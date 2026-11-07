@@ -229,6 +229,9 @@ cleanup, stamping) has no context and is ignored. Never the Yjs `clientID`.
   store keeps them for the retry; a state-only store (`unchanged`, `kept-invalid`,
   `kept-empty`) sends and clears nothing, or an edit stored while the doc was invalid would
   later fall back to whoever edited last.
+- **The API trusts them for #320:** a mention's email names, and a reminder belongs to, the
+  user these edits give for its block (`api/mention_notifications.go`). That is why they come
+  from the connection, never the doc: a client could put any user id in a node's attrs.
 - After the PUT, `stored` (`block_doc: "written"`) carries `edits` (what was just written,
   when any) so open editors merge it (`gl-admin/lib/blockEditsStore.ts`).
 - Tests: `blockEdits.test.ts` (plain Y.Doc), `gl-admin/lib/collaboration/blockEdits.hocuspocus.test.ts`

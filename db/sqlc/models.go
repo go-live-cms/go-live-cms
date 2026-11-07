@@ -183,6 +183,15 @@ type PostMedium struct {
 	Blocks  json.RawMessage `json:"blocks"`
 }
 
+type PostMentionNotification struct {
+	PostID      int64         `json:"post_id"`
+	BlockID     string        `json:"block_id"`
+	UserID      int64         `json:"user_id"`
+	MentionedBy sql.NullInt64 `json:"mentioned_by"`
+	Emailed     bool          `json:"emailed"`
+	CreatedAt   time.Time     `json:"created_at"`
+}
+
 type PostMetum struct {
 	ID        int64          `json:"id"`
 	PostID    int64          `json:"post_id"`
@@ -200,6 +209,21 @@ type PostPublishedAuthor struct {
 type PostPublishedTerm struct {
 	PostID         int64 `json:"post_id"`
 	TaxonomyTermID int64 `json:"taxonomy_term_id"`
+}
+
+type PostReminder struct {
+	ID           int64        `json:"id"`
+	PostID       int64        `json:"post_id"`
+	BlockID      string       `json:"block_id"`
+	RemindAt     time.Time    `json:"remind_at"`
+	ChipDate     time.Time    `json:"chip_date"`
+	ChipTime     string       `json:"chip_time"`
+	UserID       int64        `json:"user_id"`
+	Status       string       `json:"status"`
+	ClaimedUntil sql.NullTime `json:"claimed_until"`
+	Attempts     int32        `json:"attempts"`
+	DoneAt       sql.NullTime `json:"done_at"`
+	CreatedAt    time.Time    `json:"created_at"`
 }
 
 type PostScheduledUpdate struct {

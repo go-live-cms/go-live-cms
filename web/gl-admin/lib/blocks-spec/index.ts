@@ -3,6 +3,7 @@ import { isThemeBlockType, themeBlockIssues, type ThemeBlockLookup } from "./the
 import { nestingIssues } from "./nesting"
 
 export * from "./nesting"
+export * from "./inlineNodes"
 
 // Block Spec v1 - Authoritative Types
 export type BlockID = string

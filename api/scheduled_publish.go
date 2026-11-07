@@ -97,6 +97,9 @@ func (server *Server) RunScheduledPublishing(ctx context.Context, interval time.
 	for {
 		server.publishDueScheduledPosts(ctx)
 		server.applyDueScheduledUpdates(ctx)
+		// Date reminders (#320, reminders.go) share the loop: the same interval, claims
+		// and leases.
+		server.sendDueReminders(ctx)
 		select {
 		case <-ctx.Done():
 			server.logger.Info("scheduled publishing stopped")

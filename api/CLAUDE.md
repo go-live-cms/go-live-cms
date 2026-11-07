@@ -1106,7 +1106,9 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   `comment_reopened`, `comment_deleted` with `author_id`; ids only, never the body; edits aren't
   recorded) and `notifyCollabComments` → the collab server's `POST
   /internal/documents/post-<id>/comments` (best effort, after the response), which broadcasts
-  `{"type":"comments"}`. Mention notifications (#320) hook into `afterCommentWrite`.
+  `{"type":"comments"}`. **Mentions in comment bodies are out of scope (decision, #320):**
+  comments stay plain text; an @name there is text and notifies nobody. A follow-up would
+  hook into `afterCommentWrite` and reuse #320's ledger and `notifyNewMentions`.
 - Tests: `post_comments_test.go` (real DB: every role, CRUD, resolve, trash, nudges, activity, not
   public, the delete race) and `auth_comments_test.go`.
 
@@ -1128,6 +1130,52 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
 - Tests: `db/sqlc/post_block_edit_test.go` (upsert, prune, state-only, rollback, SET NULL),
   `post_block_edits_test.go` (real DB: stored through the internal PUT, every role, not public)
   and `TestPutInternalPostCollab`'s `BlockEdits` cases.
+
+## Mentions, content links and date reminders (#320, `000050`, `inline_nodes.go`, `mentions.go`, `mention_notifications.go`, `reminders.go`)
+
+- **Inline nodes in a text block's pm** (`mention` {userId, label}, `contentLink` {postId, label},
+  `dateChip` {date, time, reminder}; rules in `web/gl-admin/lib/blocks-spec/inlineNodes.ts`).
+  The sanitizer (`sanitizePMNode` → `sanitizeInlineNode`) makes each an allowlist of normalized
+  attrs; a mention or link without a valid id becomes its label as text, a chip without a valid
+  day is dropped, a stored `href` never survives. `inlineNodeVectors.json` (web) is shared with
+  `TestInlineNodeVectors`.
+- **Public API (`publicizeInlineNodes`):** every `/public` response that carries a published block
+  doc (`publicPostView`, so the post, slug and front page; `/public/posts/:id/blocks`; the type,
+  author and term lists through `publicizePostResponses`) rewrites them in place, one lookup each
+  for all docs: a mention → `{label}` = the member's **current** name (else the stored label, else
+  "a former member"), a link → `{label, href}` with the target's current path (`postHref`, the
+  site's URL structure and published category) **only while the target is published in a public,
+  active type** (a draft, the trash or a private type: `{label}`, which the site renders as text),
+  a chip → `{date, time}`. No user id, post id or email leaves through them
+  (`TestPublicInlineNodesWithoutIDsOrEmails` checks every route). A new `/public` route that
+  returns published blocks must call it.
+- **@ menu routes** (content roles, contributors included, public fields only, never an email):
+  `GET /mentions/people?q=` (content-role members by name/username, 5) and `?ids=` (≤100, the
+  editor's current names), `GET /mentions/content?q=` (what the caller may read, `canReadPost` via
+  `viewer_id`, never trashed, latest edited first, 5).
+- **Mention emails** (`mention_notifications.go`): only after a collab store that writes
+  `block_doc`. `collabInlineNodes` reads one entry per mentioned member (preferring a block this
+  store changed, with its `block_edits` user as who typed it), and `StorePostCollabTx` records
+  them in **`post_mention_notifications` (PK post + member)** in the store's transaction,
+  returning only new rows. Decision: **one email per member per post**, not per block: a split or
+  paste gives the text a new block id and would mail again. No email for: a mention nobody typed in
+  that store (a duplicate's or template's content), yourself, a trashed post, and **a member who
+  can't read the post (decision: no notification at all**, not "you were mentioned in a post you
+  can't see", which would still reveal the post, its author and timing); the row stays
+  `emailed=false`, so publishing later sends nothing late. ≤25 emails per store. Template `mention`
+  (title + admin link, never content), after the response (`runInBackground`).
+- **Reminders** (`reminders.go`): `StorePostCollabTx` keeps `post_reminders` in step with the
+  working copy (`DeleteStalePostReminders` drops pending rows whose chip is gone or moved;
+  `AddPostReminders` adds chips with an owner, the block's `block_edits` user, and a time still
+  ahead, in the site's zone: `reminderInstant`, a DST gap fires when it ends). The store reads the
+  site's zone only for a doc with a reminder. **The #147 scheduler sends them**
+  (`RunScheduledPublishing` → `sendDueReminders`, after publishes and updates): `ClaimDueReminders`
+  (`FOR UPDATE SKIP LOCKED`, the lease is the fencing token), `canReadPost` checked at send time
+  (else `skipped`), retries with #147's backoff up to 5 attempts (`failed`), `sent` rows never fire
+  again. Template `reminder`.
+- Tests: `inline_nodes_test.go` (vectors, sanitizer, extraction, DST), `mentions_db_test.go` (real
+  DB: once per member and post, no leak, self/unattributed/trash, the public routes, the menu routes,
+  reminders kept in step and sent once, skipped without access), `mailer` `TestMentionAndReminderTemplates`.
 
 ## Theme blocks (#376)
 

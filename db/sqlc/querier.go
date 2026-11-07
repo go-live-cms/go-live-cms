@@ -19,6 +19,10 @@ type Querier interface {
 	// from before #331 may have several categories: one is kept (golive_keep_one_category,
 	// 000047: the lowest non-default id), and EnsureDefaultCategory fills in none.
 	AddExistingTermsToPost(ctx context.Context, arg AddExistingTermsToPostParams) error
+	// The store's new reminders (parallel arrays; remind_ats as RFC 3339 text), each owned by
+	// whoever wrote it. One already recorded for the same block and time is left as it is
+	// (its owner and status). Returns the rows it inserted.
+	AddPostReminders(ctx context.Context, arg AddPostRemindersParams) ([]AddPostRemindersRow, error)
 	// Post-Taxonomy Relationships
 	AddPostToTaxonomyTerm(ctx context.Context, arg AddPostToTaxonomyTermParams) (PostTaxonomyRelationship, error)
 	BlockAllSessionsForUser(ctx context.Context, userID int64) error
@@ -34,6 +38,9 @@ type Querier interface {
 	// exclude_id skips the post being edited; pass 0 when creating.
 	CheckSlugExists(ctx context.Context, arg CheckSlugExistsParams) (bool, error)
 	CheckURLExists(ctx context.Context, url string) (bool, error)
+	// Claims up to max_rows due pending reminders for this replica (FOR UPDATE SKIP LOCKED,
+	// then a lease, as ClaimDueScheduledPosts). claimed_until is the claim's fencing token.
+	ClaimDueReminders(ctx context.Context, arg ClaimDueRemindersParams) ([]ClaimDueRemindersRow, error)
 	// Claims up to max_posts due scheduled posts for this replica: FOR UPDATE SKIP
 	// LOCKED, so two replicas running it at once never pick the same row, and the
 	// claim (publish_next_attempt_at = now + lease) makes the others skip it until
@@ -194,6 +201,11 @@ type Querier interface {
 	// A newer signup for the address, or its account being created, ends every
 	// other pending link for it.
 	DeleteSignupRequestsByEmail(ctx context.Context, email string) error
+	// A store's reminders replace the post's pending ones: a pending row whose chip is gone
+	// (removed, or moved to another time: keys are "<block_id> <remind_at as RFC 3339>") is
+	// deleted. Sent, skipped and failed rows stay, so a chip never fires twice. Runs inside
+	// StorePostCollabTx, like AddPostReminders.
+	DeleteStalePostReminders(ctx context.Context, arg DeleteStalePostRemindersParams) error
 	// Expired rows hold unconfirmed details nobody can use any more.
 	DeleteStaleSignupRequests(ctx context.Context) (int64, error)
 	DeleteTaxonomyTerm(ctx context.Context, id int64) error
@@ -209,6 +221,8 @@ type Querier interface {
 	// A post of type "post" without a category gets the default one (Uncategorized). The
 	// other types may have none. Called by every writer of a post's terms.
 	EnsureDefaultCategory(ctx context.Context, postIds []int64) (int64, error)
+	// Ends a claimed reminder (sent, skipped, or failed for good), only under this claim.
+	FinishReminder(ctx context.Context, arg FinishReminderParams) (int64, error)
 	GetActiveTheme(ctx context.Context) (Theme, error)
 	// Get active theme with its settings
 	GetActiveThemeWithSettings(ctx context.Context) (GetActiveThemeWithSettingsRow, error)
@@ -413,6 +427,10 @@ type Querier interface {
 	// (canEditAsCollaborator: someone else's published post), for the posts lists'
 	// Edit / "Can edit" (#321).
 	ListCollaboratorPostIDs(ctx context.Context, userID int64) ([]int64, error)
+	// The posts content links point at, for the public API: what their current URL is built
+	// from (the published category, #331) and whether they're shown at all (published, of a
+	// public and active type).
+	ListContentLinkTargets(ctx context.Context, ids []int64) ([]ListContentLinkTargetsRow, error)
 	// Home's "Continue where you left off": the posts the user last worked on, newest
 	// first. "Worked on" = their created/edited/updated/version_restored/status_changed
 	// events. Those are throttled, so up to one window behind; when the user is also
@@ -452,6 +470,18 @@ type Querier interface {
 	// and each member's posts owned (posts.user_id, every type and status), counted in the
 	// same query.
 	ListMembers(ctx context.Context, arg ListMembersParams) ([]ListMembersRow, error)
+	// @ mentions, content links and date reminders (#320, 000050; api/mentions.go,
+	// api/inline_nodes.go, api/mention_notifications.go, api/reminders.go).
+	// The @ menu's People: members with one of @roles (the content roles) matching @pattern
+	// by name or username (ILIKE, '' = everyone), by name. Public fields only.
+	ListMentionCandidates(ctx context.Context, arg ListMentionCandidatesParams) ([]ListMentionCandidatesRow, error)
+	// The @ menu's "Link to post or page": posts the viewer may read (@viewer_id 0 = a
+	// moderator, every post; else their own and published ones, canReadPost), never one in
+	// the trash, whose title matches @pattern ('' = all), the latest edited first.
+	ListMentionContent(ctx context.Context, arg ListMentionContentParams) ([]ListMentionContentRow, error)
+	// Members by id (the editor's current names; the public API's mention names). A removed
+	// member has no row.
+	ListMentionPeopleByIDs(ctx context.Context, ids []int64) ([]ListMentionPeopleByIDsRow, error)
 	// A menu's items with what their URL and visibility are resolved from: the
 	// post (and its type), the term (and its taxonomy) or the archive's post type.
 	// A target that no longer exists comes back as NULLs. A post's published
@@ -491,6 +521,10 @@ type Querier interface {
 	// Every comment of a post's threads (deleted ones too, without a body), in thread
 	// order, with the author's current name.
 	ListPostComments(ctx context.Context, postID int64) ([]ListPostCommentsRow, error)
+	// A post's ledger (tests and support).
+	ListPostMentionNotifications(ctx context.Context, postID int64) ([]PostMentionNotification, error)
+	// A post's reminders (tests and support).
+	ListPostReminders(ctx context.Context, postID int64) ([]ListPostRemindersRow, error)
 	// Without block_doc (the chooser doesn't need it), with the saved category's
 	// names and who saved it. With id, that one template (the create and rename
 	// responses).
@@ -625,6 +659,8 @@ type Querier interface {
 	// Row-locks the given users in id order (RemoveUserTx: the member and the one who
 	// receives their posts), so two removals that name each other can't deadlock.
 	LockUsersForUpdate(ctx context.Context, ids []int64) ([]LockUsersForUpdateRow, error)
+	// The ledger rows whose email went out.
+	MarkMentionsEmailed(ctx context.Context, arg MarkMentionsEmailedParams) error
 	// Deletes the rows of blocks that aren't in the post's new block_doc (keep_ids: every
 	// key of its "blocks", hidden blocks included).
 	PrunePostBlockEdits(ctx context.Context, arg PrunePostBlockEditsParams) error
@@ -646,6 +682,11 @@ type Querier interface {
 	// A merge (#331): the source's posts get the target, unless they have it already (the
 	// leftover links go with the source term).
 	ReassignTermPosts(ctx context.Context, arg ReassignTermPostsParams) (int64, error)
+	// Adds the members a store mentions that the ledger doesn't have for this post (parallel
+	// arrays, one entry per member: the block, the member, who typed it, 0 = nobody known) and
+	// returns only the rows it inserted: a member already recorded is never notified again. A member who no longer exists is left out.
+	// Runs inside StorePostCollabTx.
+	RecordPostMentions(ctx context.Context, arg RecordPostMentionsParams) ([]RecordPostMentionsRow, error)
 	// A failed attempt under this claim: the reason the editor shows, and the next try
 	// after the backoff. 0 rows: the schedule changed meanwhile, nothing to record.
 	RecordScheduledPublishFailure(ctx context.Context, arg RecordScheduledPublishFailureParams) (int64, error)
@@ -655,6 +696,8 @@ type Querier interface {
 	// The dev seed (#358): published posts whose terms and featured images were linked
 	// after they were published get them in their published settings.
 	RefreshPublishedSettings(ctx context.Context, ids []int64) error
+	// Gives a claimed reminder back for a retry at retry_at (a failed send), under this claim.
+	ReleaseReminder(ctx context.Context, arg ReleaseReminderParams) (int64, error)
 	RemoveAllPostTaxonomies(ctx context.Context, postID int64) error
 	RemoveAllPostTaxonomiesByTerm(ctx context.Context, taxonomyTermID int64) error
 	// Assigning a category replaces the post's other one(s).

@@ -1620,3 +1620,85 @@
     }
   }
 }
+
+// #320: the inline nodes (`extensions/InlineNodeViews.ts`) and the @ menu (`ui/MentionMenu.tsx`,
+// the slash menu's list styles) with its date dialog (`ui/DateChipDialog.ts`, the table
+// picker's styles). The canvas's "Mention / link to content (@)": an accent-tinted name.
+.editor-mention,
+.editor-content-link,
+.editor-date-chip {
+  background: var(--accent-subtle);
+  border-radius: 4px;
+  color: var(--text-selected);
+  padding: 0 3px;
+  white-space: nowrap;
+
+  &.ProseMirror-selectednode {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 1px;
+  }
+}
+
+.editor-mention.is-missing {
+  background: var(--background-hover);
+  color: var(--text-secondary);
+}
+
+.editor-content-link,
+.editor-date-chip {
+  align-items: baseline;
+  display: inline-flex;
+  gap: 3px;
+
+  svg {
+    align-self: center;
+    flex: none;
+  }
+}
+
+.mention-menu {
+  &__icon {
+    color: var(--text-secondary);
+    display: grid;
+    flex: none;
+    margin: 0 4px;
+    place-items: center;
+  }
+
+  &__divider {
+    background: var(--border-color);
+    height: 1px;
+    margin: 6px -6px;
+  }
+
+  &__status {
+    color: var(--text-secondary);
+    font-size: var(--type-footnote);
+    padding: var(--space-2);
+  }
+
+  &__option--date {
+    color: var(--text-secondary);
+  }
+}
+
+.editor-date-dialog {
+  width: 300px;
+
+  &__remind {
+    align-items: center;
+    column-gap: var(--space-2);
+    display: grid;
+    grid-template-columns: auto 1fr;
+
+    .editor-table-picker__hint {
+      grid-column: 2;
+    }
+  }
+
+  &__error {
+    color: var(--danger-text);
+    font-size: var(--type-footnote);
+    margin: 0;
+  }
+}

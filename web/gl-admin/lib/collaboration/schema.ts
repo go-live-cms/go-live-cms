@@ -14,6 +14,7 @@ import { Callout } from "../../components/editor/extensions/Callout"
 import { PullQuote } from "../../components/editor/extensions/PullQuote"
 import { TodoItem, TodoList } from "../../components/editor/extensions/TodoList"
 import { TableBlock } from "../../components/editor/extensions/TableBlock"
+import { ContentLink, DateChip, Mention } from "../../components/editor/extensions/InlineNodes"
 
 const lowlight = createLowlight(common)
 
@@ -78,6 +79,11 @@ export function schemaExtensions({ collaborating }: { collaborating: boolean }) 
     // #420: the table block (figure: TipTap's table, cells `paragraph+`, plus a caption).
     // After paragraph, so `block` content still fills with a paragraph.
     table: TableBlock,
+    // #320: inline atoms inside text (an @ mention, a link to a post, a date chip). New
+    // node types, so they change the fingerprint (#416) like a new block does.
+    mention: Mention,
+    contentLink: ContentLink,
+    dateChip: DateChip,
     blockId: BlockIdExtension,
   }
 }

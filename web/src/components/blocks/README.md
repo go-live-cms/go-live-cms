@@ -232,6 +232,13 @@ interface BlockComponentProps {
   (`colgroup` when it spans columns; a header cell never spans rows). Cells come from
   `tableRows` (paragraphs only, spans clamped) and render like a list item's text. The theme
   makes `.table-scroll` scroll sideways (`themes/README.md`).
+- **Mentions, content links, dates (#320, inline nodes in any text, `renderInlineNode` in
+  `utils/contentRenderer.tsx`):** a mention is `<span class="gl-mention">Ana Costa</span>` (the
+  member's current name from the API, never an id or email, no "@"); a content link is
+  `<a class="gl-content-link" href="/post/slug">text</a>` when the API sent a site path, else
+  its text alone (a draft or trashed target); a date is `<time class="gl-date"
+  datetime="2026-11-12[T14:30]">` with `attrs.label` (the site's format, `labelDateChips`) or
+  the default long format. Marks apply to them as to text. Themes may style the classes.
 - **`anchorId`** (#356, "Copy link to block"): every top-level block's root element gets
   it as its `id`, so `/<post url>#b-<block id>` lands on it. A heading keeps its slug id
   (#351) and puts the anchor on an empty `<span class="gl-block-anchor">` at its start.

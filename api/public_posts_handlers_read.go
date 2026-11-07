@@ -65,6 +65,8 @@ func (server *Server) getPublicPostsByType(c *gin.Context) {
 	for i, post := range posts {
 		items[i] = toPublicPostWithMetaResponse(post)
 	}
+	// Mentions and content links (#320): names and current URLs, never ids.
+	server.publicizePostResponses(c.Request.Context(), items)
 	c.JSON(http.StatusOK, gin.H{"posts": items, "pagination": info})
 }
 
@@ -142,6 +144,8 @@ func (server *Server) publicPostView(ctx context.Context, post db.Post) (publicP
 	// So does a page's template (#336).
 	resp.PageTemplate = publishedPageTemplate(settings, post.PageTemplate)
 	server.attachBlockMedia(ctx, resp.PublishedBlocks)
+	// Mentions and content links (#320): names and current URLs, never ids.
+	server.publicizeInlineNodes(ctx, resp.PublishedBlocks)
 	view := publicPostView{Post: resp, TaxonomyTerms: []TaxonomyTermResponse{}}
 
 	if published {

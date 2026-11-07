@@ -422,8 +422,15 @@ func sanitizePMNode(node map[string]interface{}) {
 				kept = append(kept, ch)
 				continue
 			}
-			if t, _ := childMap["type"].(string); disallowedNodeTypes[t] {
+			t, _ := childMap["type"].(string)
+			if disallowedNodeTypes[t] {
 				continue // drop dangerous node entirely
+			}
+			// #320's inline nodes: an allowlist of attrs, each normalized (inline_nodes.go).
+			if isInlineNodeType(t) {
+				if childMap = sanitizeInlineNode(childMap); childMap == nil {
+					continue
+				}
 			}
 			sanitizePMNode(childMap)
 			kept = append(kept, childMap)

@@ -227,6 +227,13 @@ func (server *Server) putInternalPostCollab(c *gin.Context) {
 		if dropped > 0 {
 			server.requestLog(c).Warn("collab store: block edits left out", "post_id", postID, "count", dropped)
 		}
+		// Mentions and reminders (#320, mention_notifications.go): recorded in the store's
+		// transaction. The site's zone is read only for a doc with a reminder in it.
+		var zone *time.Location
+		if docHasReminders(req.BlockDoc) {
+			zone = server.siteZone(c.Request.Context())
+		}
+		arg.Mentions, arg.Reminders = collabInlineNodes(req.BlockDoc, arg.BlockEdits, zone)
 	}
 
 	result, err := server.store.StorePostCollabTx(c.Request.Context(), arg)
@@ -245,5 +252,10 @@ func (server *Server) putInternalPostCollab(c *gin.Context) {
 		return
 	}
 
+	if len(result.NewMentions) > 0 {
+		logger := server.requestLog(c)
+		mentions := result.NewMentions
+		server.runInBackground(requestIDFromContext(c), "/internal/posts/:id/collab", func() { server.notifyNewMentions(logger, postID, mentions) })
+	}
 	c.JSON(http.StatusOK, gin.H{"block_revision": result.BlockRevision, "epoch": epoch.String()})
 }
