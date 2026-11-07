@@ -1,30 +1,31 @@
-import { useState, useCallback, useRef, useEffect } from "react"
+import { useState, useCallback, useRef, useEffect, type KeyboardEvent } from "react"
+import { createPortal } from "react-dom"
 import type { Editor as TiptapEditor } from "@tiptap/core"
-import type { Node as PMNode } from "prosemirror-model"
-import { computePosition } from "@floating-ui/dom"
-import { DragHandle as TipTapDragHandle } from "@tiptap/extension-drag-handle-react"
+import { NodeSelection } from "prosemirror-state"
 import { defaultComputePositionConfig } from "@tiptap/extension-drag-handle"
 import BlockMenu from "./BlockMenu"
 import MoveToDialog from "./MoveToDialog"
 import AddBlockMenu from "./AddBlockMenu"
-import { refOf, resolveBlock, topLevelBlockAt, type BlockRef } from "../utils/blockActions"
+import { refOf, resolveBlock, type BlockRef } from "../utils/blockActions"
+import { createGutterPlugin, gutterPluginKey } from "../utils/gutterPlugin"
+import type { EditorBlock } from "../utils/blockTree"
 
-// The gutter beside the hovered block ("Post editor"; "Inserting blocks"): + opens the
-// block catalog with its own search field (#415, AddBlockMenu), the drag handle drags to
-// move, and clicking it (or Enter/Space on it) opens the block menu (#356): Colour,
-// Duplicate, Copy link to block, Move to, Delete, and Comment (#192) when the post has
-// comments. Turn into isn't built here; "Last edited by" (#328) is BlockMenu's own.
+// The gutter beside the hovered block ("Post editor"; "Inserting blocks"), at any depth
+// (#417): + opens the block catalog with its own search field (#415, AddBlockMenu), the drag
+// handle drags to move (into or out of a group, by the nesting table), and clicking it (or
+// Enter/Space on it) opens the block menu (#356): Colour, Duplicate, Copy link to block,
+// Move to, Delete, and Comment (#192) when the post has comments. Turn into isn't built
+// here; "Last edited by" (#328) is BlockMenu's own.
 //
-// The gutter follows the pointer (TipTap's drag-handle plugin). From the keyboard, Tab in
-// the text shows it at the caret's block and focuses + (BlockGutterKeys); Tab again
-// reaches the drag handle. The menus and the Move to dialog render outside this element
-// (a portal / Modal): the plugin moves this element into the editor's DOM.
+// The gutter follows the pointer (utils/gutterPlugin.ts). From the keyboard, Tab in the
+// text or on a selected block shows it at that block and focuses + (BlockGutterKeys); Tab
+// again reaches the drag handle, then the block's own toolbar when it has one (a group's
+// Width and Background). The menus and the Move to dialog render outside this element (a
+// portal / Modal): the plugin moves the gutter into the editor's DOM.
 
 /**
- * Pins the handle (and its hovered block) while the menu is open. The React DragHandle
- * installs only the drag-handle plugin, not the extension that defines the
- * lockDragHandle / unlockDragHandle commands, so set the meta the plugin reads directly.
- * A meta-only transaction: no doc change, nothing reaches Yjs.
+ * Pins the gutter (and its hovered block) while a menu is open. A meta-only transaction:
+ * no doc change, nothing reaches Yjs.
  */
 export function setHandleLock(editor: TiptapEditor, locked: boolean) {
   if (editor.isDestroyed) return
@@ -32,6 +33,14 @@ export function setHandleLock(editor: TiptapEditor, locked: boolean) {
 }
 
 type Storage = Record<string, { openMoveTo?: ((ref: BlockRef) => void) | null; focusAddButton?: ((ref: BlockRef) => boolean) | null }>
+
+/** The first control of the block's own toolbar (`data-block-toolbar`), if it has one. */
+function blockToolbarControl(editor: TiptapEditor, block: EditorBlock): HTMLElement | null {
+  const dom = editor.view.nodeDOM(block.pos)
+  if (!(dom instanceof HTMLElement)) return null
+  const toolbar = Array.from(dom.children).find((child) => child instanceof HTMLElement && child.hasAttribute("data-block-toolbar"))
+  return (toolbar as HTMLElement | undefined)?.querySelector<HTMLElement>("button:not([disabled])") ?? null
+}
 
 export default function DragHandle({
   editor,
@@ -46,20 +55,43 @@ export default function DragHandle({
   // The hovered block by id (its position as a fallback), so an edit by anyone between
   // showing the gutter and pressing + or the handle never retargets it.
   const hovered = useRef<BlockRef | null>(null)
-  const gutterRef = useRef<HTMLDivElement>(null)
+  // The plugin moves this element into the editor's DOM; React renders into it (a portal),
+  // so it never loses track of its children.
+  const [host] = useState(() => {
+    const element = document.createElement("div")
+    element.className = "editor-gutter-host"
+    return element
+  })
   const buttonRef = useRef<HTMLButtonElement>(null)
   const addRef = useRef<HTMLButtonElement>(null)
+  const gutter = useRef<ReturnType<typeof createGutterPlugin> | null>(null)
   const [menuFor, setMenuFor] = useState<BlockRef | null>(null)
   const [addFor, setAddFor] = useState<BlockRef | null>(null)
   const [moveFor, setMoveFor] = useState<BlockRef | null>(null)
 
-  const onDragHandleNodeChange = useCallback((data: { node: PMNode | null; editor: TiptapEditor; pos: number }) => {
-    const block = data.node ? topLevelBlockAt(data.editor.state.doc, data.pos) : null
+  const onBlockChange = useCallback((block: EditorBlock | null) => {
     hovered.current = block ? refOf(block) : null
     // Every block but an empty line: images and dividers have a menu too. An empty line
     // has + only (the design's "An empty line between blocks").
-    setShowDrag(!!data.node && !(data.node.isTextblock && data.node.content.size === 0))
+    setShowDrag(!!block && !(block.node.isTextblock && block.node.content.size === 0))
   }, [])
+
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return
+    const plugin = createGutterPlugin({
+      element: host,
+      dragSource: () => buttonRef.current,
+      computePositionConfig: defaultComputePositionConfig,
+      onBlockChange,
+    })
+    gutter.current = plugin
+    editor.registerPlugin(plugin.plugin)
+    return () => {
+      gutter.current = null
+      if (!editor.isDestroyed) editor.unregisterPlugin(gutterPluginKey)
+      host.remove()
+    }
+  }, [editor, host, onBlockChange])
 
   // Ctrl Shift P opens Move to for the block holding the cursor (blockActions.ts).
   useEffect(() => {
@@ -72,24 +104,13 @@ export default function DragHandle({
     }
   }, [editor])
 
-  // Tab in the text: show the gutter at the caret's block and focus + (blockGutter.ts).
+  // Tab in the text or on a selected block: show the gutter at that block and focus + (blockGutter.ts).
   useEffect(() => {
     if (!editor) return
     const storage = (editor.storage as unknown as Storage).blockGutter
     if (!storage) return
     storage.focusAddButton = (ref) => {
-      const handle = gutterRef.current?.parentElement
-      const block = resolveBlock(editor.state.doc, ref)
-      const dom = block && editor.view.nodeDOM(block.pos)
-      if (!handle || !block || !(dom instanceof HTMLElement)) return false
-      hovered.current = refOf(block)
-      setShowDrag(!(block.node.isTextblock && block.node.content.size === 0))
-      // What the plugin does on hover: show the element and place it beside the block.
-      handle.style.visibility = ""
-      handle.style.pointerEvents = "auto"
-      computePosition(dom, handle, defaultComputePositionConfig)
-        .then(({ x, y, strategy }) => Object.assign(handle.style, { position: strategy, left: `${x}px`, top: `${y}px` }))
-        .catch(() => {}) // the editor went away meanwhile
+      if (!gutter.current?.place(ref)) return false
       addRef.current?.focus()
       return true
     }
@@ -128,19 +149,35 @@ export default function DragHandle({
     setAddFor(refOf(block))
   }
 
-  // Esc returns focus to + ("esc returns to +"); inserting leaves it in the new block.
+  // Esc returns focus to +; inserting leaves it in the new block.
   const closeAdd = (refocus: boolean) => {
     setAddFor(null)
     setHandleLock(editor, false)
     if (refocus) addRef.current?.focus()
   }
 
+  // Tab on the handle: on to the block's own toolbar ("Keyboard": "reach its + and drag
+  // handle, then its toolbar"). The block is selected so its toolbar shows.
+  const onHandleKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key !== "Tab" || event.shiftKey || menuFor) return
+    const block = currentBlock()
+    if (!block) return
+    // No toolbar: Tab goes on out of the editor, leaving the caret where it was.
+    const control = blockToolbarControl(editor, block)
+    if (!control) return
+    if (!(editor.state.selection instanceof NodeSelection && editor.state.selection.from === block.pos)) {
+      editor.view.dispatch(editor.state.tr.setSelection(NodeSelection.create(editor.state.doc, block.pos)))
+    }
+    event.preventDefault()
+    control.focus()
+  }
+
   if (!editor) return null
 
   return (
     <>
-      <TipTapDragHandle editor={editor} onNodeChange={onDragHandleNodeChange}>
-        <div ref={gutterRef} className="editor-gutter">
+      {createPortal(
+        <div className="editor-gutter">
           <button
             ref={addRef}
             type="button"
@@ -151,7 +188,7 @@ export default function DragHandle({
             aria-expanded={!!addFor}
             // A click, or Space / Enter from the keyboard (a button's own).
             onClick={() => (addFor ? closeAdd(false) : openAdd())}
-            // Not a drag start: the whole gutter is draggable.
+            draggable={false}
             onDragStart={(e) => e.preventDefault()}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" aria-hidden="true">
@@ -168,6 +205,7 @@ export default function DragHandle({
             aria-expanded={!!menuFor}
             tabIndex={showDrag || menuFor ? undefined : -1}
             onClick={() => (menuFor ? closeMenu(false) : openMenu())}
+            onKeyDown={onHandleKeyDown}
           >
             <svg width="14" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
               <circle cx="9" cy="6" r="1.6" />
@@ -178,8 +216,9 @@ export default function DragHandle({
               <circle cx="15" cy="18" r="1.6" />
             </svg>
           </button>
-        </div>
-      </TipTapDragHandle>
+        </div>,
+        host,
+      )}
       {menuFor && (
         <BlockMenu
           editor={editor}

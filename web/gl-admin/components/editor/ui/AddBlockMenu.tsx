@@ -5,7 +5,7 @@ import { useClickOutside, useFloating, useStableId } from "@gl-admin/components/
 import { toast } from "@gl-admin/components/ui/Toast"
 import { authManager } from "@gl-admin/lib/auth"
 import { getActiveTheme, menuEntries, type CatalogEntry } from "../blocks/catalog"
-import { insertFromGutter } from "../utils/blockGutter"
+import { gutterAccepts, insertFromGutter } from "../utils/blockGutter"
 import type { BlockRef } from "../utils/blockActions"
 import { InsertMenuFooter, InsertMenuList, optionId, useInsertMenu } from "./InsertMenu"
 
@@ -29,9 +29,12 @@ export default function AddBlockMenu({ editor, target, anchor, onClose, entries:
   const idPrefix = useStableId("gl-add-block")
   const [query, setQuery] = useState("")
   const { style, ready } = useFloating(anchor, menuRef, true, "bottom-start")
-  // Read once per opening: the role and theme don't change while it's open.
+  // Read once per opening: the role, theme and slot don't change while it's open. Only
+  // what the block's container accepts (#417: the gutter is at any depth).
   const entries = useMemo(
-    () => given ?? menuEntries({ role: authManager.getState().user?.role, theme: getActiveTheme() }),
+    () =>
+      given ??
+      menuEntries({ role: authManager.getState().user?.role, theme: getActiveTheme(), accepts: gutterAccepts(editor, target) }),
     [given]
   )
   const menu = useInsertMenu(entries, query)

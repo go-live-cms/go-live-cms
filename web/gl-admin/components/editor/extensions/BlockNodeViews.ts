@@ -323,9 +323,17 @@ class GroupView implements NodeView {
     this.dom = document.createElement("div")
     this.dom.className = "editor-group"
     this.dom.dataset.type = "group"
+    // Remote carets' name labels flip at this edge (#417, utils/cursorAwareness.ts).
+    this.dom.setAttribute("data-collab-bounds", "")
     this.settings = document.createElement("div")
     this.settings.className = "editor-group__settings"
     this.settings.contentEditable = "false"
+    // The group's toolbar (#417): Tab from its drag handle lands here (ui/DragHandle.tsx),
+    // ← → move between its buttons, Esc goes back to the group in the text.
+    this.settings.setAttribute("role", "toolbar")
+    this.settings.setAttribute("aria-label", "Group")
+    this.settings.setAttribute("data-block-toolbar", "")
+    this.settings.addEventListener("keydown", (event) => this.onToolbarKey(event))
     this.settings.append(
       this.segment("Width", "align", GROUP_ALIGNS, GROUP_WIDTH_LABELS),
       this.segment("Background", "style", GROUP_STYLES, GROUP_STYLE_LABELS),
@@ -362,13 +370,34 @@ class GroupView implements NodeView {
     return field
   }
 
+  private onToolbarKey(event: KeyboardEvent) {
+    const buttons = Array.from(this.settings.querySelectorAll<HTMLButtonElement>("button"))
+    const at = buttons.indexOf(event.target as HTMLButtonElement)
+    if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
+      event.preventDefault()
+      const next = (at + (event.key === "ArrowRight" ? 1 : buttons.length - 1)) % buttons.length
+      buttons[next]?.focus()
+    } else if (event.key === "Escape") {
+      event.preventDefault()
+      const pos = this.getPos()
+      if (pos !== undefined && this.view.state.doc.nodeAt(pos)?.type.name === "group") {
+        this.view.dispatch(this.view.state.tr.setSelection(NodeSelection.create(this.view.state.doc, pos)))
+      }
+      this.view.focus()
+    }
+  }
+
   private set(attr: "align" | "style", value: string) {
     // `editable` can change without an update (a demotion, #313).
     if (!this.view.editable) return
     const pos = this.getPos()
     const current = pos === undefined ? null : this.view.state.doc.nodeAt(pos)
     if (pos === undefined || !current || current.type.name !== "group" || current.attrs[attr] === value) return
-    this.view.dispatch(this.view.state.tr.setNodeMarkup(pos, undefined, { ...current.attrs, [attr]: value }))
+    const { state } = this.view
+    const tr = state.tr.setNodeMarkup(pos, undefined, { ...current.attrs, [attr]: value })
+    // A selected group stays selected (#417: Tab from its handle selects it, then its toolbar).
+    if (state.selection instanceof NodeSelection && state.selection.from === pos) tr.setSelection(NodeSelection.create(tr.doc, pos))
+    this.view.dispatch(tr)
   }
 
   private render() {
@@ -574,6 +603,8 @@ class TableBlockView implements NodeView {
     this.toolbar.contentEditable = "false"
     this.toolbar.setAttribute("role", "toolbar")
     this.toolbar.setAttribute("aria-label", "Table")
+    // The gutter's Tab reaches it from a selected table (#417, DragHandle's blockToolbarControl).
+    this.toolbar.setAttribute("data-block-toolbar", "")
     for (const menu of TABLE_MENUS) this.toolbar.append(this.menuButton(menu))
     const separator = doc.createElement("span")
     separator.className = "editor-table__separator"

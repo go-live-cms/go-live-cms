@@ -767,11 +767,49 @@
     margin: 24px 0;
   }
 
-  // ProseMirror's own class.
+  // ProseMirror's own class: a selected block (Esc, #417), at any depth.
   // stylelint-disable-next-line selector-class-pattern
   .ProseMirror-selectednode {
     outline: 2px solid var(--focus-ring);
     outline-offset: 2px;
+  }
+
+  // A selected block also holds the DOM selection: the outline shows it, not a text tint.
+  // stylelint-disable-next-line selector-class-pattern
+  .ProseMirror-selectednode ::selection,
+  .ProseMirror-selectednode::selection {
+    background: transparent;
+  }
+
+  // A block someone else selected (#417, utils/cursorAwareness.ts): their colour as a ring
+  // inside this user's own outline, and their name on its top edge. Never clipped: no
+  // container sets overflow, and the tag sits above every block.
+  .collab-block-selection {
+    box-shadow: 0 0 0 2px var(--collab-color);
+    position: relative;
+
+    &::before {
+      background: var(--collab-color);
+      border-radius: 4px 4px 0 0;
+      color: #fff;
+      content: attr(data-collab-name);
+      font-family: var(--font-sans);
+      font-size: 11px;
+      font-style: normal;
+      font-weight: 600;
+      letter-spacing: normal;
+      line-height: 16px;
+      padding: 0 6px;
+      pointer-events: none;
+      position: absolute;
+      right: -2px;
+      text-transform: none;
+      top: -2px;
+      transform: translateY(-100%);
+      user-select: none;
+      white-space: nowrap;
+      z-index: var(--z-raised);
+    }
   }
 
   [style*="text-align: center"] {
@@ -1034,6 +1072,22 @@
   &__label {
     @include mixins.visually-hidden;
   }
+}
+
+// Where a dragged block lands (#417, utils/gutterPlugin.ts): a line between two blocks,
+// as wide as the container it goes into.
+.editor-drop-line {
+  background: var(--focus-ring);
+  border-radius: 1px;
+  height: 2px;
+  margin-top: -1px;
+  pointer-events: none;
+  position: absolute;
+}
+
+// Above a group's border and tint when it sits beside a block inside one (#417).
+.editor-gutter-host {
+  z-index: var(--z-raised);
 }
 
 // The gutter beside the hovered block: + (add a block) and the drag handle.

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useRef } from "react"
 import FeaturedImage from "./FeaturedImage"
 import { useFeaturedImage } from "@gl-admin/lib/hooks/useFeaturedImage"
 import type { Media, Post } from "@gl-admin/lib/api/types"
@@ -11,6 +11,8 @@ import PostOwner from "./PostOwner"
 import type { TransferPostResult } from "@gl-admin/lib/api/posts"
 import PostSeoPanel from "./PostSeoPanel"
 import PageTemplateField from "./PageTemplateField"
+import BlockSettingsPanel from "./BlockSettingsPanel"
+import type { Editor as TiptapEditor } from "@tiptap/core"
 import Tabs from "@gl-admin/components/ui/Tabs"
 import type { PostSEOSettings } from "@gl-admin/lib/api/types"
 import { EXCERPT_GUIDE, softCount } from "@gl-admin/lib/postSeo"
@@ -26,9 +28,11 @@ import "@gl-admin/assets/styles/components/editor/post-settings.scss"
 // Archive); Publish date (#147) opens the Schedule dialog for a draft or a scheduled post.
 // Owner (#353) is who the post belongs to (access), with Transfer for admins; Authors
 // (#319) is the byline, separate from the owner. A page has its Template (#336,
-// PageTemplateField). Not built yet, so not shown: move to trash (#327).
+// PageTemplateField). Block (#417) shows the selected block, nested or not, with its
+// settings (BlockSettingsPanel), while the editor is editable. Not built yet, so not shown:
+// move to trash (#327).
 
-type SettingsTab = "post" | "seo" | "history"
+export type SettingsTab = "post" | "block" | "seo" | "history"
 
 interface PostSidebarProps {
   post: Post
@@ -83,6 +87,12 @@ interface PostSidebarProps {
     onView: (version: PostVersion) => void
     onBackToWorkingCopy: () => void
   }
+  // The Block tab (#417): the editable editor, absent while there is none.
+  blockEditor?: TiptapEditor | null
+  // Opens a tab and focuses it (⌘⇧, opens Block); `key` changes on every request.
+  tabRequest?: { tab: SettingsTab; key: number } | null
+  // The tab shown changed (so ⌘⇧, knows whether it closes the panel or switches to Block).
+  onTabChange?: (tab: SettingsTab) => void
 }
 
 const STATUS_HINT: Record<string, string> = {
@@ -113,9 +123,24 @@ export default function PostSidebar({
   owner,
   seo,
   history,
+  blockEditor,
+  tabRequest,
+  onTabChange,
 }: PostSidebarProps) {
   const dateSettings = useSiteDateSettings()
   const [activeTab, setActiveTab] = useState<SettingsTab>("post")
+  const panelRef = useRef<HTMLElement>(null)
+  const tabChanged = useRef(onTabChange)
+  tabChanged.current = onTabChange
+  useEffect(() => tabChanged.current?.(activeTab), [activeTab])
+
+  // ⌘⇧, (#417): the Block tab, with focus on it.
+  useEffect(() => {
+    if (!tabRequest) return
+    setActiveTab(tabRequest.tab)
+    const raf = requestAnimationFrame(() => panelRef.current?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')?.focus())
+    return () => cancelAnimationFrame(raf)
+  }, [tabRequest])
   // A transfer that replaced the old owner in the byline: the Authors field reloads.
   const [bylineKey, setBylineKey] = useState(0)
 
@@ -136,8 +161,10 @@ export default function PostSidebar({
 
   // History may go away (a demotion): fall back to the Post tab.
   useEffect(() => {
-    if ((!history && activeTab === "history") || (!seo && activeTab === "seo")) setActiveTab("post")
-  }, [history, seo, activeTab])
+    if ((!history && activeTab === "history") || (!seo && activeTab === "seo") || (!blockEditor && activeTab === "block")) {
+      setActiveTab("post")
+    }
+  }, [history, seo, blockEditor, activeTab])
 
   const type = post.post_type || "post"
   const status = post.post_status || "draft"
@@ -307,6 +334,7 @@ export default function PostSidebar({
 
   return (
     <aside
+      ref={panelRef}
       aria-label="Post settings"
       className={`post-settings ${isVisible ? "post-settings--visible" : ""}`}
       style={{ "--post-settings-width": sidebarWidth } as React.CSSProperties}
@@ -321,6 +349,7 @@ export default function PostSidebar({
           onChange={(id) => setActiveTab(id as SettingsTab)}
           tabs={[
             { id: "post", label: "Post" },
+            ...(blockEditor ? [{ id: "block", label: "Block" }] : []),
             ...(seo ? [{ id: "seo", label: "SEO" }] : []),
             ...(history ? [{ id: "history", label: "History" }] : []),
           ]}
@@ -337,6 +366,8 @@ export default function PostSidebar({
             onView={history.onView}
             onBackToWorkingCopy={history.onBackToWorkingCopy}
           />
+        ) : activeTab === "block" && blockEditor ? (
+          <BlockSettingsPanel editor={blockEditor} />
         ) : activeTab === "seo" && seo ? (
           <PostSeoPanel
             seo={seo.value}
