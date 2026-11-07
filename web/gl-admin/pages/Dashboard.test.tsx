@@ -107,6 +107,17 @@ const counts = () =>
 
 const section = (id: string) => container.querySelector(`section[aria-labelledby="${id}"]`) as HTMLElement
 
+// Relative times ("2 hours ago") read the local calendar: a real clock just after
+// midnight makes them "yesterday" (CI ran into it at 00:09 UTC). Only Date is faked, at
+// 14:00 local time; timers and promises stay real.
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"] })
+  vi.setSystemTime(new Date(2026, 9, 27, 14, 0, 0))
+})
+afterEach(() => {
+  vi.useRealTimers()
+})
+
 beforeEach(() => {
   container = document.createElement("div")
   document.body.appendChild(container)
