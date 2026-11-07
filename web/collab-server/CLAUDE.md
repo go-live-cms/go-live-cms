@@ -37,7 +37,10 @@ The server converts with `getInstalledCollabSchema()` (the default `schema` of
 from `themes/*/blocks/*/index.ts`. `build.mjs` resolves that glob with `importMetaGlob`
 when the bundle is built, so **adding or changing a theme block means rebuilding this
 image** (the Dockerfile copies `themes/`). The build **fails** if a theme's `editor.ts` or
-`render.tsx`, or React, gets into the bundle: only headless definitions belong here. The
+`render.tsx`, or React, gets into the bundle: only headless definitions belong here. It
+also fails on any module from **`web/src`** (#320): the image ships `collab-server/`,
+`gl-admin/` and `themes/` only, so a schema extension importing `@/lib/...` built locally and
+in vitest but broke the Docker build. Shared rules belong in `gl-admin/lib/blocks-spec`. The
 store validates installed theme blocks against their spec (`themeBlockLookup(schema)`),
 the same rules as the API, and `collab_listening` logs `theme_blocks` (checked by
 `process.test.ts`, which also stores an alert through the real bundle). Blocks of a theme

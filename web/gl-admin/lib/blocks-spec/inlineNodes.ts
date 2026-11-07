@@ -126,6 +126,19 @@ export function chipDateInstant(date: string): Date {
   return new Date(Date.UTC(y, m - 1, d, 12))
 }
 
+/**
+ * A chip as plain text without the site's settings: "Nov 12, 2026" (en-US, short), plus
+ * ", 2:30 PM" for a chip with a time. What the schema's `leafText` and `renderHTML` give
+ * (the block's `text`, the clipboard); the editor's view and the public page use the site's
+ * format (`src/lib/dateChips.ts`, which gives the same string for the default settings).
+ * Here, not in `src/`, because the collab server builds this schema and its image ships
+ * no `web/src`.
+ */
+export function defaultDateChipLabel(attrs: DateChipAttrs): string {
+  const day = new Intl.DateTimeFormat("en-US", { timeZone: "UTC", year: "numeric", month: "short", day: "numeric" }).format(chipDateInstant(attrs.date))
+  return attrs.time ? `${day}, ${formatChipTime(attrs.time)}` : day
+}
+
 /** "14:30" → "2:30 PM" (en-US) or "14:30", in `language`. */
 export function formatChipTime(time: string, language = "en-US"): string {
   const [h, m] = time.split(":").map(Number)

@@ -4,6 +4,7 @@ import {
   CONTENT_LINK_NODE,
   DATE_CHIP_NODE,
   dateChipAttrs,
+  defaultDateChipLabel,
   MENTION_NODE,
   normalizeChipDate,
   normalizeChipTime,
@@ -14,7 +15,6 @@ import {
   type DateChipAttrs,
   type MentionAttrs,
 } from "@gl-admin/lib/blocks-spec/inlineNodes"
-import { formatDateChip } from "@/lib/dateChips"
 
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {
@@ -219,5 +219,6 @@ export function contentLinkText(node: PMNode): string {
 /** The chip as plain text, in the default format (the editor's view uses the site's). */
 export function dateChipText(node: PMNode): string {
   const attrs = dateChipAttrs(node.attrs)
-  return attrs ? formatDateChip(attrs) : ""
+  // Not src/lib/dateChips: the collab server builds this schema, and its image ships no web/src.
+  return attrs ? defaultDateChipLabel(attrs) : ""
 }

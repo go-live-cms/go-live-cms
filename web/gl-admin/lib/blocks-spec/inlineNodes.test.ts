@@ -7,6 +7,7 @@ import {
   chipDateInstant,
   contentLinkAttrs,
   dateChipAttrs,
+  defaultDateChipLabel,
   formatChipTime,
   INLINE_LABEL_MAX_LENGTH,
   mentionAttrs,
@@ -49,5 +50,17 @@ describe("normalizers", () => {
     expect(formatChipTime("14:30", "en-US")).toBe("2:30 PM")
     expect(formatChipTime("14:30", "pt-BR")).toBe("14:30")
     expect(addDays("2026-12-31", 1)).toBe("2027-01-01")
+  })
+
+  it("labels a chip without site settings the way the site's default format does", async () => {
+    const { formatDateChip } = await import("../../../src/lib/dateChips")
+    for (const chip of [
+      { date: "2026-11-12", time: null, reminder: false },
+      { date: "2026-01-01", time: "09:05", reminder: true },
+      { date: "2028-02-29", time: "23:59", reminder: false },
+    ]) {
+      expect(defaultDateChipLabel(chip)).toBe(formatDateChip(chip))
+    }
+    expect(defaultDateChipLabel({ date: "2026-11-12", time: "14:30", reminder: false })).toBe("Nov 12, 2026, 2:30 PM")
   })
 })
