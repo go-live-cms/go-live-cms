@@ -9,7 +9,8 @@ import EmptyState from "@gl-admin/components/ui/EmptyState"
 import FilterSelect from "@gl-admin/components/ui/FilterSelect"
 import { CheckIcon, PlusIcon, SearchIcon, UploadIcon } from "@gl-admin/components/ui/icons"
 import { toast } from "@gl-admin/components/ui/Toast"
-import { getMedia, getMediaById, createMedia } from "@gl-admin/lib/api/media"
+import { getMedia, getMediaById } from "@gl-admin/lib/api/media"
+import { uploadMediaFile } from "@gl-admin/lib/mediaLookup"
 import { errorMessage } from "@gl-admin/lib/api/errors"
 import { MEDIA_SORTS, MISSING_ALT_PARAM, TYPE_FILTERS, countLine, findMediaSort } from "@gl-admin/lib/mediaLibrary"
 import { ignoresPaste, pastedImages } from "@gl-admin/lib/mediaPaste"
@@ -133,15 +134,8 @@ export default function Media() {
     if (files.length === 0) return
     const batch = files.map((file, i) => ({ key: `${Date.now()}-${i}-${file.name}`, name: file.name, error: null }))
     setUploads((prev) => [...batch, ...prev.filter((u) => u.error === null)])
-    const results = await Promise.allSettled(
-      files.map((file) => {
-        const form = new FormData()
-        form.append("file", file)
-        form.append("name", file.name)
-        form.append("description", `Uploaded file: ${file.name}`)
-        return createMedia(form)
-      })
-    )
+    // The editor's media picker uploads the same way (#423, `uploadMediaFile`).
+    const results = await Promise.allSettled(files.map((file) => uploadMediaFile(file)))
     const failed = new Map<string, string>()
     results.forEach((r, i) => {
       if (r.status === "rejected") failed.set(batch[i].key, errorMessage(r.reason, "Upload failed"))

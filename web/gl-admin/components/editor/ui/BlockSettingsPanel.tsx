@@ -11,6 +11,7 @@ import {
 } from "@gl-admin/lib/blocks-spec"
 import { catalogEntries, type BlockIconSpec } from "../blocks/catalog"
 import { BlockIcon } from "./BlockIcon"
+import MediaBlockSettings from "./MediaBlockSettings"
 import {
   ancestorBlocks,
   blockSpecTypeOf,
@@ -25,7 +26,8 @@ import {
 // block the selection is on or in, at any depth (a paragraph inside a group as well as the
 // group), its place ("Group › Paragraph", each container a button that selects it), and its
 // settings. Today only containers have settings here (a group's Width and Background, the
-// same as its toolbar); other blocks keep theirs on their toolbars.
+// same as its toolbar), and the media blocks their file with Replace (#423); other blocks
+// keep theirs on their toolbars.
 //
 // It reads the editor's state and changes a block with one `setNodeMarkup`, found by its id
 // when the button is pressed (a collaborator's edit moves positions, never ids). No plugin,
@@ -155,6 +157,8 @@ export default function BlockSettingsPanel({ editor }: { editor: TiptapEditor })
   const ref = refOfBlock(block)
   const info = blockInfo(block)
   const isGroup = block.node.type.name === "group"
+  // #423: the file a media block shows, with Replace.
+  const isMedia = ["image", "video", "audio", "file"].includes(block.node.type.name)
 
   return (
     <div className="block-settings">
@@ -197,6 +201,8 @@ export default function BlockSettingsPanel({ editor }: { editor: TiptapEditor })
             onPick={(value) => setAttr(ref, "style", value)}
           />
         </fieldset>
+      ) : isMedia ? (
+        <MediaBlockSettings editor={editor} node={block.node} blockRef={ref} />
       ) : (
         <p className="post-settings__hint">This block has no settings here. Its toolbar has its options.</p>
       )}

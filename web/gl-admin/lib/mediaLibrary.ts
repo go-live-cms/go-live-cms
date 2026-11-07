@@ -142,7 +142,8 @@ export const CROP_PREVIEWS = [
 ]
 
 // How a post uses a file (#176): its featured image, a content block showing it
-// (`block_id`, `block_type`: "image", or a theme block's "theme:<slug>/<block>"), or a
+// (`block_id`, `block_type`: "image", "video", "audio", "file" (#423), or a theme block's
+// "theme:<slug>/<block>"), or a
 // link made some other way ("attached").
 export interface MediaUsage {
   type: "featured" | "block" | "attached"

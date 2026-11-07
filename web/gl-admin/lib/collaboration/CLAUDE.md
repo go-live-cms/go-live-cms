@@ -247,8 +247,8 @@ kept so references in code stay valid.
 
 - Every block node type needs the **`data-block-id`** attr (added globally by
   `BlockIdExtension` to paragraph/heading/blockquote/codeBlock/horizontalRule/image/
-  bullet_list/ordered_list/listItem, callout/pullQuote/taskList/taskItem (#419) and every container, `CONTAINER_NODE_NAMES`). Custom/theme nodes must declare it too or
-  bullet_list/ordered_list/listItem/tableBlock and every container, `CONTAINER_NODE_NAMES`). Custom/theme nodes must declare it too or
+  bullet_list/ordered_list/listItem, callout/pullQuote/taskList/taskItem (#419), tableBlock (#420),
+  video/audio/file (#423) and every container, `CONTAINER_NODE_NAMES`). Custom/theme nodes must declare it too or
   `schema.nodeFromJSON` throws "Unsupported attribute".
 - **Callout, pull quote, to-do list (#419, three flow blocks).** Schema in `schemaExtensions`
   (`components/editor/extensions/Callout.ts`, `PullQuote.ts`, `TodoList.ts`: TipTap's TaskList/
@@ -353,6 +353,26 @@ kept so references in code stay valid.
     keys, picker, toolbar, paste), `TableBlock.collab.test.ts` (two users in different cells; a
     column and a row at once), `src/components/blocks/table/TableBlock.test.tsx`, Go
     `post_blocks_table_test.go`, and two cases in `nestingVectors.json`.
+- **Video, audio, file (#423, `components/editor/extensions/MediaBlocks.ts`): flow blocks, not in
+  the `block` group** (`STANDALONE_FLOW_NODE_NAMES`, like the table: a block of the doc or a group,
+  never part of a quote's or a list item's pm, which the page renders as text). Block Spec `video` /
+  `audio` v1: `mediaId` and `caption` (the **image's caption node**, `imageCaption`, as their
+  optional child: one node, one set of keys and bridge code; its parse rule's context is
+  `image/|video/|audio/`); `file` v1: `mediaId` and `label` (a node attr typed in the view's field,
+  last writer wins, stored as typed and normalized by the bridge, `normalizeFileLabel`). **No `src`,
+  name or size is stored**: the media library has them (the editor looks them up, the public page
+  reads the API's `media` map), so a replaced or deleted file shows as such everywhere and files are
+  served only from `/uploads`. The bridge keeps only a positive integer `mediaId` (a numeric string
+  is read as one) and a valid label, and leaves defaults out. `file` is an atom. The commands
+  (`insertMediaBlock`, `setBlockMedia`, `toggleMediaCaption`) are `MediaBlockCommands` in
+  `schemaExtensions` (no schema). Every change is one ordinary transaction from the user's own
+  input; the views have no appendTransaction (rule 7). **Stale clients:** a bundle from before #423
+  has none of the three nodes (and a narrower doc and group), so the fingerprint guard (#416)
+  refuses it (`schemaFingerprint.test.ts`). Tests: `blockBridge.media.test.ts`,
+  `components/editor/extensions/MediaBlocks.test.ts` (views, picker, upload, missing, read-only),
+  `MediaBlocks.collab.test.ts` (two users, the stored doc, a restart), the public
+  `src/components/blocks/mediaBlocks.test.tsx`, Go `post_blocks_media_blocks_test.go` and two cases
+  in `nestingVectors.json`.
 - `pmToBlockDoc` regenerates duplicate/invalid block ids.
 - **Known limitation:** a `code_block` with empty code can't be shown in the editor
   (ProseMirror disallows empty text nodes). It is dropped like any other unbuildable

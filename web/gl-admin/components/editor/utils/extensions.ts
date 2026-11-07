@@ -73,6 +73,11 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
       schema.todoList,
       schema.todoItem,
       schema.table,
+      schema.video,
+      schema.audio,
+      schema.file,
+      // #423: insert, set the file of, and caption the media blocks; no schema.
+      schema.mediaCommands,
       schema.blockId,
       BlockNodeViews,
       // #420: Tab / ⇧Tab between cells, only while the caret is in one; no schema.
@@ -95,6 +100,10 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
             case "horizontalRule":
               return ""
             case "image":
+              return ""
+            case "video":
+            case "audio":
+            case "file":
               return ""
             case "imageCaption":
             case "tableCaption":
