@@ -127,6 +127,10 @@ export const BlockIdExtension = Extension.create({
           "taskItem",
           // #420: the table block (the figure), not its grid, rows or cells.
           "tableBlock",
+          // #423
+          "video",
+          "audio",
+          "file",
           ...CONTAINER_NODE_NAMES,
         ],
         attributes: {

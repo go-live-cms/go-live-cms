@@ -22,6 +22,8 @@ import {
 import { TableView } from "@tiptap/extension-table"
 import { hasHeaderRow } from "./TableBlock"
 import { DETAILS_OPEN_HELP, DETAILS_OPEN_LABEL } from "./DetailsBlock"
+import { MediaBlockView, MediaLookupTracker, missingPanel } from "./MediaBlockViews"
+import { chooseMediaFor } from "../blocks/mediaPicking"
 
 const blockNodeViewsKey = new PluginKey("blockNodeViews")
 
@@ -78,6 +80,10 @@ export const BlockNodeViews = Extension.create({
             // #420: the table block (its toolbar) and the grid, which scrolls in its own box.
             tableBlock: (node, view, getPos) => new TableBlockView(node, view, getPos as () => number | undefined, editor),
             table: (node) => new GridView(node, TABLE_CELL_MIN_WIDTH),
+            // #423: video, audio, file (MediaBlockViews.ts).
+            video: (node, view, getPos) => new MediaBlockView(node, view, getPos as () => number | undefined, editor),
+            audio: (node, view, getPos) => new MediaBlockView(node, view, getPos as () => number | undefined, editor),
+            file: (node, view, getPos) => new MediaBlockView(node, view, getPos as () => number | undefined, editor),
           },
           // Marks the quote or pull quote the cursor is in, so its empty citation field
           // shows, and the group or callout it is in (or the selected group), so its
@@ -120,11 +126,19 @@ function setBlockId(dom: HTMLElement, node: PMNode) {
   else dom.removeAttribute("data-block-id")
 }
 
+/**
+ * An image: the picture, its caption and "Add caption" (#346). Since #423 an image whose
+ * media was deleted (the lookup's 404, `lib/mediaLookup.ts`) shows "The image file is
+ * missing" with Replace instead of a broken picture; a lookup that failed any other way
+ * leaves the image as it is (it still has its src).
+ */
 class ImageView implements NodeView {
   dom: HTMLElement
   contentDOM: HTMLElement
   private img: HTMLImageElement
   private addCaption: HTMLButtonElement
+  private missing: { dom: HTMLElement; replace: HTMLButtonElement } | null = null
+  private lookup = new MediaLookupTracker(() => this.render())
 
   constructor(
     private node: PMNode,
@@ -180,6 +194,32 @@ class ImageView implements NodeView {
     this.dom.dataset.align = isImageAlign(align) ? align : "inline"
     setBlockId(this.dom, this.node)
     this.addCaption.hidden = this.node.childCount > 0 || !this.view.editable
+    this.renderMissing()
+  }
+
+  private renderMissing() {
+    this.lookup.track(this.node.attrs.mediaId)
+    const isMissing = this.lookup.state?.status === "missing"
+    this.dom.classList.toggle("is-missing", isMissing)
+    this.img.hidden = isMissing
+    if (!isMissing) {
+      this.missing?.dom.remove()
+      this.missing = null
+      return
+    }
+    if (!this.missing) {
+      const name = typeof this.node.attrs.title === "string" && this.node.attrs.title.trim() ? this.node.attrs.title.trim() : "This image"
+      this.missing = missingPanel("image", "missing", `${name} is no longer in Media. Its caption is kept for the replacement.`, () => {
+        const pos = this.getPos()
+        if (pos !== undefined && this.view.editable) chooseMediaFor(this.editor, pos)
+      })
+      this.dom.insertBefore(this.missing.dom, this.contentDOM)
+    }
+    this.missing.replace.hidden = !this.view.editable
+  }
+
+  destroy() {
+    this.lookup.destroy()
   }
 
   update(node: PMNode) {
@@ -191,7 +231,7 @@ class ImageView implements NodeView {
 
   stopEvent(event: Event) {
     const target = event.target as globalThis.Node | null
-    if (target && this.addCaption.contains(target)) return true
+    if (target && (this.addCaption.contains(target) || this.missing?.dom.contains(target))) return true
     return event.type === "mousedown" && target === this.img
   }
 

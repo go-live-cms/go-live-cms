@@ -980,6 +980,9 @@ These are always available and don't need registration:
 | `group`        | Blocks kept together (`div.group`, `is-tinted`, `alignwide`/`alignfull`) |
 | `details`      | A summary readers open to see its blocks (`<details [open]><summary>`, below) |
 | `table`        | Rows and columns with an optional header row and caption (below) |
+| `video`        | A video from Media with the browser's player (`figure.video-block > video`), never autoplaying |
+| `audio`        | An audio file with the browser's player (`figure.audio-block > audio`) |
+| `file`         | A download row (`div.file-block`: `.file-icon`, `.file-text` with the link and `.file-meta` "PDF · 240 KB", `a.btn.file-download`) |
 
 **Every theme styles the three #419 blocks** and defines `.sr-only` (the callout says its
 tone in a visually hidden span): they render with only their classes
@@ -1021,6 +1024,12 @@ Make `.table-scroll` scroll sideways (`overflow-x: auto`) and give the `<table>`
 page; the box is focusable, so show its focus ring (the arrow keys scroll it). Without a
 caption the region is named "Table" (`aria-label`). Cells hold paragraphs only, rendered
 inline with `<br>` between them. The default theme's rules are in `styles/theme.css`.
+
+**Media blocks (#423).** Video, audio and file render only when the file is there: a block
+whose media was deleted is left out with its caption (so is an image), and files come only
+from `/uploads`. Give `.video-block video` and `.audio-block audio` the text column's width
+and lay `.file-block` out as a row that wraps on a phone; the default theme's rules are in
+`styles/theme.css`.
 
 ---
 

@@ -118,6 +118,13 @@ the collab server.
   a time (`imagePipelineSlots`). Published docs served by `GET /posts/:id`, `/posts/slug/:slug`
   and `/public/posts/:id/blocks` get a derived `media` map for image blocks
   (`post_block_media.go`) so the renderer can emit `srcset` and `object-position`.
+  **Media blocks (#423):** video, audio and file blocks store only `mediaId` (plus `caption` /
+  `label`), so their entries also carry `mime_type`, `file_size`, `name` and `filename` (the
+  uploaded name, which a download is saved as), and their URL is that `media_path` (always
+  `/uploads/...`; the sanitizer keeps no `src` on them: `sanitizePlayableAttrs`,
+  `sanitizeFileAttrs`, allowlists). Ids the lookup didn't find are listed in **`media_missing`**
+  (sorted): the media was deleted, and the renderer leaves those blocks out, the image's too. A
+  failed lookup adds neither key, so an image still renders from its `src`.
 - **Missing alt text (#325, `000026`):** alt is optional on upload (no file-name fallback;
   bulk uploads store `""`), `PUT /media/:id` `alt: ""` clears it (absent keeps; name and
   description still treat `""` as keep), and `media.decorative` marks an image whose empty
@@ -131,7 +138,8 @@ the collab server.
   featured image, > 0 = content link, and `blocks` (jsonb `[{"id","type"}]`) = the content
   blocks showing it, in document order, for the order-0 row too. `SyncPostContentMedia`
   takes parallel `media_ids`/`block_ids`/`block_types` (`db.ContentMediaUse`, built by
-  `BlockDocV1.contentMediaUses`; the Tx params' `ContentMedia`). Unsetting or replacing the
+  `BlockDocV1.contentMediaUses`: every media block, `mediaBlockTypes` = image, video, audio, file
+  since #423; the Tx params' `ContentMedia`). Unsetting or replacing the
   featured image goes through `UnlinkPostFeaturedMedia`, which keeps an image that is also in
   the body as a content link. `GET /media/:id/posts` adds `usages` (`featured` | `block` |
   `attached`, `mediaUsages`). One row per pair keeps #325's counts unchanged.

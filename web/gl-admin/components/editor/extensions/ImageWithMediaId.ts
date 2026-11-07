@@ -38,7 +38,8 @@ export function findSelectedImage(state: EditorState): { pos: number; node: PMNo
 }
 
 /**
- * An image's caption (#346): the image node's only, optional child. Its own node, not
+ * An image's caption (#346): the image node's only, optional child, and since #423 a
+ * video's and an audio block's (the same node: one set of rules, keys and bridge code). Its own node, not
  * an attribute, so two people typing in one caption merge like any other text (Yjs),
  * and not the image's own inline content, which would make the image a textblock that
  * "turn into" and the slash menu could replace. Plain text runs with bold, italic and
@@ -53,9 +54,10 @@ export const ImageCaption = Node.create({
   defining: true,
 
   parseHTML() {
-    // Only inside an image: a pasted <figcaption> on its own (the paste sanitizer drops
-    // images) must stay text, not get wrapped in an empty image.
-    return [{ tag: "figcaption", context: "image/" }]
+    // Only inside an image, a video or an audio block (#423, which share it): a pasted
+    // <figcaption> on its own (the paste sanitizer drops media) must stay text, not get
+    // wrapped in an empty image.
+    return [{ tag: "figcaption", context: "image/|video/|audio/" }]
   },
 
   renderHTML({ HTMLAttributes }) {

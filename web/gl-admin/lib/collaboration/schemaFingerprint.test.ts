@@ -209,10 +209,10 @@ describe("schemaFingerprint (#416)", () => {
     })
 
     it("details (#421) changed it: new node types, and a doc and a group that name details", () => {
-      // The schema as it was before #421: no details nodes, a doc and a group without them.
+      // The schema as it was before #421 (after #423): no details nodes, a doc and a group without them.
       const { document: _document, group: _group, details, ...rest } = schemaExtensions({ collaborating: true })
-      const OldDocument = Node.create({ name: "doc", topNode: true, content: "(block | tableBlock | group)+" })
-      const OldGroup = Group.extend({ content: "(block | tableBlock)+" })
+      const OldDocument = Node.create({ name: "doc", topNode: true, content: "(block | tableBlock | video | audio | file | group)+" })
+      const OldGroup = Group.extend({ content: "(block | tableBlock | video | audio | file)+" })
       const before = getSchema([OldDocument, ...Object.values({ ...rest, group: OldGroup })])
       expect(before.nodes.details).toBeUndefined()
       for (const name of ["details", "detailsSummary"]) expect(getCoreSchema().nodes[name], name).toBeDefined()
@@ -225,6 +225,30 @@ describe("schemaFingerprint (#416)", () => {
       // The open attr is in it: a tab whose details has none is refused too.
       const openless = getSchema(Object.values({ ...schemaExtensions({ collaborating: true }), details: details.extend({ addAttributes: () => ({}) }) }))
       expect(schemaFingerprint(openless)).not.toBe(core)
+    })
+
+    it("the video, audio and file blocks (#423) changed it: three node types, named by the doc and a group", () => {
+      // The schema as it was before #423 (and #421): no media nodes, no details, and the doc and the group name
+      // only the table next to `block`.
+      const { video, audio, file, mediaCommands: _commands, document: _document, group: _group, details: _details, ...rest } = schemaExtensions({ collaborating: true })
+      const OldDocument = Node.create({ name: "doc", topNode: true, content: "(block | tableBlock | group)+" })
+      const OldGroup = Group.extend({ content: "(block | tableBlock)+" })
+      const before = getSchema([OldDocument, ...Object.values({ ...rest, group: OldGroup })])
+      for (const name of ["video", "audio", "file"]) {
+        expect(before.nodes[name], name).toBeUndefined()
+        expect(getCoreSchema().nodes[name], name).toBeDefined()
+      }
+      const old = schemaFingerprint(before)
+      expect(old).not.toBe(core)
+      // A stale tab with only some of them (a bundle from midway) still differs from both.
+      for (const added of [{ video }, { audio }, { file }]) {
+        const one = schemaFingerprint(getSchema([OldDocument, ...Object.values({ ...rest, group: OldGroup, ...added })]))
+        expect(one, Object.keys(added)[0]).not.toBe(old)
+        expect(one, Object.keys(added)[0]).not.toBe(core)
+      }
+      // Their attrs are part of it: a file block without its label attr is another schema.
+      const noLabel = getSchema(Object.values({ ...schemaExtensions({ collaborating: true }), file: file.extend({ addAttributes: () => ({ mediaId: { default: null } }) }) }))
+      expect(schemaFingerprint(noLabel)).not.toBe(core)
     })
 
     it("an extension without schema doesn't", () => {

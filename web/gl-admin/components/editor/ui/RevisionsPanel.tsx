@@ -21,6 +21,7 @@ import VersionDiff, {
   VERSION_ONLY_LABEL,
   WORKING_ONLY_LABEL,
 } from "./VersionDiff"
+import { useFileBlockMedia } from "@gl-admin/lib/docMedia"
 import "@gl-admin/assets/styles/components/editor/revisions-panel.scss"
 
 interface RevisionsPanelProps {
@@ -184,6 +185,9 @@ export default function RevisionsPanel({
 }
 
 /** A REST block doc as a full one: `{}` (a post that never had blocks, rule 14) is empty. */
+/** No doc yet (the comparison is loading): stable, so the media hook doesn't loop. */
+const EMPTY_DOC: BlockDocV1 = { doc_version: 1, blocks_order: [], blocks: {} }
+
 function fullDoc(doc: BlockDocV1 | Record<string, never> | null | undefined): BlockDocV1 {
   const d = doc as Partial<BlockDocV1> | null | undefined
   return {
@@ -273,7 +277,9 @@ export function VersionPreview({ version, postId, workingKey = 0 }: VersionPrevi
       ? comparison
       : null
   // Stable per version, so a re-render of the page doesn't re-render a long comparison.
-  const versionDoc = useMemo(() => fullDoc(version.doc), [version])
+  // Video, audio and file blocks render from the media map (#423, `lib/docMedia.ts`).
+  const versionDoc = useFileBlockMedia(useMemo(() => fullDoc(version.doc), [version]))
+  const workingDoc = useFileBlockMedia(ready?.working ?? EMPTY_DOC)
   const title = version.settings?.title?.trim() ? version.settings.title : null
 
   return (
@@ -330,7 +336,7 @@ export function VersionPreview({ version, postId, workingKey = 0 }: VersionPrevi
 
       {ready && !(versionDoc.blocks_order.length === 0 && ready.working.blocks_order.length === 0) ? (
         <div className="revisions-preview__content">
-          <VersionDiff diff={ready.diff} version={versionDoc} working={ready.working} />
+          <VersionDiff diff={ready.diff} version={versionDoc} working={workingDoc} />
         </div>
       ) : versionDoc.blocks_order.length === 0 ? (
         <p className="revisions-panel__empty">This version is empty.</p>

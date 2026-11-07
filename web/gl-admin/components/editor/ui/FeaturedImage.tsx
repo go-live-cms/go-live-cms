@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react"
-import FeaturedImageSelector from "./FeaturedImageSelector"
+import MediaPicker from "@gl-admin/components/media/MediaPicker"
 import { getMediaVariantPreviewURL } from "@gl-admin/lib/api/media"
 import type { Media } from "@gl-admin/lib/api/types"
 import "@gl-admin/assets/styles/components/editor/featured-image.scss"
@@ -104,11 +104,14 @@ const FeaturedImage: React.FC<FeaturedImageProps> = ({
         )}
       </div>
 
-      <FeaturedImageSelector
+      <MediaPicker
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSelect={handleImageSelect}
-        currentFeaturedImage={featuredImage}
+        kind="image"
+        current={featuredImage}
+        title="Select Featured Image"
+        removeLabel="Remove Featured Image"
       />
     </div>
   )

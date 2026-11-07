@@ -38,6 +38,10 @@ export const FLOW_TYPES = [
   "todo_list",
   // #420
   "table",
+  // #423
+  "video",
+  "audio",
+  "file",
 ] as const
 
 /**
@@ -47,7 +51,8 @@ export const FLOW_TYPES = [
  * would be hidden in that block's `pm` and the public renderer, which renders only text
  * there, would drop them. The flow content expressions name them next to `block`.
  */
-export const STANDALONE_FLOW_NODE_NAMES = ["tableBlock"] as const
+// The media blocks (#423) too: a video, audio or file in a quote's pm would never render.
+export const STANDALONE_FLOW_NODE_NAMES = ["tableBlock", "video", "audio", "file"] as const
 
 /**
  * The list types: `children` are their items, as before #414. Each list has one item
@@ -134,6 +139,10 @@ export const BLOCK_NODE_NAMES: Readonly<Record<string, string>> = {
   todo_item: "taskItem",
   // #420: the block node is the figure (`tableBlock`: the `table` plus its caption).
   table: "tableBlock",
+  // #423
+  video: "video",
+  audio: "audio",
+  file: "file",
   ...Object.fromEntries(Object.entries(CONTAINERS).map(([type, rule]) => [type, rule.node])),
 }
 

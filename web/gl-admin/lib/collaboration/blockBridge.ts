@@ -9,6 +9,10 @@ import {
   normalizeBlockColor,
   normalizeCalloutTone,
   normalizeCite,
+  normalizeFileLabel,
+  AUDIO_BLOCK_VERSION,
+  FILE_BLOCK_VERSION,
+  VIDEO_BLOCK_VERSION,
   type BlockColor,
   type BlockDocV1,
   type Block,
@@ -337,6 +341,30 @@ function pmNodeToBlock(node: PMNode, allBlocks: Record<BlockID, Block>, seenIds:
     case "tableBlock":
       return tableNodeToBlock(node, id)
 
+    // #423. The file is the media id alone (its URL, name and size are the media
+    // library's); a caption like an image's, a file's label by `normalizeFileLabel`.
+    // Empty ones left out, so a block with no file yet stores only its id and type.
+    case "video":
+    case "audio": {
+      const caption = captionOf(node)
+      return {
+        id,
+        type: node.type.name,
+        version: node.type.name === "video" ? VIDEO_BLOCK_VERSION : AUDIO_BLOCK_VERSION,
+        attrs: { ...mediaIdAttr(node.attrs.mediaId), ...(caption ? { caption } : {}) },
+      } as Block
+    }
+
+    case "file": {
+      const label = normalizeFileLabel(node.attrs.label)
+      return {
+        id,
+        type: "file",
+        version: FILE_BLOCK_VERSION,
+        attrs: { ...mediaIdAttr(node.attrs.mediaId), ...(label ? { label } : {}) },
+      }
+    }
+
     default:
       // Custom/theme block - preserve full PM data for round-trip fidelity
       return {
@@ -457,6 +485,12 @@ function mediaIdOf(value: unknown): number | undefined {
   if (typeof value === "number" && Number.isFinite(value)) return value
   if (typeof value === "string" && /^\d+$/.test(value.trim())) return Number(value.trim())
   return undefined
+}
+
+/** `{ mediaId }` for a media id that is a positive integer (`zVideo` etc.), else nothing. */
+function mediaIdAttr(value: unknown): { mediaId?: number } {
+  const id = mediaIdOf(value)
+  return id !== undefined && Number.isInteger(id) && id > 0 ? { mediaId: id } : {}
 }
 
 /**
@@ -943,6 +977,24 @@ function blockToPMNode(block: Block, allBlocks: Record<BlockID, Block>, ctx: Con
 
     case "table":
       return tableBlockToPM(block, baseAttrs, ctx.schema)
+
+    // #423. Only a valid media id and label make it into the node; the caption like an
+    // image's (no child without one).
+    case "video":
+    case "audio": {
+      const caption = captionToPM((block.attrs as { caption?: unknown }).caption, ctx.schema)
+      return {
+        type: block.type,
+        attrs: { ...baseAttrs, ...mediaIdAttr((block.attrs as { mediaId?: unknown }).mediaId) },
+        ...(caption.length > 0 ? { content: [{ type: "imageCaption", content: caption }] } : {}),
+      }
+    }
+
+    case "file": {
+      const attrs = block.attrs as { mediaId?: unknown; label?: unknown }
+      const label = normalizeFileLabel(attrs.label)
+      return { type: "file", attrs: { ...baseAttrs, ...mediaIdAttr(attrs.mediaId), ...(label ? { label } : {}) } }
+    }
 
     case "list_item":
       if (block.attrs.pm) {

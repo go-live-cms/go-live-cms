@@ -238,6 +238,17 @@ interface BlockComponentProps {
   (`colgroup` when it spans columns; a header cell never spans rows). Cells come from
   `tableRows` (paragraphs only, spans clamped) and render like a list item's text. The theme
   makes `.table-scroll` scroll sideways (`themes/README.md`).
+- **Video, audio, file (#423, "Published · media & embeds"):** they store only a media id, so
+  they render from the `media` map the API attaches to a served doc (`utils/mediaFile.ts`
+  `blockFileFor`: the entry's `media_path`, accepted only under `/uploads/`, never the block's
+  attrs). `video/` and `audio/` are `figure.video-block > video` / `figure.audio-block > audio`
+  with `controls`, `preload="none"` and **no autoplay**, named by the caption's text (else the
+  media's name), a download link inside for a browser that can't play it, then the
+  `figcaption`. `file/` is `div.file-block > span.file-icon + div.file-text (a +
+  span.file-meta "PDF · 240 KB") + a.btn.btn-secondary.file-download`; both links carry
+  `download` = the uploaded file's name. Nothing renders for a block with no file, a media the
+  API lists in `media_missing` (deleted: left out with its caption, the image too), or one with
+  no entry (the lookup failed; an image then renders from its own `src`).
 - **`anchorId`** (#356, "Copy link to block"): every top-level block's root element gets
   it as its `id`, so `/<post url>#b-<block id>` lands on it. A heading keeps its slug id
   (#351) and puts the anchor on an empty `<span class="gl-block-anchor">` at its start.

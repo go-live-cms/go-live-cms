@@ -1,9 +1,9 @@
 @use "@gl-admin/assets/styles/mixins";
 
-// The featured image picker (a dialog from the settings panel). On the design tokens
-// since #341; it used to switch on prefers-color-scheme.
+// The media picker (#423, `components/media/MediaPicker.tsx`): the featured and social
+// images' dialog before, every media block's now. On the design tokens since #341.
 
-.gl-featured-image-selector {
+.gl-media-picker {
   display: flex;
   flex-direction: column;
   max-height: 70vh;
@@ -21,6 +21,71 @@
   &__search {
     flex: 1;
     max-width: 300px;
+  }
+
+  &__actions {
+    align-items: center;
+    display: flex;
+    gap: var(--space-2);
+  }
+
+  &__sr {
+    @include mixins.visually-hidden;
+  }
+
+  // The kind filter (no `kind`: every file), the library's own TYPE_FILTERS.
+  &__filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+  }
+
+  &__filter {
+    background: var(--background);
+    border: 0;
+    border-radius: var(--radius-full);
+    box-shadow: inset 0 0 0 1px var(--border-strong);
+    color: var(--text-primary);
+    cursor: pointer;
+    font: inherit;
+    font-size: var(--type-label);
+    height: 28px;
+    padding: 0 var(--space-3);
+
+    &[aria-checked="true"] {
+      background: var(--accent-solid);
+      box-shadow: none;
+      color: var(--accent-on);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--focus-ring);
+      outline-offset: 1px;
+    }
+  }
+
+  &__status {
+    color: var(--text-secondary);
+    font-size: var(--type-label);
+    margin: 0 0 var(--space-3);
+
+    &:empty {
+      display: none;
+    }
+  }
+
+  &__footer {
+    align-items: center;
+    display: flex;
+    gap: var(--space-2);
+    justify-content: flex-end;
+    width: 100%;
+  }
+
+  &__count {
+    color: var(--text-secondary);
+    margin-right: auto;
   }
 
   &__search-input {
@@ -97,21 +162,34 @@
     display: grid;
     gap: var(--space-4);
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    list-style: none;
+    margin: 0;
     max-height: 50vh;
     overflow-y: auto;
-    padding: var(--space-4) 0;
+    padding: var(--space-4) 2px;
   }
 
   &__item {
     background: var(--background-subtle);
     border: 2px solid transparent;
     border-radius: 8px;
+    color: inherit;
     cursor: pointer;
+    display: block;
+    font: inherit;
     overflow: hidden;
+    padding: 0;
+    text-align: left;
     transition: border-color var(--duration-fast) var(--ease-out);
+    width: 100%;
 
     &:hover {
       border-color: var(--accent-border);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--focus-ring);
+      outline-offset: 2px;
     }
 
     &--selected,
@@ -128,6 +206,7 @@
 
   &__thumbnail {
     background: var(--background-hover);
+    display: block;
     height: 120px;
     overflow: hidden;
     position: relative;
@@ -180,12 +259,36 @@
     white-space: nowrap;
   }
 
+  // A video, audio or file tile: its format ("MP4", "PDF") on the kind's tint.
+  &__kind {
+    align-items: center;
+    color: var(--text-secondary);
+    display: flex;
+    font-size: var(--type-label);
+    font-weight: 700;
+    height: 100%;
+    justify-content: center;
+    letter-spacing: 0.04em;
+    width: 100%;
+  }
+
   &__info {
+    display: block;
     padding: var(--space-2) var(--space-3);
+  }
+
+  &__meta {
+    color: var(--text-secondary);
+    display: block;
+    font-size: var(--type-footnote);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   &__name {
     color: var(--text-primary);
+    display: block;
     font-size: var(--type-label);
     line-height: var(--type-label-lh);
     margin: 0;

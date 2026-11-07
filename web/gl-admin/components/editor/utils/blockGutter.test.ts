@@ -38,6 +38,9 @@ const PM_NODE: Record<string, string> = {
   todo_list: "taskList",
   table: "tableBlock",
   details: "details",
+  video: "video",
+  audio: "audio",
+  file: "file",
 }
 
 // The table asks for its size first (#420): Create table with the defaults.

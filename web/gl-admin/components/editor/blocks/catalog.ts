@@ -4,6 +4,7 @@ import { holderAcceptsType } from "../utils/blockTree"
 import { createImagePlaceholder } from "./mediaBlocks"
 import { openTableSizePicker } from "../ui/TableSizePicker"
 import { TABLE_ICON } from "../extensions/TableBlock"
+import { MEDIA_BLOCK_ICONS } from "@gl-admin/lib/blocks-spec"
 
 // The block catalog (#415, docs/design/block-library.md 3.1): every block the editor can
 // insert, in one list. The slash menu, the + menu in the gutter, Turn into (turnInto.ts)
@@ -93,6 +94,10 @@ export const ICONS = {
   table: TABLE_ICON,
   // #421, the canvas's Details tile.
   details: "M4 6l3 3-3 3M11 9h9M4 16h16",
+  // #423 ("Editor · image, gallery, video, audio, file")
+  video: MEDIA_BLOCK_ICONS.video,
+  audio: MEDIA_BLOCK_ICONS.audio,
+  file: MEDIA_BLOCK_ICONS.file,
 } as const
 
 const chain = (editor: Editor, range: InsertRange) => editor.chain().focus().deleteRange(range)
@@ -249,6 +254,35 @@ export const CORE_BLOCKS: readonly CatalogEntry[] = [
     keywords: ["img", "picture", "photo"],
     icon: { path: ICONS.image },
     insert: (editor, range) => createImagePlaceholder(editor, range),
+  },
+  // #423: an empty block ("Upload" / "Choose from Media"); the file comes from the shared
+  // media picker or an upload (blocks/mediaPicking.ts). The line it's typed on is replaced.
+  {
+    id: "video",
+    type: "video",
+    name: "Video",
+    group: "media",
+    keywords: ["movie", "clip", "mp4", "webm", "film"],
+    icon: { path: ICONS.video },
+    insert: (editor, range) => chain(editor, range).insertMediaBlock("video").run(),
+  },
+  {
+    id: "audio",
+    type: "audio",
+    name: "Audio",
+    group: "media",
+    keywords: ["sound", "music", "podcast", "mp3", "recording"],
+    icon: { path: ICONS.audio },
+    insert: (editor, range) => chain(editor, range).insertMediaBlock("audio").run(),
+  },
+  {
+    id: "file",
+    type: "file",
+    name: "File",
+    group: "media",
+    keywords: ["download", "pdf", "document", "attachment"],
+    icon: { path: ICONS.file },
+    insert: (editor, range) => chain(editor, range).insertMediaBlock("file").run(),
   },
   // Layout
   {

@@ -240,7 +240,16 @@ const TYPE_LABELS: Record<string, string> = {
   todo_list: "To-do list",
   todo_item: "To-do",
   table: "Table",
+  // #423
+  video: "Video",
+  audio: "Audio",
+  file: "File",
 }
+
+/** The media blocks without text of their own (#423): their caption or label is diffed instead. */
+const MEDIA_ONLY = new Set(["image", "video", "audio", "file"])
+/** The blocks whose caption is a word diff (an image's, a table's, a video's, an audio block's). */
+const CAPTIONED = new Set(["image", "table", "video", "audio"])
 
 /** "Heading", "Bulleted list", or a theme block's name ("theme:example/alert" → "Alert"). */
 export function blockTypeLabel(type: string): string {
@@ -309,6 +318,15 @@ function attrChanges(v: Block, w: Block): AttrChange[] {
       add("title", "Title", display(va.title), display(wa.title))
       const width = (a: Record<string, unknown>) => WIDTH_LABELS[String(a.align ?? "inline")] ?? WIDTH_LABELS.inline
       add("align", "Width", width(va), width(wa))
+      break
+    }
+    // #423: the file is the media id (the library has its name), a file's link text its label.
+    case "video":
+    case "audio":
+    case "file": {
+      const media = (a: Record<string, unknown>) => (typeof a.mediaId === "number" ? `Media #${a.mediaId}` : null)
+      add("file", "File", media(va), media(wa))
+      if (v.type === "file") add("label", "Link text", display(va.label), display(wa.label))
       break
     }
     case "group": {
@@ -510,8 +528,8 @@ function diffBlock(id: string, v: Block, w: Block, vDoc: Doc, wDoc: Doc, moved: 
   }
 
   const attrs = attrChanges(v, w)
-  const text = v.type === "image" || v.type === "divider" ? undefined : diffTokens(blockTokens(w), blockTokens(v))
-  const caption = v.type === "image" || v.type === "table" ? diffTokens(captionTokens(w), captionTokens(v)) : undefined
+  const text = MEDIA_ONLY.has(v.type) || v.type === "divider" ? undefined : diffTokens(blockTokens(w), blockTokens(v))
+  const caption = CAPTIONED.has(v.type) ? diffTokens(captionTokens(w), captionTokens(v)) : undefined
   const changed = attrs.length > 0 || (text ? hasChanges(text) : false) || (caption ? hasChanges(caption) : false)
   return {
     id,

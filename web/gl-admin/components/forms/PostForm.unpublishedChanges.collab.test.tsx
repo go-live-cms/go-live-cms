@@ -80,7 +80,7 @@ vi.mock("@gl-admin/components/editor/ui/PostSidebar", () => ({ default: () => nu
 vi.mock("@gl-admin/components/editor/ui/BubbleMenu", () => ({ default: () => null }))
 vi.mock("@gl-admin/components/editor/ui/BlockTypeToolbar", () => ({ default: () => null }))
 vi.mock("@gl-admin/components/editor/ui/DragHandle", () => ({ default: () => null }))
-vi.mock("@gl-admin/components/editor/ui/MediaSelector", () => ({ default: () => null }))
+vi.mock("@gl-admin/components/editor/ui/MediaPickerHost", () => ({ default: () => null }))
 vi.mock("@gl-admin/components/editor/ui/CharacterCount", () => ({ default: () => null }))
 
 import { blockAPIClient } from "@gl-admin/lib/api/blockAPI"

@@ -102,15 +102,17 @@ describe("the nesting table", () => {
   })
 
   it("derives the content expressions", () => {
-    expect(containerContent("group")).toBe("(block | tableBlock | details)+")
+    expect(containerContent("group")).toBe("(block | tableBlock | video | audio | file | details)+")
     // #421: its part first, then flow.
-    expect(containerContent("details")).toBe("detailsSummary (block | tableBlock)+")
-    expect(topLevelContent()).toBe("(block | tableBlock | group | details)+")
+    expect(containerContent("details")).toBe("detailsSummary (block | tableBlock | video | audio | file)+")
+    expect(topLevelContent()).toBe("(block | tableBlock | video | audio | file | group | details)+")
   })
 
   it("details (#421): holds flow, sits at the top or in a group, its summary a part (never a block)", () => {
     expect(acceptsChild("details", "paragraph")).toBe(true)
     expect(acceptsChild("details", "table")).toBe(true)
+    expect(acceptsChild("details", "video")).toBe(true)
+    expect(acceptsChild("details", "file")).toBe(true)
     expect(acceptsChild("details", "theme:example/alert")).toBe(true)
     expect(acceptsChild("details", "details")).toBe(false)
     expect(acceptsChild("details", "group")).toBe(false)
