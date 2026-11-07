@@ -237,6 +237,29 @@ describe("schemaFingerprint (#416)", () => {
       expect(schemaFingerprint(blockCells)).not.toBe(core)
     })
 
+    it("the video, audio and file blocks (#423) changed it: three node types, named by the doc and a group", () => {
+      // The schema as it was before #423: no media nodes, and the doc and the group name
+      // only the table next to `block`.
+      const { video, audio, file, mediaCommands: _commands, document: _document, group: _group, ...rest } = schemaExtensions({ collaborating: true })
+      const OldDocument = Node.create({ name: "doc", topNode: true, content: "(block | tableBlock | group)+" })
+      const OldGroup = Group.extend({ content: "(block | tableBlock)+" })
+      const before = getSchema([OldDocument, ...Object.values({ ...rest, group: OldGroup })])
+      for (const name of ["video", "audio", "file"]) {
+        expect(before.nodes[name], name).toBeUndefined()
+        expect(getCoreSchema().nodes[name], name).toBeDefined()
+      }
+      const old = schemaFingerprint(before)
+      expect(old).not.toBe(core)
+      // A stale tab with only some of them (a bundle from midway) still differs from both.
+      for (const added of [{ video }, { audio }, { file }]) {
+        const one = schemaFingerprint(getSchema([OldDocument, ...Object.values({ ...rest, group: OldGroup, ...added })]))
+        expect(one, Object.keys(added)[0]).not.toBe(old)
+        expect(one, Object.keys(added)[0]).not.toBe(core)
+      }
+      // Their attrs are part of it: a file block without its label attr is another schema.
+      const noLabel = getSchema(Object.values({ ...schemaExtensions({ collaborating: true }), file: file.extend({ addAttributes: () => ({ mediaId: { default: null } }) }) }))
+      expect(schemaFingerprint(noLabel)).not.toBe(core)
+    })
     it("an extension without schema doesn't", () => {
       expect(withExtra(Extension.create({ name: "shortcuts", addKeyboardShortcuts: () => ({}) }))).toBe(core)
     })

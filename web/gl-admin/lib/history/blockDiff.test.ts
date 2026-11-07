@@ -186,6 +186,23 @@ describe("diffBlockDocs", () => {
       ])
     })
 
+    it("video, audio and file (#423): the file, a caption as a word diff, a file's link text", () => {
+      const video = (id: string, mediaId: number, caption?: string) => ({
+        type: "video",
+        attrs: { "data-block-id": id, mediaId },
+        ...(caption ? { content: [{ type: "imageCaption", content: [text(caption)] }] } : {}),
+      })
+      const file = (id: string, mediaId: number, label?: string) => ({ type: "file", attrs: { "data-block-id": id, mediaId, label: label ?? null } })
+      const v = entry(diffBlockDocs(doc(video(A, 8, "The launch walkthrough")), doc(video(A, 7, "The launch"))).entries, A)
+      expect(v.status).toBe("changed")
+      expect(v.attrs.map((a) => [a.key, a.version, a.working])).toEqual([["file", "Media #8", "Media #7"]])
+      expect(show(v.caption)).toBe("The launch[+ walkthrough]")
+      expect(v.text).toBeUndefined()
+      const f = entry(diffBlockDocs(doc(file(B, 9, "Checklist")), doc(file(B, 9))).entries, B)
+      expect(f.attrs.map((a) => [a.key, a.version, a.working])).toEqual([["label", "Checklist", null]])
+      expect(isIdentical(diffBlockDocs(doc(file(B, 9, "x")), doc(file(B, 9, "x"))))).toBe(true)
+    })
+
     it("quote citation (#346)", () => {
       const e = entry(diffBlockDocs(doc(quote(A, "Words.", "Ana")), doc(quote(A, "Words."))).entries, A)
       expect(e.attrs).toEqual([{ key: "cite", label: "Citation", version: "Ana", working: null }])

@@ -1,13 +1,17 @@
 import React, { useContext } from "react"
-import { captionRuns, isImageAlign } from "@gl-admin/lib/blocks-spec"
+import { captionRuns, isImageAlign, isMediaMissing } from "@gl-admin/lib/blocks-spec"
 import type { BlockComponentProps } from "../types"
 import { renderContent } from "../utils/contentRenderer"
 import { blockMediaFor, ImageSizesContext, isFirstImageBlock, responsiveImageAttrs } from "../utils/responsiveImage"
 
 const ImageBlock: React.FC<BlockComponentProps> = ({ block, doc, anchorId }) => {
   const attrs = block.attrs as Record<string, unknown>
-  const title = attrs?.title as string | undefined
   const sizes = useContext(ImageSizesContext)
+  // The image was deleted from Media (#423, the API's `media_missing`): left out, caption
+  // and all, rather than a broken image. A failed lookup is not that: the image then
+  // renders from its own src.
+  if (isMediaMissing(doc, attrs?.mediaId)) return null
+  const title = attrs?.title as string | undefined
   const media = blockMediaFor(doc, attrs?.mediaId)
   // A decorative image (#325) is skipped by screen readers whatever alt text the block
   // was inserted with.

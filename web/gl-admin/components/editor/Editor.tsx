@@ -29,7 +29,7 @@ import type { PostCommentsStore } from "@gl-admin/lib/commentsStore"
 import { PostBlockEditsStore } from "@gl-admin/lib/blockEditsStore"
 import { BlockEditsContext } from "./blockEditsContext"
 import CharacterCount from "./ui/CharacterCount"
-import MediaSelector from "./ui/MediaSelector"
+import MediaPickerHost from "./ui/MediaPickerHost"
 import { getExtensions } from "./utils/extensions"
 import { scrollToCollaborator } from "./utils/cursorAwareness"
 import { reloadPage } from "./utils/reloadPage"
@@ -482,7 +482,7 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
           <DragHandle editor={editor} postUrl={postUrl} onComment={commentsLive ? onComment : undefined} />
         </BlockEditsContext.Provider>
       )}
-      {!readOnly && <MediaSelector editor={editor} postId={postId} />}
+      {!readOnly && <MediaPickerHost editor={editor} postId={postId} />}
 
       <div className="editor-wrapper">
         {commentsLive && comments ? (

@@ -292,6 +292,224 @@
     display: block;
   }
 
+  // Video, audio and file (#423, MediaBlockViews.ts; the canvas's "Editor · image,
+  // gallery, video, audio, file" and "Errors & empty states"). A selected block gets the
+  // selection outline; the empty one is a dashed drop zone; a missing file the danger tint.
+  .editor-media {
+    border-radius: 8px;
+    margin: 12px 0;
+    position: relative;
+
+    // stylelint-disable-next-line selector-class-pattern
+    &.ProseMirror-selectednode {
+      outline: 2px solid var(--selected-border-color);
+      outline-offset: 2px;
+    }
+
+    // stylelint-disable-next-line selector-class-pattern
+    &.ProseMirror-selectednode ::selection {
+      background: transparent;
+    }
+  }
+
+  .editor-media__drop {
+    background: var(--background-subtle);
+    border: 1px dashed var(--control-border);
+    border-radius: 8px;
+    color: var(--text-secondary);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-4);
+
+    p {
+      font-size: var(--type-label);
+      margin: 0;
+    }
+  }
+
+  .editor-media__drop-head {
+    align-items: center;
+    color: var(--text-primary);
+    display: flex;
+    font-weight: 600;
+    gap: var(--space-2);
+  }
+
+  .editor-media__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .editor-media__button {
+    align-items: center;
+    background: var(--background);
+    border: 0;
+    border-radius: var(--radius-md);
+    box-shadow: inset 0 0 0 1px var(--border-strong);
+    color: var(--text-primary);
+    cursor: pointer;
+    display: inline-flex;
+    flex: none;
+    font: inherit;
+    font-size: var(--type-label);
+    font-weight: 500;
+    height: 32px;
+    padding: 0 var(--space-3);
+
+    &:hover {
+      background: var(--background-hover);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--focus-ring);
+      outline-offset: 1px;
+    }
+
+    &--static {
+      cursor: default;
+    }
+
+    &[hidden] {
+      display: none;
+    }
+  }
+
+  .editor-media__player {
+    background: var(--background-subtle);
+    border-radius: 8px;
+    display: block;
+    width: 100%;
+
+    &--video {
+      aspect-ratio: 16 / 9;
+    }
+
+    &--audio {
+      background: transparent;
+    }
+  }
+
+  .editor-media__loading {
+    background: var(--background-subtle);
+    border-radius: 8px;
+    color: var(--text-secondary);
+    font-size: var(--type-label);
+    padding: var(--space-4);
+  }
+
+  .editor-media__file {
+    align-items: center;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    display: flex;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+  }
+
+  .editor-media__file-icon {
+    align-items: center;
+    background: var(--background-subtle);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    display: flex;
+    flex: none;
+    height: 44px;
+    justify-content: center;
+    width: 36px;
+  }
+
+  .editor-media__file-text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .editor-media__label {
+    background: transparent;
+    border: 0;
+    border-radius: 4px;
+    color: var(--text-selected);
+    font: inherit;
+    font-weight: 600;
+    padding: 0 2px;
+    width: 100%;
+
+    &::placeholder {
+      color: var(--text-selected);
+      opacity: 0.7;
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--focus-ring);
+      outline-offset: 1px;
+    }
+  }
+
+  .editor-media__meta {
+    color: var(--text-secondary);
+    font-size: var(--type-footnote);
+    padding: 0 2px;
+  }
+
+  .editor-media__status {
+    color: var(--text-secondary);
+    font-size: var(--type-footnote);
+    margin: var(--space-1) 0 0;
+
+    &:empty {
+      display: none;
+    }
+  }
+
+  // "A media file that's missing": an icon and words as well as the colour.
+  .editor-media__missing {
+    align-items: center;
+    background: var(--danger-bg);
+    border: 1px dashed var(--danger-text);
+    border-radius: 8px;
+    color: var(--text-primary);
+    display: grid;
+    gap: 2px var(--space-3);
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    padding: var(--space-3) var(--space-4);
+  }
+
+  .editor-media__missing-icon {
+    color: var(--danger-text);
+    grid-row: span 2;
+  }
+
+  .editor-media__missing-title {
+    font-weight: 600;
+  }
+
+  .editor-media__missing-text {
+    font-size: var(--type-label);
+    grid-column: 2;
+  }
+
+  .editor-media__missing .editor-media__button {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+  }
+
+  // An image's missing state takes the picture's place, centred, like the canvas.
+  .editor-image__figure.is-missing .editor-media__missing {
+    align-content: center;
+    aspect-ratio: 3 / 2;
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    text-align: center;
+
+    > * {
+      grid-column: 1;
+      grid-row: auto;
+    }
+  }
+
   // The quote's citation field (#346): shown when it has one, or the cursor is in the
   // quote, or on hover.
   .editor-quote__cite {
@@ -1187,6 +1405,13 @@
     &:focus-visible {
       outline: 2px solid var(--focus-ring);
       outline-offset: -2px;
+    }
+
+    // A worded button (the media toolbar's Replace, #423).
+    &--text {
+      font-size: var(--type-label);
+      font-weight: 500;
+      padding: 0 var(--space-2);
     }
   }
 

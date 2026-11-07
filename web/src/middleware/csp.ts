@@ -59,6 +59,8 @@ export function buildAdminCsp({ nonce, pageOrigin, apiUrl, collabUrl }: AdminCsp
     "style-src": ["'self'", "'unsafe-inline'"],
     // blob: for local image previews before upload; data: for inline SVG/icons.
     "img-src": ["'self'", "data:", "blob:", ...extra([apiOrigin])],
+    // The editor's video and audio players (#423) play files from /uploads, like images.
+    "media-src": ["'self'", ...extra([apiOrigin])],
     "font-src": ["'self'", "data:"],
     "connect-src": connectSrc,
     // History's diff worker (#355) is a bundled same-origin file. Explicit, so blob: and

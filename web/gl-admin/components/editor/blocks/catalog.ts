@@ -4,6 +4,7 @@ import { holderAcceptsType } from "../utils/blockTree"
 import { createImagePlaceholder } from "./mediaBlocks"
 import { openTableSizePicker } from "../ui/TableSizePicker"
 import { TABLE_ICON } from "../extensions/TableBlock"
+import { MEDIA_BLOCK_ICONS } from "@gl-admin/lib/blocks-spec"
 
 // The block catalog (#415, docs/design/block-library.md 3.1): every block the editor can
 // insert, in one list. The slash menu, the + menu in the gutter, Turn into (turnInto.ts)
@@ -91,6 +92,10 @@ export const ICONS = {
   pullQuote: "M4 3h16M4 21h16M7 15c2 0 3-1 3-4V8H6v3h3M14 15c2 0 3-1 3-4V8h-4v3h3",
   callout: "M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M12 16v-4M12 8h.01",
   table: TABLE_ICON,
+  // #423 ("Editor · image, gallery, video, audio, file")
+  video: MEDIA_BLOCK_ICONS.video,
+  audio: MEDIA_BLOCK_ICONS.audio,
+  file: MEDIA_BLOCK_ICONS.file,
 } as const
 
 const chain = (editor: Editor, range: InsertRange) => editor.chain().focus().deleteRange(range)
@@ -236,6 +241,35 @@ export const CORE_BLOCKS: readonly CatalogEntry[] = [
     keywords: ["img", "picture", "photo"],
     icon: { path: ICONS.image },
     insert: (editor, range) => createImagePlaceholder(editor, range),
+  },
+  // #423: an empty block ("Upload" / "Choose from Media"); the file comes from the shared
+  // media picker or an upload (blocks/mediaPicking.ts). The line it's typed on is replaced.
+  {
+    id: "video",
+    type: "video",
+    name: "Video",
+    group: "media",
+    keywords: ["movie", "clip", "mp4", "webm", "film"],
+    icon: { path: ICONS.video },
+    insert: (editor, range) => chain(editor, range).insertMediaBlock("video").run(),
+  },
+  {
+    id: "audio",
+    type: "audio",
+    name: "Audio",
+    group: "media",
+    keywords: ["sound", "music", "podcast", "mp3", "recording"],
+    icon: { path: ICONS.audio },
+    insert: (editor, range) => chain(editor, range).insertMediaBlock("audio").run(),
+  },
+  {
+    id: "file",
+    type: "file",
+    name: "File",
+    group: "media",
+    keywords: ["download", "pdf", "document", "attachment"],
+    icon: { path: ICONS.file },
+    insert: (editor, range) => chain(editor, range).insertMediaBlock("file").run(),
   },
   // Layout
   {

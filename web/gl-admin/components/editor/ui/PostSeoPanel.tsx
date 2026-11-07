@@ -1,5 +1,5 @@
 import React, { useEffect, useId, useState } from "react"
-import FeaturedImageSelector from "./FeaturedImageSelector"
+import MediaPicker from "@gl-admin/components/media/MediaPicker"
 import { getMediaById, getMediaSocialPreviewURL } from "@gl-admin/lib/api/media"
 import type { Media, PostSEOSettings } from "@gl-admin/lib/api/types"
 import {
@@ -389,12 +389,13 @@ export default function PostSeoPanel({
         )}
       </div>
 
-      <FeaturedImageSelector
+      <MediaPicker
         isOpen={picking}
         onClose={() => setPicking(false)}
+        kind="image"
         title="Choose a social image"
         removeLabel="Use the featured image"
-        currentFeaturedImage={socialImage}
+        current={socialImage}
         onSelect={(media) => {
           setSocialImage(media)
           set({ social_image_id: media?.id ?? null })

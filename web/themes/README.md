@@ -979,6 +979,9 @@ These are always available and don't need registration:
 | `todo_item`    | A to-do list's item, `checked` or not                     |
 | `group`        | Blocks kept together (`div.group`, `is-tinted`, `alignwide`/`alignfull`) |
 | `table`        | Rows and columns with an optional header row and caption (below) |
+| `video`        | A video from Media with the browser's player (`figure.video-block > video`), never autoplaying |
+| `audio`        | An audio file with the browser's player (`figure.audio-block > audio`) |
+| `file`         | A download row (`div.file-block`: `.file-icon`, `.file-text` with the link and `.file-meta` "PDF · 240 KB", `a.btn.file-download`) |
 
 **Every theme styles the three #419 blocks** and defines `.sr-only` (the callout says its
 tone in a visually hidden span): they render with only their classes
@@ -1013,6 +1016,12 @@ text passes 4.5:1 on, in light and dark (a link inside it too), and keep `sup`/`
 opening up the line: the default theme's `styles/theme.css` uses
 `font-size: 0.72em; line-height: 0; position: relative; vertical-align: baseline` with
 `top: -0.5em` / `bottom: -0.25em`.
+
+**Media blocks (#423).** Video, audio and file render only when the file is there: a block
+whose media was deleted is left out with its caption (so is an image), and files come only
+from `/uploads`. Give `.video-block video` and `.audio-block audio` the text column's width
+and lay `.file-block` out as a row that wraps on a phone; the default theme's rules are in
+`styles/theme.css`.
 
 ---
 

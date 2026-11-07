@@ -15,6 +15,7 @@ import { PullQuote } from "../../components/editor/extensions/PullQuote"
 import { TodoItem, TodoList } from "../../components/editor/extensions/TodoList"
 import { TableBlock } from "../../components/editor/extensions/TableBlock"
 import { GlHighlight, GlSubscript, GlSuperscript } from "../../components/editor/extensions/InlineMarks"
+import { AudioBlock, FileBlock, MediaBlockCommands, VideoBlock } from "../../components/editor/extensions/MediaBlocks"
 
 const lowlight = createLowlight(common)
 
@@ -85,6 +86,14 @@ export function schemaExtensions({ collaborating }: { collaborating: boolean }) 
     // #420: the table block (figure: TipTap's table, cells `paragraph+`, plus a caption).
     // After paragraph, so `block` content still fills with a paragraph.
     table: TableBlock,
+    // #423: video, audio and file (media library files by id; the image is above). Not in
+    // the `block` group, like the table. Each changes the fingerprint (#416).
+    video: VideoBlock,
+    audio: AudioBlock,
+    file: FileBlock,
+    // Their commands (insert, set the file, caption): no schema, kept next to the nodes so
+    // every editor built from these has them, like the table's.
+    mediaCommands: MediaBlockCommands,
     blockId: BlockIdExtension,
   }
 }

@@ -35,7 +35,7 @@ const customHtml: CatalogEntry = {
   icon: { path: ICONS.html },
   insert: () => {},
 }
-// The design's /vid example, with embeds the catalog doesn't have yet.
+// The design's /vid example: the Video block (#423) and embeds the catalog doesn't have yet.
 const video = (name: string, group: CatalogEntry["group"], keywords: string[] = []): CatalogEntry => ({
   id: name.toLowerCase(),
   type: name.toLowerCase(),
@@ -45,7 +45,7 @@ const video = (name: string, group: CatalogEntry["group"], keywords: string[] = 
   icon: { path: ICONS.image },
   insert: () => {},
 })
-const withEmbeds = [...CORE_BLOCKS, video("Video", "media", ["movie"]), video("YouTube", "embeds", ["video"]), video("Vimeo", "embeds", ["video"])]
+const withEmbeds = [...CORE_BLOCKS, video("YouTube", "embeds", ["video"]), video("Vimeo", "embeds", ["video"])]
 
 const names = (entries: readonly CatalogEntry[]) => entries.map((e) => e.name)
 const sectionNames = (query: string, entries: readonly CatalogEntry[] = CORE_BLOCKS) =>
@@ -75,7 +75,7 @@ describe("the catalog", () => {
           "Table",
         ],
       ],
-      ["Media", ["Image"]],
+      ["Media", ["Image", "Video", "Audio", "File"]],
       ["Layout", ["Divider", "Group"]],
     ])
     expect(BLOCK_GROUPS.map((g) => g.label)).toEqual(["Text", "Media", "Layout", "Embeds", "Advanced"])
@@ -202,6 +202,9 @@ const PM_NODE: Record<string, string> = {
   pull_quote: "pullQuote",
   todo_list: "taskList",
   table: "tableBlock",
+  video: "video",
+  audio: "audio",
+  file: "file",
 }
 
 describe("insert", () => {

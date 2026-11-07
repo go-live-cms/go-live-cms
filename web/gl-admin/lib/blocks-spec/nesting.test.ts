@@ -100,8 +100,8 @@ describe("the nesting table", () => {
   })
 
   it("derives the content expressions", () => {
-    expect(containerContent("group")).toBe("(block | tableBlock)+")
-    expect(topLevelContent()).toBe("(block | tableBlock | group)+")
+    expect(containerContent("group")).toBe("(block | tableBlock | video | audio | file)+")
+    expect(topLevelContent()).toBe("(block | tableBlock | video | audio | file | group)+")
   })
 
   it("a group holds flow: core flow types, theme blocks and unknown types, never a container or a list item", () => {

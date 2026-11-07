@@ -280,9 +280,9 @@ function ChangedBlock({ entry, version, working }: { entry: BlockDiffEntry; vers
     }
   }
 
-  if ((block.type === "image" || block.type === "table") && !typeChanged) {
-    // The image (or table, #420) as it renders, with its caption replaced by the caption's
-    // diff; a table's changed cell text under it.
+  if (["image", "table", "video", "audio"].includes(block.type) && !typeChanged) {
+    // The image (or table, #420, or video or audio, #423) as it renders, with its caption
+    // replaced by the caption's diff; a table's changed cell text under it.
     const attrs = { ...(block.attrs as Record<string, unknown>) }
     delete attrs.caption
     const bare = { ...version, blocks: { ...version.blocks, [entry.id]: { ...block, attrs } as Block } }

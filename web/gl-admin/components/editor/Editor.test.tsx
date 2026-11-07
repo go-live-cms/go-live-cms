@@ -72,7 +72,7 @@ vi.mock("./ui/DragHandle", async () => {
     },
   }
 })
-vi.mock("./ui/MediaSelector", () => ({ default: () => null }))
+vi.mock("./ui/MediaPickerHost", () => ({ default: () => null }))
 vi.mock("./ui/CharacterCount", () => ({ default: () => null }))
 vi.mock("./ui/LinkModal", () => ({ default: () => null }))
 
