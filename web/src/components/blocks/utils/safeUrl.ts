@@ -1,12 +1,12 @@
 /**
- * URL sanitization helpers for the public Block Spec v1 renderer (issue #188). (No CSS
- * values any more: a highlight is the theme's one colour since #418.)
+ * URL sanitization helpers for the public Block Spec v1 renderer (issue #188). No CSS
+ * values reach the renderer any more: a highlight is the theme's one colour since #418.
  *
  * Defence in depth alongside the server-side sanitizer in `api/post_blocks_sanitize.go`:
  * the server cleans content on save, but content already stored before the sanitizer
  * existed is only made safe here, at render time. React/Astro escape text and attribute
- * VALUES, but they do NOT block dangerous URL schemes (javascript:) or CSS values — these
- * helpers do. Keep the logic in sync with the Go sanitizer.
+ * VALUES, but they do NOT block dangerous URL schemes (javascript:) — these helpers do.
+ * Keep the logic in sync with the Go sanitizer.
  */
 
 const SAFE_HREF_SCHEMES = new Set(["http", "https", "mailto", "tel"])

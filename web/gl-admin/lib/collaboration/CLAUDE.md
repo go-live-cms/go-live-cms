@@ -359,7 +359,10 @@ kept so references in code stay valid.
   (`excludes`, each also itself), so neither builds without the other. Block Spec keeps them as
   runs with no attrs (`{type:"highlight"}`); captions don't allow them (`CAPTION_MARKS`).
   ⌘⇧H is Highlight's own shortcut; ⌘. and ⌘, are exact (`exactShortcut`: no Shift, so ⌘⇧, stays
-  #417's settings panel; ProseMirror's keymap would retry a shifted `,` without Shift).
+  #417's settings panel; ProseMirror's keymap would retry a shifted `,` without Shift; a
+  non-ASCII key there, Cyrillic or Greek, matches by `keyCode` as the keymap would).
+  Highlight has no `==text==` input or paste rule (not one of the Markdown shortcuts, and it
+  would highlight pasted `a == b == c`).
   - **Concurrent excluded marks:** Yjs keeps each formatting attribute on its own, so two people
     setting superscript and subscript on one word at once (or bold and inline code, which
     excludes every mark) leave a run with both. y-tiptap builds it unchecked (the editors show

@@ -21,22 +21,30 @@ import Superscript from "@tiptap/extension-superscript"
  * Each mark changes the schema fingerprint (#416): a tab from before #418 would delete a
  * highlighted run a newer peer typed (rule 10), so it is refused at its reconnect.
  */
-export const GlHighlight = Highlight.configure({ multicolor: false })
+// No `==text==` input or paste rule: it isn't one of the editor's Markdown shortcuts
+// (design 3.2), and it would highlight " b " in pasted or typed "a == b == c".
+export const GlHighlight = Highlight.extend({
+  addInputRules: () => [],
+  addPasteRules: () => [],
+}).configure({ multicolor: false })
 
 /**
  * ⌘. / ⌘, exactly: Mod and the key, no Shift or Alt. Not TipTap's `Mod-,` keymap entry:
  * ProseMirror's keymap retries a shifted character key without its Shift, so `Mod-,` would
  * also take ⌘⇧, (the settings panel, #417) whenever that one passes, or on a layout whose
- * Shift+, still reads ",". Returns false (the key goes on) where the mark can't be set,
- * as in a caption.
+ * Shift+, still reads ",". Like that keymap, a layout whose key there types something that
+ * isn't ASCII (Cyrillic, Greek: Ctrl+. reads "ю") matches by `keyCode`. Returns false (the
+ * key goes on) where the mark can't be set, as in a caption.
  */
-function exactShortcut(key: string, run: () => boolean): Plugin {
+function exactShortcut(key: string, keyCode: number, run: () => boolean): Plugin {
   return new Plugin({
-    key: new PluginKey(`glScriptShortcut${key}`),
+    key: new PluginKey(`glScriptShortcut${keyCode}`),
     props: {
       handleKeyDown(_view, event) {
         const mod = isMacOS() ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
-        if (!mod || event.shiftKey || event.altKey || event.key !== key) return false
+        if (!mod || event.shiftKey || event.altKey) return false
+        const nonAscii = event.key.length === 1 && !/[\x20-\x7e]/.test(event.key)
+        if (event.key !== key && !(nonAscii && event.keyCode === keyCode)) return false
         return run()
       },
     },
@@ -47,7 +55,7 @@ export const GlSuperscript = Superscript.extend({
   excludes: "superscript subscript",
   addKeyboardShortcuts: () => ({}),
   addProseMirrorPlugins() {
-    return [exactShortcut(".", () => this.editor.commands.toggleSuperscript())]
+    return [exactShortcut(".", 190, () => this.editor.commands.toggleSuperscript())]
   },
 })
 
@@ -55,7 +63,7 @@ export const GlSubscript = Subscript.extend({
   excludes: "subscript superscript",
   addKeyboardShortcuts: () => ({}),
   addProseMirrorPlugins() {
-    return [exactShortcut(",", () => this.editor.commands.toggleSubscript())]
+    return [exactShortcut(",", 188, () => this.editor.commands.toggleSubscript())]
   },
 })
 

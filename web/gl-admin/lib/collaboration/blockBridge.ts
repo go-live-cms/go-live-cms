@@ -359,6 +359,18 @@ function blockColorOf(node: PMNode): { blockColor?: BlockColor } {
  */
 const COLOR_NODE_TYPES = new Set<string>(BLOCK_COLOR_NODE_TYPES)
 
+const markRankCache = new WeakMap<Schema, Map<string, number>>()
+
+/** Each mark type's rank: `schema.marks` is in rank order (`MarkType.rank` isn't typed). */
+function markRanks(schema: Schema): Map<string, number> {
+  let ranks = markRankCache.get(schema)
+  if (!ranks) {
+    ranks = new Map(Object.keys(schema.marks).map((name, index) => [name, index]))
+    markRankCache.set(schema, ranks)
+  }
+  return ranks
+}
+
 /**
  * `marks` (ProseMirror JSON) without the marks a schema's `excludes` rule out, as
  * ProseMirror's `Mark.addToSet` would leave them, taken in schema rank order so the
@@ -375,12 +387,11 @@ const COLOR_NODE_TYPES = new Set<string>(BLOCK_COLOR_NODE_TYPES)
 export function withoutExcludedMarks(marks: unknown, schema: Schema): unknown {
   if (!Array.isArray(marks) || marks.length < 2) return marks
   const typeOf = (mark: any) => (typeof mark?.type === "string" ? schema.marks[mark.type] : undefined)
-  // `schema.marks` is in rank order (MarkType's `rank` isn't in its typings).
-  const rank = (name: string) => Object.keys(schema.marks).indexOf(name)
+  const rank = markRanks(schema)
   const ranked = marks
     .map((mark, index) => ({ mark, index, type: typeOf(mark) }))
     .filter((entry) => entry.type)
-    .sort((a, b) => rank(a.type!.name) - rank(b.type!.name) || a.index - b.index)
+    .sort((a, b) => rank.get(a.type!.name)! - rank.get(b.type!.name)! || a.index - b.index)
   let kept: typeof ranked = []
   for (const entry of ranked) {
     if (kept.some((other) => other.type!.excludes(entry.type!) && !entry.type!.excludes(other.type!))) continue
@@ -408,14 +419,9 @@ export function withValidMarkSets(json: any, schema: Schema): any {
 }
 
 function pmJSON(node: PMNode, ...topLevel: string[]): any {
-  const schema = node.type.schema
   const clean = (json: any, root: boolean): any => {
     if (!json || typeof json !== "object") return json
     let out = json
-    if (Array.isArray(json.marks)) {
-      const marks = withoutExcludedMarks(json.marks, schema)
-      if (marks !== json.marks) out = { ...out, marks }
-    }
     if (json.attrs && typeof json.attrs === "object") {
       const attrs = { ...json.attrs }
       if (root) for (const name of topLevel) delete attrs[name]
@@ -429,7 +435,8 @@ function pmJSON(node: PMNode, ...topLevel: string[]): any {
     if (Array.isArray(json.content)) out = { ...out, content: json.content.map((child: any) => clean(child, false)) }
     return out
   }
-  return clean(node.toJSON(), true)
+  // Excluded marks resolved as at seed (#418), so a run two users gave both is stored valid.
+  return withValidMarkSets(clean(node.toJSON(), true), node.type.schema)
 }
 
 /**

@@ -131,6 +131,34 @@ describe("commands and shortcuts (#418)", () => {
     expect(runs(editor)).toEqual([["alpha", []]])
   })
 
+  it("⌘. and ⌘, work on a layout whose keys there aren't ASCII (by keyCode), not on another ASCII key", () => {
+    const editor = makeEditor(doc(para("alpha beta")))
+    select(editor, "alpha")
+    expect(press(editor, "ю", { keyCode: 190 })).toBe(true) // Russian: the . key
+    select(editor, "beta")
+    expect(press(editor, "б", { keyCode: 188 })).toBe(true) // Russian: the , key
+    expect(runs(editor)).toEqual([
+      ["alpha", ["superscript"]],
+      [" ", []],
+      ["beta", ["subscript"]],
+    ])
+    // A layout where that key types a different ASCII character isn't ⌘. or ⌘,.
+    select(editor, "alpha")
+    expect(press(editor, ":", { keyCode: 190 })).toBe(false)
+  })
+
+  it("has no ==text== input or paste rule: typed or pasted == stays text", () => {
+    const editor = makeEditor(doc(para("x")))
+    editor.commands.setTextSelection(2)
+    for (const ch of " a == b ==") {
+      const { from, to } = editor.state.selection
+      const insert = () => editor.state.tr.insertText(ch, from, to)
+      if (!editor.view.someProp("handleTextInput", (f) => f(editor.view, from, to, ch, insert))) editor.commands.insertContent(ch)
+    }
+    editor.view.pasteText(" c == d == e", new Event("paste") as ClipboardEvent)
+    expect(runs(editor)).toEqual([["x a == b == c == d == e", []]])
+  })
+
   it("turning subscript on replaces superscript, and back; highlight stays", () => {
     const editor = makeEditor(doc(para("x2")))
     select(editor, "2")
