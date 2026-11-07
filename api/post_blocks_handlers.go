@@ -95,16 +95,17 @@ func (doc *BlockDocV1) prepareForStore(themeBlocks ThemeBlockManifest) error {
 	return nil
 }
 
-// contentMediaUses lists the document's image blocks with a mediaId, in
-// document order at any depth (blocks_order, then children depth first: an image in a
-// group counts, #414), for the post_media sync (#176): each block is one use, so a
-// media shown twice gives two.
+// contentMediaUses lists the document's media blocks (image, and since #423 video, audio
+// and file: `mediaBlockTypes`) with a mediaId, in document order at any depth
+// (blocks_order, then children depth first: an image in a group counts, #414), for the
+// post_media sync (#176, "Used in"): each block is one use, so a media shown twice gives
+// two.
 func (doc *BlockDocV1) contentMediaUses() []db.ContentMediaUse {
 	uses := make([]db.ContentMediaUse, 0)
 
 	doc.walkBlocks(func(blockID string, blockMap map[string]interface{}) {
 		blockType, ok := blockMap["type"].(string)
-		if !ok || blockType != "image" {
+		if !ok || !mediaBlockTypes[blockType] {
 			return
 		}
 		attrs, ok := blockMap["attrs"].(map[string]interface{})
@@ -123,9 +124,9 @@ func (doc *BlockDocV1) contentMediaUses() []db.ContentMediaUse {
 	return uses
 }
 
-// publishedContentMedia gives PublishPostTx the image blocks of the published
+// publishedContentMedia gives PublishPostTx the media blocks of the published
 // body, in document order. A body that doesn't parse as a block doc has no
-// content images.
+// content media.
 func publishedContentMedia(blockDoc json.RawMessage) []db.ContentMediaUse {
 	var doc BlockDocV1
 	if err := json.Unmarshal(blockDoc, &doc); err != nil {

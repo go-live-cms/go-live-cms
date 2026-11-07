@@ -11,6 +11,10 @@ collab server (`web/collab-server/`) converts between the two. See
 - `index.ts`: the TypeScript types (`BlockDocV1`, `Block`, the per-type attrs) and the Zod
   validators (`validateBlockDoc`), which the collab server's store runs before writing
   `block_doc` (#214).
+- `media.ts` (#423): the media blocks' shared rules: which blocks hold media and the picker
+  kind each takes (`MEDIA_BLOCK_KINDS`), the upload `accept` lists, the file label's rules, the
+  "PDF · 240 KB" line, the icons, and `isMediaMissing` (the API's `media_missing`: a deleted
+  media, not a failed lookup).
 - `nesting.ts` (#414): **the nesting table** (which types are containers and what each holds),
   the shared block predicate `isBlockNode`, the content expressions, `dedupeBlockRefs`,
   `nestingIssues` (the structural checks `validateBlockDoc` runs) and `blocksInReadingOrder`.
@@ -58,6 +62,13 @@ posts.block_doc → publish → post_versions → public site (SSR)
   `attrs.headerRow: true` (absent: none) makes the first row the header row. `attrs.caption`
   is runs like an image's, `attrs.text` the cells' text. `tableRows(pm)` reads it as the
   renderer does. Rules: `../collaboration/CLAUDE.md` (blockBridge notes, Table).
+- **video** / **audio** (#423): flow; `attrs.mediaId` (a positive integer, the media library
+  item; absent: no file yet) and `attrs.caption` (runs, like an image's). No `src`: the file's URL,
+  type and size are the media library's (`media.ts`; the public page reads the API's `media` map,
+  so files are served only from `/uploads`)
+- **file** (#423): flow; `attrs.mediaId` and `attrs.label`, the link text (plain, by
+  `normalizeFileLabel`: trimmed, at most `FILE_LABEL_MAX_LENGTH` code points; absent: the file's
+  name)
 - Theme blocks: unknown types keep their ProseMirror JSON in `attrs.pm` and round-trip
   unchanged.
 

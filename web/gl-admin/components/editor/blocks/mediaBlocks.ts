@@ -1,7 +1,4 @@
 import type { Editor as TiptapEditor } from "@tiptap/core"
-import { getMediaURL } from "@gl-admin/lib/api"
-import { createPostMedia } from "@gl-admin/lib/api/posts"
-import type { Media } from "@gl-admin/lib/api/types"
 
 export const createImagePlaceholder = (editor: TiptapEditor, range: { from: number; to: number }) => {
   const placeholderSrc =
@@ -30,17 +27,19 @@ function isEditorViewReady(editor: TiptapEditor): boolean {
   }
 }
 
+/**
+ * Opens the media picker when an image placeholder (an image block with no file yet) is
+ * clicked. The picker and what happens after are `mediaPicking.ts` (#423).
+ */
 export class MediaBlockManager {
   private editor: TiptapEditor
-  private postId?: number
   private onShowMediaSelector: (position: number) => void
   private cleanupImageClick?: () => void
   private retryTimer?: ReturnType<typeof setInterval>
   private retryTimeout?: ReturnType<typeof setTimeout>
 
-  constructor(editor: TiptapEditor, postId?: number, onShowMediaSelector?: (position: number) => void) {
+  constructor(editor: TiptapEditor, onShowMediaSelector?: (position: number) => void) {
     this.editor = editor
-    this.postId = postId
     this.onShowMediaSelector = onShowMediaSelector || (() => {})
     // Defer setup until editor view is ready
     if (isEditorViewReady(editor)) {
@@ -99,39 +98,6 @@ export class MediaBlockManager {
     this.cleanupImageClick = () => {
       if (isEditorViewReady(this.editor)) {
         editorElement.removeEventListener("click", handleImageClick)
-      }
-    }
-  }
-
-  async handleMediaSelect(media: Media, imagePosition: number): Promise<void> {
-    const imageUrl = getMediaURL(media.media_path)
-    const { view } = this.editor
-    const { state } = view
-    const { doc } = state
-    const resolvedPos = doc.resolve(imagePosition)
-    const imageNode = resolvedPos.nodeAfter
-
-    if (imageNode && imageNode.type.name === "image") {
-      // Keep the other attrs (the width, #346); the caption is the node's content and
-      // stays too. The media's description is not copied into the caption, nor into the
-      // alt text: uploads have none by default (#325), and the description then reads
-      // "Uploaded file: name.jpg". A decorative image gets an empty alt.
-      const transaction = state.tr.setNodeMarkup(imagePosition, imageNode.type, {
-        ...imageNode.attrs,
-        src: imageUrl,
-        alt: media.decorative ? "" : media.alt?.trim() || "",
-        title: media.name || "",
-        mediaId: media.id,
-      })
-      view.dispatch(transaction)
-
-      if (this.postId) {
-        try {
-          await createPostMedia(this.postId, media.id, 1)
-          console.log(`Successfully linked media ${media.id} to post ${this.postId} as content image`)
-        } catch (error) {
-          console.error("Failed to link media to post:", error)
-        }
       }
     }
   }

@@ -65,6 +65,16 @@ describe("usedInRows (the “Used in” data)", () => {
     ])
   })
 
+  it("names the video, audio and file blocks (#423)", () => {
+    const block = (id: string, block_type: string): MediaUsage => ({ type: "block", block_id: id, block_type })
+    const rows = usedInRows([
+      { ...link(1, "gallery"), usages: [block("a", "video")] },
+      { ...link(2, "gallery"), usages: [block("b", "audio"), block("c", "audio")] },
+      { ...link(3, "featured"), usages: [{ type: "featured" }, block("d", "file")] },
+    ])
+    expect(rows.map((r) => r.how)).toEqual(["Video block", "2 audio blocks", "Featured image and file block"])
+  })
+
   it("labels each usage in order", () => {
     expect(usageLabels({ relationship_type: "featured", usages: [{ type: "featured" }, { type: "block", block_id: "x" }] })).toEqual([
       "featured image",

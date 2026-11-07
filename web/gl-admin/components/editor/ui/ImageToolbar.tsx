@@ -4,7 +4,8 @@ import type { Editor as TiptapEditor } from "@tiptap/core"
 import { NodeSelection } from "@tiptap/pm/state"
 import Tooltip from "@gl-admin/components/ui/Tooltip"
 import type { ImageAlign } from "@gl-admin/lib/blocks-spec"
-import { findSelectedImage } from "../extensions/ImageWithMediaId"
+import { findSelectedMediaBlock, MEDIA_NODE_NAMES } from "../extensions/MediaBlocks"
+import { chooseMediaFor } from "../blocks/mediaPicking"
 
 /** Safely check if editor view is mounted (TipTap v3 throws on .view access) */
 function isViewMounted(editor: TiptapEditor): boolean {
@@ -66,18 +67,39 @@ interface ImageToolbarProps {
   editor: TiptapEditor
 }
 
+const LABELS: Record<string, string> = { image: "Image", video: "Video", audio: "Audio", file: "File" }
+const isMediaSelection = (selection: unknown) =>
+  selection instanceof NodeSelection && (MEDIA_NODE_NAMES as readonly string[]).includes(selection.node.type.name)
+
 /**
- * The image toolbar (#346): width (content, wide, full) and the caption on/off. Shown
- * while the image itself is selected; the caption has the selection toolbar.
+ * The media blocks' toolbar: an image's width (content, wide, full) and caption on/off
+ * (#346), and since #423 every media block's Replace (the shared picker, `mediaPicking.ts`)
+ * and the caption of a video or audio block. Shown while the block itself is selected; a
+ * caption has the selection toolbar.
  */
 const ImageToolbar = ({ editor }: ImageToolbarProps) => {
-  const [state, setState] = useState<{ align: ImageAlign; hasCaption: boolean }>({ align: "inline", hasCaption: false })
+  const [state, setState] = useState<{ name: string; align: ImageAlign; hasCaption: boolean; hasFile: boolean }>({
+    name: "image",
+    align: "inline",
+    hasCaption: false,
+    hasFile: false,
+  })
 
   const update = useCallback(() => {
-    const image = editor ? findSelectedImage(editor.state) : null
-    if (!image) return
-    setState({ align: image.node.attrs.align ?? "inline", hasCaption: image.node.childCount > 0 })
+    const block = editor ? findSelectedMediaBlock(editor.state) : null
+    if (!block) return
+    setState({
+      name: block.node.type.name,
+      align: block.node.attrs.align ?? "inline",
+      hasCaption: block.node.childCount > 0,
+      hasFile: typeof block.node.attrs.mediaId === "number",
+    })
   }, [editor])
+
+  const replace = () => {
+    const block = findSelectedMediaBlock(editor.state)
+    if (block) chooseMediaFor(editor, block.pos)
+  }
 
   useEffect(() => {
     if (!editor) return
@@ -97,12 +119,10 @@ const ImageToolbar = ({ editor }: ImageToolbarProps) => {
       editor={editor}
       pluginKey="imageToolbar"
       className="editor-toolbar image-toolbar"
-      shouldShow={({ editor: e, state: s }) =>
-        isViewMounted(e) && e.isEditable && s.selection instanceof NodeSelection && s.selection.node.type.name === "image"
-      }
+      shouldShow={({ editor: e, state: s }) => isViewMounted(e) && e.isEditable && isMediaSelection(s.selection)}
     >
-      <div role="toolbar" aria-label="Image" className="editor-toolbar__group">
-        {WIDTHS.map((width) => (
+      <div role="toolbar" aria-label={LABELS[state.name] ?? "Media"} className="editor-toolbar__group">
+        {state.name === "image" && WIDTHS.map((width) => (
           <Tooltip key={width.value} content={width.label} placement="top">
             <button
               type="button"
@@ -115,18 +135,28 @@ const ImageToolbar = ({ editor }: ImageToolbarProps) => {
             </button>
           </Tooltip>
         ))}
-        <span aria-hidden="true" className="editor-toolbar__divider" />
-        <Tooltip content={state.hasCaption ? "Remove caption" : "Add caption"} placement="top">
-          <button
-            type="button"
-            className="editor-toolbar__button"
-            aria-label="Caption"
-            aria-pressed={state.hasCaption}
-            onClick={() => editor.chain().focus().toggleImageCaption().run()}
-          >
-            <CaptionIcon />
-          </button>
-        </Tooltip>
+        {state.name === "image" && <span aria-hidden="true" className="editor-toolbar__divider" />}
+        {state.name !== "file" && (
+          <Tooltip content={state.hasCaption ? "Remove caption" : "Add caption"} placement="top">
+            <button
+              type="button"
+              className="editor-toolbar__button"
+              aria-label="Caption"
+              aria-pressed={state.hasCaption}
+              onClick={() =>
+                state.name === "image"
+                  ? editor.chain().focus().toggleImageCaption().run()
+                  : editor.chain().focus().toggleMediaCaption().run()
+              }
+            >
+              <CaptionIcon />
+            </button>
+          </Tooltip>
+        )}
+        {state.name !== "file" && <span aria-hidden="true" className="editor-toolbar__divider" />}
+        <button type="button" className="editor-toolbar__button editor-toolbar__button--text" onClick={replace}>
+          {state.hasFile ? "Replace" : "Choose from Media"}
+        </button>
       </div>
     </TipTapBubbleMenu>
   )

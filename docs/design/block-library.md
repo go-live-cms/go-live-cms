@@ -507,8 +507,8 @@ tests at each step including the collab round trip.
 | Table | flow | `caption` (runs), `headerRow` | TipTap table, cells restricted to `paragraph+` (no blocks in cells); the table is one block with its rows in `pm`. Published in a scrolling, focusable region. Built in #420: the block node is a `tableBlock` (grid + caption), outside the `block` group so it can't land in a quote or list item; `headerRow` is canonical (stored cells are all `tableCell`) and in the editor an attr of the grid, never a cell type, so toggling it can't drop a collaborator's typing. |
 | Details | container | `summary` (runs), `open` | 2.4 (summary part, slot if TipTap's extension is used). |
 | Footnotes | container + inline node | `footnoteRef`: inline atom with `footnoteId`; `footnotes` holds `footnote` blocks (id = footnoteId) | Numbered by order of references. The `footnotes` block is created by the insert command, never by an appendTransaction (rule 7). |
-| Video, audio | flow | `mediaId`, `caption` | Native players. |
-| File | flow | `mediaId`, `label` | A download link with type and size. |
+| Video, audio | flow | `mediaId`, `caption` | Native players. Built in #423: outside the `block` group like the table, the caption is the image's caption node, no `src` (the public page takes the URL from the API's `media` map, only under `/uploads`), `preload="none"`, no autoplay. |
+| File | flow | `mediaId`, `label` | A download link with type and size. Built in #423: an atom; `label` is a node attr typed in the block (absent: the media's name); both links `download` under the uploaded name. |
 | Gallery | container of `image` | `columns` (2–4), `caption` | Each image is an image block (alt, caption, reorder with ⌘⇧←/→). |
 | Embed | flow | `provider`, `ref`, `title`, `caption` | Section 5. |
 | Columns / column | container | 2.2 | Stack in order on phones. |

@@ -9,7 +9,7 @@ import { findEntry, turnIntoEntries, type CatalogEntry } from "../blocks/catalog
 /** A catalog entry id ("paragraph", "heading-2", "bullet-list", …). */
 export type TurnIntoValue = string
 
-/** The catalog id of the block holding the selection ("divider" and "image" have no Turn into). */
+/** The catalog id of the block holding the selection ("divider" and the media blocks have no Turn into). */
 export const computeTurnIntoFromSelection = (editor: TiptapEditor): TurnIntoValue => {
   const { state } = editor
   const sel = state.selection
@@ -17,6 +17,8 @@ export const computeTurnIntoFromSelection = (editor: TiptapEditor): TurnIntoValu
   if (sel instanceof NodeSelection && sel.node) {
     const node = sel.node
     if (node.type.name === "image") return "image"
+    // #423
+    if (node.type.name === "video" || node.type.name === "audio" || node.type.name === "file") return node.type.name
     if (node.type.name === "horizontalRule") return "divider"
     if (node.type.name === "codeBlock") return "code-block"
     if (node.type.name === "blockquote") return "quote"
@@ -49,6 +51,7 @@ export const computeTurnIntoFromSelection = (editor: TiptapEditor): TurnIntoValu
     const node = $from.node(d)
     if (node.type.name === "horizontalRule") return "divider"
     if (node.type.name === "image") return "image"
+    if (node.type.name === "video" || node.type.name === "audio") return node.type.name
   }
 
   return "paragraph"
