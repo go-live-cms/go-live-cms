@@ -359,10 +359,63 @@ function blockColorOf(node: PMNode): { blockColor?: BlockColor } {
  */
 const COLOR_NODE_TYPES = new Set<string>(BLOCK_COLOR_NODE_TYPES)
 
+/**
+ * `marks` (ProseMirror JSON) without the marks a schema's `excludes` rule out, as
+ * ProseMirror's `Mark.addToSet` would leave them, taken in schema rank order so the
+ * result doesn't depend on the input's order: a mark replaces one it excludes (a later
+ * one of the same type replaces an earlier one), and a mark that one already kept excludes
+ * is dropped. Order is kept; a mark type the schema doesn't know is left alone.
+ *
+ * Why (#418): Yjs keeps each formatting attribute on its own, so two people who make the
+ * same word superscript and subscript at once (or bold and inline code, which excludes
+ * every mark) leave a run with both. y-tiptap builds it without a check, so the editor
+ * shows it, but `check()` refuses that mark set: unnormalized, the store would write it
+ * and the next seed would drop the whole block as unbuildable (#213).
+ */
+export function withoutExcludedMarks(marks: unknown, schema: Schema): unknown {
+  if (!Array.isArray(marks) || marks.length < 2) return marks
+  const typeOf = (mark: any) => (typeof mark?.type === "string" ? schema.marks[mark.type] : undefined)
+  // `schema.marks` is in rank order (MarkType's `rank` isn't in its typings).
+  const rank = (name: string) => Object.keys(schema.marks).indexOf(name)
+  const ranked = marks
+    .map((mark, index) => ({ mark, index, type: typeOf(mark) }))
+    .filter((entry) => entry.type)
+    .sort((a, b) => rank(a.type!.name) - rank(b.type!.name) || a.index - b.index)
+  let kept: typeof ranked = []
+  for (const entry of ranked) {
+    if (kept.some((other) => other.type!.excludes(entry.type!) && !entry.type!.excludes(other.type!))) continue
+    kept = kept.filter((other) => !entry.type!.excludes(other.type!))
+    kept.push(entry)
+  }
+  if (kept.length === ranked.length) return marks
+  const keep = new Set(kept.map((entry) => entry.index))
+  return marks.filter((mark, index) => !typeOf(mark) || keep.has(index))
+}
+
+/** `json` (a ProseMirror node's JSON) with `withoutExcludedMarks` at every depth. */
+export function withValidMarkSets(json: any, schema: Schema): any {
+  if (!json || typeof json !== "object") return json
+  let out = json
+  if (Array.isArray(json.marks)) {
+    const marks = withoutExcludedMarks(json.marks, schema)
+    if (marks !== json.marks) out = { ...out, marks }
+  }
+  if (Array.isArray(json.content)) {
+    const content = json.content.map((child: any) => withValidMarkSets(child, schema))
+    if (content.some((child: any, i: number) => child !== json.content[i])) out = { ...out, content }
+  }
+  return out
+}
+
 function pmJSON(node: PMNode, ...topLevel: string[]): any {
+  const schema = node.type.schema
   const clean = (json: any, root: boolean): any => {
     if (!json || typeof json !== "object") return json
     let out = json
+    if (Array.isArray(json.marks)) {
+      const marks = withoutExcludedMarks(json.marks, schema)
+      if (marks !== json.marks) out = { ...out, marks }
+    }
     if (json.attrs && typeof json.attrs === "object") {
       const attrs = { ...json.attrs }
       if (root) for (const name of topLevel) delete attrs[name]
@@ -371,7 +424,7 @@ function pmJSON(node: PMNode, ...topLevel: string[]): any {
       if (COLOR_NODE_TYPES.has(json.type) && "blockColor" in attrs && normalizeBlockColor(attrs.blockColor) === null) {
         delete attrs.blockColor
       }
-      out = { ...json, attrs }
+      out = { ...out, attrs }
     }
     if (Array.isArray(json.content)) out = { ...out, content: json.content.map((child: any) => clean(child, false)) }
     return out
@@ -635,7 +688,9 @@ export function blockDocToPMWithReport(doc: BlockDocV1, schema: Schema): { node:
     try {
       if (ctx.referenced.has(blockId)) throw new Error(`block ${blockId} is already in the document`)
       ctx.referenced.add(blockId)
-      const json = blockToPMNode(block, doc.blocks, ctx)
+      // A run with marks that exclude each other (two people's concurrent edits, #418)
+      // loses the excluded ones, not the block.
+      const json = withValidMarkSets(blockToPMNode(block, doc.blocks, ctx), schema)
       if (!json) throw new Error(`no PM representation for block type ${block.type}`)
       const node = schema.nodeFromJSON(json)
       node.check()
@@ -985,7 +1040,7 @@ function convertListChildren(
     try {
       if (ctx.referenced.has(childId)) throw new Error(`block ${childId} is already in the document`)
       ctx.referenced.add(childId)
-      let json = blockToPMNode(childBlock, allBlocks, ctx)
+      let json = withValidMarkSets(blockToPMNode(childBlock, allBlocks, ctx), ctx.schema)
       if (json?.type === "paragraph") {
         json = {
           type: itemNode,
@@ -1036,7 +1091,7 @@ function containerChildrenToPM(block: Block, allBlocks: Record<BlockID, Block>, 
         if (ctx.referenced.has(childId)) throw new Error(`block ${childId} is already in the document`)
         ctx.referenced.add(childId)
         if (!acceptsChild(block.type, child.type)) throw new Error(`a ${block.type} can't hold a ${child.type} block`)
-        const json = blockToPMNode(child, allBlocks, ctx)
+        const json = withValidMarkSets(blockToPMNode(child, allBlocks, ctx), ctx.schema)
         if (!json) throw new Error(`no PM representation for block type ${child.type}`)
         const node = ctx.schema.nodeFromJSON(json)
         node.check()

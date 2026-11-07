@@ -31,7 +31,7 @@ const PAIRS: [Key, Key, number][] = [
   ["text", "background", TEXT],
   ["text", "surface", TEXT],
   ["text", "surface2", TEXT],
-  ["text", "highlight", TEXT],
+  ["text", "highlight", TEXT], // search matches, and highlighted text (#418) with links in it
   ["textMuted", "background", TEXT],
   ["textMuted", "surface", TEXT],
   ["textMuted", "surface2", TEXT],

@@ -146,6 +146,30 @@
     }
   }
 
+  // #418: one highlight colour; sup/sub sit on the line without changing its height.
+  mark {
+    background: var(--editor-highlight);
+    border-radius: 2px;
+    color: inherit;
+    padding: 0 0.1em;
+  }
+
+  sup,
+  sub {
+    font-size: 0.72em;
+    line-height: 0;
+    position: relative;
+    vertical-align: baseline;
+  }
+
+  sup {
+    top: -0.5em;
+  }
+
+  sub {
+    bottom: -0.25em;
+  }
+
   a {
     color: var(--text-selected);
     text-decoration: underline;

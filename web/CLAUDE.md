@@ -571,6 +571,14 @@ are the most fragile part of the codebase. **Before editing anything under
   a wide table scroll in its own box at 375px. Rules: `gl-admin/lib/collaboration/CLAUDE.md`
   (blockBridge notes, Table). History compares its cells as text, the caption like an image's and
   the header row as an attribute.
+- **Inline marks (#418, design `docs/design/block-library.md` 3.3):** Highlight, Superscript and
+  Subscript in the selection toolbar (`ui/BubbleMenu.tsx`, after Link; not in a caption), ⌘⇧H,
+  ⌘. and ⌘,. The marks are `extensions/InlineMarks.ts` (rules, the concurrent-edit case and the
+  API's mark allowlist: `gl-admin/lib/collaboration/CLAUDE.md`). The editor styles them from
+  `--editor-highlight` (`_tokens.scss`, contrast in `tokens.test.ts`); the public renderer writes
+  `<mark>`, `<sup>`, `<sub>` (a stored colour never becomes a style) and every theme styles them
+  (`themes/README.md`). Paste keeps `mark`/`sup`/`sub` without attributes and turns Docs/Word
+  `vertical-align: super|sub` spans into `sup`/`sub`.
 - **Editing nested blocks (#417, design `docs/design/block-library.md` 3.5):** the gutter is
   our own plugin now (`components/editor/utils/gutterPlugin.ts`; TipTap 3.4.2's drag handle
   only finds top-level blocks): it follows the pointer to the innermost block (a block in a

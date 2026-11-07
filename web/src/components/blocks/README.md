@@ -232,6 +232,10 @@ interface BlockComponentProps {
   (`colgroup` when it spans columns; a header cell never spans rows). Cells come from
   `tableRows` (paragraphs only, spans clamped) and render like a list item's text. The theme
   makes `.table-scroll` scroll sideways (`themes/README.md`).
+- **Inline marks (`utils/contentRenderer.tsx`):** bold `<strong>`, italic `<em>`, underline `<u>`,
+  strike `<s>`, code `<code>`, link `<a>` (`safeHref`), and since #418 highlight `<mark>` (no
+  style: the theme's one colour), superscript `<sup>` and subscript `<sub>`, nested in schema
+  order (a link inside a highlight). Any other mark renders its text only.
 - **`anchorId`** (#356, "Copy link to block"): every top-level block's root element gets
   it as its `id`, so `/<post url>#b-<block id>` lands on it. A heading keeps its slug id
   (#351) and puts the anchor on an empty `<span class="gl-block-anchor">` at its start.

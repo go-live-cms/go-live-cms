@@ -1007,6 +1007,13 @@ page; the box is focusable, so show its focus ring (the arrow keys scroll it). W
 caption the region is named "Table" (`aria-label`). Cells hold paragraphs only, rendered
 inline with `<br>` between them. The default theme's rules are in `styles/theme.css`.
 
+**Inline marks (#418).** Post text may carry `<mark>` (a highlight: one colour, the theme's;
+the markup never has a colour of its own), `<sup>` and `<sub>`. Style `mark` with a fill your
+text passes 4.5:1 on, in light and dark (a link inside it too), and keep `sup`/`sub` from
+opening up the line: the default theme's `styles/theme.css` uses
+`font-size: 0.72em; line-height: 0; position: relative; vertical-align: baseline` with
+`top: -0.5em` / `bottom: -0.25em`.
+
 ---
 
 ## Design Tokens & Dark Mode

@@ -64,6 +64,10 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
           ]
         : []),
       schema.image,
+      // #418: ⌘⇧H, ⌘. and ⌘, are the marks' own shortcuts.
+      schema.highlight,
+      schema.superscript,
+      schema.subscript,
       schema.textAlign,
       schema.quoteCitation,
       schema.blockColor,

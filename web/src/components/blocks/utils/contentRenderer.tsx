@@ -1,7 +1,7 @@
 import React from "react"
 import type { PMNode } from "../types"
 import type { Block } from "@gl-admin/lib/blocks-spec"
-import { safeHref, safeCssColor } from "./safeUrl"
+import { safeHref } from "./safeUrl"
 import { blockColorClass } from "./blockColor"
 import { calloutMarkup, plainText, pullQuoteMarkup, todoListMarkup } from "./textBlockMarkup"
 
@@ -45,14 +45,18 @@ export function renderTextNode(node: PMNode, index: number): React.ReactNode {
             </a>
           )
           break
+        // #418: one theme colour (the theme styles `<mark>`), so no colour from the mark:
+        // the schema has no `color` attr and the API drops any.
         case "highlight":
-          content = (
-            <mark key={`highlight-${index}`} style={{ backgroundColor: safeCssColor(mark.attrs?.color as string | undefined) }}>
-              {content}
-            </mark>
-          )
+          content = <mark key={`highlight-${index}`}>{content}</mark>
           break
-        // Add more mark types as needed
+        case "superscript":
+          content = <sup key={`superscript-${index}`}>{content}</sup>
+          break
+        case "subscript":
+          content = <sub key={`subscript-${index}`}>{content}</sub>
+          break
+        // Any other mark type renders its text only.
       }
     }
   }

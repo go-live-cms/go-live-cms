@@ -141,8 +141,9 @@ func TestSanitize_DangerousNodesAndAttrs(t *testing.T) {
 	})
 
 	t.Run("strips on* handler attributes from node and mark attrs", func(t *testing.T) {
+		// A link is the one mark that keeps attrs (#418); the others keep none at all.
 		marks := []interface{}{
-			map[string]interface{}{"type": "bold", "attrs": map[string]interface{}{"onmouseover": "alert(1)"}},
+			map[string]interface{}{"type": "link", "attrs": map[string]interface{}{"href": "https://example.com", "onmouseover": "alert(1)"}},
 		}
 		nodeAttrs := map[string]interface{}{"textAlign": "left", "onclick": "alert(1)", "ONLOAD": "x"}
 		doc := paragraphWithText("hi", marks, nodeAttrs)
@@ -157,34 +158,7 @@ func TestSanitize_DangerousNodesAndAttrs(t *testing.T) {
 
 		markAttrs := node["marks"].([]interface{})[0].(map[string]interface{})["attrs"].(map[string]interface{})
 		require.NotContains(t, markAttrs, "onmouseover")
-	})
-}
-
-func TestSanitize_HighlightColor(t *testing.T) {
-	highlight := func(color string) []interface{} {
-		return []interface{}{map[string]interface{}{"type": "highlight", "attrs": map[string]interface{}{"color": color}}}
-	}
-	colorOf := func(doc *BlockDocV1) (string, bool) {
-		attrs := firstTextNode(t, doc)["marks"].([]interface{})[0].(map[string]interface{})["attrs"].(map[string]interface{})
-		c, ok := attrs["color"].(string)
-		return c, ok
-	}
-
-	t.Run("drops unsafe color values", func(t *testing.T) {
-		doc := paragraphWithText("x", highlight("red; background:url(data:image/svg+xml,<svg onload=alert(1)>)"), nil)
-		doc.sanitize()
-		_, ok := colorOf(doc)
-		require.False(t, ok, "unsafe color must be removed")
-	})
-
-	t.Run("keeps safe color values", func(t *testing.T) {
-		for _, c := range []string{"#ffeb3b", "rgb(255, 235, 59)", "yellow"} {
-			doc := paragraphWithText("x", highlight(c), nil)
-			doc.sanitize()
-			got, ok := colorOf(doc)
-			require.True(t, ok, "safe color %q must be kept", c)
-			require.Equal(t, c, got)
-		}
+		require.Equal(t, "https://example.com", markAttrs["href"])
 	})
 }
 
@@ -203,14 +177,6 @@ func TestIsSafeURL(t *testing.T) {
 	require.False(t, isSafeURL("javascript:alert(1)", safeHrefSchemes))
 	require.False(t, isSafeURL("data:text/html,x", safeImageSchemes))
 	require.False(t, isSafeURL("JavaScript:alert(1)", safeHrefSchemes), "scheme check is case-insensitive")
-}
-
-func TestIsSafeColor(t *testing.T) {
-	require.True(t, isSafeColor("#fff"))
-	require.True(t, isSafeColor("rgba(0,0,0,.5)"))
-	require.True(t, isSafeColor("transparent"))
-	require.False(t, isSafeColor("red;url(x)"))
-	require.False(t, isSafeColor("url(javascript:alert(1))"))
 }
 
 // singleBlock builds a one-block doc of the given type and attrs.
@@ -273,8 +239,7 @@ func TestSanitize_ImageCaption(t *testing.T) {
 		require.Equal(t, "a", a["text"])
 		marks := a["marks"].([]interface{})
 		require.Len(t, marks, 1)
-		require.Equal(t, "italic", marks[0].(map[string]interface{})["type"])
-		require.NotContains(t, marks[0].(map[string]interface{})["attrs"], "onclick")
+		require.Equal(t, map[string]interface{}{"type": "italic"}, marks[0], "italic keeps no attrs at all (#418)")
 		b := got[1].(map[string]interface{})
 		require.Equal(t, "b", b["text"])
 		require.NotContains(t, b, "marks", "no allowed mark left")

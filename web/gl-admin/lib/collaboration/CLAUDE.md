@@ -353,6 +353,33 @@ kept so references in code stay valid.
     keys, picker, toolbar, paste), `TableBlock.collab.test.ts` (two users in different cells; a
     column and a row at once), `src/components/blocks/table/TableBlock.test.tsx`, Go
     `post_blocks_table_test.go`, and two cases in `nestingVectors.json`.
+- **Inline marks highlight, superscript, subscript (#418, `components/editor/extensions/InlineMarks.ts`).**
+  TipTap's Highlight (`multicolor: false`: **no `color` attr**, one theme colour), Superscript
+  and Subscript 3.4.2, in `schemaExtensions`. Superscript and subscript **exclude each other**
+  (`excludes`, each also itself), so neither builds without the other. Block Spec keeps them as
+  runs with no attrs (`{type:"highlight"}`); captions don't allow them (`CAPTION_MARKS`).
+  ⌘⇧H is Highlight's own shortcut; ⌘. and ⌘, are exact (`exactShortcut`: no Shift, so ⌘⇧, stays
+  #417's settings panel; ProseMirror's keymap would retry a shifted `,` without Shift).
+  - **Concurrent excluded marks:** Yjs keeps each formatting attribute on its own, so two people
+    setting superscript and subscript on one word at once (or bold and inline code, which
+    excludes every mark) leave a run with both. y-tiptap builds it unchecked (the editors show
+    both), but `check()` refuses that set, so unhandled the next seed would hide the whole block
+    (#213). **`withoutExcludedMarks` / `withValidMarkSets` (`blockBridge.ts`) resolve it as
+    `Mark.addToSet` would, in rank order** (subscript wins over superscript, code over the rest):
+    in `pmJSON` (every store) and before each block's `nodeFromJSON` + `check()` at seed.
+  - **API allowlist:** the Go sanitizer keeps only `allowedMarkTypes` (every mark of this
+    schema), drops any other mark (the text stays) and every attr but a link's;
+    `blocks-spec/markAllowlist.test.ts` fails if the list and the schema's marks differ. **A new
+    mark needs an entry there.**
+  - **Stale clients:** a bundle from before #418 lacks the three marks, and y-tiptap would delete
+    a highlighted run a newer peer typed (rule 10); the fingerprint guard (#416) refuses it
+    (`schemaFingerprint.test.ts` pins that they, their exclusions and a colour attr change it).
+  - **Old tests:** `highlight` used to stand for an unknown theme mark; such tests use `spoiler`.
+  - Tests: `extensions/InlineMarks.test.ts` (schema, shortcuts, exclusion, captions, HTML, round
+    trip, paste), `InlineMarks.collab.test.ts` (two users on the relay, the stored doc, a seed with
+    both marks, a restart), `ui/BubbleMenu.test.tsx`, `src/components/blocks/utils/
+    contentRenderer.marks.test.tsx`, `themes/default/inlineMarks.test.ts`, Go
+    `post_blocks_marks_test.go`.
 - `pmToBlockDoc` regenerates duplicate/invalid block ids.
 - **Known limitation:** a `code_block` with empty code can't be shown in the editor
   (ProseMirror disallows empty text nodes). It is dropped like any other unbuildable

@@ -21,4 +21,11 @@ describe("TipTap version pin", () => {
 
     expect(offPin).toEqual([])
   })
+
+  it("pins the inline mark extensions (#418) exactly, with overrides that follow them", () => {
+    for (const name of ["@tiptap/extension-highlight", "@tiptap/extension-superscript", "@tiptap/extension-subscript"]) {
+      expect(pkg.dependencies[name], name).toBe(pkg.dependencies["@tiptap/core"])
+      expect(pkg.overrides[name], name).toBe(`$${name}`)
+    }
+  })
 })
