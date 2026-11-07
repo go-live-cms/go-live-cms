@@ -587,8 +587,7 @@
   &[contenteditable="false"] blockquote > .editor-quote__cite.is-empty,
   &[contenteditable="false"] .editor-pullquote > .editor-quote__cite.is-empty,
   &[contenteditable="false"] .editor-group > .editor-group__settings,
-  &[contenteditable="false"] .editor-callout > .editor-callout__settings {
-  &[contenteditable="false"] .editor-group > .editor-group__settings,
+  &[contenteditable="false"] .editor-callout > .editor-callout__settings,
   &[contenteditable="false"] .editor-table > .editor-table__toolbar {
     display: none;
   }
