@@ -19,18 +19,18 @@ import { schemaFingerprint } from "./schemaFingerprint"
 // (and deletes) a type it can't build.
 
 /** A node type the "new" bundle has and the installed (old) one doesn't: a new block. */
-const Callout = Node.create({
-  name: "callout",
+const Sidenote = Node.create({
+  name: "sidenote",
   group: "block",
   content: "inline*",
   addAttributes: () => ({ "data-block-id": { default: null } }),
 })
-const NEW_SCHEMA = getCollabSchema([...installedThemeBlocks.map((block) => block.node), Callout])
+const NEW_SCHEMA = getCollabSchema([...installedThemeBlocks.map((block) => block.node), Sidenote])
 /** What a tab still on the bundle from before the deploy sends. */
 const OLD_FINGERPRINT = schemaFingerprint(getInstalledCollabSchema())
 
 const DOC = "post-12"
-const CALLOUT_ID = "blk-callout-00001"
+const SIDENOTE_ID = "blk-sidenote-00001"
 
 let relay: Relay
 
@@ -55,14 +55,14 @@ const schemaDenies = () =>
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
-/** A callout appended to the editor fragment, as the new bundle's editor would insert it. */
-function appendCallout(doc: Y.Doc, text: string, id = CALLOUT_ID) {
+/** A sidenote appended to the editor fragment, as the new bundle's editor would insert it. */
+function appendSidenote(doc: Y.Doc, text: string, id = SIDENOTE_ID) {
   const fragment = doc.getXmlFragment(EDITOR_FRAGMENT)
   doc.transact(() => {
-    const callout = new Y.XmlElement("callout")
-    fragment.insert(fragment.length, [callout])
-    callout.setAttribute("data-block-id", id)
-    callout.insert(0, [new Y.XmlText(text)])
+    const sidenote = new Y.XmlElement("sidenote")
+    fragment.insert(fragment.length, [sidenote])
+    sidenote.setAttribute("data-block-id", id)
+    sidenote.insert(0, [new Y.XmlText(text)])
   })
 }
 
@@ -157,21 +157,21 @@ describe("schema fingerprint guard (#416)", () => {
     const peer = relay.client("1")
     await peer.whenSynced()
     const old = relay.client("2", { schemaFingerprint: OLD_FINGERPRINT })
-    appendCallout(peer.doc, "Careful")
+    appendSidenote(peer.doc, "Careful")
 
     await waitFor(() => old.outdated, { what: "the old tab's refusal" })
-    await waitFor(() => storedBlock(CALLOUT_ID)?.type === "callout", { what: "the callout to be stored" })
+    await waitFor(() => storedBlock(SIDENOTE_ID)?.type === "sidenote", { what: "the sidenote to be stored" })
     await sleep(300)
-    // The old tab never got the callout, so y-tiptap there had nothing to delete.
+    // The old tab never got the sidenote, so y-tiptap there had nothing to delete.
     expect(old.doc.getXmlFragment(EDITOR_FRAGMENT).length).toBe(0)
-    expect(nodeNames(peer.doc)).toEqual(["paragraph", "callout"])
+    expect(nodeNames(peer.doc)).toEqual(["paragraph", "sidenote"])
 
     // After a restart (store, unload, load from the stored state) it is all still there.
     await relay.restart()
     const reader = relay.client("3")
     await reader.whenSynced()
-    expect(nodeNames(reader.doc)).toEqual(["paragraph", "callout"])
-    expect(storedBlock(CALLOUT_ID)).toMatchObject({ type: "callout", attrs: { text: "Careful" } })
+    expect(nodeNames(reader.doc)).toEqual(["paragraph", "sidenote"])
+    expect(storedBlock(SIDENOTE_ID)).toMatchObject({ type: "sidenote", attrs: { text: "Careful" } })
   })
 
   it("a connected editor keeps its connection until it reconnects; after a deploy onto another schema it is refused and keeps its doc", async () => {
@@ -194,11 +194,11 @@ describe("schema fingerprint guard (#416)", () => {
     const peer = relay.client("1")
     await peer.whenSynced()
     expect(paragraphs(peer.doc)).toEqual(["intro", "typed before the deploy"])
-    appendCallout(peer.doc, "New block")
-    await waitFor(() => storedBlock(CALLOUT_ID)?.type === "callout", { what: "the callout to be stored" })
+    appendSidenote(peer.doc, "New block")
+    await waitFor(() => storedBlock(SIDENOTE_ID)?.type === "sidenote", { what: "the sidenote to be stored" })
     await sleep(300)
     expect(nodeNames(tab.doc)).toEqual(["paragraph", "paragraph"])
     expect(tab.getStatus()).toBe("outdated")
-    expect(nodeNames(peer.doc)).toEqual(["paragraph", "paragraph", "callout"])
+    expect(nodeNames(peer.doc)).toEqual(["paragraph", "paragraph", "sidenote"])
   })
 })

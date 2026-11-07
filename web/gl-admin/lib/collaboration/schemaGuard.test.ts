@@ -11,15 +11,15 @@ import { EDITOR_FRAGMENT, describeUnbuildableTypes, findUnbuildableTypes } from 
 // tests pin that hazard against the real binding and prove the guard sees it first.
 
 // Stands in for a theme block (like themes/example's alert), minus the NodeView.
-const Callout = Node.create({
-  name: "callout",
+const Sidenote = Node.create({
+  name: "sidenote",
   group: "block",
   content: "inline*",
   addAttributes() {
     return { "data-block-id": { default: null }, variant: { default: "info" } }
   },
-  parseHTML: () => [{ tag: "div[data-type=callout]" }],
-  renderHTML: () => ["div", { "data-type": "callout" }, 0],
+  parseHTML: () => [{ tag: "div[data-type=sidenote]" }],
+  renderHTML: () => ["div", { "data-type": "sidenote" }, 0],
 })
 
 // Stands in for a theme mark.
@@ -30,15 +30,15 @@ const Highlight = Mark.create({
 })
 
 const base: AnyExtension[] = [StarterKit.configure({ undoRedo: false }), BlockIdExtension]
-const themed = [...base, Callout, Highlight]
+const themed = [...base, Sidenote, Highlight]
 
 const content = {
   type: "doc",
   content: [
     { type: "paragraph", attrs: { "data-block-id": "intro-block-0001" }, content: [{ type: "text", text: "Intro" }] },
     {
-      type: "callout",
-      attrs: { "data-block-id": "callout-block-01", variant: "warning" },
+      type: "sidenote",
+      attrs: { "data-block-id": "sidenote-block-01", variant: "warning" },
       content: [{ type: "text", text: "Mind the gap" }],
     },
     { type: "paragraph", attrs: { "data-block-id": "outro-block-0001" }, content: [{ type: "text", text: "The end" }] },
@@ -126,14 +126,14 @@ describe("y-tiptap deletes what a client's schema can't build (hazard)", () => {
     bind(client, themed)
     await settle()
 
-    expect(nodeTypes(server)).toEqual(["paragraph", "callout", "paragraph"])
+    expect(nodeTypes(server)).toEqual(["paragraph", "sidenote", "paragraph"])
   })
 })
 
 describe("findUnbuildableTypes", () => {
   it("names unknown node types", () => {
     const fragment = serverDoc(content).getXmlFragment(EDITOR_FRAGMENT)
-    expect(findUnbuildableTypes(fragment, getSchema(base))).toEqual({ nodes: ["callout"], marks: [] })
+    expect(findUnbuildableTypes(fragment, getSchema(base))).toEqual({ nodes: ["sidenote"], marks: [] })
   })
 
   it("names unknown marks", () => {
@@ -148,12 +148,12 @@ describe("findUnbuildableTypes", () => {
         {
           type: "blockquote",
           attrs: { "data-block-id": "quote-block-0001" },
-          content: [{ type: "callout", attrs: { "data-block-id": "callout-block-02" } }],
+          content: [{ type: "sidenote", attrs: { "data-block-id": "sidenote-block-02" } }],
         },
       ],
     }
     const fragment = serverDoc(nested).getXmlFragment(EDITOR_FRAGMENT)
-    expect(findUnbuildableTypes(fragment, getSchema(base))?.nodes).toEqual(["callout"])
+    expect(findUnbuildableTypes(fragment, getSchema(base))?.nodes).toEqual(["sidenote"])
   })
 
   it("returns null when the schema can build everything, and for an empty doc", () => {
@@ -171,7 +171,7 @@ describe("findUnbuildableTypes", () => {
   })
 
   it("describes the result for the notice", () => {
-    expect(describeUnbuildableTypes({ nodes: ["callout"], marks: [] })).toBe("callout (block)")
+    expect(describeUnbuildableTypes({ nodes: ["sidenote"], marks: [] })).toBe("sidenote (block)")
     expect(describeUnbuildableTypes({ nodes: ["a", "b"], marks: ["highlight"] })).toBe(
       "a, b (blocks); highlight (formatting)"
     )

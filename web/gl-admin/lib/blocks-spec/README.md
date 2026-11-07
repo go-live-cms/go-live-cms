@@ -44,6 +44,14 @@ posts.block_doc → publish → post_versions → public site (SSR)
 - **group** (#414): a container: `children` are its blocks (flow only: no group, no list
   item), `attrs.style` `tinted` (absent: none) and `attrs.align` `wide`/`full` (absent:
   content)
+- **callout** (#419): flow; its paragraphs in `pm` (node `callout`, `paragraph+`), and
+  `attrs.tone` `info`/`success`/`warning`/`danger` (`CALLOUT_TONES`, always written; absent or
+  unknown reads as info), never in `pm`
+- **pull_quote** (#419): flow; a textblock (node `pullQuote`, `inline*`) with `attrs.cite` by
+  the quote's rules (`normalizeCite`, `CITE_MAX_LENGTH`), never in `pm`
+- **todo_list** / **todo_item** (#419): a third list type (`LIST_ITEMS`): `children` are its
+  `todo_item`s (node `taskItem`, TipTap's TaskItem, `paragraph+`), each a block with its id and
+  `attrs.checked` (a boolean, always written), never in `pm`. No attrs on the list itself
 - **table** (#420): a flow block (no `children`). `attrs.pm` is the `table` node: `tableRow`s
   of `tableCell`s, each cell `paragraph+`, its only attrs `colspan`/`rowspan` (integers
   2..`TABLE_MAX_SPAN`, absent when 1); every stored cell is a `tableCell`, and

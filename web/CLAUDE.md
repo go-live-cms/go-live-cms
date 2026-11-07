@@ -531,6 +531,15 @@ are the most fragile part of the codebase. **Before editing anything under
   split, Enter at the start (the thread stays on the new empty block above), join, paste, turn-into,
   restore and reseed, and for blocks inside a Group (#414: moving the group or the block out of
   it, a restart, a reseed): `lib/collaboration/comments.hocuspocus.test.ts`.
+- **Per-block "Last edited by" (#328):** the block menu's footer, "Last edited by Ana Costa · 2
+  hours ago" ("you" for yourself, "a former member" for a removed one, no line for a block with no
+  attribution; `lib/blockEdits.ts`, tested). The data is the API's (`lib/api/blockEdits.ts`, `GET
+  /posts/:id/block-edits`), never the Yjs doc: the collab server writes it with each store that
+  writes `block_doc` (`collab-server/CLAUDE.md`). `Editor` owns one `PostBlockEditsStore`
+  (`lib/blockEditsStore.ts`, memory only) per bound, editable post and provides it through
+  `components/editor/blockEditsContext.ts` (so `DragHandle` passes nothing). It reads on bind and
+  after every reconnect, and merges the rows each `stored` message carries (`edits`), with one
+  more read for a user it can't name yet; a read answer never undoes a row merged meanwhile.
 - **Nested blocks and the Group block (#414):** containers hold their blocks by id
   (`gl-admin/lib/blocks-spec/nesting.ts` is the table; rules in
   `gl-admin/lib/collaboration/CLAUDE.md`, "Containers"). Group: a Layout entry in the block
@@ -542,6 +551,16 @@ are the most fragile part of the codebase. **Before editing anything under
   default theme's styles in `themes/default/styles/theme.css`. History's diff compares a
   container's children by id (`blockDiff.ts`, `VersionDiff`'s `version-diff__container`).
   Theme blocks may hold text only since then (`THEME_BLOCK_CONTENT_NAMES`).
+- **Callout, pull quote, to-do list (#419):** Text entries in the block catalog (Callout:
+  `setParagraph().setCallout()`; Pull quote: `setPullQuote()`; To-do list: `toggleTaskList()`,
+  Markdown `[]`, TaskItem's own input rule, so `catalog.markdown.test.ts` types it too). The
+  callout's Type is its view's buttons (shown while the cursor is in it: the post sidebar has no
+  Block tab) and a picker in `BlockTypeToolbar` (`setCalloutTone`). Paste keeps
+  `div[data-type=callout][data-tone]`, `figure[data-type=pull-quote][data-cite]` and
+  `ul[data-type=taskList] > li[data-type=taskItem][data-checked]` with valid values only.
+  Public markup in `src/components/blocks/README.md`; the default theme's callout colours are
+  theme tokens (`info`/`infoBg`, …). History's diff treats a to-do list as a list (a ticked item is
+  a "Done" change). Rules: `gl-admin/lib/collaboration/CLAUDE.md`.
 - **Table block (#420):** a Text entry in the catalog (`/table`) whose insert opens the size
   picker (`components/editor/ui/TableSizePicker.ts`: a plain-DOM dialog at the caret, Columns 3 and
   Rows 2 to start, Rows counting the header row, Create table; Esc closes it and inserts nothing).

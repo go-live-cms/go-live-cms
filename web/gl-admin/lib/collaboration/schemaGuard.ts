@@ -64,7 +64,7 @@ export function findUnbuildableTypes(fragment: XmlFragment, schema: Schema): Unb
   return { nodes: [...nodes].sort(), marks: [...marks].sort() }
 }
 
-/** "callout, quote (block); highlight (formatting)" — for the editor's notice. */
+/** "sidenote, quote (block); highlight (formatting)" — for the editor's notice. */
 export function describeUnbuildableTypes({ nodes, marks }: UnbuildableTypes): string {
   const parts: string[] = []
   if (nodes.length) parts.push(`${nodes.join(", ")} (block${nodes.length > 1 ? "s" : ""})`)

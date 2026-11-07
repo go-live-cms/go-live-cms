@@ -13,15 +13,15 @@ import { canonical, ids, richDoc } from "./fragmentBridge.fixtures"
 // their edits must come back out of the server's store.
 
 // Stands in for a theme extension (like themes/example's alert), minus the NodeView.
-const Callout = Node.create({
-  name: "callout",
+const Sidenote = Node.create({
+  name: "sidenote",
   group: "block",
   content: "inline*",
   addAttributes() {
     return { "data-block-id": { default: null }, variant: { default: "info" } }
   },
-  parseHTML: () => [{ tag: "div[data-type=callout]" }],
-  renderHTML: () => ["div", { "data-type": "callout" }, 0],
+  parseHTML: () => [{ tag: "div[data-type=sidenote]" }],
+  renderHTML: () => ["div", { "data-type": "sidenote" }, 0],
 })
 
 const editors: Editor[] = []
@@ -34,7 +34,7 @@ function makeEditor(doc: Y.Doc, { theme = true } = {}): Editor {
     element: document.createElement("div"),
     extensions: [
       ...Object.values(schemaExtensions({ collaborating: true })),
-      ...(theme ? [Callout] : []),
+      ...(theme ? [Sidenote] : []),
       Collaboration.configure({ document: doc }),
     ],
   })
@@ -112,7 +112,7 @@ describe("editors on a server-seeded doc (#206)", () => {
     const stored = fragmentToBlockDoc(server.getXmlFragment(EDITOR_FRAGMENT), base)
     expect(stored.blocks_order).toEqual(doc.blocks_order)
     expect((stored.blocks[ids.intro].attrs as any).text).toBe("Edited. Plain, bold and a link")
-    expect(stored.blocks[ids.callout]).toEqual(doc.blocks[ids.callout])
+    expect(stored.blocks[ids.sidenote]).toEqual(doc.blocks[ids.sidenote])
   })
 
   it("two editors on one server-seeded doc converge", async () => {
@@ -151,7 +151,7 @@ describe("y-tiptap deletes nodes a client's schema can't build (hazard, #206)", 
     await settle()
 
     const stored = fragmentToBlockDoc(server.getXmlFragment(EDITOR_FRAGMENT), base)
-    expect(stored.blocks[ids.callout]).toBeUndefined()
-    expect(stored.blocks_order).not.toContain(ids.callout)
+    expect(stored.blocks[ids.sidenote]).toBeUndefined()
+    expect(stored.blocks_order).not.toContain(ids.sidenote)
   })
 })

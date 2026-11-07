@@ -160,7 +160,8 @@ describe("the slash menu", () => {
     type("/")
     expect(active()!.textContent).toBe("Paragraph")
     // From the last Text block down into Media.
-    for (let i = 0; i < 10; i++) expect(press("ArrowDown")).toBe(true)
+    // Paragraph, six headings, three lists, quote, pull quote, callout (#419), then code.
+    for (let i = 0; i < 13; i++) expect(press("ArrowDown")).toBe(true)
     expect(active()!.textContent).toBe("Code```")
     press("ArrowDown")
     expect(active()!.textContent).toBe("Table")

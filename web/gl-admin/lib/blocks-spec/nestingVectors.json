@@ -304,6 +304,59 @@
           "item-00001": { "id": "item-00001", "type": "list_item", "version": 1, "attrs": {} }
         }
       }
+    },
+    {
+      "name": "a group holding a callout, a pull quote and a to-do list (#419, all flow)",
+      "valid": true,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["group-0001"],
+        "blocks": {
+          "group-0001": { "id": "group-0001", "type": "group", "version": 1, "attrs": {}, "children": ["callout-01", "pullquote1", "todo-00001"] },
+          "callout-01": { "id": "callout-01", "type": "callout", "version": 1, "attrs": { "tone": "warning", "text": "Mind the gap" } },
+          "pullquote1": { "id": "pullquote1", "type": "pull_quote", "version": 1, "attrs": { "text": "Set large", "cite": "Ana" } },
+          "todo-00001": { "id": "todo-00001", "type": "todo_list", "version": 1, "attrs": {}, "children": ["task-00001", "task-00002"] },
+          "task-00001": { "id": "task-00001", "type": "todo_item", "version": 1, "attrs": { "text": "one", "checked": true } },
+          "task-00002": { "id": "task-00002", "type": "todo_item", "version": 1, "attrs": { "text": "two", "checked": false } }
+        }
+      }
+    },
+    {
+      "name": "children on a callout (its paragraphs are in its pm)",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["callout-01"],
+        "blocks": {
+          "callout-01": { "id": "callout-01", "type": "callout", "version": 1, "attrs": { "tone": "info" }, "children": ["para-00001"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": {} }
+        }
+      }
+    },
+    {
+      "name": "children on a to-do item",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["todo-00001"],
+        "blocks": {
+          "todo-00001": { "id": "todo-00001", "type": "todo_list", "version": 1, "attrs": {}, "children": ["task-00001"] },
+          "task-00001": { "id": "task-00001", "type": "todo_item", "version": 1, "attrs": {}, "children": ["para-00001"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": {} }
+        }
+      }
+    },
+    {
+      "name": "a group holding a to-do item (items live in their list)",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["group-0001"],
+        "blocks": {
+          "group-0001": { "id": "group-0001", "type": "group", "version": 1, "attrs": {}, "children": ["task-00001"] },
+          "task-00001": { "id": "task-00001", "type": "todo_item", "version": 1, "attrs": {} }
+        }
+      }
     }
   ]
 }

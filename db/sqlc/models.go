@@ -142,6 +142,13 @@ type PostAccessRequest struct {
 	CreatedAt   time.Time     `json:"created_at"`
 }
 
+type PostBlockEdit struct {
+	PostID   int64         `json:"post_id"`
+	BlockID  string        `json:"block_id"`
+	UserID   sql.NullInt64 `json:"user_id"`
+	EditedAt time.Time     `json:"edited_at"`
+}
+
 type PostCollaborator struct {
 	PostID    int64         `json:"post_id"`
 	UserID    int64         `json:"user_id"`

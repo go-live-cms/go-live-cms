@@ -81,6 +81,14 @@ func sanitizeBlock(block map[string]interface{}) {
 		sanitizeBlockquoteAttrs(attrs)
 	case "group":
 		sanitizeGroupAttrs(attrs)
+	case "callout":
+		sanitizeCalloutAttrs(attrs)
+	case "pull_quote":
+		sanitizePullQuoteAttrs(attrs)
+	case "todo_list":
+		sanitizeTodoListAttrs(attrs)
+	case "todo_item":
+		sanitizeTodoItemAttrs(attrs)
 	case "table":
 		sanitizeTableAttrs(attrs)
 	}
@@ -287,12 +295,79 @@ func clampTableSpan(raw interface{}) int {
 // spaces, it's trimmed and capped at citeMaxRunes, and an empty one is dropped.
 // A `cite` inside the stored pm node is removed: the block's own is the only one.
 func sanitizeBlockquoteAttrs(attrs map[string]interface{}) {
+	deletePMAttr(attrs, "cite")
+	sanitizeCite(attrs)
+}
+
+// deletePMAttr removes `name` from the attrs of the block's top pm node: the block's own
+// attr is the only one (a quote's cite, a callout's tone, a to-do item's checked).
+func deletePMAttr(attrs map[string]interface{}, name string) {
 	if pm, ok := attrs["pm"].(map[string]interface{}); ok {
 		if pmAttrs, ok := pm["attrs"].(map[string]interface{}); ok {
-			delete(pmAttrs, "cite")
+			delete(pmAttrs, name)
 		}
 	}
+}
 
+// keepOnlyAttrs deletes every attr not in allowed: the core #419 blocks' attrs are an
+// allowlist, like a group's.
+func keepOnlyAttrs(attrs map[string]interface{}, allowed ...string) {
+	for key := range attrs {
+		keep := false
+		for _, name := range allowed {
+			if key == name {
+				keep = true
+				break
+			}
+		}
+		if !keep {
+			delete(attrs, key)
+		}
+	}
+}
+
+// Callout tones (Block Spec `CALLOUT_TONES`). Absent means "info".
+var calloutTones = map[string]bool{"info": true, "success": true, "warning": true, "danger": true}
+
+// sanitizeCalloutAttrs (#419): `pm`, `text` and `tone` only; a tone outside the enum is
+// dropped (the callout renders as info), and a `tone` in the pm is removed.
+func sanitizeCalloutAttrs(attrs map[string]interface{}) {
+	keepOnlyAttrs(attrs, "pm", "text", "tone")
+	deletePMAttr(attrs, "tone")
+	if raw, present := attrs["tone"]; present {
+		if s, ok := raw.(string); !ok || !calloutTones[s] {
+			delete(attrs, "tone")
+		}
+	}
+}
+
+// sanitizePullQuoteAttrs (#419): `pm`, `text` and `cite` only; `cite` by the quote's rules.
+func sanitizePullQuoteAttrs(attrs map[string]interface{}) {
+	keepOnlyAttrs(attrs, "pm", "text", "cite")
+	deletePMAttr(attrs, "cite")
+	sanitizeCite(attrs)
+}
+
+// sanitizeTodoListAttrs (#419): a to-do list has no attrs of its own (its items are
+// its children).
+func sanitizeTodoListAttrs(attrs map[string]interface{}) {
+	keepOnlyAttrs(attrs)
+}
+
+// sanitizeTodoItemAttrs (#419): `pm`, `text` and `checked` only; `checked` must be a
+// boolean (anything else is dropped: unchecked), and a `checked` in the pm is removed.
+func sanitizeTodoItemAttrs(attrs map[string]interface{}) {
+	keepOnlyAttrs(attrs, "pm", "text", "checked")
+	deletePMAttr(attrs, "checked")
+	if raw, present := attrs["checked"]; present {
+		if _, ok := raw.(bool); !ok {
+			delete(attrs, "checked")
+		}
+	}
+}
+
+// sanitizeCite makes attrs' `cite` plain text (see sanitizeBlockquoteAttrs).
+func sanitizeCite(attrs map[string]interface{}) {
 	raw, present := attrs["cite"]
 	if !present {
 		return

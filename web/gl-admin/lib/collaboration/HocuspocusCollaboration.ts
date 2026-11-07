@@ -23,8 +23,8 @@ import { encodeCollabAuthToken } from "./schemaFingerprint"
 //     block_doc was written around it); merging these structs would duplicate the
 //     content, so this instance is then dead: `onStale` listeners remount with a fresh
 //     instance (and a fresh Y.Doc). The server-side counterpart of rule 0.
-//   - Store results: `{type:"stored", revision, block_doc}` / `{type:"store_failed"}`,
-//     surfaced through `onStore` (CollabSaveStatus).
+//   - Store results: `{type:"stored", revision, block_doc, edits?}` / `{type:"store_failed"}`,
+//     surfaced through `onStore` (CollabSaveStatus; `edits` is #328's attribution).
 //   - Access changes (#313): the server re-checks every open connection's access. A
 //     demotion (or an API outage past its grace period) makes the connection read-only
 //     and sends `{type:"access", mode, reason}`; losing access altogether closes it with
@@ -78,9 +78,22 @@ export interface CollabAccess {
   outdated?: boolean
 }
 
+/** One block's last edit as a `stored` message carries it (#328). */
+export interface StoredBlockEdit {
+  block_id: string
+  user_id: number
+  edited_at: string
+}
+
 /** Sent with broadcastStateless after each store attempt (web/collab-server/server.ts). */
 export type StoreMessage =
-  | { type: "stored"; revision: number | null; block_doc: "written" | "kept-invalid" | "kept-empty" | "unchanged" }
+  | {
+      type: "stored"
+      revision: number | null
+      block_doc: "written" | "kept-invalid" | "kept-empty" | "unchanged"
+      /** The attribution this store wrote (#328): only with "written", when there is some. */
+      edits?: StoredBlockEdit[]
+    }
   | { type: "store_failed" }
 
 export type HocuspocusStatus = "connecting" | "connected" | "disconnected" | "denied" | "revoked" | "outdated"

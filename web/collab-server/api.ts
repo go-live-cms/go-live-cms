@@ -4,7 +4,7 @@
 //
 //   GET /internal/users/:id/access?doc=&issued_at=  → { role, can_edit }   (access.ts)
 //   GET /internal/posts/:id/collab                  → CollabRecord
-//   PUT /internal/posts/:id/collab  CollabStoreBody → { block_revision }
+//   PUT /internal/posts/:id/collab  CollabStoreBody → { block_revision }   (+ block_edits, #328)
 //
 // Must NOT import yjs.
 import type { BlockDocV1 } from "../gl-admin/lib/blocks-spec"
@@ -40,6 +40,19 @@ export interface CollabStoreBody {
    * without): the state is recorded against the current revision.
    */
   base_revision?: number
+  /**
+   * Who changed each block this store changed, and when (#328, blockEdits.ts). Sent only
+   * with `block_doc`: the API upserts them into post_block_edits in the same transaction
+   * and deletes the rows of blocks `block_doc` doesn't have.
+   */
+  block_edits?: CollabBlockEdit[]
+}
+
+/** One block's attribution (#328): `edited_at` is an ISO 8601 time. */
+export interface CollabBlockEdit {
+  block_id: string
+  user_id: number
+  edited_at: string
 }
 
 export interface CollabStoreResult {

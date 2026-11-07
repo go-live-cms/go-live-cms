@@ -4,12 +4,33 @@ import type { Editor as TiptapEditor } from "@tiptap/core"
 import { applyTurnInto, computeTurnIntoFromSelection, type TurnIntoValue } from "../utils/turnInto"
 import { turnIntoEntries } from "../blocks/catalog"
 import CommandSelect, { type CommandSelectOption } from "./CommandSelect"
-import { catalogSelectOptions } from "./BlockIcon"
+import { BlockIcon, catalogSelectOptions } from "./BlockIcon"
+import { findCallout } from "../extensions/Callout"
+import {
+  CALLOUT_TONE_ICONS,
+  CALLOUT_TONE_LABELS,
+  CALLOUT_TONES,
+  normalizeCalloutTone,
+  type CalloutTone,
+} from "@gl-admin/lib/blocks-spec"
 
 /** The block type picker's options: the catalog's paragraph and headings 1–6 (#415). */
 const blockTypeOptions: CommandSelectOption[] = catalogSelectOptions(
   turnIntoEntries().filter((entry) => entry.type === "paragraph" || entry.type === "heading")
 )
+
+/** The callout's Type picker (#419, "Type Warning ▾" on the blocks canvas): each tone with its icon. */
+export const calloutToneOptions: CommandSelectOption[] = CALLOUT_TONES.map((tone) => ({
+  value: tone,
+  label: CALLOUT_TONE_LABELS[tone],
+  label_icon: <BlockIcon icon={{ path: CALLOUT_TONE_ICONS[tone] }} />,
+}))
+
+/** The tone of the callout holding the selection, or null outside one. */
+function calloutToneAt(editor: TiptapEditor): CalloutTone | null {
+  const callout = findCallout(editor.state)
+  return callout ? normalizeCalloutTone(callout.node.attrs.tone) : null
+}
 
 // Alignment icons as inline SVGs
 const AlignLeftIcon = () => (
@@ -47,11 +68,13 @@ interface BlockTypeToolbarProps {
  */
 const BlockTypeToolbar = ({ editor }: BlockTypeToolbarProps) => {
   const [blockType, setBlockType] = useState<TurnIntoValue>("paragraph")
+  const [calloutTone, setCalloutTone] = useState<CalloutTone | null>(null)
 
   const updateBlockType = useCallback(() => {
     if (!editor) return
     const v = computeTurnIntoFromSelection(editor)
     setBlockType(v)
+    setCalloutTone(calloutToneAt(editor))
   }, [editor])
 
   useEffect(() => {
@@ -102,6 +125,25 @@ const BlockTypeToolbar = ({ editor }: BlockTypeToolbarProps) => {
           }}
         />
         <span aria-hidden="true" className="editor-toolbar__divider" />
+        {calloutTone && (
+          <>
+            <CommandSelect
+              options={calloutToneOptions}
+              value={calloutTone}
+              label="Callout type"
+              disabled={!editor.isEditable}
+              onChange={(option: CommandSelectOption) => {
+                // `editable` can change while the picker is open (a demotion, #313): a
+                // read-only connection's edit would be dropped by the server.
+                if (!editor.isEditable) return
+                const tone = normalizeCalloutTone(option.value)
+                setCalloutTone(tone)
+                editor.chain().focus().setCalloutTone(tone).run()
+              }}
+            />
+            <span aria-hidden="true" className="editor-toolbar__divider" />
+          </>
+        )}
         {/* Text alignment */}
         <button
           type="button"

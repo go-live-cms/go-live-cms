@@ -33,6 +33,9 @@ const PM_NODE: Record<string, string> = {
   image: "image",
   divider: "horizontalRule",
   group: "group",
+  callout: "callout",
+  pull_quote: "pullQuote",
+  todo_list: "taskList",
   table: "tableBlock",
 }
 

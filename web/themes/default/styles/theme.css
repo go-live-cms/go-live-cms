@@ -1185,6 +1185,132 @@ body {
   color: var(--color-text-muted);
 }
 
+/* Pull quote (#419, "Published · text"): one line set large and centred under the
+   accent rule, the citation below. Not a quote's italic or its quote mark. */
+.prose .pullquote {
+  margin-block: 2.5em;
+  padding-top: 1.25em;
+  border-top: 3px solid var(--color-accent);
+  text-align: center;
+}
+.prose .pullquote blockquote {
+  margin: 0;
+  padding: 0;
+  font-size: inherit;
+  font-style: normal;
+}
+.prose .pullquote blockquote::before {
+  content: none;
+}
+.prose .pullquote p {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: var(--size-2xl);
+  font-weight: 700;
+  line-height: var(--leading-snug);
+  letter-spacing: -0.015em;
+  color: var(--color-secondary);
+  text-wrap: balance;
+}
+.prose .pullquote figcaption {
+  margin-top: 0.9em;
+  text-align: center;
+}
+
+/* Callout (#419): the tone's icon and fill; the tone is also said in words (.sr-only),
+   so the meaning never rests on colour. */
+.prose .callout {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-md);
+  background: var(--color-info-bg);
+  font-size: 0.94em;
+  line-height: var(--leading-normal);
+}
+.prose .callout > svg {
+  margin-top: 0.15em;
+  color: var(--color-info);
+}
+.prose .callout.is-success {
+  background: var(--color-success-bg);
+}
+.prose .callout.is-success > svg {
+  color: var(--color-success);
+}
+.prose .callout.is-warning {
+  background: var(--color-warning-bg);
+}
+.prose .callout.is-warning > svg {
+  color: var(--color-warning);
+}
+.prose .callout.is-danger {
+  background: var(--color-danger-bg);
+}
+.prose .callout.is-danger > svg {
+  color: var(--color-danger);
+}
+.prose .callout-body > * {
+  margin: 0;
+}
+.prose .callout-body > * + * {
+  margin-top: 0.8em;
+}
+.prose .callout + .callout {
+  margin-top: var(--space-3);
+}
+
+/* To-do list (#419): a list with read-only checkboxes readers can't toggle. The blocks
+   canvas has no published board for it yet; this follows the theme's own tokens: the
+   box like an input's edge, a ticked box in the primary colour. */
+.prose .todo-list {
+  padding-left: 0;
+  list-style: none;
+}
+.prose .todo-list > li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6em;
+}
+.prose .todo-list > li + li {
+  margin-top: 0.4em;
+}
+.prose .todo-list input[type="checkbox"] {
+  appearance: none;
+  display: grid;
+  place-content: center;
+  flex: none;
+  width: 1.05em;
+  height: 1.05em;
+  margin: 0.3em 0 0;
+  border: 1.5px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  opacity: 1;
+  cursor: default;
+}
+.prose .todo-list input[type="checkbox"]:checked {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+}
+.prose .todo-list input[type="checkbox"]:checked::after {
+  content: "";
+  width: 0.28em;
+  height: 0.55em;
+  margin-top: -0.12em;
+  border: solid var(--color-on-primary);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.prose .todo-list .todo-item__text {
+  min-width: 0;
+}
+.prose .todo-list .is-checked > .todo-item__text {
+  color: var(--color-text-muted);
+  text-decoration: line-through;
+}
+
 /* Table (#420): scrolls sideways in its own box (focusable, so the arrow keys scroll it),
    with a shade at the edge that has more to show; the page itself never scrolls sideways.
    The header row is on the surface colour; light and dark come from the tokens. */

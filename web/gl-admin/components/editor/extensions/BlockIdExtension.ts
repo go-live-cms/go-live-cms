@@ -120,6 +120,11 @@ export const BlockIdExtension = Extension.create({
           "bulletList",
           "orderedList",
           "listItem",
+          // #419
+          "callout",
+          "pullQuote",
+          "taskList",
+          "taskItem",
           // #420: the table block (the figure), not its grid, rows or cells.
           "tableBlock",
           ...CONTAINER_NODE_NAMES,

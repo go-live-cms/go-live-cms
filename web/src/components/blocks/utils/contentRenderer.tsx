@@ -3,6 +3,7 @@ import type { PMNode } from "../types"
 import type { Block } from "@gl-admin/lib/blocks-spec"
 import { safeHref, safeCssColor } from "./safeUrl"
 import { blockColorClass } from "./blockColor"
+import { calloutMarkup, plainText, pullQuoteMarkup, todoListMarkup } from "./textBlockMarkup"
 
 /**
  * Render a single text node with its marks (bold, italic, link, code, etc.)
@@ -114,6 +115,26 @@ export function renderContent(content: PMNode[] | undefined): React.ReactNode {
     // Handle hard break
     if (node.type === "hardBreak") {
       return <br key={index} />
+    }
+
+    // The #419 blocks inside a quote or a list item (the schema lets them go there): the
+    // same markup as at the top level, from their nested pm (attrs as the node has them).
+    if (node.type === "callout") {
+      return calloutMarkup({ tone: node.attrs?.tone, content: node.content, renderInline: renderContent, key: index })
+    }
+    if (node.type === "pullQuote") {
+      return pullQuoteMarkup({ content: renderContent(node.content), cite: node.attrs?.cite, key: index })
+    }
+    if (node.type === "taskList") {
+      const items = (node.content ?? [])
+        .filter((item) => item?.type === "taskItem")
+        .map((item, i) => ({
+          key: i,
+          checked: item.attrs?.checked === true,
+          content: renderContent(item.content),
+          label: plainText(item.content) || "To-do",
+        }))
+      return todoListMarkup({ items, key: index })
     }
 
     return null

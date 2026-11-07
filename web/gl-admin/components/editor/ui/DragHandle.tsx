@@ -13,7 +13,7 @@ import { refOf, resolveBlock, topLevelBlockAt, type BlockRef } from "../utils/bl
 // block catalog with its own search field (#415, AddBlockMenu), the drag handle drags to
 // move, and clicking it (or Enter/Space on it) opens the block menu (#356): Colour,
 // Duplicate, Copy link to block, Move to, Delete, and Comment (#192) when the post has
-// comments. Turn into and "Last edited by" aren't built here.
+// comments. Turn into isn't built here; "Last edited by" (#328) is BlockMenu's own.
 //
 // The gutter follows the pointer (TipTap's drag-handle plugin). From the keyboard, Tab in
 // the text shows it at the caret's block and focuses + (BlockGutterKeys); Tab again

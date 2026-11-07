@@ -7,6 +7,7 @@ import {
   IMAGE_BLOCK_VERSION,
   isImageAlign,
   normalizeBlockColor,
+  normalizeCalloutTone,
   normalizeCite,
   type BlockColor,
   type BlockDocV1,
@@ -24,6 +25,7 @@ import {
   isGroupAlign,
   isGroupStyle,
   LIST_NODE_NAMES,
+  listItemOf,
   synthesizedChildId,
   type ContainerRule,
 } from "../blocks-spec"
@@ -271,6 +273,53 @@ function pmNodeToBlock(node: PMNode, allBlocks: Record<BlockID, Block>, seenIds:
         // children are set by the caller
       }
 
+    // #419. Like a quote's `cite`, each one's own attr is canonical on the block and
+    // left out of its `pm`, so the two can never disagree.
+    case "callout":
+      return {
+        id,
+        type: "callout",
+        version: 1,
+        attrs: {
+          pm: pmJSON(node, "tone"),
+          text: node.textContent || undefined,
+          // Always stored: an unknown value (a peer's bad update) is the default.
+          tone: normalizeCalloutTone(node.attrs.tone),
+        },
+      }
+
+    case "pullQuote":
+      return {
+        id,
+        type: "pull_quote",
+        version: 1,
+        attrs: {
+          pm: pmJSON(node, "cite"),
+          text: node.textContent || undefined,
+          cite: normalizeCite(node.attrs.cite) ?? undefined,
+        },
+      }
+
+    case "taskList":
+      return {
+        id,
+        type: "todo_list",
+        version: 1,
+        attrs: {},
+        // children are set by the caller
+      }
+
+    case "taskItem":
+      return {
+        id,
+        type: "todo_item",
+        version: 1,
+        attrs: {
+          pm: pmJSON(node, "checked"),
+          text: node.textContent || undefined,
+          checked: node.attrs.checked === true,
+        },
+      }
     case "tableBlock":
       return tableNodeToBlock(node, id)
 
@@ -787,15 +836,58 @@ function blockToPMNode(block: Block, allBlocks: Record<BlockID, Block>, ctx: Con
       return {
         type: "bulletList",
         attrs: { ...baseAttrs, ...colorAttrs(block) },
-        content: listItemsToPM(block.id, block.children, allBlocks, ctx),
+        content: listItemsToPM(block, allBlocks, ctx),
       }
 
     case "ordered_list":
       return {
         type: "orderedList",
         attrs: { ...baseAttrs, ...colorAttrs(block) },
-        content: listItemsToPM(block.id, block.children, allBlocks, ctx),
+        content: listItemsToPM(block, allBlocks, ctx),
       }
+
+    case "todo_list":
+      return {
+        type: "taskList",
+        attrs: baseAttrs,
+        content: listItemsToPM(block, allBlocks, ctx),
+      }
+
+    // #419. A stored pm's own `tone` / `cite` / `checked` is ignored: the block's wins.
+    // The node type is the block's, whatever the pm says.
+    case "callout": {
+      const tone = normalizeCalloutTone(block.attrs.tone)
+      const pm = block.attrs.pm
+      if (pm) return { ...pm, type: "callout", attrs: { ...pmAttrsWithout(pm, "tone"), ...baseAttrs, tone } }
+      return {
+        type: "callout",
+        attrs: { ...baseAttrs, tone },
+        content: [{ type: "paragraph", content: block.attrs.text ? [{ type: "text", text: block.attrs.text }] : [] }],
+      }
+    }
+
+    case "pull_quote": {
+      const cite = normalizeCite(block.attrs.cite)
+      const citeAttrs = cite ? { cite } : {}
+      const pm = block.attrs.pm
+      if (pm) return { ...pm, type: "pullQuote", attrs: { ...pmAttrsWithout(pm, "cite"), ...baseAttrs, ...citeAttrs } }
+      return {
+        type: "pullQuote",
+        attrs: { ...baseAttrs, ...citeAttrs },
+        content: block.attrs.text ? [{ type: "text", text: block.attrs.text }] : [],
+      }
+    }
+
+    case "todo_item": {
+      const checked = block.attrs.checked === true
+      const pm = block.attrs.pm
+      if (pm) return { ...pm, type: "taskItem", attrs: { ...pmAttrsWithout(pm, "checked"), ...baseAttrs, checked } }
+      return {
+        type: "taskItem",
+        attrs: { ...baseAttrs, checked },
+        content: [{ type: "paragraph", content: block.attrs.text ? [{ type: "text", text: block.attrs.text }] : [] }],
+      }
+    }
 
     case "group": {
       const attrs = block.attrs as { style?: unknown; align?: unknown }
@@ -849,29 +941,26 @@ function blockToPMNode(block: Block, allBlocks: Record<BlockID, Block>, ctx: Con
 }
 
 /**
- * Convert a list block's children to PM listItem JSON. The schema requires
- * `listItem+`, but schema.nodeFromJSON doesn't check content expressions (#213), so
- * each child is validated on its own, and one bad item doesn't take the list with it:
- * - a paragraph child is wrapped in a listItem (listItem content is `paragraph block*`),
+ * Convert a list block's children to its item nodes' JSON (`listItem`, or `taskItem` for
+ * a to-do list, #419: `LIST_ITEMS`). The schema requires `<item>+`, but
+ * schema.nodeFromJSON doesn't check content expressions (#213), so each child is
+ * validated on its own, and one bad item doesn't take the list with it:
+ * - a paragraph child is wrapped in an item (both items start with a paragraph),
  *   keeping its text and its id;
- * - any other child that isn't a valid listItem is dropped and reported in ctx.dropped,
- *   so restoreDroppedBlocks puts it back on save;
+ * - any other child that isn't a valid item of this list is dropped and reported in
+ *   ctx.dropped, so restoreDroppedBlocks puts it back on save;
  * - when no item is left (none, all dangling, or all dropped), synthesize one empty
- *   listItem, which is what the editor itself produces for a fresh list.
+ *   item, which is what the editor itself produces for a fresh list.
  * A list that (transitively) lists itself as a child throws here, so the child that
  * closes the cycle is dropped like any other bad child instead of recursing until the
  * stack overflows.
  */
-function listItemsToPM(
-  listId: BlockID,
-  children: BlockID[] | undefined,
-  allBlocks: Record<BlockID, Block>,
-  ctx: ConvertContext,
-): any[] {
+function listItemsToPM(list: Block, allBlocks: Record<BlockID, Block>, ctx: ConvertContext): any[] {
+  const listId = list.id
   if (ctx.containersInProgress.has(listId)) throw new Error(`list ${listId} contains itself`)
   ctx.containersInProgress.add(listId)
   try {
-    return convertListChildren(listId, children, allBlocks, ctx)
+    return convertListChildren(listId, list.children, listItemOf(list.type)?.node ?? "listItem", allBlocks, ctx)
   } finally {
     ctx.containersInProgress.delete(listId)
   }
@@ -880,6 +969,7 @@ function listItemsToPM(
 function convertListChildren(
   listId: BlockID,
   children: BlockID[] | undefined,
+  itemNode: string,
   allBlocks: Record<BlockID, Block>,
   ctx: ConvertContext,
 ): any[] {
@@ -898,12 +988,12 @@ function convertListChildren(
       let json = blockToPMNode(childBlock, allBlocks, ctx)
       if (json?.type === "paragraph") {
         json = {
-          type: "listItem",
+          type: itemNode,
           attrs: { "data-block-id": childId },
           content: [{ ...json, attrs: { ...json.attrs, "data-block-id": null } }],
         }
       }
-      if (json?.type !== "listItem") throw new Error(`a ${childBlock.type} block can't be a list item`)
+      if (json?.type !== itemNode) throw new Error(`a ${childBlock.type} block can't be an item of this list`)
       ctx.schema.nodeFromJSON(json).check()
       items.push(json)
     } catch (error) {
@@ -914,7 +1004,7 @@ function convertListChildren(
   }
 
   if (items.length > 0) return items
-  return [{ type: "listItem", attrs: { "data-block-id": synthesizedItemId(listId) }, content: [{ type: "paragraph" }] }]
+  return [{ type: itemNode, attrs: { "data-block-id": synthesizedItemId(listId) }, content: [{ type: "paragraph" }] }]
 }
 
 /**

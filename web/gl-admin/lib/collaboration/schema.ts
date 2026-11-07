@@ -10,6 +10,9 @@ import { BlockIdExtension } from "../../components/editor/extensions/BlockIdExte
 import { QuoteCitation } from "../../components/editor/extensions/QuoteCitation"
 import { BlockColor } from "../../components/editor/extensions/BlockColor"
 import { Group, GroupDocument } from "../../components/editor/extensions/GroupBlock"
+import { Callout } from "../../components/editor/extensions/Callout"
+import { PullQuote } from "../../components/editor/extensions/PullQuote"
+import { TodoItem, TodoList } from "../../components/editor/extensions/TodoList"
 import { TableBlock } from "../../components/editor/extensions/TableBlock"
 
 const lowlight = createLowlight(common)
@@ -66,6 +69,12 @@ export function schemaExtensions({ collaborating }: { collaborating: boolean }) 
     blockColor: BlockColor,
     // #414: the first container. Its content expression is the nesting table's.
     group: Group,
+    // #419: three flow blocks. Each changes the schema fingerprint (#416), so a tab from
+    // before them is refused at its reconnect instead of deleting them (rule 10).
+    callout: Callout,
+    pullQuote: PullQuote,
+    todoList: TodoList,
+    todoItem: TodoItem,
     // #420: the table block (figure: TipTap's table, cells `paragraph+`, plus a caption).
     // After paragraph, so `block` content still fills with a paragraph.
     table: TableBlock,
