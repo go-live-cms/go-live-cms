@@ -398,7 +398,10 @@ describe("the toolbar (#420)", () => {
     columnButton.click()
     const menu = toolbarOf(ed).querySelector<HTMLElement>('[role="menu"]')!
     expect(menu.style.left).toBe(`${columnButton.offsetLeft}px`)
-    ed.view.dom.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }))
+    // Outside the editor (ProseMirror's own mousedown needs a layout jsdom doesn't have).
+    const elsewhere = document.body.appendChild(document.createElement("button"))
+    elsewhere.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }))
+    elsewhere.remove()
     expect(toolbarOf(ed).querySelector('[role="menu"]')).toBeNull()
     expect(columnButton.getAttribute("aria-expanded")).toBe("false")
   })
