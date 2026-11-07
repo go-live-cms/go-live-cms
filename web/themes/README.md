@@ -978,6 +978,7 @@ These are always available and don't need registration:
 | `todo_list`    | A checklist (`ul.todo-list`), read-only checkboxes on the public page |
 | `todo_item`    | A to-do list's item, `checked` or not                     |
 | `group`        | Blocks kept together (`div.group`, `is-tinted`, `alignwide`/`alignfull`) |
+| `details`      | A summary readers open to see its blocks (`<details [open]><summary>`, below) |
 | `table`        | Rows and columns with an optional header row and caption (below) |
 
 **Every theme styles the three #419 blocks** and defines `.sr-only` (the callout says its
@@ -986,6 +987,20 @@ tone in a visually hidden span): they render with only their classes
 default theme's callout fills and icon colours are `colors.*.info` / `infoBg` (and `success`,
 `warning`, `danger`), `--color-info` / `--color-info-bg` in its stylesheet, checked for
 contrast by `themes/default/tokens.test.ts`.
+
+**Details markup (#421).** The browser's own element, so it opens and closes with no script
+(a click, or ↵ / Space on the focused summary):
+
+```html
+<details id="b-<id>" open>      <!-- `open` only when "Open by default" is on -->
+  <summary>…</summary>          <!-- always there, maybe empty; bold, italic and links only -->
+  <p>…</p>                      <!-- its blocks, any flow block -->
+</details>
+```
+
+A theme may hide the browser's marker (`list-style: none` and `::-webkit-details-marker`) and
+draw its own; keep the summary's focus ring. The default theme's rules are in
+`styles/theme.css`.
 
 **Table markup (#420).** A theme styles it; nothing else is needed:
 

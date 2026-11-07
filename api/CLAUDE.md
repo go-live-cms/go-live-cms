@@ -1223,7 +1223,7 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
 
 ## Nested blocks (#414, `post_blocks_nesting.go`)
 
-- Containers (Group today) hold their child blocks **by id** in `children`, each a full block
+- Containers (Group, Details) hold their child blocks **by id** in `children`, each a full block
   in the flat `blocks` map, like a list's items. The table (`blockContainers`, `flowBlockTypes`)
   mirrors the web's `blocks-spec/nesting.ts`; `TestNestingVectors` reads the web's
   `nestingVectors.json`, which the collab store's tests read too, so both refuse the same docs.
@@ -1250,6 +1250,11 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   any depth of a table block's pm (another block's node of the same name is left alone). The
   header row is the block's `headerRow`, never in the pm. The bridge's output passes through
   unchanged (a test pins it).
+- **Details (#421, `post_blocks_details_test.go`):** a container (`blockContainers`: flow,
+  1+; a group accepts it). Its summary is an attr, not a child: `sanitizeDetailsAttrs` is an
+  allowlist (`summary` reduced like a caption by `sanitizeCaptionRuns`, `text` a string, `open`
+  only `true`). An image in a details is in `post_media` (`walkBlocks`). Four cases in
+  `nestingVectors.json`.
 - **`contentMediaUses` walks the tree** (`walkBlocks`: blocks_order, then children depth
   first, each once), so an image in a group is in `post_media` and "Used in".
   `blockDocMediaIDs` (the public `media` map) already walks the flat map. `regenerateBlockIDs`

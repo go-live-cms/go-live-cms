@@ -125,7 +125,11 @@ export function fragmentToBlockDoc(
       }
       if (id) afterId = id
     }
-    if (children.length === 0) throw new Error(`${node.type} ${containerId ?? ""} has no block that can be converted`)
+    // Its parts (a details' summary, #421) don't count: a container with only those would
+    // be skipped by pmToBlockDoc and lost, where falling back keeps its previous version.
+    if (!children.some((child) => isBlockNode(child.type.name, node.type))) {
+      throw new Error(`${node.type} ${containerId ?? ""} has no block that can be converted`)
+    }
     const shell = schema.nodeFromJSON({ type: node.type, attrs: node.attrs, marks: node.marks })
     return shell.type.create(shell.attrs, children, shell.marks)
   }

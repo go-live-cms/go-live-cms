@@ -1,4 +1,4 @@
-import { Node as PMNode, Schema } from "prosemirror-model"
+import { Node as PMNode, Schema, type ContentMatch } from "prosemirror-model"
 import {
   BLOCKQUOTE_BLOCK_VERSION,
   captionRuns,
@@ -273,6 +273,20 @@ function pmNodeToBlock(node: PMNode, allBlocks: Record<BlockID, Block>, seenIds:
         // children are set by the caller
       }
 
+    // #421. The summary is a part: its runs and text are the block's attrs, never a block.
+    // Defaults left out, so an untouched, closed details stores only its children.
+    case "details":
+      return {
+        id,
+        type: "details",
+        version: 1,
+        attrs: {
+          ...summaryOf(node),
+          ...(node.attrs.open === true ? { open: true as const } : {}),
+        },
+        // children are set by the caller
+      }
+
     // #419. Like a quote's `cite`, each one's own attr is canonical on the block and
     // left out of its `pm`, so the two can never disagree.
     case "callout":
@@ -453,6 +467,17 @@ function captionOf(image: PMNode): CaptionText[] | undefined {
   const caption = image.firstChild
   if (!caption || caption.type.name !== "imageCaption" || caption.content.size === 0) return undefined
   return caption.content.toJSON() as CaptionText[]
+}
+
+/**
+ * A details' summary for Block Spec (#421): the runs of its `detailsSummary` (its first
+ * child) as `attrs.summary`, and their text as `attrs.text` (what search reads). Neither
+ * when it's empty.
+ */
+function summaryOf(details: PMNode): { summary?: CaptionText[]; text?: string } {
+  const summary = details.firstChild
+  if (!summary || summary.type.name !== "detailsSummary" || summary.content.size === 0) return {}
+  return { summary: summary.content.toJSON() as CaptionText[], text: summary.textContent || undefined }
 }
 
 /**
@@ -903,6 +928,19 @@ function blockToPMNode(block: Block, allBlocks: Record<BlockID, Block>, ctx: Con
       }
     }
 
+    // #421: the summary (always there; empty without runs), then the blocks.
+    case "details": {
+      const attrs = block.attrs as { summary?: unknown; open?: unknown }
+      return {
+        type: "details",
+        attrs: { ...baseAttrs, ...(attrs.open === true ? { open: true } : {}) },
+        content: [
+          { type: "detailsSummary", ...captionContent(captionToPM(attrs.summary, ctx.schema)) },
+          ...containerChildrenToPM(block, allBlocks, ctx),
+        ],
+      }
+    }
+
     case "table":
       return tableBlockToPM(block, baseAttrs, ctx.schema)
 
@@ -1024,6 +1062,9 @@ function containerChildrenToPM(block: Block, allBlocks: Record<BlockID, Block>, 
   ctx.containersInProgress.add(block.id)
   try {
     const nodeType = ctx.schema.nodes[rule.node]
+    // What may follow the container's parts (a details' summary, #421): its blocks.
+    let afterParts: ContentMatch | null = nodeType?.contentMatch ?? null
+    for (const part of rule.parts ?? []) afterParts = afterParts?.matchType(ctx.schema.nodes[part]) ?? null
     const items: any[] = []
     let afterId: BlockID | null = null
     for (const childId of block.children ?? []) {
@@ -1040,7 +1081,7 @@ function containerChildrenToPM(block: Block, allBlocks: Record<BlockID, Block>, 
         if (!json) throw new Error(`no PM representation for block type ${child.type}`)
         const node = ctx.schema.nodeFromJSON(json)
         node.check()
-        if (nodeType && !nodeType.contentMatch.matchType(node.type)) throw new Error(`a ${rule.node} can't hold a ${node.type.name}`)
+        if (nodeType && !afterParts?.matchType(node.type)) throw new Error(`a ${rule.node} can't hold a ${node.type.name}`)
         items.push(json)
       } catch (error) {
         console.warn(`Dropping child ${childId} (${child.type}) of ${block.type} ${block.id}:`, error)

@@ -11,6 +11,8 @@ import { SlashCommandExtension } from "../ui/SlashCommand"
 import { PasteSanitizer } from "../extensions/PasteSanitizer"
 import { BlockNodeViews } from "../extensions/BlockNodeViews"
 import { TableKeyboard } from "../extensions/TableBlock"
+import { DetailsKeyboard } from "../extensions/DetailsBlock"
+import { TEXT_PART_NODE_NAMES } from "@gl-admin/lib/blocks-spec/nesting"
 import { BlockActions } from "./blockActions"
 import { BlockGutterKeys } from "./blockGutter"
 import { BlockNavigationKeys, BlockSelectionKeys } from "../extensions/BlockNavigation"
@@ -73,10 +75,13 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
       schema.todoList,
       schema.todoItem,
       schema.table,
+      schema.details,
       schema.blockId,
       BlockNodeViews,
       // #420: Tab / ⇧Tab between cells, only while the caret is in one; no schema.
       TableKeyboard,
+      // #421: ↵ from the summary into the content, ⌫ never deletes the summary; no schema.
+      DetailsKeyboard,
       // The block menu's Ctrl D / Ctrl Shift P (#356); no schema.
       BlockActions,
       // Blocks at any depth from the keyboard (#417): Esc, ↵, ↑↓, ⌘⇧↑↓, ⌫; no schema.
@@ -99,6 +104,8 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
             case "imageCaption":
             case "tableCaption":
               return "Write a caption…"
+            case "detailsSummary":
+              return "Summary"
             case "pullQuote":
               return "Pull quote"
             case "heading":
@@ -133,13 +140,13 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
         suggestion: {
           // "/" at the start of a line (#415, "Type / on an empty line").
           startOfLine: true,
-          // No block commands inside a caption (#346, #420: text only), in code, or in a
-          // table cell (#420: paragraphs only).
+          // No block commands inside a caption or a details summary (#346, #420, #421: text
+          // only), in code, or in a table cell (#420: paragraphs only).
           allow: ({ state, range }: { state: any; range: { from: number } }) => {
             const $at = state.doc.resolve(range.from)
             const parent = $at.parent
             const cell = $at.depth > 1 ? $at.node($at.depth - 1).type.spec.tableRole : undefined
-            return parent.type.name !== "imageCaption" && parent.type.name !== "tableCaption" && !parent.type.spec.code && !cell
+            return !TEXT_PART_NODE_NAMES.has(parent.type.name) && !parent.type.spec.code && !cell
           },
           // The whole menu (the list filters by the query itself): the role gate and the
           // active theme (catalog.ts). The role is a UI hint; the server enforces.

@@ -483,6 +483,12 @@
     padding: var(--space-2) var(--space-3);
   }
 
+  // A details' summary (#421) above its blocks.
+  &__summary {
+    font-weight: 600;
+    margin: 0 0 var(--space-2);
+  }
+
   // A whole block or list item only on one side. <ins>/<del> are transparent, so the
   // block keeps its own markup inside.
   &__whole {

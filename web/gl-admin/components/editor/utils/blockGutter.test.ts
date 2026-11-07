@@ -37,6 +37,7 @@ const PM_NODE: Record<string, string> = {
   pull_quote: "pullQuote",
   todo_list: "taskList",
   table: "tableBlock",
+  details: "details",
 }
 
 // The table asks for its size first (#420): Create table with the defaults.

@@ -11,6 +11,8 @@ import {
 } from "@gl-admin/lib/blocks-spec"
 import { catalogEntries, type BlockIconSpec } from "../blocks/catalog"
 import { BlockIcon } from "./BlockIcon"
+import Switch from "../../ui/Switch"
+import { DETAILS_OPEN_HELP, DETAILS_OPEN_LABEL } from "../extensions/BlockNodeViews"
 import {
   ancestorBlocks,
   blockSpecTypeOf,
@@ -24,8 +26,9 @@ import {
 // The settings panel's Block tab (#417; the canvas's settings panel, "Post · Block"): the
 // block the selection is on or in, at any depth (a paragraph inside a group as well as the
 // group), its place ("Group › Paragraph", each container a button that selects it), and its
-// settings. Today only containers have settings here (a group's Width and Background, the
-// same as its toolbar); other blocks keep theirs on their toolbars.
+// settings. Today only containers have settings here (a group's Width and Background, a
+// details' Open by default, #421: the same as their toolbars); other blocks keep theirs on
+// their toolbars.
 //
 // It reads the editor's state and changes a block with one `setNodeMarkup`, found by its id
 // when the button is pressed (a collaborator's edit moves positions, never ids). No plugin,
@@ -138,7 +141,7 @@ export default function BlockSettingsPanel({ editor }: { editor: TiptapEditor })
   )
 
   const setAttr = useCallback(
-    (ref: BlockRef, attr: string, value: string) => {
+    (ref: BlockRef, attr: string, value: string | boolean) => {
       if (!editor.isEditable) return
       const block = resolveEditorBlock(editor.state.doc, ref)
       if (!block || block.node.attrs[attr] === value) return
@@ -155,6 +158,7 @@ export default function BlockSettingsPanel({ editor }: { editor: TiptapEditor })
   const ref = refOfBlock(block)
   const info = blockInfo(block)
   const isGroup = block.node.type.name === "group"
+  const isDetails = block.node.type.name === "details"
 
   return (
     <div className="block-settings">
@@ -197,6 +201,16 @@ export default function BlockSettingsPanel({ editor }: { editor: TiptapEditor })
             onPick={(value) => setAttr(ref, "style", value)}
           />
         </fieldset>
+      ) : isDetails ? (
+        // #421, the canvas's Details settings.
+        <Switch
+          className="block-settings__switch"
+          label={DETAILS_OPEN_LABEL}
+          description={DETAILS_OPEN_HELP}
+          checked={block.node.attrs.open === true}
+          disabled={!editor.isEditable}
+          onChange={(open) => setAttr(ref, "open", open)}
+        />
       ) : (
         <p className="post-settings__hint">This block has no settings here. Its toolbar has its options.</p>
       )}

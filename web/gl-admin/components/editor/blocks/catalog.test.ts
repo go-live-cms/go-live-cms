@@ -73,6 +73,7 @@ describe("the catalog", () => {
           "Callout",
           "Code",
           "Table",
+          "Details",
         ],
       ],
       ["Media", ["Image"]],
@@ -202,6 +203,7 @@ const PM_NODE: Record<string, string> = {
   pull_quote: "pullQuote",
   todo_list: "taskList",
   table: "tableBlock",
+  details: "details",
 }
 
 describe("insert", () => {

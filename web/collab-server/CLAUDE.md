@@ -211,7 +211,7 @@ Hocuspocus applies a client's update with its `Connection` as the origin (`readU
 cleanup, stamping) has no context and is ignored. Never the Yjs `clientID`.
 - **Both detection paths:** an existing type in `tr.changed` (the event's target → the
   nearest block at or above it, `isBlockNode`, any depth: a list item's paragraph → the
-  item, a caption → the image, a child added to a group → the group), and a **new element
+  item, a caption → the image, a details' summary → the details (#421), a child added to a group → the group), and a **new element
   in its parent's `changes.added`** (Yjs leaves types created in the transaction out of
   `tr.changed`), with every block inside it (a pasted group).
 - **Store:** only when the decision is `write`, after `stampFragmentBlockIds`: `capture()`

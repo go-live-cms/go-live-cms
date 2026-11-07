@@ -67,7 +67,10 @@ const BLOCK_COLOR_TAGS = new Set(["P", "H1", "H2", "H3", "H4", "H5", "H6", "BLOC
 // `<div data-type="group" data-style data-align>` (GroupBlock.ts). Kept only on a <div>,
 // only that type and only valid values, so a pasted group is a group again (with fresh
 // ids: `data-block-id` is never kept) and no other markup can claim to be one.
-const CONTAINER_DIV_TYPES = new Set(["group"])
+// Details (#421): `<div data-type="details" data-open="true">` with its summary
+// `<div data-type="details-summary">`, from the editor or from a page's `<details open>` and
+// `<summary>` (normalizeClipboardMarkup), which DetailsBlock.ts parses.
+const CONTAINER_DIV_TYPES = new Set(["group", "details", "details-summary"])
 const isGroupDiv = (node: Element) => node.nodeName === "DIV" && node.getAttribute("data-type") === "group"
 
 // The #419 blocks, from the editor's own clipboard: a callout `<div data-type="callout"
@@ -94,7 +97,7 @@ function getPurifier() {
     ALLOWED_TAGS,
     ALLOWED_ATTR: [
       "href", "class", "data-pm-slice", "data-block-color", "data-type", "data-style", "data-align",
-      "data-tone", "data-cite", "data-checked", "colspan", "rowspan",
+      "data-tone", "data-cite", "data-checked", "colspan", "rowspan", "data-open",
     ],
     ALLOW_DATA_ATTR: false,
     ALLOW_ARIA_ATTR: false,
@@ -126,6 +129,8 @@ function getPurifier() {
       if (!isGroupDiv(node) || !isGroupStyle(data.attrValue)) data.keepAttr = false
     } else if (data.attrName === "data-align") {
       if (!isGroupDiv(node) || !isGroupAlign(data.attrValue)) data.keepAttr = false
+    } else if (data.attrName === "data-open") {
+      if (!isTyped(node, "DIV", "details") || data.attrValue !== "true") data.keepAttr = false
     } else if (data.attrName === "colspan" || data.attrName === "rowspan") {
       // A cell's span (#420), on a cell only, as the integer Block Spec stores (1..TABLE_MAX_SPAN).
       const span = node.nodeName === "TD" || node.nodeName === "TH" ? clampTableSpan(data.attrValue) : 1
@@ -236,9 +241,28 @@ function normalizeClipboardMarkup(root: HTMLElement) {
     if (root.contains(cell)) flattenCell(cell as HTMLElement)
   }
 
-  // ProseMirror doesn't treat these as block boundaries, so a nav (or a details) and the
-  // text after it would run together into one paragraph. Make them divs.
-  for (const cell of Array.from(root.querySelectorAll("caption, nav, details, summary"))) {
+  // A details (#421) becomes the editor's own markup: its first <summary> child the summary,
+  // `open` as data-open. Any other <summary> is a plain div below.
+  for (const details of Array.from(root.querySelectorAll("details"))) {
+    const div = details.ownerDocument.createElement("div")
+    div.setAttribute("data-type", "details")
+    if (details.hasAttribute("open")) div.setAttribute("data-open", "true")
+    const summary = Array.from(details.children).find((child) => child.tagName === "SUMMARY")
+    if (summary) {
+      const part = details.ownerDocument.createElement("div")
+      part.setAttribute("data-type", "details-summary")
+      part.append(...Array.from(summary.childNodes))
+      summary.replaceWith(part)
+      // The summary first, as the schema has it.
+      details.prepend(part)
+    }
+    div.append(...Array.from(details.childNodes))
+    details.replaceWith(div)
+  }
+
+  // ProseMirror doesn't treat these as block boundaries, so a nav and the text after it
+  // would run together into one paragraph. Make them divs.
+  for (const cell of Array.from(root.querySelectorAll("caption, nav, summary"))) {
     const div = cell.ownerDocument.createElement("div")
     div.append(...Array.from(cell.childNodes))
     cell.replaceWith(div)

@@ -224,6 +224,50 @@ describe("per-block attribution on the relay (#328)", () => {
     expect(editors328()).toEqual({ [ONE]: 1, [nested]: 2, [GROUP]: 2, [AFTER]: 1 })
   })
 
+  it("inside a details (#421): a summary edit is the details', a child's edit the child's, a new child its author's", async () => {
+    await relay.destroy()
+    const DETAILS = "blk-0328-details-001"
+    const ONE = "blk-0328-dinner-0001"
+    const AFTER = "blk-0328-dafter-0001"
+    relay = await startRelay({
+      revision: 3,
+      blockDoc: canonical({
+        doc_version: 1,
+        blocks_order: [DETAILS, AFTER],
+        blocks: {
+          [DETAILS]: { id: DETAILS, type: "details", version: 1, attrs: { summary: [{ type: "text", text: "Question" }], text: "Question" }, children: [ONE] },
+          [ONE]: { id: ONE, type: "paragraph", version: 1, attrs: { text: "inside one" } },
+          [AFTER]: { id: AFTER, type: "paragraph", version: 1, attrs: { text: "after" } },
+        },
+      } as BlockDocV1),
+    })
+    const a = await peer("1")
+    const b = await peer("2")
+    await waitFor(() => b.editor.getText().includes("after") && json(a.editor) === json(b.editor), { what: "the details on both" })
+
+    // Typing in a block of the details: that block is the nearest block, not the details.
+    typeAtEnd(a.editor, ONE, " typed")
+    await serverHas("inside one typed")
+    await waitFor(() => editors328()[ONE] === 1, { what: "the child's edit" })
+    expect(editors328()).toEqual({ [ONE]: 1 })
+
+    // Typing in the summary: the summary is a part, so the details is the block edited.
+    b.editor.chain().setTextSelection(2).insertContent("The ").run()
+    await waitFor(() => (stored().blocks[DETAILS]?.attrs as any)?.text === "The Question", { what: "the summary stored" })
+    await waitFor(() => editors328()[DETAILS] === 2, { what: "the summary's edit" })
+    expect(editors328()).toEqual({ [ONE]: 1, [DETAILS]: 2 })
+
+    // User 1 adds a block inside the details.
+    const one = find(a.editor, ONE)
+    a.editor.commands.insertContentAt(one.pos + one.node.nodeSize, { type: "paragraph", content: [{ type: "text", text: "nested new" }] })
+    await serverHas("nested new")
+    await waitFor(() => Object.values(stored().blocks).some((block) => (block.attrs as any)?.text === "nested new"), { what: "the new child stored" })
+    const nested = storedIdOf("nested new")
+    await waitFor(() => editors328()[nested] === 1, { what: "the new child" })
+    expect(stored().blocks[DETAILS]).toMatchObject({ children: [ONE, nested] })
+    expect(editors328()).toMatchObject({ [ONE]: 1, [nested]: 1 })
+  })
+
   it("a move attributes nothing; a paste attributes the new block to whoever pasted", async () => {
     const { a, b } = await twoPeers()
     typeAtEnd(a.editor, ids.alpha, " first")

@@ -166,6 +166,8 @@ describe("the slash menu", () => {
     press("ArrowDown")
     expect(active()!.textContent).toBe("Table")
     press("ArrowDown")
+    expect(active()!.textContent).toBe("Details")
+    press("ArrowDown")
     expect(active()!.textContent).toBe("Image")
     press("ArrowDown")
     expect(active()!.textContent).toBe("Divider---")

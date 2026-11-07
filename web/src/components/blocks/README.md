@@ -225,6 +225,12 @@ interface BlockComponentProps {
   **disabled** checkbox (readers can't toggle it, it isn't a tab stop) labelled by the item's
   text (`aria-labelledby` = `todo-<item id>`, or `aria-label` for an id that isn't HTML-safe).
   The default theme styles them (`themes/default/styles/theme.css`).
+- **Details (#421, `details/`):** the browser's own `<details id="b-<id>" [open]>` (only
+  with `attrs.open: true`), its `<summary>` first (the runs, caption marks only; an empty one
+  is an empty `<summary>`, so the browser shows no "Details" label of its own), then its
+  blocks through `renderBlock`. No script: the browser opens and closes it (a click, ↵ or Space
+  on the summary). Nothing renders when none of its blocks does. The default theme styles
+  `details`/`summary` (rules, a chevron that turns).
 - **Table (#420, `table/`):** `figure.table-block > div.table-scroll[role=region][tabindex=0]
   [aria-labelledby=<caption id>] > table`, then `figcaption#b-<id>-caption` (the id comes from
   the block id, so a table in a group has one too; without a caption the region is

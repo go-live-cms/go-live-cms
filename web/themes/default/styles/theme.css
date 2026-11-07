@@ -1351,6 +1351,62 @@ body {
   border-bottom: 0;
 }
 
+/* Details (#421, "Published · text"): the browser's own <details>, so it opens and closes
+   with no script (a click, or ↵ / Space on the focused summary). A rule above and below,
+   one between details that follow each other; the summary in the heading face with a
+   chevron that turns when open. Its blocks reset the prose rhythm, like a group's.
+   Light and dark come from the tokens. */
+.prose details {
+  border-block: 1px solid var(--color-border);
+}
+.prose details + details {
+  margin-top: 0;
+  border-top: 0;
+}
+.prose details > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  min-height: 56px;
+  padding-block: 12px;
+  font-family: var(--font-heading);
+  font-weight: 600;
+  line-height: var(--leading-snug);
+  color: var(--color-secondary);
+  cursor: pointer;
+  list-style: none;
+}
+.prose details > summary::-webkit-details-marker {
+  display: none;
+}
+.prose details > summary::after {
+  content: "";
+  flex: none;
+  width: 9px;
+  height: 9px;
+  margin-right: 4px;
+  border-right: 2px solid var(--color-text-muted);
+  border-bottom: 2px solid var(--color-text-muted);
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform var(--duration);
+}
+.prose details[open] > summary::after {
+  transform: translateY(2px) rotate(225deg);
+}
+.prose details > * {
+  margin: 0;
+}
+.prose details > * + * {
+  margin-top: 0.8em;
+}
+.prose details > summary + * {
+  margin-top: 0;
+}
+.prose details > :last-child:not(summary) {
+  margin-bottom: 1.25em;
+}
+
 /* ---------- single post ---------- */
 .post-header {
   display: flex;

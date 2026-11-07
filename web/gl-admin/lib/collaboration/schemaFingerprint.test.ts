@@ -188,8 +188,9 @@ describe("schemaFingerprint (#416)", () => {
     })
 
     it("the table (#420) changed it: new node types, and a doc and a group that name the table block", () => {
-      // The schema as it was before #420: no table nodes, `(block | group)+` doc, `block+` group.
-      const { table: _table, document: _document, group: _group, ...rest } = schemaExtensions({ collaborating: true })
+      // The schema as it was before #420: no table nodes (nor #421's details), `(block | group)+`
+      // doc, `block+` group.
+      const { table: _table, document: _document, group: _group, details: _details, ...rest } = schemaExtensions({ collaborating: true })
       const OldDocument = Node.create({ name: "doc", topNode: true, content: "(block | group)+" })
       const OldGroup = Group.extend({ content: "block+" })
       const before = getSchema([OldDocument, ...Object.values({ ...rest, group: OldGroup })])
@@ -205,6 +206,25 @@ describe("schemaFingerprint (#416)", () => {
       ])
       expect(blockCells.nodes.tableCell.spec.content).toBe("block+")
       expect(schemaFingerprint(blockCells)).not.toBe(core)
+    })
+
+    it("details (#421) changed it: new node types, and a doc and a group that name details", () => {
+      // The schema as it was before #421: no details nodes, a doc and a group without them.
+      const { document: _document, group: _group, details, ...rest } = schemaExtensions({ collaborating: true })
+      const OldDocument = Node.create({ name: "doc", topNode: true, content: "(block | tableBlock | group)+" })
+      const OldGroup = Group.extend({ content: "(block | tableBlock)+" })
+      const before = getSchema([OldDocument, ...Object.values({ ...rest, group: OldGroup })])
+      expect(before.nodes.details).toBeUndefined()
+      for (const name of ["details", "detailsSummary"]) expect(getCoreSchema().nodes[name], name).toBeDefined()
+      const old = schemaFingerprint(before)
+      expect(old).not.toBe(core)
+      // A stale tab with the nodes but the old doc and group differs from both.
+      const nodesOnly = schemaFingerprint(getSchema([OldDocument, ...Object.values({ ...rest, group: OldGroup, details })]))
+      expect(nodesOnly).not.toBe(old)
+      expect(nodesOnly).not.toBe(core)
+      // The open attr is in it: a tab whose details has none is refused too.
+      const openless = getSchema(Object.values({ ...schemaExtensions({ collaborating: true }), details: details.extend({ addAttributes: () => ({}) }) }))
+      expect(schemaFingerprint(openless)).not.toBe(core)
     })
 
     it("an extension without schema doesn't", () => {
