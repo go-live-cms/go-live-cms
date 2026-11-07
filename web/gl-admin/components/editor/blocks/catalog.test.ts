@@ -18,6 +18,7 @@ import {
 } from "./catalog"
 import { applyTurnInto, computeTurnIntoFromSelection } from "../utils/turnInto"
 import { stubJsdomRangeLayout } from "@gl-admin/lib/collaboration/testHelpers"
+import { currentTableSizePicker } from "../ui/TableSizePicker"
 
 // The block catalog (#415): one list for the slash menu, the + menu and Turn into.
 
@@ -71,6 +72,7 @@ describe("the catalog", () => {
           "Pull quote",
           "Callout",
           "Code",
+          "Table",
         ],
       ],
       ["Media", ["Image"]],
@@ -199,6 +201,7 @@ const PM_NODE: Record<string, string> = {
   callout: "callout",
   pull_quote: "pullQuote",
   todo_list: "taskList",
+  table: "tableBlock",
 }
 
 describe("insert", () => {
@@ -207,6 +210,8 @@ describe("insert", () => {
     const from = ed.state.doc.firstChild!.nodeSize + 1
     ed.commands.setTextSelection(from + 4)
     entry.insert(ed, { from, to: from + 4 })
+    // The table asks for its size first (#420): Create table with the defaults.
+    currentTableSizePicker()?.submit()
     const types: string[] = []
     ed.state.doc.forEach((node) => types.push(node.type.name))
     expect(types).toContain(PM_NODE[entry.type])

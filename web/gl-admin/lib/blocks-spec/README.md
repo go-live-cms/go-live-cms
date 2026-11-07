@@ -52,6 +52,12 @@ posts.block_doc → publish → post_versions → public site (SSR)
 - **todo_list** / **todo_item** (#419): a third list type (`LIST_ITEMS`): `children` are its
   `todo_item`s (node `taskItem`, TipTap's TaskItem, `paragraph+`), each a block with its id and
   `attrs.checked` (a boolean, always written), never in `pm`. No attrs on the list itself
+- **table** (#420): a flow block (no `children`). `attrs.pm` is the `table` node: `tableRow`s
+  of `tableCell`s, each cell `paragraph+`, its only attrs `colspan`/`rowspan` (integers
+  2..`TABLE_MAX_SPAN`, absent when 1); every stored cell is a `tableCell`, and
+  `attrs.headerRow: true` (absent: none) makes the first row the header row. `attrs.caption`
+  is runs like an image's, `attrs.text` the cells' text. `tableRows(pm)` reads it as the
+  renderer does. Rules: `../collaboration/CLAUDE.md` (blockBridge notes, Table).
 - Theme blocks: unknown types keep their ProseMirror JSON in `attrs.pm` and round-trip
   unchanged.
 

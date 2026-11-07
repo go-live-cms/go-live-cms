@@ -225,6 +225,13 @@ interface BlockComponentProps {
   **disabled** checkbox (readers can't toggle it, it isn't a tab stop) labelled by the item's
   text (`aria-labelledby` = `todo-<item id>`, or `aria-label` for an id that isn't HTML-safe).
   The default theme styles them (`themes/default/styles/theme.css`).
+- **Table (#420, `table/`):** `figure.table-block > div.table-scroll[role=region][tabindex=0]
+  [aria-labelledby=<caption id>] > table`, then `figcaption#b-<id>-caption` (the id comes from
+  the block id, so a table in a group has one too; without a caption the region is
+  `aria-label="Table"`). With `headerRow` the first row is a `<thead>` of `<th scope="col">`
+  (`colgroup` when it spans columns; a header cell never spans rows). Cells come from
+  `tableRows` (paragraphs only, spans clamped) and render like a list item's text. The theme
+  makes `.table-scroll` scroll sideways (`themes/README.md`).
 - **`anchorId`** (#356, "Copy link to block"): every top-level block's root element gets
   it as its `id`, so `/<post url>#b-<block id>` lands on it. A heading keeps its slug id
   (#351) and puts the anchor on an empty `<span class="gl-block-anchor">` at its start.

@@ -560,6 +560,17 @@ are the most fragile part of the codebase. **Before editing anything under
   Public markup in `src/components/blocks/README.md`; the default theme's callout colours are
   theme tokens (`info`/`infoBg`, …). History's diff treats a to-do list as a list (a ticked item is
   a "Done" change). Rules: `gl-admin/lib/collaboration/CLAUDE.md`.
+- **Table block (#420):** a Text entry in the catalog (`/table`) whose insert opens the size
+  picker (`components/editor/ui/TableSizePicker.ts`: a plain-DOM dialog at the caret, Columns 3 and
+  Rows 2 to start, Rows counting the header row, Create table; Esc closes it and inserts nothing).
+  The node and its commands are `extensions/TableBlock.ts` (schema in `schemaExtensions`, the keys in
+  `TableKeyboard`, editor only); the view (Row ▾ and Column ▾ menus, the Header row switch, ⌥F10 to
+  reach them, the grid in a scrolling `tableWrapper`) is `TableBlockView` in `BlockNodeViews.ts`.
+  No slash menu, Turn into or "Type /" hint in a cell (paragraphs only) or a caption. The public
+  `src/components/blocks/table/` and the default theme's `.table-scroll` rules (`theme.css`) make
+  a wide table scroll in its own box at 375px. Rules: `gl-admin/lib/collaboration/CLAUDE.md`
+  (blockBridge notes, Table). History compares its cells as text, the caption like an image's and
+  the header row as an attribute.
 - **Editing nested blocks (#417, design `docs/design/block-library.md` 3.5):** the gutter is
   our own plugin now (`components/editor/utils/gutterPlugin.ts`; TipTap 3.4.2's drag handle
   only finds top-level blocks): it follows the pointer to the innermost block (a block in a

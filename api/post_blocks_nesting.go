@@ -28,12 +28,13 @@ var blockContainers = map[string]blockContainer{
 }
 
 // flowBlockTypes are the core types that hold no blocks. Lists count as flow (their
-// items are their own business).
+// items are their own business); so does the table (#420: its rows are in its pm).
 var flowBlockTypes = map[string]bool{
 	"paragraph": true, "heading": true, "blockquote": true, "code_block": true,
 	"divider": true, "image": true, "bullet_list": true, "ordered_list": true,
 	// #419
 	"callout": true, "pull_quote": true, "todo_list": true,
+	"table": true,
 }
 
 // listBlockTypes have their items as children (Block Spec `LIST_ITEMS`): list_item for

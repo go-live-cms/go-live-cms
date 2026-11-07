@@ -23,6 +23,7 @@ export type KnownBlockType =
   | "pull_quote"
   | "todo_list"
   | "todo_item"
+  | "table"
 
 /** BlockType allows known types + arbitrary custom types from themes */
 export type BlockType = KnownBlockType | (string & {})
@@ -68,6 +69,65 @@ export function isGroupStyle(value: unknown): value is GroupStyle {
 
 export function isGroupAlign(value: unknown): value is GroupAlign {
   return typeof value === "string" && (GROUP_ALIGNS as readonly string[]).includes(value)
+}
+
+/**
+ * Table (#420), a flow block: one block whose rows are in `attrs.pm` (the `table` node's
+ * JSON: `tableRow`s of `tableCell`s, each cell `paragraph+`, nothing else), whether its
+ * first row is a header row in `attrs.headerRow` (canonical: the stored cells are all
+ * `tableCell`), and its caption as runs in `attrs.caption`, like an image's.
+ *
+ * A cell's `colspan` and `rowspan` are its only attrs, integers clamped to
+ * 1..TABLE_MAX_SPAN, stored only when not 1 (here, in the bridge and in the API's
+ * sanitizer, `tableMaxSpan`). The size picker makes at most TABLE_MAX_COLUMNS columns and
+ * TABLE_MAX_ROWS rows; a pasted table may be bigger.
+ */
+export const TABLE_MAX_SPAN = 64
+export const TABLE_MAX_COLUMNS = 20
+export const TABLE_MAX_ROWS = 100
+/** The cell node types a stored table's pm may name; a `tableHeader` is read as a plain cell (the header row is `headerRow`). */
+export const TABLE_CELL_TYPES = ["tableCell", "tableHeader"] as const
+
+/** A cell span as stored: an integer in 1..TABLE_MAX_SPAN (a non-number is 1). */
+export function clampTableSpan(value: unknown): number {
+  const n = typeof value === "number" ? value : typeof value === "string" && /^\s*\d+\s*$/.test(value) ? Number(value) : NaN
+  if (!Number.isFinite(n)) return 1
+  return Math.min(TABLE_MAX_SPAN, Math.max(1, Math.floor(n)))
+}
+
+/** One cell of a stored table, as the renderer reads it. */
+export interface TableCellView {
+  colspan: number
+  rowspan: number
+  /** The cell's paragraphs, as ProseMirror JSON. */
+  content: any[]
+}
+
+/**
+ * A stored table's rows as the public renderer and the history read them: every row that
+ * is a `tableRow`, every cell of a cell type, its spans clamped and its paragraphs (only
+ * paragraphs: anything else a bad write put there is left out). A cell with none keeps one
+ * empty paragraph. A row with no cells stays (a rowspan above covers it); a table with no
+ * rows is left out.
+ */
+export function tableRows(pm: unknown): TableCellView[][] {
+  const rows = (pm as { type?: unknown; content?: unknown } | null)?.type === "table" ? (pm as { content?: unknown }).content : null
+  if (!Array.isArray(rows)) return []
+  const cellTypes = new Set<string>(TABLE_CELL_TYPES)
+  return rows
+    .filter((row) => row?.type === "tableRow" && Array.isArray(row.content))
+    .map((row) =>
+      (row.content as any[])
+        .filter((cell) => cellTypes.has(cell?.type))
+        .map((cell): TableCellView => {
+          const paragraphs = Array.isArray(cell.content) ? cell.content.filter((node: any) => node?.type === "paragraph") : []
+          return {
+            colspan: clampTableSpan(cell.attrs?.colspan),
+            rowspan: clampTableSpan(cell.attrs?.rowspan),
+            content: paragraphs.length > 0 ? paragraphs : [{ type: "paragraph" }],
+          }
+        }),
+    )
 }
 
 /**
@@ -278,6 +338,21 @@ export type GroupBlock = BaseBlock<
   }
 >
 
+/** A table (#420), a flow block: its rows in `pm`, never `children`. */
+export type TableBlock = BaseBlock<
+  "table",
+  {
+    /** The `table` node: `tableRow`s of `tableCell`s with `paragraph+` (see TABLE_MAX_SPAN). */
+    pm: any
+    /** Cell texts, a space between cells and a newline between rows. */
+    text?: string
+    /** The first row is a header row. Absent: no header row. */
+    headerRow?: true
+    /** Rich caption (bold, italic, link). Absent: no caption. */
+    caption?: CaptionText[]
+  }
+>
+
 /**
  * Callout (#419), a flow block: its paragraphs live in its `pm` (like a quote's), the
  * tone is canonical in `attrs.tone`, never in `pm`.
@@ -349,6 +424,7 @@ export type Block =
   | PullQuoteBlock
   | TodoListBlock
   | TodoItemBlock
+  | TableBlock
   | CustomBlock
 
 export interface BlockDocV1 {
@@ -511,6 +587,30 @@ export const zGroup = zBase.extend({
   children: z.array(zBlockID),
 })
 
+// A table's pm (#420): rows of cells of paragraphs. The cells' only attrs are their spans
+// (`.strict()`: the bridge writes nothing else, the API keeps nothing else).
+const zTableSpan = z.number().int().min(2).max(TABLE_MAX_SPAN)
+const zTableCell = z.object({
+  type: z.enum(TABLE_CELL_TYPES),
+  attrs: z.object({ colspan: zTableSpan.optional(), rowspan: zTableSpan.optional() }).strict().optional(),
+  content: z.array(z.object({ type: z.literal("paragraph") }).passthrough()).min(1),
+})
+// A row may have no cells of its own (every one covered by a rowspan from above).
+const zTableRow = z.object({
+  type: z.literal("tableRow"),
+  content: z.array(zTableCell),
+})
+
+export const zTable = zBase.extend({
+  type: z.literal("table"),
+  attrs: z.object({
+    pm: z.object({ type: z.literal("table"), content: z.array(zTableRow).min(1) }),
+    text: z.string().optional(),
+    headerRow: z.literal(true).optional(),
+    caption: z.array(zCaptionText).optional(),
+  }),
+})
+
 /**
  * Catch-all for theme/custom block types not in the known set. Any version: a theme
  * block keeps the version its theme wrote even when that theme isn't installed here.
@@ -538,6 +638,7 @@ const knownBlockSchemas: Record<KnownBlockType, z.ZodTypeAny> = {
   pull_quote: zPullQuote,
   todo_list: zTodoList,
   todo_item: zTodoItem,
+  table: zTable,
 }
 
 // A known type must match its own schema; only other types fall back to the custom

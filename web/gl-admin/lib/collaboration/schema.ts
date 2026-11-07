@@ -13,6 +13,7 @@ import { Group, GroupDocument } from "../../components/editor/extensions/GroupBl
 import { Callout } from "../../components/editor/extensions/Callout"
 import { PullQuote } from "../../components/editor/extensions/PullQuote"
 import { TodoItem, TodoList } from "../../components/editor/extensions/TodoList"
+import { TableBlock } from "../../components/editor/extensions/TableBlock"
 
 const lowlight = createLowlight(common)
 
@@ -74,6 +75,9 @@ export function schemaExtensions({ collaborating }: { collaborating: boolean }) 
     pullQuote: PullQuote,
     todoList: TodoList,
     todoItem: TodoItem,
+    // #420: the table block (figure: TipTap's table, cells `paragraph+`, plus a caption).
+    // After paragraph, so `block` content still fills with a paragraph.
+    table: TableBlock,
     blockId: BlockIdExtension,
   }
 }

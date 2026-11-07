@@ -2,6 +2,8 @@ import type { Editor } from "@tiptap/core"
 import { installedThemeBlockEditors } from "@gl-admin/lib/theme-blocks/editorBlocks"
 import { holderAcceptsType } from "../utils/blockTree"
 import { createImagePlaceholder } from "./mediaBlocks"
+import { openTableSizePicker } from "../ui/TableSizePicker"
+import { TABLE_ICON } from "../extensions/TableBlock"
 
 // The block catalog (#415, docs/design/block-library.md 3.1): every block the editor can
 // insert, in one list. The slash menu, the + menu in the gutter, Turn into (turnInto.ts)
@@ -88,6 +90,7 @@ export const ICONS = {
   todo: "m3 7 2 2 4-4M3 17l2 2 4-4M13 7h8M13 17h8",
   pullQuote: "M4 3h16M4 21h16M7 15c2 0 3-1 3-4V8H6v3h3M14 15c2 0 3-1 3-4V8h-4v3h3",
   callout: "M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M12 16v-4M12 8h.01",
+  table: TABLE_ICON,
 } as const
 
 const chain = (editor: Editor, range: InsertRange) => editor.chain().focus().deleteRange(range)
@@ -208,6 +211,22 @@ export const CORE_BLOCKS: readonly CatalogEntry[] = [
     insert: (editor, range) => chain(editor, range).setCodeBlock().run(),
     turnInto: (editor) => editor.chain().focus().setCodeBlock().run(),
   },
+  // #420: the size picker first ("Columns", "Rows", Create table); the table replaces the
+  // line (now empty) when it's created, and nothing is inserted if it's closed.
+  {
+    id: "table",
+    type: "table",
+    name: "Table",
+    group: "text",
+    keywords: ["grid", "rows", "columns", "spreadsheet", "cells"],
+    icon: { path: ICONS.table },
+    insert: (editor, range) => {
+      // No `.focus()`: TipTap focuses the editor a frame later, which would take focus
+      // from the picker's first field.
+      editor.chain().deleteRange(range).run()
+      openTableSizePicker(editor)
+    },
+  },
   // Media
   {
     id: "image",
@@ -294,8 +313,8 @@ export function menuEntries(context: MenuContext, entries: readonly CatalogEntry
 export function slotAcceptsAt(editor: Editor): (entry: CatalogEntry) => boolean {
   const { $from } = editor.state.selection
   const parent = $from.depth > 1 ? $from.node($from.depth - 1) : null
-  // A block that holds paragraphs only (a callout, a to-do item, #419): any other entry
-  // would delete the typed /query and then fail to make its block there.
+  // A block that holds paragraphs only (a callout, a to-do item, #419; a table cell, #420):
+  // any other entry would delete the typed /query and then fail to make its block there.
   if (parent && parent.type.spec.content === "paragraph+") return (entry) => entry.type === "paragraph"
   const holder = parent?.type.name ?? "doc"
   return (entry) => holderAcceptsType(holder, entry.type)

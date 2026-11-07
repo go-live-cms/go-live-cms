@@ -58,8 +58,11 @@ const BubbleMenu = ({ editor, className = "", openLinkModal, ...props }: any) =>
 
   if (!editor) return null
 
-  // In an image caption (#346): no "turn into", and only the marks a caption allows.
-  const inCaption = editor.state.selection.$from.parent.type.name === "imageCaption"
+  // In an image or table caption (#346, #420): no "turn into", and only the marks a
+  // caption allows. In a table cell (paragraphs only, #420): no "turn into" either.
+  const { $from } = editor.state.selection
+  const inCaption = $from.parent.type.name === "imageCaption" || $from.parent.type.name === "tableCaption"
+  const inCell = $from.depth > 1 && !!$from.node($from.depth - 1).type.spec.tableRole
   const mark = (name: string, label: string, run: () => void, content: ReactNode, style?: CSSProperties) =>
     inCaption && !(CAPTION_MARKS as readonly string[]).includes(name) ? null : (
       <button
@@ -91,7 +94,7 @@ const BubbleMenu = ({ editor, className = "", openLinkModal, ...props }: any) =>
       {...props}
     >
       <div role="toolbar" aria-label="Format text" className="editor-toolbar__group">
-        {!inCaption && (
+        {!inCaption && !inCell && (
           <>
             <CommandSelect
               options={turnIntoOptions}

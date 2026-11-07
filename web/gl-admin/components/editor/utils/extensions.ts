@@ -10,6 +10,7 @@ import { getActiveTheme, menuEntries, slotAcceptsAt, type CatalogEntry } from ".
 import { SlashCommandExtension } from "../ui/SlashCommand"
 import { PasteSanitizer } from "../extensions/PasteSanitizer"
 import { BlockNodeViews } from "../extensions/BlockNodeViews"
+import { TableKeyboard } from "../extensions/TableBlock"
 import { BlockActions } from "./blockActions"
 import { BlockGutterKeys } from "./blockGutter"
 import { BlockNavigationKeys, BlockSelectionKeys } from "../extensions/BlockNavigation"
@@ -71,8 +72,11 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
       schema.pullQuote,
       schema.todoList,
       schema.todoItem,
+      schema.table,
       schema.blockId,
       BlockNodeViews,
+      // #420: Tab / ⇧Tab between cells, only while the caret is in one; no schema.
+      TableKeyboard,
       // The block menu's Ctrl D / Ctrl Shift P (#356); no schema.
       BlockActions,
       // Blocks at any depth from the keyboard (#417): Esc, ↵, ↑↓, ⌘⇧↑↓, ⌫; no schema.
@@ -93,6 +97,7 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
             case "image":
               return ""
             case "imageCaption":
+            case "tableCaption":
               return "Write a caption…"
             case "pullQuote":
               return "Pull quote"
@@ -111,6 +116,8 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
               if (editor.isActive("heading", { level: 1 })) return headingLabel(1)
               if (editor.isActive("heading", { level: 2 })) return headingLabel(2)
               if (editor.isActive("heading", { level: 3 })) return headingLabel(3)
+              // A table cell holds paragraphs only (#420): no block menu there, so no hint.
+              if (editor.isActive("tableCell") || editor.isActive("tableHeader")) return ""
               // "Empty insert states" (#415): the hint is on the focused empty line only
               // (showOnlyCurrent), never on every empty line of an unfocused post.
               if (!editor.isFocused) return ""
@@ -126,10 +133,13 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
         suggestion: {
           // "/" at the start of a line (#415, "Type / on an empty line").
           startOfLine: true,
-          // No block commands inside an image caption (#346, it holds text only) or in code.
+          // No block commands inside a caption (#346, #420: text only), in code, or in a
+          // table cell (#420: paragraphs only).
           allow: ({ state, range }: { state: any; range: { from: number } }) => {
-            const parent = state.doc.resolve(range.from).parent
-            return parent.type.name !== "imageCaption" && !parent.type.spec.code
+            const $at = state.doc.resolve(range.from)
+            const parent = $at.parent
+            const cell = $at.depth > 1 ? $at.node($at.depth - 1).type.spec.tableRole : undefined
+            return parent.type.name !== "imageCaption" && parent.type.name !== "tableCaption" && !parent.type.spec.code && !cell
           },
           // The whole menu (the list filters by the query itself): the role gate and the
           // active theme (catalog.ts). The role is a UI hint; the server enforces.

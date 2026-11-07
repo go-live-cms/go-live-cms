@@ -7,6 +7,7 @@ import {
   containerRule,
   isBlockNode,
   isContainerType,
+  isStandaloneFlowType,
   LIST_ITEM_NODE_NAMES,
 } from "@gl-admin/lib/blocks-spec/nesting"
 
@@ -195,14 +196,16 @@ export function holderAccepts(holder: PMNode, child: PMNode): boolean {
 /**
  * The one "what may go here" rule, by node name and Block Spec type: the top level (`doc`)
  * takes flow and the top-level containers, a container what the table lets it hold, and
- * anything else (a slot, or another block's own content: a list item, a quote) flow only.
+ * anything else (a slot, or another block's own content: a list item, a quote) flow only,
+ * and never a standalone flow block (the table, #420: `STANDALONE_FLOW_NODE_NAMES`, which
+ * the schema keeps out of another block's content).
  * The slash menu (`slotAcceptsAt`), the gutter's + (`gutterAccepts`) and drops all read it.
  */
 export function holderAcceptsType(holderName: string, type: string): boolean {
   if (holderName === "doc") return !isContainerType(type) || !!containerRule(type)?.topLevel
   const container = containerOfNode(holderName)
   if (container) return acceptsChild(container.type, type)
-  return !isContainerType(type)
+  return !isContainerType(type) && !isStandaloneFlowType(type)
 }
 
 function withChildren(holder: PMNode, children: PMNode[]): boolean {

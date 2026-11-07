@@ -92,8 +92,9 @@ export const BlockIdExtension = Extension.create({
               }
             }
 
-            // Inline content can't hold list items; don't walk it.
-            return !node.isTextblock
+            // Inline content can't hold list items, and a table's grid (#420) holds no
+            // blocks: don't walk either (a big table would cost every transaction).
+            return !node.isTextblock && node.type.name !== "tableBlock"
           })
 
           return hasChanges ? tr : null
@@ -124,6 +125,8 @@ export const BlockIdExtension = Extension.create({
           "pullQuote",
           "taskList",
           "taskItem",
+          // #420: the table block (the figure), not its grid, rows or cells.
+          "tableBlock",
           ...CONTAINER_NODE_NAMES,
         ],
         attributes: {

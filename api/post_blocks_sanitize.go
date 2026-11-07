@@ -1,6 +1,7 @@
 package api
 
 import (
+	"math"
 	"net/url"
 	"regexp"
 	"strings"
@@ -88,6 +89,8 @@ func sanitizeBlock(block map[string]interface{}) {
 		sanitizeTodoListAttrs(attrs)
 	case "todo_item":
 		sanitizeTodoItemAttrs(attrs)
+	case "table":
+		sanitizeTableAttrs(attrs)
 	}
 
 	// Block colour (#356): a palette token on the core blocks that take one.
@@ -148,6 +151,12 @@ func sanitizeImageAttrs(attrs map[string]interface{}) {
 		}
 	}
 
+	sanitizeCaption(attrs)
+}
+
+// sanitizeCaption reduces `attrs.caption` (an image's, a table's) to non-empty text runs
+// with only the caption marks, each mark sanitized; an empty or malformed one is dropped.
+func sanitizeCaption(attrs map[string]interface{}) {
 	raw, present := attrs["caption"]
 	if !present {
 		return
@@ -186,6 +195,100 @@ func sanitizeImageAttrs(attrs map[string]interface{}) {
 		return
 	}
 	attrs["caption"] = kept
+}
+
+// tableMaxSpan caps a table cell's colspan and rowspan (Block Spec `TABLE_MAX_SPAN`).
+const tableMaxSpan = 64
+
+// The ProseMirror node types of a table's grid (#420) and the attrs each may keep: the
+// grid and its rows none, a cell its spans only.
+var tableGridNodeTypes = map[string]bool{"table": true, "tableRow": true}
+var tableCellNodeTypes = map[string]bool{"tableCell": true, "tableHeader": true}
+
+// tableBlockAttrs: the attrs a table block (#420) may have; anything else is deleted.
+var tableBlockAttrs = map[string]bool{"pm": true, "text": true, "headerRow": true, "caption": true}
+
+// sanitizeTableAttrs is an allowlist: `headerRow` is `true` or absent, the caption is
+// reduced like an image's, `text` is a string, and a `pm` that isn't a table node is
+// dropped (the block then renders nothing). The grid's node attrs go through
+// sanitizeTableGrid, at any depth of the pm (only a table block's).
+func sanitizeTableAttrs(attrs map[string]interface{}) {
+	for name := range attrs {
+		if !tableBlockAttrs[name] {
+			delete(attrs, name)
+		}
+	}
+	if _, ok := attrs["text"].(string); !ok {
+		delete(attrs, "text")
+	}
+	if raw, present := attrs["headerRow"]; present {
+		if b, ok := raw.(bool); !ok || !b {
+			delete(attrs, "headerRow")
+		}
+	}
+	sanitizeCaption(attrs)
+	pm, ok := attrs["pm"].(map[string]interface{})
+	if !ok || pm["type"] != "table" {
+		delete(attrs, "pm")
+		return
+	}
+	sanitizeTableGrid(pm)
+}
+
+// sanitizeTableGrid applies sanitizeTableNodeAttrs to a table block's pm and every node
+// under it. Only a table block's: another block's node of the same name keeps its attrs.
+func sanitizeTableGrid(node map[string]interface{}) {
+	sanitizeTableNodeAttrs(node)
+	if content, ok := node["content"].([]interface{}); ok {
+		for _, child := range content {
+			if childMap, ok := child.(map[string]interface{}); ok {
+				sanitizeTableGrid(childMap)
+			}
+		}
+	}
+}
+
+// sanitizeTableNodeAttrs is the allowlist for a table's grid nodes (#420): `table` and
+// `tableRow` keep no attrs; a cell keeps `colspan` and `rowspan`, each an integer clamped
+// to 1..tableMaxSpan and left out when 1 (a non-number is 1). Nothing else survives.
+func sanitizeTableNodeAttrs(node map[string]interface{}) {
+	t := stringOf(node["type"])
+	if tableGridNodeTypes[t] {
+		delete(node, "attrs")
+		return
+	}
+	if !tableCellNodeTypes[t] {
+		return
+	}
+	attrs, _ := node["attrs"].(map[string]interface{})
+	kept := map[string]interface{}{}
+	for _, name := range []string{"colspan", "rowspan"} {
+		if span := clampTableSpan(attrs[name]); span != 1 {
+			kept[name] = float64(span)
+		}
+	}
+	if len(kept) == 0 {
+		delete(node, "attrs")
+		return
+	}
+	node["attrs"] = kept
+}
+
+// clampTableSpan reads a span as JSON decodes it (a float64) and clamps it to
+// 1..tableMaxSpan; anything that isn't a finite number is 1.
+func clampTableSpan(raw interface{}) int {
+	f, ok := raw.(float64)
+	if !ok || math.IsNaN(f) || math.IsInf(f, 0) {
+		return 1
+	}
+	f = math.Floor(f)
+	if f < 1 {
+		return 1
+	}
+	if f > tableMaxSpan {
+		return tableMaxSpan
+	}
+	return int(f)
 }
 
 // sanitizeBlockquoteAttrs makes `cite` plain text: control characters become

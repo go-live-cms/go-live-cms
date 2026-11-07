@@ -233,6 +233,7 @@ const TYPE_LABELS: Record<string, string> = {
   pull_quote: "Pull quote",
   todo_list: "To-do list",
   todo_item: "To-do",
+  table: "Table",
 }
 
 /** "Heading", "Bulleted list", or a theme block's name ("theme:example/alert" → "Alert"). */
@@ -320,6 +321,13 @@ function attrChanges(v: Block, w: Block): AttrChange[] {
     case "pull_quote":
       add("cite", "Citation", display(va.cite), display(wa.cite))
       break
+    case "table": {
+      // #420: the cells are the text (word diff, a paragraph break between cells), the
+      // caption is diffed like an image's; the header row is the attribute.
+      const header = (a: Record<string, unknown>) => (a.headerRow === true ? "On" : "Off")
+      add("headerRow", "Header row", header(va), header(wa))
+      break
+    }
     case "divider":
     case "list_item":
     case "todo_list":
@@ -488,7 +496,7 @@ function diffBlock(id: string, v: Block, w: Block, vDoc: Doc, wDoc: Doc, moved: 
 
   const attrs = attrChanges(v, w)
   const text = v.type === "image" || v.type === "divider" ? undefined : diffTokens(blockTokens(w), blockTokens(v))
-  const caption = v.type === "image" ? diffTokens(captionTokens(w), captionTokens(v)) : undefined
+  const caption = v.type === "image" || v.type === "table" ? diffTokens(captionTokens(w), captionTokens(v)) : undefined
   const changed = attrs.length > 0 || (text ? hasChanges(text) : false) || (caption ? hasChanges(caption) : false)
   return {
     id,

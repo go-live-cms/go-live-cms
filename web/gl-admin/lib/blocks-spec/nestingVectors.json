@@ -31,6 +31,19 @@
       }
     },
     {
+      "name": "a table (#420) is flow: at the top and in a group, its rows in its pm",
+      "valid": true,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["table-0001", "group-0001"],
+        "blocks": {
+          "table-0001": { "id": "table-0001", "type": "table", "version": 1, "attrs": { "pm": { "type": "table", "content": [{ "type": "tableRow", "content": [{ "type": "tableCell", "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "Role" }] }] }, { "type": "tableCell", "attrs": { "colspan": 2 }, "content": [{ "type": "paragraph" }] }] }] }, "text": "Role", "headerRow": true, "caption": [{ "type": "text", "text": "Roles" }] } },
+          "group-0001": { "id": "group-0001", "type": "group", "version": 1, "attrs": {}, "children": ["table-0002"] },
+          "table-0002": { "id": "table-0002", "type": "table", "version": 1, "attrs": { "pm": { "type": "table", "content": [{ "type": "tableRow", "content": [{ "type": "tableCell", "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "Role" }] }] }, { "type": "tableCell", "attrs": { "colspan": 2 }, "content": [{ "type": "paragraph" }] }] }] } } }
+        }
+      }
+    },
+    {
       "name": "a group holding a theme block and a type this build doesn't know (both flow)",
       "valid": true,
       "doc": {
@@ -157,6 +170,18 @@
         "blocks": {
           "group-0001": { "id": "group-0001", "type": "group", "version": 1, "attrs": {}, "children": ["odd-000001"] },
           "odd-000001": "paragraph"
+        }
+      }
+    },
+    {
+      "name": "children on a table (#420: its rows are in its pm, it holds no blocks)",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["table-0001"],
+        "blocks": {
+          "table-0001": { "id": "table-0001", "type": "table", "version": 1, "attrs": { "pm": { "type": "table", "content": [{ "type": "tableRow", "content": [{ "type": "tableCell", "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "Role" }] }] }, { "type": "tableCell", "attrs": { "colspan": 2 }, "content": [{ "type": "paragraph" }] }] }] } }, "children": ["para-00001"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "Hello" } }
         }
       }
     },

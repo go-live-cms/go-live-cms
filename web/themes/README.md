@@ -977,6 +977,8 @@ These are always available and don't need registration:
 | `pull_quote`   | A line from the post set large (`figure.pullquote`), optional citation |
 | `todo_list`    | A checklist (`ul.todo-list`), read-only checkboxes on the public page |
 | `todo_item`    | A to-do list's item, `checked` or not                     |
+| `group`        | Blocks kept together (`div.group`, `is-tinted`, `alignwide`/`alignfull`) |
+| `table`        | Rows and columns with an optional header row and caption (below) |
 
 **Every theme styles the three #419 blocks** and defines `.sr-only` (the callout says its
 tone in a visually hidden span): they render with only their classes
@@ -984,6 +986,26 @@ tone in a visually hidden span): they render with only their classes
 default theme's callout fills and icon colours are `colors.*.info` / `infoBg` (and `success`,
 `warning`, `danger`), `--color-info` / `--color-info-bg` in its stylesheet, checked for
 contrast by `themes/default/tokens.test.ts`.
+
+**Table markup (#420).** A theme styles it; nothing else is needed:
+
+```html
+<figure class="table-block">
+  <div class="table-scroll" role="region" tabindex="0" aria-labelledby="b-<id>-caption">
+    <table>
+      <thead><tr><th scope="col">…</th></tr></thead>  <!-- only with a header row -->
+      <tbody><tr><td>…</td></tr></tbody>
+    </table>
+  </div>
+  <figcaption id="b-<id>-caption">…</figcaption>      <!-- only with a caption -->
+</figure>
+```
+
+Make `.table-scroll` scroll sideways (`overflow-x: auto`) and give the `<table>` a
+`min-width`, so a wide table scrolls inside its box on a phone instead of widening the
+page; the box is focusable, so show its focus ring (the arrow keys scroll it). Without a
+caption the region is named "Table" (`aria-label`). Cells hold paragraphs only, rendered
+inline with `<br>` between them. The default theme's rules are in `styles/theme.css`.
 
 ---
 

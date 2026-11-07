@@ -248,6 +248,7 @@ kept so references in code stay valid.
 - Every block node type needs the **`data-block-id`** attr (added globally by
   `BlockIdExtension` to paragraph/heading/blockquote/codeBlock/horizontalRule/image/
   bullet_list/ordered_list/listItem, callout/pullQuote/taskList/taskItem (#419) and every container, `CONTAINER_NODE_NAMES`). Custom/theme nodes must declare it too or
+  bullet_list/ordered_list/listItem/tableBlock and every container, `CONTAINER_NODE_NAMES`). Custom/theme nodes must declare it too or
   `schema.nodeFromJSON` throws "Unsupported attribute".
 - **Callout, pull quote, to-do list (#419, three flow blocks).** Schema in `schemaExtensions`
   (`components/editor/extensions/Callout.ts`, `PullQuote.ts`, `TodoList.ts`: TipTap's TaskList/
@@ -308,6 +309,50 @@ kept so references in code stay valid.
     trips, drops, synthesized ids, cycles, the store's per-child fallback),
     `components/editor/extensions/GroupBlock.test.ts` (commands, view, split/duplicate/paste ids)
     and `GroupBlock.collab.test.ts` (two users in one group on the relay, the stored doc).
+- **Table (#420, `components/editor/extensions/TableBlock.ts`): a flow block, not a container.**
+  The block node is `tableBlock` (`table tableCaption`, `BLOCK_NODE_NAMES.table`): TipTap's
+  `table` (prosemirror-tables reads every child of `table` as a row, so the caption can't live
+  there) plus a caption that is always there (empty = none). Cells are **`paragraph+`** and their
+  only attrs are `colspan`/`rowspan` (no `colwidth`, no resizing). `tableBlock` is **not in the
+  `block` group** (`STANDALONE_FLOW_NODE_NAMES` in `nesting.ts`): the doc and flow containers
+  name it, so a table is never part of a quote's, a list item's or a theme block's `pm` (paste
+  lifts it out; `slotAcceptsAt` doesn't offer it there).
+  - **The header row is the grid's `headerRow` attr, never a cell type.** There is no
+    `tableHeader` node: every cell is a `tableCell`. Toggling the header row is one attribute
+    (last writer wins); a cell whose node type changed would be a new Yjs element, and a peer
+    typing in it would lose those keys (`TableBlock.collab.test.ts` pins it). The editor
+    styles the row from `data-header-row` (`GridView`); the public page renders `<thead>`.
+  - **Block Spec `table` v1:** `attrs.pm` = the `table` node's rows (no attrs; every cell a
+    `tableCell`, spans only when not 1; a row may be empty when a rowspan covers it),
+    `attrs.headerRow` (`true` or absent) from the grid's attr, `attrs.caption` runs like an
+    image's, `attrs.text` the cell texts. On load `tableRows` keeps only rows, cells and
+    paragraphs (a stored `tableHeader` is read as a cell), spans clamped to `TABLE_MAX_SPAN`. A
+    table with no rows can't be built: dropped and kept (#213). No `children`.
+  - **Rule 7:** prosemirror-tables' `tableEditing` plugin has an `appendTransaction`
+    (`fixTables` pads short rows). `GlTable` wraps it to skip collaboration-sync transactions,
+    or every peer would pad a table two people reshaped at once and each padding would sync;
+    only a local change fixes a table (`TableBlock.collab.test.ts` fails without the guard).
+  - **One transaction each:** `insertTableBlock` (after a selected block, or for the caret's
+    line), `addTableRow`/`addTableColumn`, `deleteTableRow`/`deleteTableColumn` (never the last
+    one: prosemirror-tables only refuses that when dispatching, so `can()` is checked first),
+    `toggleTableHeaderRow`.
+  - **Keys** (`TableKeyboard`, editor only, priority 200): Tab / ⇧Tab between cells, Tab in the
+    last cell adds a row, ⌥F10 focuses the toolbar, Backspace with every cell selected deletes the
+    table block. **Only while the caret is in a cell**; anywhere else they return false, so lists,
+    the gutter's Tab and #417's keys run as before.
+  - **Paste:** `PasteSanitizer` keeps `td`/`th` (with clamped `colspan`/`rowspan`), turns each
+    cell's content into paragraphs (`flattenCell`: a heading, a list item or a nested table's
+    cell ends a line), and moves a `<caption>` into the figure's `figcaption`. A pasted table
+    has a header row when its first row is all `<th>` (`hasHeaderRowHTML`); any `<th>` is a
+    plain cell. A table pasted with the caret in a cell fills cells from there
+    (`pastedIntoCell`, `TableKeyboard`'s `transformPasted`) instead of splitting the table.
+  - **Stale clients:** a bundle from before #420 has no table nodes (and a narrower doc), so
+    y-tiptap would delete a table a newer peer inserts; the fingerprint guard (#416) refuses
+    such a tab (`schemaFingerprint.test.ts` pins that the table changed it).
+  - Tests: `blockBridge.table.test.ts` (bridge, fragment, Zod), `TableBlock.test.ts` (commands,
+    keys, picker, toolbar, paste), `TableBlock.collab.test.ts` (two users in different cells; a
+    column and a row at once), `src/components/blocks/table/TableBlock.test.tsx`, Go
+    `post_blocks_table_test.go`, and two cases in `nestingVectors.json`.
 - `pmToBlockDoc` regenerates duplicate/invalid block ids.
 - **Known limitation:** a `code_block` with empty code can't be shown in the editor
   (ProseMirror disallows empty text nodes). It is dropped like any other unbuildable

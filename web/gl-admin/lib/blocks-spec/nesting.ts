@@ -36,7 +36,18 @@ export const FLOW_TYPES = [
   "callout",
   "pull_quote",
   "todo_list",
+  // #420
+  "table",
 ] as const
+
+/**
+ * Flow nodes that are **not in TipTap's `block` group** (#420): they may be a block of the
+ * doc or of a container that holds flow, but never part of another block's own content (a
+ * quote's `block+`, a list item's `paragraph block*`, a callout, a theme block), where they
+ * would be hidden in that block's `pm` and the public renderer, which renders only text
+ * there, would drop them. The flow content expressions name them next to `block`.
+ */
+export const STANDALONE_FLOW_NODE_NAMES = ["tableBlock"] as const
 
 /**
  * The list types: `children` are their items, as before #414. Each list has one item
@@ -101,6 +112,8 @@ export const BLOCK_NODE_NAMES: Readonly<Record<string, string>> = {
   pull_quote: "pullQuote",
   todo_list: "taskList",
   todo_item: "taskItem",
+  // #420: the block node is the figure (`tableBlock`: the `table` plus its caption).
+  table: "tableBlock",
   ...Object.fromEntries(Object.entries(CONTAINERS).map(([type, rule]) => [type, rule.node])),
 }
 
@@ -168,25 +181,35 @@ export function acceptsChild(containerType: string, childType: unknown): boolean
   return rule.accepts.includes(childType) || (rule.accepts.includes("flow") && isFlowType(childType))
 }
 
+/** Whether `type` (Block Spec) is a flow block that can't be part of another block's content. */
+export function isStandaloneFlowType(type: unknown): boolean {
+  return typeof type === "string" && (STANDALONE_FLOW_NODE_NAMES as readonly string[]).includes(BLOCK_NODE_NAMES[type] ?? "")
+}
+
+/** The content-expression names of flow: TipTap's `block` group plus the standalone flow nodes. */
+const FLOW_NAMES: readonly string[] = ["block", ...STANDALONE_FLOW_NODE_NAMES]
+
 /**
  * A container's ProseMirror content expression, derived from the table. `flow` is
- * TipTap's `block` group: no container is in it, so it holds exactly the nodes that hold
- * no blocks (core flow nodes, theme blocks, stand-ins). Containers are named.
+ * TipTap's `block` group plus the standalone flow nodes (the table, #420): no container is
+ * in either, so they hold exactly the nodes that hold no blocks (core flow nodes, theme
+ * blocks, stand-ins). Containers are named.
  */
 export function containerContent(type: ContainerType): string {
   const rule: ContainerRule = CONTAINERS[type]
-  const names = rule.accepts.map((accepted) => (accepted === "flow" ? "block" : BLOCK_NODE_NAMES[accepted]))
+  const names = rule.accepts.flatMap((accepted) => (accepted === "flow" ? FLOW_NAMES : [BLOCK_NODE_NAMES[accepted]]))
   const choice = names.length === 1 ? names[0] : `(${names.join(" | ")})`
   if (rule.max === undefined) return rule.min === 0 ? `${choice}*` : rule.min === 1 ? `${choice}+` : `${choice}{${rule.min},}`
   return `${choice}{${rule.min},${rule.max}}`
 }
 
-/** The doc's content expression: flow (`block`) plus every container allowed at the top. */
+/** The doc's content expression: flow (`block` and the standalone flow nodes) plus every container allowed at the top. */
 export function topLevelContent(): string {
   const containers = Object.values(CONTAINER_RULES)
     .filter((rule) => rule.topLevel)
     .map((rule) => rule.node)
-  return containers.length === 0 ? "block+" : `(block | ${containers.join(" | ")})+`
+  const names = [...FLOW_NAMES, ...containers]
+  return names.length === 1 ? "block+" : `(${names.join(" | ")})+`
 }
 
 /**
