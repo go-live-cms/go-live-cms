@@ -441,6 +441,13 @@ Highlight, superscript, subscript ("Editor · text blocks", "Paragraph"; "Keyboa
 - Every mark is a rule 10 hazard (an unknown mark costs the text run, not just the mark),
   so marks ship after, or with, the schema guard (2.7).
 
+As built (#418): `components/editor/extensions/InlineMarks.ts`. One finding changed the plan:
+two people setting superscript and subscript on one word at once leave both in Yjs, which
+y-tiptap builds unchecked and a seed's `check()` refuses, so the bridge now resolves excluded
+marks on every store and seed (`withoutExcludedMarks`; the same was already true of inline
+code and any other mark). ⌘. and ⌘, take no Shift, so ⌘⇧, stays the settings panel. Rules:
+`web/gl-admin/lib/collaboration/CLAUDE.md` ("Inline marks").
+
 ### 3.3b Inline nodes (#320)
 
 As built: `mention`, `contentLink` and `dateChip` are inline atoms (TipTap nodes in the

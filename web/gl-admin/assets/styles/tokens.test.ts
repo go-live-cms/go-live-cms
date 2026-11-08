@@ -57,6 +57,9 @@ const PAIRS: [string, string, number][] = [
   ["info-text", "info-bg", TEXT],
   ["tooltip-color", "tooltip-background", TEXT],
   ["code-inline-color", "code-inline-background", TEXT],
+  // Highlighted text (#418): the text on it, and a link in it.
+  ["text-primary", "editor-highlight", TEXT],
+  ["text-selected", "editor-highlight", TEXT],
   ["text-primary", "code-block-background", TEXT],
   ["control-border", "background", UI],
   ["focus-ring", "background", UI],

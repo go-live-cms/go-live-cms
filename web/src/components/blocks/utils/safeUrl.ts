@@ -1,19 +1,16 @@
 /**
- * URL/CSS sanitization helpers for the public Block Spec v1 renderer (issue #188).
+ * URL sanitization helpers for the public Block Spec v1 renderer (issue #188). No CSS
+ * values reach the renderer any more: a highlight is the theme's one colour since #418.
  *
  * Defence in depth alongside the server-side sanitizer in `api/post_blocks_sanitize.go`:
  * the server cleans content on save, but content already stored before the sanitizer
  * existed is only made safe here, at render time. React/Astro escape text and attribute
- * VALUES, but they do NOT block dangerous URL schemes (javascript:) or CSS values — these
- * helpers do. Keep the logic in sync with the Go sanitizer.
+ * VALUES, but they do NOT block dangerous URL schemes (javascript:) — these helpers do.
+ * Keep the logic in sync with the Go sanitizer.
  */
 
 const SAFE_HREF_SCHEMES = new Set(["http", "https", "mailto", "tel"])
 const SAFE_IMAGE_SCHEMES = new Set(["http", "https"])
-
-// Conservative CSS color allowlist: hex / rgb(a) / hsl(a) / named color. Rejects
-// anything containing url(), semicolons, etc.
-const SAFE_COLOR_RE = /^(#[0-9a-fA-F]{3,8}|[a-zA-Z]+|(?:rgb|rgba|hsl|hsla)\([0-9.,%\s/]+\))$/
 
 // NUL / TAB / LF / CR are stripped by browsers before URL parsing, so they can smuggle
 // a scheme past a naive check (e.g. "java<TAB>script:"). Reject any URL containing them.
@@ -51,12 +48,4 @@ export function safeHref(href: string | undefined | null): string | undefined {
 /** Safe image src, or "" when the URL scheme is not allowed. */
 export function safeImageSrc(src: string | undefined | null): string {
   return isSafeUrl(src, SAFE_IMAGE_SCHEMES) ? (src ?? "") : ""
-}
-
-/** Safe CSS color value, or `undefined` when it isn't a recognised safe token. */
-export function safeCssColor(color: string | undefined | null): string | undefined {
-  if (color == null) return undefined
-  const c = color.trim()
-  if (c === "") return undefined
-  return SAFE_COLOR_RE.test(c) ? color : undefined
 }

@@ -3,6 +3,8 @@ import { createHash } from "node:crypto"
 import { Extension, getSchema, Mark, Node } from "@tiptap/core"
 import { Schema, type MarkSpec, type NodeSpec } from "prosemirror-model"
 import { TableCell, TableHeader } from "@tiptap/extension-table"
+import Subscript from "@tiptap/extension-subscript"
+import Superscript from "@tiptap/extension-superscript"
 import { getCoreSchema, schemaExtensions } from "./schema"
 import { Group } from "../../components/editor/extensions/GroupBlock"
 import { GlTable, GlTableRow, TableBlock, TableCaption } from "../../components/editor/extensions/TableBlock"
@@ -140,8 +142,36 @@ describe("schemaFingerprint (#416)", () => {
       expect(withExtra(Sidenote)).not.toBe(core)
     })
 
-    it("a new mark (highlight, superscript…) changes it", () => {
-      expect(withExtra(Mark.create({ name: "highlight" }))).not.toBe(core)
+    it("a new mark changes it", () => {
+      expect(withExtra(Mark.create({ name: "spoiler" }))).not.toBe(core)
+    })
+
+    it("the inline marks (#418) changed it, each on its own, and their exclusions are in it", () => {
+      // The schema as it was before #418: none of the three marks.
+      const { highlight, superscript, subscript, ...rest } = schemaExtensions({ collaborating: true })
+      const before = getSchema(Object.values(rest))
+      for (const name of ["highlight", "superscript", "subscript"]) {
+        expect(before.marks[name], name).toBeUndefined()
+        expect(getCoreSchema().marks[name], name).toBeDefined()
+      }
+      const old = schemaFingerprint(before)
+      expect(old).not.toBe(core)
+      // A stale tab with either part still differs from both (superscript and subscript
+      // name each other in `excludes`, so neither builds without the other).
+      for (const added of [{ highlight }, { superscript, subscript }]) {
+        const one = schemaFingerprint(getSchema(Object.values({ ...rest, ...added })))
+        expect(one, Object.keys(added).join("+")).not.toBe(old)
+        expect(one, Object.keys(added).join("+")).not.toBe(core)
+      }
+      // A tab whose superscript and subscript could be combined builds other docs: refused.
+      // (TipTap's own Superscript and Subscript, which only exclude themselves.)
+      const combinable = getSchema(Object.values({ ...rest, highlight, superscript: Superscript, subscript: Subscript }))
+      expect(combinable.marks.superscript.excludes(combinable.marks.subscript)).toBe(false)
+      expect(schemaFingerprint(combinable)).not.toBe(core)
+      // And one whose highlight has a colour attr (multicolor) too.
+      const multicolor = getSchema(Object.values({ ...rest, highlight: highlight.configure({ multicolor: true }), superscript, subscript }))
+      expect(multicolor.marks.highlight.spec.attrs).toHaveProperty("color")
+      expect(schemaFingerprint(multicolor)).not.toBe(core)
     })
 
     it("a new global attribute changes it", () => {

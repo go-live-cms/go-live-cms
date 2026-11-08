@@ -571,6 +571,14 @@ are the most fragile part of the codebase. **Before editing anything under
   a wide table scroll in its own box at 375px. Rules: `gl-admin/lib/collaboration/CLAUDE.md`
   (blockBridge notes, Table). History compares its cells as text, the caption like an image's and
   the header row as an attribute.
+- **Inline marks (#418, design `docs/design/block-library.md` 3.3):** Highlight, Superscript and
+  Subscript in the selection toolbar (`ui/BubbleMenu.tsx`, after Link; not in a caption), ⌘⇧H,
+  ⌘. and ⌘,. The marks are `extensions/InlineMarks.ts` (rules, the concurrent-edit case and the
+  API's mark allowlist: `gl-admin/lib/collaboration/CLAUDE.md`). The editor styles them from
+  `--editor-highlight` (`_tokens.scss`, contrast in `tokens.test.ts`); the public renderer writes
+  `<mark>`, `<sup>`, `<sub>` (a stored colour never becomes a style) and every theme styles them
+  (`themes/README.md`). Paste keeps `mark`/`sup`/`sub` without attributes and turns Docs/Word
+  `vertical-align: super|sub` spans into `sup`/`sub`.
 - **@ mentions, content links and dates (#320, the canvas's "Editor menus & states" ›
   "Mention / link to content (@)"):** "@" after a space or at the start of a line (not in code
   or a caption) opens `components/editor/ui/MentionMenu.tsx`: People, "Link to post or page",

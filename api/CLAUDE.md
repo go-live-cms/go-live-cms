@@ -1309,6 +1309,14 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   any depth of a table block's pm (another block's node of the same name is left alone). The
   header row is the block's `headerRow`, never in the pm. The bridge's output passes through
   unchanged (a test pins it).
+- **Marks are an allowlist (#418, `post_blocks_marks_test.go`):** `sanitizeMarks` keeps only
+  `allowedMarkTypes` (bold, code, italic, strike, underline, link, highlight, superscript,
+  subscript: exactly the editor schema's marks, checked by the web's
+  `blocks-spec/markAllowlist.test.ts`), at any depth of any block's pm (theme blocks too) and in
+  captions (`captionMarks` first). Any other mark is dropped, its text kept; a run left with no
+  marks loses the key. Only a link keeps attrs (`href` checked, `on*` stripped); every other mark
+  keeps none, so a highlight never carries a colour. **Add a new editor mark there**, or every
+  store strips it.
 - **`contentMediaUses` walks the tree** (`walkBlocks`: blocks_order, then children depth
   first, each once), so an image in a group is in `post_media` and "Used in".
   `blockDocMediaIDs` (the public `media` map) already walks the flat map. `regenerateBlockIDs`

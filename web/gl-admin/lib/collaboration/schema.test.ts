@@ -123,10 +123,12 @@ describe("schemaWithStandIns", () => {
     const paragraph = {
       type: "paragraph",
       // In schema rank order (stand-ins come last), since toJSON() writes marks that way.
-      content: [{ type: "text", text: "hi", marks: [{ type: "bold" }, { type: "highlight", attrs: { color: "yellow" } }] }],
+      // (`spoiler`, not `highlight`: that one is a core mark since #418.)
+      content: [{ type: "text", text: "hi", marks: [{ type: "bold" }, { type: "spoiler", attrs: { color: "yellow" } }] }],
     }
+    expect(base.marks.spoiler).toBeUndefined()
     const schema = schemaWithStandIns(base, [paragraph])
-    expect(schema.marks.highlight).toBeDefined()
+    expect(schema.marks.spoiler).toBeDefined()
     expect(schema.nodes.paragraph).toBeDefined()
     expect(schema.nodeFromJSON(paragraph).toJSON()).toMatchObject(paragraph)
   })

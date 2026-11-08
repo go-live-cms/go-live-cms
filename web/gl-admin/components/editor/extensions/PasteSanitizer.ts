@@ -31,7 +31,9 @@ const pasteSanitizerPluginKey = new PluginKey("pasteSanitizer")
  * from BlockIdExtension's appendTransaction on the paste transaction, as for typing.
  */
 
-// Tags that survive. Formatting maps to marks (strong/em/u/s/code/a); the structural
+// Tags that survive. Formatting maps to marks (strong/em/u/s/code/a, and since #418
+// mark/sup/sub: highlight, superscript, subscript, with no attributes, so a pasted
+// `<mark style="background:red">` is the theme's one highlight); the structural
 // block tags that have no node of their own (div, table, …) are kept so ProseMirror
 // still breaks paragraphs at their boundaries instead of running cells/divs together.
 // Every other element (span, font, o:p, img, …) is unwrapped: removed, text kept.
@@ -39,6 +41,7 @@ const ALLOWED_TAGS = [
   "p", "br", "h1", "h2", "h3", "h4", "h5", "h6",
   "ul", "ol", "li", "blockquote", "pre", "code", "hr",
   "a", "strong", "b", "em", "i", "u", "s", "strike", "del",
+  "mark", "sup", "sub",
   "div", "section", "article", "header", "footer", "aside", "main", "address", "hgroup",
   "figure", "figcaption", "dl", "dt", "dd",
   "table", "thead", "tbody", "tfoot", "tr", "td", "th", "caption",
@@ -210,8 +213,9 @@ export function sanitizePastedHTML(html: string): string {
  * because the styles that carry them are about to be stripped:
  * - Docs wraps the whole selection in `<b style="font-weight:normal">`; unwrap it,
  *   or the paste would turn entirely bold once the style is gone.
- * - Docs and Word mark bold/italic/underline/strikethrough with inline styles on
- *   spans; wrap their content in strong/em/u/s (no strong inside headings), and lift
+ * - Docs and Word mark bold/italic/underline/strikethrough and superscript/subscript
+ *   with inline styles on spans; wrap their content in strong/em/u/s/sup/sub (no strong
+ *   inside headings), and lift
  *   spans that switch bold/italic off out of an enclosing <b>/<i>.
  * - Word fakes list bullets with `mso-list:Ignore` spans; drop them.
  * - Docs nests a sub-list directly inside the parent list; move it into the
@@ -250,6 +254,10 @@ function normalizeClipboardMarkup(root: HTMLElement) {
     // Docs styles every link underlined; the link itself already says that.
     if (decoration.includes("underline") && !el.closest("a")) wrappers.push("u")
     if (decoration.includes("line-through")) wrappers.push("s")
+    // Docs and Word mark superscript/subscript with `vertical-align` (#418).
+    const verticalAlign = style["vertical-align"]?.toLowerCase()
+    if (verticalAlign === "super") wrappers.push("sup")
+    else if (verticalAlign === "sub") wrappers.push("sub")
     for (const tag of wrappers) {
       const wrapper = el.ownerDocument.createElement(tag)
       wrapper.append(...Array.from(el.childNodes))
