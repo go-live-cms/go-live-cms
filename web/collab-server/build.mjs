@@ -57,5 +57,13 @@ if (clientOnly.length > 0) {
   console.error(`collab-server bundle must not contain client-only modules, found: ${clientOnly.join(", ")}`)
   process.exit(1)
 }
+// The image ships collab-server/, gl-admin/ and themes/ only (its Dockerfile): a module from
+// web/src (the public site) would build here and then fail in the Docker build (#320).
+const srcRoot = path.join(webRoot, "src") + path.sep
+const fromSrc = inputs.filter((input) => path.resolve(webRoot, input).startsWith(srcRoot))
+if (fromSrc.length > 0) {
+  console.error(`collab-server bundle must not import web/src (the image doesn't ship it), found: ${fromSrc.join(", ")}`)
+  process.exit(1)
+}
 const themeBlocks = inputs.filter((input) => /themes\/[^/]+\/blocks\/[^/]+\/index\.ts$/.test(input))
 console.log(`collab-server bundle: ${path.relative(webRoot, outfile)} (yjs: ${yjsFiles[0]}; theme blocks: ${themeBlocks.length})`)

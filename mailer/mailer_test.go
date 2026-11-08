@@ -394,3 +394,39 @@ func TestSignupTemplates(t *testing.T) {
 	}
 	require.NotContains(t, msg.HTML, "<b>Site</b>", "escaped in HTML")
 }
+
+// #320: a mention and a reminder. Names and titles are escaped in the HTML, one line in
+// the subject, and the email carries the admin link, never the post's content.
+func TestMentionAndReminderTemplates(t *testing.T) {
+	msg, err := RenderMention("ana@example.com", Mention{
+		SiteTitle:     "GoLive Blog",
+		MentionerName: "Kenji <b>T</b>",
+		PostTitle:     "Line one\nline <i>two</i>",
+		Link:          "https://cms.example/gl-admin/content/edit/9",
+	})
+	require.NoError(t, err)
+	require.Equal(t, TemplateMention, msg.Template)
+	require.Equal(t, "ana@example.com", msg.To)
+	require.Equal(t, "Kenji <b>T</b> mentioned you in Line one line <i>two</i>", msg.Subject)
+	require.Contains(t, msg.Text, "https://cms.example/gl-admin/content/edit/9")
+	require.Contains(t, msg.Text, "one email per post")
+	require.NotContains(t, msg.HTML, "<b>T</b>")
+	require.Contains(t, msg.HTML, "&lt;i&gt;two&lt;/i&gt;")
+
+	plain, err := RenderMention("ana@example.com", Mention{Link: "https://cms.example/x"})
+	require.NoError(t, err)
+	require.Equal(t, "Someone mentioned you in Untitled", plain.Subject)
+	require.Contains(t, plain.Text, DefaultSiteTitle)
+
+	reminder, err := RenderReminder("ana@example.com", Reminder{
+		SiteTitle: "GoLive Blog",
+		PostTitle: "Launch <plan>",
+		When:      "2026-12-01 at 10:00\n(Europe/Lisbon)",
+		Link:      "https://cms.example/gl-admin/content/edit/9",
+	})
+	require.NoError(t, err)
+	require.Equal(t, TemplateReminder, reminder.Template)
+	require.Equal(t, "Reminder: Launch <plan>", reminder.Subject)
+	require.Contains(t, reminder.Text, "2026-12-01 at 10:00 (Europe/Lisbon)")
+	require.Contains(t, reminder.HTML, "Launch &lt;plan&gt;")
+}

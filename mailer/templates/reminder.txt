@@ -1,0 +1,11 @@
+Hi,
+
+You asked to be reminded on {{.When}} about "{{.PostTitle}}" on {{.SiteTitle}}.
+
+Open the post:
+
+{{.Link}}
+
+You set this reminder with a date in the post. Remove the date, or its reminder, to stop reminders like this one.
+
+{{.SiteTitle}}

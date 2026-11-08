@@ -1,0 +1,37 @@
+{
+  "description": "#320 inline nodes: a node's attrs as stored. `expected` null = the node can't be stored (a mention or link becomes its label as text, a date chip is dropped). Read by blocks-spec/inlineNodes.test.ts (mentionAttrs / contentLinkAttrs / dateChipAttrs) and api/inline_nodes_test.go (sanitizeInlineNodeAttrs).",
+  "cases": [
+    { "name": "a mention", "type": "mention", "attrs": { "userId": 7, "label": "Ana Costa" }, "expected": { "userId": 7, "label": "Ana Costa" } },
+    { "name": "a mention without a label", "type": "mention", "attrs": { "userId": 7 }, "expected": { "userId": 7, "label": null } },
+    { "name": "a mention id as digits", "type": "mention", "attrs": { "userId": "12", "label": "Kenji" }, "expected": { "userId": 12, "label": "Kenji" } },
+    { "name": "a mention's extra attrs are dropped (no email)", "type": "mention", "attrs": { "userId": 7, "label": "Ana", "email": "ana@example.test", "onclick": "x" }, "expected": { "userId": 7, "label": "Ana" } },
+    { "name": "a mention label is one trimmed line", "type": "mention", "attrs": { "userId": 7, "label": "  Ana\n\tCosta \u0007 " }, "expected": { "userId": 7, "label": "Ana Costa" } },
+    { "name": "a blank mention label is none", "type": "mention", "attrs": { "userId": 7, "label": "   " }, "expected": { "userId": 7, "label": null } },
+    { "name": "a mention without an id", "type": "mention", "attrs": { "label": "Ana" }, "expected": null },
+    { "name": "a mention with id 0", "type": "mention", "attrs": { "userId": 0, "label": "Ana" }, "expected": null },
+    { "name": "a mention with a negative id", "type": "mention", "attrs": { "userId": -3, "label": "Ana" }, "expected": null },
+    { "name": "a mention with a fractional id", "type": "mention", "attrs": { "userId": 2.5, "label": "Ana" }, "expected": null },
+    { "name": "a mention id as text that isn't digits", "type": "mention", "attrs": { "userId": "7; DROP", "label": "Ana" }, "expected": null },
+    { "name": "a mention id past the safe integers", "type": "mention", "attrs": { "userId": 9007199254740993, "label": "Ana" }, "expected": null },
+
+    { "name": "a content link", "type": "contentLink", "attrs": { "postId": 42, "label": "About" }, "expected": { "postId": 42, "label": "About" } },
+    { "name": "a stored href is dropped (resolved at read time)", "type": "contentLink", "attrs": { "postId": 42, "label": "About", "href": "javascript:alert(1)" }, "expected": { "postId": 42, "label": "About" } },
+    { "name": "a content link without a label", "type": "contentLink", "attrs": { "postId": 42, "label": null }, "expected": { "postId": 42, "label": null } },
+    { "name": "a content link without a post id", "type": "contentLink", "attrs": { "label": "About" }, "expected": null },
+
+    { "name": "a date", "type": "dateChip", "attrs": { "date": "2026-11-12", "time": null, "reminder": false }, "expected": { "date": "2026-11-12", "time": null, "reminder": false } },
+    { "name": "a date and time", "type": "dateChip", "attrs": { "date": "2026-11-12", "time": "14:30", "reminder": false }, "expected": { "date": "2026-11-12", "time": "14:30", "reminder": false } },
+    { "name": "a reminder", "type": "dateChip", "attrs": { "date": "2026-11-12", "time": "08:15", "reminder": true }, "expected": { "date": "2026-11-12", "time": "08:15", "reminder": true } },
+    { "name": "a reminder without a time fires at 09:00", "type": "dateChip", "attrs": { "date": "2026-11-12", "reminder": true }, "expected": { "date": "2026-11-12", "time": "09:00", "reminder": true } },
+    { "name": "reminder as text", "type": "dateChip", "attrs": { "date": "2026-11-12", "time": "10:00", "reminder": "true" }, "expected": { "date": "2026-11-12", "time": "10:00", "reminder": true } },
+    { "name": "anything else isn't a reminder", "type": "dateChip", "attrs": { "date": "2026-11-12", "reminder": "yes" }, "expected": { "date": "2026-11-12", "time": null, "reminder": false } },
+    { "name": "a bad time is none", "type": "dateChip", "attrs": { "date": "2026-11-12", "time": "24:00", "reminder": false }, "expected": { "date": "2026-11-12", "time": null, "reminder": false } },
+    { "name": "a leap day", "type": "dateChip", "attrs": { "date": "2028-02-29" }, "expected": { "date": "2028-02-29", "time": null, "reminder": false } },
+    { "name": "extra attrs are dropped", "type": "dateChip", "attrs": { "date": "2026-11-12", "author": 7, "label": "x" }, "expected": { "date": "2026-11-12", "time": null, "reminder": false } },
+    { "name": "not a real day", "type": "dateChip", "attrs": { "date": "2026-02-30" }, "expected": null },
+    { "name": "not a leap year", "type": "dateChip", "attrs": { "date": "2027-02-29" }, "expected": null },
+    { "name": "a date with a time in it", "type": "dateChip", "attrs": { "date": "2026-11-12T10:00" }, "expected": null },
+    { "name": "a year before 1000", "type": "dateChip", "attrs": { "date": "0999-01-01" }, "expected": null },
+    { "name": "no date", "type": "dateChip", "attrs": { "time": "10:00", "reminder": true }, "expected": null }
+  ]
+}

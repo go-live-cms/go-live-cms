@@ -35,6 +35,10 @@ const (
 	// Review requests (#323): to a reviewer, and back to the requester.
 	TemplateReviewRequested        = "review-requested"
 	TemplateReviewChangesRequested = "review-changes-requested"
+
+	// @ mentions and date reminders (#320).
+	TemplateMention  = "mention"
+	TemplateReminder = "reminder"
 )
 
 // SignupVerify is the data for the open signup confirmation link (#191), sent to
@@ -146,6 +150,8 @@ type templateData struct {
 	// named this reviewer.
 	Reviewer string
 	Assigned bool
+	// Reminders (#320): the chip's day and time, as the email says it.
+	When string
 }
 
 // RenderAccessRequest renders the edit access request email to a reviewer.
@@ -253,6 +259,46 @@ func RenderReviewChangesRequested(to string, d ReviewChangesRequested) (Message,
 		Link:      d.Link,
 	}
 	return render(to, TemplateReviewChangesRequested, fmt.Sprintf("Changes requested: %s", data.PostTitle), "review_changes_requested", data)
+}
+
+// Mention is the data for the email to a member mentioned in a post (#320): who
+// mentioned them, which post, and the link that opens it in the admin.
+type Mention struct {
+	SiteTitle     string
+	MentionerName string
+	PostTitle     string
+	Link          string
+}
+
+// RenderMention renders a mention email to to.
+func RenderMention(to string, d Mention) (Message, error) {
+	data := templateData{
+		SiteTitle: siteTitle(d.SiteTitle),
+		Requester: personName(d.MentionerName),
+		PostTitle: postTitle(d.PostTitle),
+		Link:      d.Link,
+	}
+	return render(to, TemplateMention, fmt.Sprintf("%s mentioned you in %s", data.Requester, data.PostTitle), "mention", data)
+}
+
+// Reminder is the data for a date chip's reminder (#320), sent to whoever set it. When
+// is the chip's day and time as written ("2026-11-12 at 09:00 (Europe/Lisbon)").
+type Reminder struct {
+	SiteTitle string
+	PostTitle string
+	When      string
+	Link      string
+}
+
+// RenderReminder renders a reminder email to to.
+func RenderReminder(to string, d Reminder) (Message, error) {
+	data := templateData{
+		SiteTitle: siteTitle(d.SiteTitle),
+		PostTitle: postTitle(d.PostTitle),
+		When:      oneLine(d.When),
+		Link:      d.Link,
+	}
+	return render(to, TemplateReminder, fmt.Sprintf("Reminder: %s", data.PostTitle), "reminder", data)
 }
 
 // personName and postTitle keep a name or title to one line (it goes in the

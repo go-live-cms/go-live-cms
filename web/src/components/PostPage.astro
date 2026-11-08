@@ -15,6 +15,7 @@ import { loadThemeLayout, pageLayoutVariant, postLayoutCandidates } from '../lib
 import { absoluteUrl, articleJsonLd, authorPath, normalizeUrlStructure, pageTitle, postCanonical, postDescription, postLastmod, postPath, publicImageUrl, resolveSiteUrl, toW3cDate, type PostSeo, type SeoMeta } from '../lib/seo'
 import { getPostAuthors } from '../lib/authorPage'
 import { getSiteSettings } from '../lib/siteSettings'
+import { labelDateChips } from '../lib/dateChips'
 import { getCachedTaxonomyTypes, linkTerms } from '../lib/termPage'
 import type { AuthorProfile, Post, TaxonomyTerm, TaxonomyType } from '@gl-admin/lib/api/types'
 import { log } from '../lib/log'
@@ -99,6 +100,8 @@ if (!LayoutComponent) {
 // The same per-request lookup the layout, SeoHead and bylines use (#330); it never
 // rejects (defaults when the API is down).
 const site = await getSiteSettings(Astro.locals)
+// Date chips (#320) in the site's language and date format: the renderer has no settings.
+if (fullPost.published_blocks) labelDateChips(fullPost.published_blocks, site)
 // The published featured image (#358); a getStaticPaths prop may carry its own.
 const featuredImage = fullPost.featured_image || publishedImage
 const urlStructure = normalizeUrlStructure(site.urlStructure)

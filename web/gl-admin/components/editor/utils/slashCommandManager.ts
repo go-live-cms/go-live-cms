@@ -14,7 +14,18 @@ interface SlashCommandListRef {
   onKeyDown: (props: { event: KeyboardEvent; [key: string]: any }) => boolean
 }
 
-class SlashCommandManager {
+/**
+ * A suggestion's popup at the caret (the slash menu, #415, and the @ menu, #320): renders
+ * `Component` with the suggestion's props into a fixed popup, keeps it at the caret on
+ * scroll, closes on Esc (keeping the typed text) and Tab, and hands every other key to the
+ * component's `onKeyDown`.
+ */
+export class SuggestionPopupManager {
+  constructor(
+    private readonly Component: any,
+    private readonly className: string,
+  ) {}
+
   private component: ReactRenderer | null = null
   private popup: HTMLElement | null = null
   private isActive = false
@@ -73,7 +84,7 @@ class SlashCommandManager {
         return
       }
 
-      this.component = new ReactRenderer(SlashCommandList, {
+      this.component = new ReactRenderer(this.Component, {
         props: {
           ...props,
           editor: props.editor,
@@ -82,7 +93,7 @@ class SlashCommandManager {
       })
 
       this.popup = document.createElement("div")
-      this.popup.className = "slash-command-popup"
+      this.popup.className = this.className
       this.popup.appendChild(this.component.element)
       document.body.appendChild(this.popup)
 
@@ -207,4 +218,4 @@ class SlashCommandManager {
   }
 }
 
-export const slashCommandManager = new SlashCommandManager()
+export const slashCommandManager = new SuggestionPopupManager(SlashCommandList, "slash-command-popup")

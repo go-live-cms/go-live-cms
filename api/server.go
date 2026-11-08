@@ -457,6 +457,9 @@ func (server *Server) setupRoutes() error {
 	server.registerActivityRoutes(v1)
 	server.registerReviewRequestRoutes(v1)
 
+	// The editor's @ menu (#320, mentions.go)
+	server.registerMentionRoutes(v1)
+
 	// Public API routes for SSR/public content
 	server.registerPublicRoutes(public)
 
