@@ -24,7 +24,7 @@ export function useSiteSettings(): Settings | null {
 let dateSettingsLoad: Promise<DateSettings | null> | null = null
 let dateSettingsLoaded: DateSettings | null = null
 
-function loadDateSettings(): Promise<DateSettings | null> {
+export function loadSiteDateSettings(): Promise<DateSettings | null> {
   if (!dateSettingsLoad) {
     dateSettingsLoad = getSettings()
       .then((s) => {
@@ -39,6 +39,11 @@ function loadDateSettings(): Promise<DateSettings | null> {
       })
   }
   return dateSettingsLoad
+}
+
+// The settings once loaded (null before): the editor's date chips (#320) format with them.
+export function loadedSiteDateSettings(): DateSettings | null {
+  return dateSettingsLoaded
 }
 
 // Forget the cached settings: Settings calls it after a save, so a new time zone shows.
@@ -60,7 +65,7 @@ export function useSiteDateSettings(): DateSettings & { loaded: boolean } {
       return
     }
     let live = true
-    loadDateSettings().then((s) => live && s && setSettings(s))
+    loadSiteDateSettings().then((s) => live && s && setSettings(s))
     return () => {
       live = false
     }

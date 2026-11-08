@@ -72,6 +72,22 @@ posts.block_doc → publish → post_versions → public site (SSR)
 - Theme blocks: unknown types keep their ProseMirror JSON in `attrs.pm` and round-trip
   unchanged.
 
+## Inline nodes (#320, `inlineNodes.ts`)
+
+Not block types: inline atoms inside a text block's `pm` (no block version changed).
+
+- **`mention`** `{userId, label}`: a member's id and their name when inserted (the editor shows
+  their current name; the public API replaces the attrs with `{label: <current name>}`).
+- **`contentLink`** `{postId, label}`: the target post's id and the link text. No URL is stored:
+  the public API adds `href` (the target's current URL) only while it is published.
+- **`dateChip`** `{date, time, reminder}`: a calendar day (YYYY-MM-DD), an optional HH:MM in the
+  site's zone, and whether its author asked to be reminded (a reminder always has a time,
+  09:00 by default). Formatted when rendered; the reminder's owner is the API's, never stored.
+
+Every value goes through the normalizers here; `inlineNodeVectors.json` is shared with the
+API's sanitizer tests. An invalid mention or link is its label as text, an invalid chip is
+dropped.
+
 ## Block structure
 
 ```typescript

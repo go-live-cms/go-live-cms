@@ -104,6 +104,8 @@ func (server *Server) listPublicTermPosts(c *gin.Context) {
 		// Same columns as ListPostsWithMeta, so the row converts directly.
 		posts[i] = toPublicPostWithMetaResponse(db.ListPostsWithMetaRow(row))
 	}
+	// Mentions and content links (#320): names and current URLs, never ids.
+	server.publicizePostResponses(c.Request.Context(), posts)
 	c.JSON(http.StatusOK, gin.H{
 		"term":       toPublicTermResponse(term),
 		"posts":      posts,

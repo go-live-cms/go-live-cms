@@ -1,0 +1,11 @@
+Hi,
+
+{{.Requester}} mentioned you in "{{.PostTitle}}" on {{.SiteTitle}}.
+
+Open the post:
+
+{{.Link}}
+
+You get one email per post you're mentioned in. Mentions in posts you can't open don't send one.
+
+{{.SiteTitle}}

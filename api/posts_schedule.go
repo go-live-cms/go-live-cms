@@ -8,6 +8,7 @@
 package api
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -71,7 +72,12 @@ func siteLocalToUTC(local string, loc *time.Location) (time.Time, error) {
 
 // siteLocation is the site's time zone from settings (#330); UTC when unset.
 func (server *Server) siteLocation(c *gin.Context) (*time.Location, error) {
-	settings, err := server.store.GetSettings(c.Request.Context())
+	return server.siteTimeZone(c.Request.Context())
+}
+
+// siteTimeZone is siteLocation for code without a request (the scheduler, #320's reminders).
+func (server *Server) siteTimeZone(ctx context.Context) (*time.Location, error) {
+	settings, err := server.store.GetSettings(ctx)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return time.UTC, nil

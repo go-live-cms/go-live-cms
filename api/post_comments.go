@@ -13,7 +13,8 @@
 // Every write records an activity event (#324) and, after the response, asks the
 // collab server to tell the post's open editors (POST
 // /internal/documents/post-<id>/comments, best effort), which then refetch.
-// Mention notifications (#320) belong in afterCommentWrite.
+// Comment bodies are plain text: an @name in one notifies nobody (#320 kept mentions to
+// the post's content; a follow-up would hook into afterCommentWrite).
 //
 // The public site never sees comments: there's no /public route, and every route
 // here takes a token and a content role.
@@ -213,8 +214,8 @@ func (server *Server) respondComments(c *gin.Context, status int, caller db.User
 }
 
 // afterCommentWrite runs after every successful comment write: the activity event
-// (#324) and the nudge to the post's open editors. Mention notifications (#320)
-// hook in here, with the new or edited comment's body.
+// (#324) and the nudge to the post's open editors. Mentions in comments would hook in
+// here (not built: #320 notifies mentions in the post's content only).
 func (server *Server) afterCommentWrite(c *gin.Context, postID int64, verb string, payload map[string]any) {
 	if verb != "" {
 		server.recordPostActivity(c, verb, postID, payload)

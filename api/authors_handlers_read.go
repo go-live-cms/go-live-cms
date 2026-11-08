@@ -106,6 +106,8 @@ func (server *Server) listPublicAuthorPosts(c *gin.Context) {
 		// Same columns as ListPostsWithMeta, so the row converts directly.
 		posts[i] = toPublicPostWithMetaResponse(db.ListPostsWithMetaRow(row))
 	}
+	// Mentions and content links (#320): names and current URLs, never ids.
+	server.publicizePostResponses(c.Request.Context(), posts)
 	c.JSON(http.StatusOK, gin.H{
 		"author": authorProfileFromRow(author),
 		"posts":  posts,
