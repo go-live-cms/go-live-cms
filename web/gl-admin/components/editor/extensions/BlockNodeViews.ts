@@ -21,6 +21,7 @@ import {
 
 import { TableView } from "@tiptap/extension-table"
 import { hasHeaderRow } from "./TableBlock"
+import { DETAILS_OPEN_HELP, DETAILS_OPEN_LABEL } from "./DetailsBlock"
 import { MediaBlockView, MediaLookupTracker, missingPanel } from "./MediaBlockViews"
 import { chooseMediaFor } from "../blocks/mediaPicking"
 
@@ -53,7 +54,7 @@ class GridView extends TableView {
 
 /**
  * The editor's views of the image (figure, width, caption), quote (citation input) and
- * group (width and background, #414) nodes (#346). Editor only: the schema (ImageWithMediaId, QuoteCitation) has no DOM
+ * group (width and background, #414) and details (Open by default, #421) nodes (#346). Editor only: the schema (ImageWithMediaId, QuoteCitation) has no DOM
  * code, so the collab server can build it. The views come from a plugin's `nodeViews`
  * prop, which ProseMirror merges with TipTap's own, so the schema extensions stay as
  * configured in `lib/collaboration/schema.ts`.
@@ -74,6 +75,7 @@ export const BlockNodeViews = Extension.create({
             blockquote: (node, view, getPos) => new QuoteView(node, view, getPos as () => number | undefined),
             pullQuote: (node, view, getPos) => new QuoteView(node, view, getPos as () => number | undefined, "pullQuote"),
             group: (node, view, getPos) => new GroupView(node, view, getPos as () => number | undefined),
+            details: (node, view, getPos) => new DetailsView(node, view, getPos as () => number | undefined),
             callout: (node, view, getPos) => new CalloutView(node, view, getPos as () => number | undefined),
             // #420: the table block (its toolbar) and the grid, which scrolls in its own box.
             tableBlock: (node, view, getPos) => new TableBlockView(node, view, getPos as () => number | undefined, editor),
@@ -97,7 +99,7 @@ export const BlockNodeViews = Extension.create({
               seen.add(node.type.name)
               marked.push(Decoration.node(pos, pos + node.nodeSize, { class: "has-selection" }))
             }
-            if (selection instanceof NodeSelection && (selection.node.type.name === "group" || selection.node.type.name === "tableBlock")) {
+            if (selection instanceof NodeSelection && MARKED_WHEN_SELECTED.has(selection.node.type.name)) {
               mark(selection.from, selection.node)
             }
             for (let depth = $from.depth; depth > 0; depth--) {
@@ -113,7 +115,9 @@ export const BlockNodeViews = Extension.create({
 })
 
 /** The nodes whose view shows a field or settings while the cursor is in them. */
-const MARKED_WHILE_IN = new Set(["blockquote", "pullQuote", "group", "callout", "tableBlock"])
+const MARKED_WHILE_IN = new Set(["blockquote", "pullQuote", "group", "callout", "tableBlock", "details"])
+/** The nodes whose view shows its toolbar while it is selected. */
+const MARKED_WHEN_SELECTED = new Set(["group", "tableBlock", "details"])
 
 /** The `data-block-id` the node's renderHTML would put on it (BlockIdExtension). */
 function setBlockId(dom: HTMLElement, node: PMNode) {
@@ -465,6 +469,120 @@ class GroupView implements NodeView {
   stopEvent(event: Event) {
     const target = event.target as globalThis.Node | null
     return Boolean(target && this.settings.contains(target))
+  }
+
+  ignoreMutation(mutation: MutationRecord | { type: "selection"; target: globalThis.Node }) {
+    if (mutation.type === "selection") return false
+    return !this.contentDOM.contains(mutation.target)
+  }
+}
+
+/**
+ * A details (#421): a chevron, its summary and its blocks (the editor always shows them,
+ * open or not), plus its toolbar while the cursor is in it (or it is selected): the
+ * **Open by default** switch. The switch is one `setNodeMarkup`, so one Yjs update; last
+ * writer wins, like any node attribute.
+ */
+class DetailsView implements NodeView {
+  dom: HTMLElement
+  contentDOM: HTMLElement
+  private toolbar: HTMLElement
+  private openSwitch: HTMLButtonElement
+
+  constructor(
+    private node: PMNode,
+    private view: EditorView,
+    private getPos: () => number | undefined,
+  ) {
+    const doc = view.dom.ownerDocument
+    this.dom = doc.createElement("div")
+    this.dom.className = "editor-details"
+    this.dom.dataset.type = "details"
+    // Remote carets' name labels flip at this edge (#417, utils/cursorAwareness.ts).
+    this.dom.setAttribute("data-collab-bounds", "")
+    const chevron = doc.createElement("span")
+    chevron.className = "editor-details__chevron"
+    chevron.contentEditable = "false"
+    chevron.setAttribute("aria-hidden", "true")
+    const svg = doc.createElementNS(SVG_NS, "svg")
+    for (const [name, value] of Object.entries({ width: "16", height: "16", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round" })) {
+      svg.setAttribute(name, value)
+    }
+    const path = doc.createElementNS(SVG_NS, "path")
+    path.setAttribute("d", CHEVRON)
+    svg.append(path)
+    chevron.append(svg)
+    this.toolbar = doc.createElement("div")
+    this.toolbar.className = "editor-details__toolbar"
+    this.toolbar.contentEditable = "false"
+    // Tab from its drag handle lands here (#417, ui/DragHandle.tsx); Esc goes back.
+    this.toolbar.setAttribute("role", "toolbar")
+    this.toolbar.setAttribute("aria-label", "Details")
+    this.toolbar.setAttribute("data-block-toolbar", "")
+    this.openSwitch = doc.createElement("button")
+    this.openSwitch.type = "button"
+    this.openSwitch.className = "editor-details__switch"
+    this.openSwitch.setAttribute("role", "switch")
+    this.openSwitch.textContent = DETAILS_OPEN_LABEL
+    this.openSwitch.title = DETAILS_OPEN_HELP
+    // Keep the cursor where it is.
+    this.openSwitch.addEventListener("mousedown", (event) => event.preventDefault())
+    this.openSwitch.addEventListener("click", () => this.toggleOpen())
+    this.toolbar.append(this.openSwitch)
+    this.toolbar.addEventListener("keydown", (event) => this.onToolbarKey(event))
+    this.contentDOM = doc.createElement("div")
+    this.contentDOM.className = "editor-details__content"
+    // The chevron sits beside the summary, the first line of the content, whether the
+    // toolbar above shows or not.
+    const body = doc.createElement("div")
+    body.className = "editor-details__body"
+    body.append(chevron, this.contentDOM)
+    this.dom.append(this.toolbar, body)
+    this.render()
+  }
+
+  private onToolbarKey(event: KeyboardEvent) {
+    if (event.key !== "Escape") return
+    event.preventDefault()
+    const pos = this.getPos()
+    if (pos !== undefined && this.view.state.doc.nodeAt(pos)?.type.name === "details") {
+      this.view.dispatch(this.view.state.tr.setSelection(NodeSelection.create(this.view.state.doc, pos)))
+    }
+    this.view.focus()
+  }
+
+  private toggleOpen() {
+    // `editable` can change without an update (a demotion, #313).
+    if (!this.view.editable) return
+    const pos = this.getPos()
+    const current = pos === undefined ? null : this.view.state.doc.nodeAt(pos)
+    if (pos === undefined || !current || current.type.name !== "details") return
+    const { state } = this.view
+    const tr = state.tr.setNodeMarkup(pos, undefined, { ...current.attrs, open: current.attrs.open !== true })
+    // A selected details stays selected (#417: Tab from its handle selects it, then its toolbar).
+    if (state.selection instanceof NodeSelection && state.selection.from === pos) tr.setSelection(NodeSelection.create(tr.doc, pos))
+    this.view.dispatch(tr)
+  }
+
+  private render() {
+    const open = this.node.attrs.open === true
+    this.dom.dataset.open = String(open)
+    setBlockId(this.dom, this.node)
+    this.openSwitch.setAttribute("aria-checked", String(open))
+    // Like Group's: not hidden here (`editable` changes without an update, #313); the
+    // editor's `[contenteditable="false"]` style hides the toolbar, and the click checks.
+  }
+
+  update(node: PMNode) {
+    if (node.type !== this.node.type) return false
+    this.node = node
+    this.render()
+    return true
+  }
+
+  stopEvent(event: Event) {
+    const target = event.target as globalThis.Node | null
+    return Boolean(target && this.toolbar.contains(target))
   }
 
   ignoreMutation(mutation: MutationRecord | { type: "selection"; target: globalThis.Node }) {

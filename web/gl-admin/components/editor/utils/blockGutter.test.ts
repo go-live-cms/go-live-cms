@@ -37,6 +37,7 @@ const PM_NODE: Record<string, string> = {
   pull_quote: "pullQuote",
   todo_list: "taskList",
   table: "tableBlock",
+  details: "details",
   video: "video",
   audio: "audio",
   file: "file",

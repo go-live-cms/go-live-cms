@@ -166,6 +166,8 @@ describe("the slash menu", () => {
     press("ArrowDown")
     expect(active()!.textContent).toBe("Table")
     press("ArrowDown")
+    expect(active()!.textContent).toBe("Details")
+    press("ArrowDown")
     expect(active()!.textContent).toBe("Image")
     // Video, audio and file (#423), then Layout.
     for (const name of ["Video", "Audio", "File"]) {

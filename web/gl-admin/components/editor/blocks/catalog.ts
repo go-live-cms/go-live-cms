@@ -92,6 +92,8 @@ export const ICONS = {
   pullQuote: "M4 3h16M4 21h16M7 15c2 0 3-1 3-4V8H6v3h3M14 15c2 0 3-1 3-4V8h-4v3h3",
   callout: "M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M12 16v-4M12 8h.01",
   table: TABLE_ICON,
+  // #421, the canvas's Details tile.
+  details: "M4 6l3 3-3 3M11 9h9M4 16h16",
   // #423 ("Editor · image, gallery, video, audio, file")
   video: MEDIA_BLOCK_ICONS.video,
   audio: MEDIA_BLOCK_ICONS.audio,
@@ -231,6 +233,17 @@ export const CORE_BLOCKS: readonly CatalogEntry[] = [
       editor.chain().deleteRange(range).run()
       openTableSizePicker(editor)
     },
+  },
+  // #421, a container. The line it's typed on becomes its first block; the caret goes to
+  // the summary. The canvas's slash name is "/details".
+  {
+    id: "details",
+    type: "details",
+    name: "Details",
+    group: "text",
+    keywords: ["toggle", "accordion", "collapse", "expand", "faq", "summary", "spoiler"],
+    icon: { path: ICONS.details },
+    insert: (editor, range) => chain(editor, range).setDetails().run(),
   },
   // Media
   {

@@ -14,6 +14,7 @@ import { Callout } from "../../components/editor/extensions/Callout"
 import { PullQuote } from "../../components/editor/extensions/PullQuote"
 import { TodoItem, TodoList } from "../../components/editor/extensions/TodoList"
 import { TableBlock } from "../../components/editor/extensions/TableBlock"
+import { Details } from "../../components/editor/extensions/DetailsBlock"
 import { GlHighlight, GlSubscript, GlSuperscript } from "../../components/editor/extensions/InlineMarks"
 import { AudioBlock, FileBlock, MediaBlockCommands, VideoBlock } from "../../components/editor/extensions/MediaBlocks"
 import { ContentLink, DateChip, Mention } from "../../components/editor/extensions/InlineNodes"
@@ -87,6 +88,9 @@ export function schemaExtensions({ collaborating }: { collaborating: boolean }) 
     // #420: the table block (figure: TipTap's table, cells `paragraph+`, plus a caption).
     // After paragraph, so `block` content still fills with a paragraph.
     table: TableBlock,
+    // #421: the second container (its summary, `detailsSummary`, comes with it). It and
+    // Group's wider content change the schema fingerprint (#416).
+    details: Details,
     // #423: video, audio and file (media library files by id; the image is above). Not in
     // the `block` group, like the table. Each changes the fingerprint (#416).
     video: VideoBlock,

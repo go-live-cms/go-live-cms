@@ -236,6 +236,12 @@ function ChangedBlock({ entry, version, working }: { entry: BlockDiffEntry; vers
   if (entry.children && !typeChanged) {
     return (
       <div className="version-diff__container" data-type={block.type}>
+        {/* A details' summary (#421), as its own line above its blocks. */}
+        {block.type === "details" && entry.caption && entry.caption.length > 0 && (
+          <p className="version-diff__summary">
+            <DiffText segments={entry.caption} />
+          </p>
+        )}
         {entry.children.map((child) => (
           <DiffBlock key={`${child.status}:${child.id}`} entry={child} version={version} working={working} />
         ))}

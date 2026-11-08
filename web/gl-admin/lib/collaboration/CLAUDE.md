@@ -269,7 +269,7 @@ kept so references in code stay valid.
   `components/editor/extensions/textBlocks.test.ts` (commands, views, read-only, paste) and
   `textBlocks.collab.test.ts` (two users on the relay, the stored doc, a restart).
 - **Containers (#414, `blocks-spec/nesting.ts`, design `docs/design/block-library.md` 2.1–2.11).**
-  A container (Group today; columns, details, … later, each a row of the table) holds its
+  A container (Group, Details #421; columns, … later, each a row of the table) holds its
   child blocks **by id** in `children`, each a full block in the flat `blocks` map, like a
   list's items, and in the fragment it is one element with its children as elements (the
   content stays in the one `"default"` fragment, #315 Option C). The table drives everything:
@@ -309,6 +309,38 @@ kept so references in code stay valid.
     trips, drops, synthesized ids, cycles, the store's per-child fallback),
     `components/editor/extensions/GroupBlock.test.ts` (commands, view, split/duplicate/paste ids)
     and `GroupBlock.collab.test.ts` (two users in one group on the relay, the stored doc).
+- **Details (#421, `components/editor/extensions/DetailsBlock.ts`): the second container.** A
+  row of the nesting table (`details`: flow only, 1+; a group may hold one) with a **part**:
+  its content is `detailsSummary` then flow (`containerContent` puts a row's
+  `parts` first). Our own node, not TipTap's Details extension (no `detailsContent` slot, no
+  new package): its blocks sit right after the summary.
+  - **The summary is a child node, never a block:** `detailsSummary` (`text*`, caption marks),
+    no `data-block-id` (`isBlockNode` leaves parts out), `isolating` (Backspace never joins
+    the first block into it) and not `selectable`. So two people typing in one summary merge
+    per character. Block Spec `details` v1: `attrs.summary` its runs (like a caption's,
+    `captionRuns` on the way in), `attrs.text` their text (search reads it), `attrs.open: true`
+    or absent; `children` its blocks. The bridge's per-child type check starts after the
+    parts (`afterParts`), and `fragmentToBlockDoc` falls a details back as a whole when no
+    *block* in it converts (its summary alone doesn't count, or it would be skipped and lost).
+  - **`open` ("Open by default")** is a node attr, last writer wins (the view's switch, the
+    Block tab, `setDetailsOpen`); the editor always shows the blocks.
+  - **Keys** (`DetailsKeyboard`, editor only, priority 200, no appendTransaction): ↵ in the
+    summary moves into the content (the first block's start, or a new empty paragraph above a
+    block that isn't text; the summary never splits); ⌫ at the summary's start does nothing
+    (TipTap's own Backspace would try to clear it into a paragraph) except in an empty details,
+    which it removes; ⌫ at the first block's start goes back to the summary. #417's keys need
+    nothing: the summary isn't an editor block, so Esc there selects the details and ↵ on it
+    steps into its first block.
+  - **Paste:** `normalizeClipboardMarkup` turns a page's `<details [open]><summary>` into the
+    editor's `<div data-type="details" data-open="true"><div data-type="details-summary">`
+    before DOMPurify, which keeps those `data-type`s and `data-open="true"` only there.
+  - **Stale clients:** a bundle from before #421 has no details nodes (and a doc and group that
+    don't name it); the fingerprint guard (#416) refuses such a tab (`schemaFingerprint.test.ts`).
+  - Tests: `blockBridge.details.test.ts`, `DetailsBlock.test.ts` (schema, commands, keys, view,
+    paste, ids), `DetailsBlock.collab.test.ts` (two users in one summary, the stored doc, a
+    restart), the #414 vectors, `comments.hocuspocus.test.ts` / `blockEdits.hocuspocus.test.ts`
+    (threads and "Last edited by" on blocks in a details; a summary edit is the details'),
+    `src/components/blocks/details/DetailsBlock.test.tsx`, Go `post_blocks_details_test.go`.
 - **Table (#420, `components/editor/extensions/TableBlock.ts`): a flow block, not a container.**
   The block node is `tableBlock` (`table tableCaption`, `BLOCK_NODE_NAMES.table`): TipTap's
   `table` (prosemirror-tables reads every child of `table` as a row, so the caption can't live

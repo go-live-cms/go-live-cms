@@ -218,8 +218,9 @@ describe("schemaFingerprint (#416)", () => {
     })
 
     it("the table (#420) changed it: new node types, and a doc and a group that name the table block", () => {
-      // The schema as it was before #420: no table nodes, `(block | group)+` doc, `block+` group.
-      const { table: _table, document: _document, group: _group, ...rest } = schemaExtensions({ collaborating: true })
+      // The schema as it was before #420: no table nodes (nor #421's details), `(block | group)+`
+      // doc, `block+` group.
+      const { table: _table, document: _document, group: _group, details: _details, ...rest } = schemaExtensions({ collaborating: true })
       const OldDocument = Node.create({ name: "doc", topNode: true, content: "(block | group)+" })
       const OldGroup = Group.extend({ content: "block+" })
       const before = getSchema([OldDocument, ...Object.values({ ...rest, group: OldGroup })])
@@ -237,10 +238,29 @@ describe("schemaFingerprint (#416)", () => {
       expect(schemaFingerprint(blockCells)).not.toBe(core)
     })
 
+    it("details (#421) changed it: new node types, and a doc and a group that name details", () => {
+      // The schema as it was before #421 (after #423): no details nodes, a doc and a group without them.
+      const { document: _document, group: _group, details, ...rest } = schemaExtensions({ collaborating: true })
+      const OldDocument = Node.create({ name: "doc", topNode: true, content: "(block | tableBlock | video | audio | file | group)+" })
+      const OldGroup = Group.extend({ content: "(block | tableBlock | video | audio | file)+" })
+      const before = getSchema([OldDocument, ...Object.values({ ...rest, group: OldGroup })])
+      expect(before.nodes.details).toBeUndefined()
+      for (const name of ["details", "detailsSummary"]) expect(getCoreSchema().nodes[name], name).toBeDefined()
+      const old = schemaFingerprint(before)
+      expect(old).not.toBe(core)
+      // A stale tab with the nodes but the old doc and group differs from both.
+      const nodesOnly = schemaFingerprint(getSchema([OldDocument, ...Object.values({ ...rest, group: OldGroup, details })]))
+      expect(nodesOnly).not.toBe(old)
+      expect(nodesOnly).not.toBe(core)
+      // The open attr is in it: a tab whose details has none is refused too.
+      const openless = getSchema(Object.values({ ...schemaExtensions({ collaborating: true }), details: details.extend({ addAttributes: () => ({}) }) }))
+      expect(schemaFingerprint(openless)).not.toBe(core)
+    })
+
     it("the video, audio and file blocks (#423) changed it: three node types, named by the doc and a group", () => {
-      // The schema as it was before #423: no media nodes, and the doc and the group name
+      // The schema as it was before #423 (and #421): no media nodes, no details, and the doc and the group name
       // only the table next to `block`.
-      const { video, audio, file, mediaCommands: _commands, document: _document, group: _group, ...rest } = schemaExtensions({ collaborating: true })
+      const { video, audio, file, mediaCommands: _commands, document: _document, group: _group, details: _details, ...rest } = schemaExtensions({ collaborating: true })
       const OldDocument = Node.create({ name: "doc", topNode: true, content: "(block | tableBlock | group)+" })
       const OldGroup = Group.extend({ content: "(block | tableBlock)+" })
       const before = getSchema([OldDocument, ...Object.values({ ...rest, group: OldGroup })])
@@ -260,6 +280,7 @@ describe("schemaFingerprint (#416)", () => {
       const noLabel = getSchema(Object.values({ ...schemaExtensions({ collaborating: true }), file: file.extend({ addAttributes: () => ({ mediaId: { default: null } }) }) }))
       expect(schemaFingerprint(noLabel)).not.toBe(core)
     })
+
     it("the inline nodes (#320) changed it, each on its own, and their attrs are in it", () => {
       // The schema as it was before #320: no mention, content link or date chip.
       const { mention, contentLink, dateChip, ...rest } = schemaExtensions({ collaborating: true })

@@ -432,3 +432,117 @@ describe("thread anchoring inside a Group (#414)", () => {
     })
   })
 })
+
+describe("thread anchoring inside a Details (#421)", () => {
+  const DETAILS = "blk-0192-details-0001"
+  const ONE = "blk-0192-dinner-00001"
+  const TWO = "blk-0192-dinner-00002"
+  const AFTER = "blk-0192-dafter-00001"
+  const detailsDoc = (): BlockDocV1 =>
+    canonical({
+      doc_version: 1,
+      blocks_order: [DETAILS, AFTER],
+      blocks: {
+        [DETAILS]: { id: DETAILS, type: "details", version: 1, attrs: { summary: [{ type: "text", text: "Question" }], text: "Question" }, children: [ONE, TWO] },
+        [ONE]: { id: ONE, type: "paragraph", version: 1, attrs: { text: "answer one" } },
+        [TWO]: { id: TWO, type: "paragraph", version: 1, attrs: { text: "answer two" } },
+        [AFTER]: { id: AFTER, type: "paragraph", version: 1, attrs: { text: "after" } },
+      },
+    } as BlockDocV1)
+
+  beforeEach(async () => {
+    await relay.destroy()
+    relay = await startRelay({ blockDoc: detailsDoc(), revision: 3 })
+  })
+
+  function bindWithViews(collab: HocuspocusCollaboration): Editor {
+    const editor = new Editor({
+      element: document.createElement("div"),
+      extensions: [...Object.values(schemaExtensions({ collaborating: true })), BlockNodeViews, Collaboration.configure({ document: collab.doc })],
+    })
+    editors.push(editor)
+    return editor
+  }
+
+  async function twoEditors() {
+    const ca = relay.client("1")
+    const cb = relay.client("2")
+    await Promise.all([ca.whenSynced(), cb.whenSynced()])
+    const a = bindWithViews(ca)
+    const b = bindWithViews(cb)
+    await waitFor(() => b.getText().includes("answer two"), { what: "the details on b" })
+    return { a, b }
+  }
+
+  function find(editor: Editor, id: string): { node: any; pos: number } {
+    let found: { node: any; pos: number } | null = null
+    editor.state.doc.descendants((node, pos) => {
+      if (!found && node.attrs["data-block-id"] === id) found = { node, pos }
+    })
+    if (!found) throw new Error(`no ${id}`)
+    return found
+  }
+
+  it("a thread on a block inside a details is anchored; the details has its own; the summary is no block", async () => {
+    const { b } = await twoEditors()
+    expect(b.state.doc.child(0).type.name).toBe("details")
+    expect(docBlocks(b.state.doc).map((block) => block.id)).toEqual([DETAILS, ONE, TWO, AFTER])
+    expect(placement(b, [thread(TWO), thread(DETAILS)])).toEqual({
+      anchored: [
+        { text: "Questionanswer oneanswer two", threads: [DETAILS] },
+        { text: "answer two", threads: [TWO] },
+      ],
+      orphaned: [],
+    })
+  })
+
+  it("editing the summary, opening it and moving a block out of it keep every thread", async () => {
+    const { a, b } = await twoEditors()
+    const threads = [thread(ONE), thread(DETAILS)]
+
+    // A collaborator types in the summary and turns Open by default on.
+    a.chain().setTextSelection(2).insertContent("A ").run()
+    a.commands.setDetailsOpen(true)
+    await converged(a, b, "the summary edit to reach b")
+    expect(b.state.doc.child(0).child(0).textContent).toBe("A Question")
+    expect(placement(b, threads).orphaned).toEqual([])
+
+    // ONE moves out of the details to the top of the post.
+    const one = find(a, ONE)
+    const tr = a.state.tr.delete(one.pos, one.pos + one.node.nodeSize)
+    tr.insert(0, one.node)
+    a.view.dispatch(tr)
+    await converged(a, b, "the move out of the details to reach b")
+    expect(b.state.doc.child(0).attrs["data-block-id"]).toBe(ONE)
+    expect(placement(b, threads)).toEqual({
+      anchored: [
+        { text: "answer one", threads: [ONE] },
+        { text: "A Questionanswer two", threads: [DETAILS] },
+      ],
+      orphaned: [],
+    })
+  })
+
+  it("survives a reload (server restart) and a reseed", async () => {
+    const threads = [thread(ONE), thread(TWO)]
+    await relay.restart()
+    const reloaded = relay.client("1")
+    await reloaded.whenSynced()
+    const r = bindWithViews(reloaded)
+    await waitFor(() => r.getText().includes("answer two"), { what: "the reloaded doc" })
+    expect(placement(r, threads).orphaned).toEqual([])
+
+    await relay.restart(() => relay.api.writeAround(String(POST_ID), detailsDoc()))
+    const reseeded = relay.client("2")
+    await reseeded.whenSynced()
+    const s = bindWithViews(reseeded)
+    await waitFor(() => s.getText().includes("answer two"), { what: "the reseeded doc" })
+    expect(placement(s, threads)).toEqual({
+      anchored: [
+        { text: "answer one", threads: [ONE] },
+        { text: "answer two", threads: [TWO] },
+      ],
+      orphaned: [],
+    })
+  })
+})

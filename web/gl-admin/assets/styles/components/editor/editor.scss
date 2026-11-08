@@ -644,6 +644,110 @@
     }
   }
 
+  // Details (#421, "Editor · table, details, …"): a chevron, the summary in bold, the blocks
+  // under it (always shown, open by default or not) with a rule beside them, and the "Open
+  // by default" switch while the cursor is in it.
+  .editor-details {
+    border-block: 1px solid var(--border-color);
+    margin: 12px 0;
+    padding: var(--space-2) 0;
+    position: relative;
+  }
+
+  .editor-details + .editor-details {
+    border-top: 0;
+    margin-top: -12px;
+  }
+
+  .editor-details__body {
+    position: relative;
+  }
+
+  // Beside the summary, the first line of the content.
+  .editor-details__chevron {
+    color: var(--text-secondary);
+    display: flex;
+    left: 0;
+    pointer-events: none;
+    position: absolute;
+    top: 4px;
+    user-select: none;
+  }
+
+  .editor-details__summary {
+    color: var(--text-primary);
+    font-weight: 600;
+    min-height: 1.5em;
+    padding-left: 24px;
+  }
+
+  .editor-details__content > :not(.editor-details__summary) {
+    margin-left: 24px;
+  }
+
+  .editor-details__content > .editor-details__summary + * {
+    margin-top: var(--space-2);
+  }
+
+  .editor-details__content > :last-child {
+    margin-bottom: 0;
+  }
+
+  .editor-details__toolbar {
+    align-items: center;
+    display: none;
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
+    user-select: none;
+  }
+
+  .editor-details.has-selection > .editor-details__toolbar {
+    display: flex;
+  }
+
+  .editor-details__switch {
+    align-items: center;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: inline-flex;
+    font: inherit;
+    font-size: var(--type-footnote);
+    gap: 4px;
+    line-height: 1;
+    min-height: 28px;
+    padding: var(--space-1) var(--space-2);
+
+    &::before {
+      background: radial-gradient(circle at 7px 50%, var(--surface-raised) 5px, transparent 5.5px), var(--border-strong);
+      border-radius: 999px;
+      content: "";
+      display: inline-block;
+      height: 14px;
+      width: 24px;
+    }
+
+    &[aria-checked="true"] {
+      color: var(--text-primary);
+
+      &::before {
+        background: radial-gradient(circle at 17px 50%, var(--accent-on) 5px, transparent 5.5px), var(--accent-solid);
+      }
+    }
+
+    &:hover {
+      background: var(--background-hover);
+      color: var(--text-primary);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--focus-ring);
+      outline-offset: 1px;
+    }
+  }
+
   // A callout (#419): the tone's icon and fill (the admin's status tokens), its
   // paragraphs, and its Type setting while the cursor is in it.
   .editor-callout {
@@ -830,7 +934,8 @@
   &[contenteditable="false"] .editor-pullquote > .editor-quote__cite.is-empty,
   &[contenteditable="false"] .editor-group > .editor-group__settings,
   &[contenteditable="false"] .editor-callout > .editor-callout__settings,
-  &[contenteditable="false"] .editor-table > .editor-table__toolbar {
+  &[contenteditable="false"] .editor-table > .editor-table__toolbar,
+  &[contenteditable="false"] .editor-details > .editor-details__toolbar {
     display: none;
   }
 

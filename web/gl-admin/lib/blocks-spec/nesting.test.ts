@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest"
 import {
   acceptsChild,
   blocksInReadingOrder,
+  CONTAINER_PART_NODE_NAMES,
   CONTAINERS,
   containerContent,
   dedupeBlockRefs,
@@ -9,6 +10,7 @@ import {
   isFlowType,
   nestingIssues,
   synthesizedChildId,
+  TEXT_PART_NODE_NAMES,
   topLevelContent,
   validateBlockDoc,
 } from "."
@@ -100,8 +102,26 @@ describe("the nesting table", () => {
   })
 
   it("derives the content expressions", () => {
-    expect(containerContent("group")).toBe("(block | tableBlock | video | audio | file)+")
-    expect(topLevelContent()).toBe("(block | tableBlock | video | audio | file | group)+")
+    expect(containerContent("group")).toBe("(block | tableBlock | video | audio | file | details)+")
+    // #421: its part first, then flow.
+    expect(containerContent("details")).toBe("detailsSummary (block | tableBlock | video | audio | file)+")
+    expect(topLevelContent()).toBe("(block | tableBlock | video | audio | file | group | details)+")
+  })
+
+  it("details (#421): holds flow, sits at the top or in a group, its summary a part (never a block)", () => {
+    expect(acceptsChild("details", "paragraph")).toBe(true)
+    expect(acceptsChild("details", "table")).toBe(true)
+    expect(acceptsChild("details", "video")).toBe(true)
+    expect(acceptsChild("details", "file")).toBe(true)
+    expect(acceptsChild("details", "theme:example/alert")).toBe(true)
+    expect(acceptsChild("details", "details")).toBe(false)
+    expect(acceptsChild("details", "group")).toBe(false)
+    expect(acceptsChild("details", "list_item")).toBe(false)
+    expect(acceptsChild("group", "details")).toBe(true)
+    expect(isBlockNode("paragraph", "details")).toBe(true)
+    expect(isBlockNode("detailsSummary", "details")).toBe(false)
+    expect(CONTAINER_PART_NODE_NAMES.has("detailsSummary")).toBe(true)
+    expect(TEXT_PART_NODE_NAMES).toEqual(new Set(["imageCaption", "tableCaption", "detailsSummary"]))
   })
 
   it("a group holds flow: core flow types, theme blocks and unknown types, never a container or a list item", () => {

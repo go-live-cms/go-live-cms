@@ -571,6 +571,14 @@ are the most fragile part of the codebase. **Before editing anything under
   a wide table scroll in its own box at 375px. Rules: `gl-admin/lib/collaboration/CLAUDE.md`
   (blockBridge notes, Table). History compares its cells as text, the caption like an image's and
   the header row as an attribute.
+- **Details (#421):** a Text entry in the catalog (`/details`, after Table: the line becomes its
+  first block, the caret goes to the summary), the node `extensions/DetailsBlock.ts` (schema,
+  commands, `DetailsKeyboard`) with its view in `BlockNodeViews.ts` (chevron, summary, the **Open
+  by default** switch while the cursor is in it) and the same switch on the Block tab. No slash
+  menu, Turn into or "Type /" hint in the summary (`TEXT_PART_NODE_NAMES`: captions and summaries).
+  The public `src/components/blocks/details/` is the browser's own `<details>` (no script) and the
+  default theme styles it. History diffs its summary like a caption and `open` as an attribute.
+  Rules: `gl-admin/lib/collaboration/CLAUDE.md` (blockBridge notes, Details).
 - **Inline marks (#418, design `docs/design/block-library.md` 3.3):** Highlight, Superscript and
   Subscript in the selection toolbar (`ui/BubbleMenu.tsx`, after Link; not in a caption), ⌘⇧H,
   ⌘. and ⌘,. The marks are `extensions/InlineMarks.ts` (rules, the concurrent-edit case and the

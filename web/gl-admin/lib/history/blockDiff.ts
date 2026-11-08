@@ -70,7 +70,7 @@ export interface BlockDiffEntry {
   moved: boolean
   /** "changed": the word diff of the block's text (absent for blocks without text). */
   text?: Segment[]
-  /** "changed" image: the caption's word diff. */
+  /** "changed" image or table: the caption's word diff; a details (#421): its summary's. */
   caption?: Segment[]
   /** "changed" list: its items. */
   list?: ListDiff
@@ -212,6 +212,12 @@ function blockTokens(block: Block): Token[] {
   return typeof text === "string" ? tokenize(text) : []
 }
 
+/** A details' summary (#421), runs like a caption's. */
+function summaryTokens(block: Block): Token[] {
+  const summary = attrsOf(block).summary
+  return Array.isArray(summary) ? contentTokens(summary as PMJson[]) : []
+}
+
 function captionTokens(block: Block): Token[] {
   const caption = attrsOf(block).caption
   return Array.isArray(caption) ? contentTokens(caption as PMJson[]) : []
@@ -328,6 +334,12 @@ function attrChanges(v: Block, w: Block): AttrChange[] {
       const style = (a: Record<string, unknown>) => GROUP_STYLE_LABELS[String(a.style ?? "none")] ?? GROUP_STYLE_LABELS.none
       add("align", "Width", width(va), width(wa))
       add("style", "Background", style(va), style(wa))
+      break
+    }
+    // #421: the summary is diffed like a caption (its text), "open" is the attribute.
+    case "details": {
+      const open = (a: Record<string, unknown>) => (a.open === true ? "On" : "Off")
+      add("open", "Open by default", open(va), open(wa))
       break
     }
     // #419: a missing or unknown tone reads as info, as the editor and the page show it.
@@ -508,8 +520,11 @@ function diffBlock(id: string, v: Block, w: Block, vDoc: Doc, wDoc: Doc, moved: 
     // Same container type: its attributes, and its children by id at any depth.
     const attrs = attrChanges(v, w)
     const children = diffEntries(childIds(v, vDoc), childIds(w, wDoc), vDoc, wDoc)
-    const changed = attrs.length > 0 || children.some((child) => child.status !== "same" || child.moved)
-    return { id, status: changed ? "changed" : "same", moved, children, attrs }
+    // A details' summary (#421) is its own text, diffed like a caption.
+    const summary = v.type === "details" ? diffTokens(summaryTokens(w), summaryTokens(v)) : undefined
+    const changed =
+      attrs.length > 0 || (summary ? hasChanges(summary) : false) || children.some((child) => child.status !== "same" || child.moved)
+    return { id, status: changed ? "changed" : "same", moved, children, attrs, ...(changed && summary ? { caption: summary } : {}) }
   }
 
   const attrs = attrChanges(v, w)

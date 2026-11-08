@@ -383,6 +383,73 @@
           "task-00001": { "id": "task-00001", "type": "todo_item", "version": 1, "attrs": {} }
         }
       }
+    },
+    {
+      "name": "details (#421) at the top and in a group, holding flow blocks; the summary is an attr",
+      "valid": true,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["details-01", "group-0001"],
+        "blocks": {
+          "details-01": { "id": "details-01", "type": "details", "version": 1, "attrs": { "summary": [{ "type": "text", "text": "Can " }, { "type": "text", "text": "contributors", "marks": [{ "type": "bold" }] }, { "type": "text", "text": " publish?" }], "text": "Can contributors publish?", "open": true }, "children": ["para-00001", "image-0001", "list-00001"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "No." } },
+          "image-0001": { "id": "image-0001", "type": "image", "version": 2, "attrs": { "mediaId": 12 } },
+          "list-00001": { "id": "list-00001", "type": "bullet_list", "version": 1, "attrs": {}, "children": ["item-00001"] },
+          "item-00001": { "id": "item-00001", "type": "list_item", "version": 1, "attrs": { "text": "one" } },
+          "group-0001": { "id": "group-0001", "type": "group", "version": 1, "attrs": {}, "children": ["details-02"] },
+          "details-02": { "id": "details-02", "type": "details", "version": 1, "attrs": {}, "children": ["para-00002"] },
+          "para-00002": { "id": "para-00002", "type": "paragraph", "version": 1, "attrs": {} }
+        }
+      }
+    },
+    {
+      "name": "a details with no blocks (#421: an empty summary is fine, no children is not)",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["details-01"],
+        "blocks": {
+          "details-01": { "id": "details-01", "type": "details", "version": 1, "attrs": { "summary": [{ "type": "text", "text": "Can " }, { "type": "text", "text": "contributors", "marks": [{ "type": "bold" }] }, { "type": "text", "text": " publish?" }], "text": "Can contributors publish?" }, "children": [] }
+        }
+      }
+    },
+    {
+      "name": "a details in a details",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["details-01"],
+        "blocks": {
+          "details-01": { "id": "details-01", "type": "details", "version": 1, "attrs": {}, "children": ["details-02"] },
+          "details-02": { "id": "details-02", "type": "details", "version": 1, "attrs": {}, "children": ["para-00001"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "No." } }
+        }
+      }
+    },
+    {
+      "name": "a group in a details (the table is acyclic: details holds flow only)",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["details-01"],
+        "blocks": {
+          "details-01": { "id": "details-01", "type": "details", "version": 1, "attrs": {}, "children": ["group-0001"] },
+          "group-0001": { "id": "group-0001", "type": "group", "version": 1, "attrs": {}, "children": ["para-00001"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "No." } }
+        }
+      }
+    },
+    {
+      "name": "a details holding a list item",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["details-01"],
+        "blocks": {
+          "details-01": { "id": "details-01", "type": "details", "version": 1, "attrs": {}, "children": ["item-00001"] },
+          "item-00001": { "id": "item-00001", "type": "list_item", "version": 1, "attrs": { "text": "one" } }
+        }
+      }
     }
   ]
 }

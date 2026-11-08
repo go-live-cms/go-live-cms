@@ -68,3 +68,39 @@ describe("blockDiff with containers (#414)", () => {
     expect(html).toContain("<del")
   })
 })
+
+describe("blockDiff with a details (#421)", () => {
+  const D = "blk-details-0001"
+  const details = (summary: string, attrs: Record<string, unknown> = {}, text = "answer"): BlockDocV1 => ({
+    doc_version: 1,
+    blocks_order: [D],
+    blocks: {
+      [D]: { id: D, type: "details", version: 1, attrs: { ...(summary ? { summary: [{ type: "text", text: summary }], text: summary } : {}), ...attrs }, children: [A] },
+      [A]: { id: A, type: "paragraph", version: 1, attrs: { text } },
+    },
+  })
+
+  it("an unchanged details is the same; a summary edit changes it, with the summary's own word diff", () => {
+    expect(diffBlockDocs(details("Who publishes"), details("Who publishes")).entries[0].status).toBe("same")
+    const entry = diffBlockDocs(details("Who publishes"), details("Who can publish")).entries[0]
+    expect(entry.status).toBe("changed")
+    expect(entry.caption!.some((s) => s.op !== "same")).toBe(true)
+    expect(entry.children!.map((c) => c.status)).toEqual(["same"])
+  })
+
+  it("shows Open by default as an attribute, and an edit inside on that block", () => {
+    const entry = diffBlockDocs(details("Q"), details("Q", { open: true }, "answer!")).entries[0]
+    expect(entry.attrs).toEqual([{ key: "open", label: "Open by default", version: "Off", working: "On" }])
+    expect(entry.children![0].status).toBe("changed")
+    // Shown with the block, unchanged.
+    expect(entry.caption!.every((s) => s.op === "same")).toBe(true)
+  })
+
+  it("VersionDiff shows the summary's diff above the details' blocks", () => {
+    const version = details("Who publishes")
+    const working = details("Who can publish")
+    const html = renderToStaticMarkup(<VersionDiff diff={diffBlockDocs(version, working)} version={version} working={working} />)
+    expect(html).toContain('class="version-diff__summary"')
+    expect(html).toMatch(/version-diff__container" data-type="details"><p class="version-diff__summary">/)
+  })
+})

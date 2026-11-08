@@ -21,10 +21,12 @@ type blockContainer struct {
 	max int
 }
 
-// blockContainers: the containers. Group (#414) is the first; columns, details, … are
-// rows here and in nesting.ts.
+// blockContainers: the containers. Group (#414) is the first, details (#421) the second;
+// columns, cover, … are rows here and in nesting.ts. A details' summary is an attr
+// (`summary` runs), not a child, so its row is only its blocks.
 var blockContainers = map[string]blockContainer{
-	"group": {accepts: []string{"flow"}, min: 1},
+	"group":   {accepts: []string{"flow", "details"}, min: 1},
+	"details": {accepts: []string{"flow"}, min: 1},
 }
 
 // flowBlockTypes are the core types that hold no blocks. Lists count as flow (their
@@ -239,6 +241,29 @@ func sanitizeGroupAttrs(attrs map[string]interface{}) {
 			delete(attrs, key)
 		}
 	}
+}
+
+// sanitizeDetailsAttrs keeps only a details' own attrs (#421, an allowlist like a
+// group's): `summary` reduced like a caption (text runs with bold, italic and link only,
+// sanitizeCaptionRuns), `text` (the summary's text, what search reads) when a string, and
+// `open` only when true (absent: closed). Anything else is deleted.
+func sanitizeDetailsAttrs(attrs map[string]interface{}) {
+	for key, value := range attrs {
+		switch key {
+		case "summary":
+		case "text":
+			if _, ok := value.(string); !ok {
+				delete(attrs, key)
+			}
+		case "open":
+			if b, ok := value.(bool); !ok || !b {
+				delete(attrs, key)
+			}
+		default:
+			delete(attrs, key)
+		}
+	}
+	sanitizeCaptionRuns(attrs, "summary")
 }
 
 // walkBlocks calls visit for each block reachable from blocks_order, in reading order

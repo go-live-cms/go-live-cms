@@ -22,6 +22,7 @@ export type KnownBlockType =
   | "ordered_list"
   | "list_item"
   | "group"
+  | "details"
   | "callout"
   | "pull_quote"
   | "todo_list"
@@ -344,6 +345,23 @@ export type GroupBlock = BaseBlock<
   }
 >
 
+/**
+ * Details (#421), a container (`nesting.ts`): `children` are the blocks a reader sees when
+ * it's open (flow only). The summary is a part, not a block: its runs (bold, italic, link,
+ * like a caption's) in `attrs.summary`, its plain text in `attrs.text` (search reads it).
+ */
+export type DetailsBlock = BaseBlock<
+  "details",
+  {
+    /** Rich summary (bold, italic, link). Absent: an empty summary. */
+    summary?: CaptionText[]
+    /** The summary's text. Absent when it's empty. */
+    text?: string
+    /** Open when the page loads. Absent: closed. */
+    open?: true
+  }
+>
+
 /** A table (#420), a flow block: its rows in `pm`, never `children`. */
 export type TableBlock = BaseBlock<
   "table",
@@ -459,6 +477,7 @@ export type Block =
   | OrderedListBlock
   | ListItemBlock
   | GroupBlock
+  | DetailsBlock
   | CalloutBlock
   | PullQuoteBlock
   | TodoListBlock
@@ -629,6 +648,18 @@ export const zGroup = zBase.extend({
   children: z.array(zBlockID),
 })
 
+// #421. The bridge writes `open` only when true and the summary only when not empty.
+export const zDetails = zBase.extend({
+  type: z.literal("details"),
+  attrs: z.object({
+    summary: z.array(zCaptionText).optional(),
+    text: z.string().optional(),
+    open: z.literal(true).optional(),
+  }),
+  // Count and child types are the nesting table's (nestingIssues).
+  children: z.array(zBlockID),
+})
+
 // A table's pm (#420): rows of cells of paragraphs. The cells' only attrs are their spans
 // (`.strict()`: the bridge writes nothing else, the API keeps nothing else).
 const zTableSpan = z.number().int().min(2).max(TABLE_MAX_SPAN)
@@ -707,6 +738,7 @@ const knownBlockSchemas: Record<KnownBlockType, z.ZodTypeAny> = {
   ordered_list: zOrderedList,
   list_item: zListItem,
   group: zGroup,
+  details: zDetails,
   callout: zCallout,
   pull_quote: zPullQuote,
   todo_list: zTodoList,

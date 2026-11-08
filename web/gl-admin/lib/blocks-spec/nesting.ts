@@ -93,11 +93,31 @@ export interface ContainerRule {
 }
 
 /**
- * The containers. Group (#414) is the first; columns, column, cover, media & text, details,
- * gallery and footnotes follow in their own issues (#352's build order), each a row here.
+ * The containers. Group (#414) is the first, Details (#421) the second; columns, column,
+ * cover, media & text, gallery and footnotes follow in their own issues (#352's build
+ * order), each a row here.
+ *
+ * Details' summary is a **part** (`detailsSummary`, rich text): a child node with no id,
+ * always its first child, stored as the block's `attrs.summary` runs, never as a block
+ * (design 2.4). There is no slot: our own node holds its blocks right after the summary,
+ * so TipTap's Details extension (and its `detailsContent` wrapper) isn't used.
  */
 export const CONTAINERS = {
-  group: { node: "group", accepts: ["flow"], min: 1, topLevel: true, synthesize: { type: "paragraph", role: "paragraph" } },
+  group: {
+    node: "group",
+    accepts: ["flow", "details"],
+    min: 1,
+    topLevel: true,
+    synthesize: { type: "paragraph", role: "paragraph" },
+  },
+  details: {
+    node: "details",
+    accepts: ["flow"],
+    min: 1,
+    topLevel: true,
+    synthesize: { type: "paragraph", role: "paragraph" },
+    parts: ["detailsSummary"],
+  },
 } as const satisfies Record<string, ContainerRule>
 
 export type ContainerType = keyof typeof CONTAINERS
@@ -202,15 +222,28 @@ const FLOW_NAMES: readonly string[] = ["block", ...STANDALONE_FLOW_NODE_NAMES]
  * A container's ProseMirror content expression, derived from the table. `flow` is
  * TipTap's `block` group plus the standalone flow nodes (the table, #420): no container is
  * in either, so they hold exactly the nodes that hold no blocks (core flow nodes, theme
- * blocks, stand-ins). Containers are named.
+ * blocks, stand-ins). Containers are named. Its parts come first, each exactly once
+ * (details: `detailsSummary (block | tableBlock)+`, #421).
  */
 export function containerContent(type: ContainerType): string {
   const rule: ContainerRule = CONTAINERS[type]
   const names = rule.accepts.flatMap((accepted) => (accepted === "flow" ? FLOW_NAMES : [BLOCK_NODE_NAMES[accepted]]))
   const choice = names.length === 1 ? names[0] : `(${names.join(" | ")})`
-  if (rule.max === undefined) return rule.min === 0 ? `${choice}*` : rule.min === 1 ? `${choice}+` : `${choice}{${rule.min},}`
-  return `${choice}{${rule.min},${rule.max}}`
+  let blocks: string
+  if (rule.max !== undefined) blocks = `${choice}{${rule.min},${rule.max}}`
+  else blocks = rule.min === 0 ? `${choice}*` : rule.min === 1 ? `${choice}+` : `${choice}{${rule.min},}`
+  return [...(rule.parts ?? []), blocks].join(" ")
 }
+
+/** The ProseMirror node names that are a container's parts (a summary): never blocks, never ids. */
+export const CONTAINER_PART_NODE_NAMES: ReadonlySet<string> = new Set(Object.values(CONTAINER_RULES).flatMap((rule) => [...(rule.parts ?? [])]))
+
+/**
+ * The text nodes that are part of a block, not blocks (#346, #420, #421): an image's or a
+ * table's caption and a details summary. One line with bold, italic and link only: no
+ * block menu, no Turn into and no "Type /" hint in them.
+ */
+export const TEXT_PART_NODE_NAMES: ReadonlySet<string> = new Set(["imageCaption", "tableCaption", ...CONTAINER_PART_NODE_NAMES])
 
 /** The doc's content expression: flow (`block` and the standalone flow nodes) plus every container allowed at the top. */
 export function topLevelContent(): string {

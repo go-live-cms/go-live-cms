@@ -81,3 +81,35 @@ describe("the Block tab (#417)", () => {
     expect(name()).toBe("Heading 3")
   })
 })
+
+describe("the Block tab on a details (#421)", () => {
+  const DETAILS = "blk-0421-details-00001"
+  const INSIDE = "blk-0421-para-a000001"
+
+  it("shows Details with its Open by default switch, from the summary or a block in it, one change each", () => {
+    act(() => {
+      editor.commands.setContent(
+        `<div data-type="details" data-block-id="${DETAILS}"><div data-type="details-summary">Q</div><p data-block-id="${INSIDE}">answer</p></div>`,
+      )
+      editor.commands.setTextSelection(2)
+    })
+    // In the summary: the details is the block (the summary is part of it).
+    expect(name()).toBe("Details")
+    const toggle = () => container.querySelector<HTMLButtonElement>('[role="switch"]')!
+    expect(toggle().getAttribute("aria-checked")).toBe("false")
+    expect(container.textContent).toContain("Open by default")
+    expect(container.textContent).toContain("It starts closed unless this is on.")
+    const changes: number[] = []
+    editor.on("transaction", ({ transaction }) => transaction.docChanged && changes.push(1))
+    act(() => toggle().click())
+    expect(editor.state.doc.firstChild!.attrs).toMatchObject({ open: true, "data-block-id": DETAILS })
+    expect(changes).toEqual([1])
+    expect(toggle().getAttribute("aria-checked")).toBe("true")
+    // A block inside: its own name, the details in its path.
+    act(() => {
+      editor.commands.setTextSelection(6)
+    })
+    expect(name()).toBe("Paragraph")
+    expect(crumbs()).toEqual(["Details"])
+  })
+})

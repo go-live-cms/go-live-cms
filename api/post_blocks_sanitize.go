@@ -77,6 +77,8 @@ func sanitizeBlock(block map[string]interface{}) {
 		sanitizeBlockquoteAttrs(attrs)
 	case "group":
 		sanitizeGroupAttrs(attrs)
+	case "details":
+		sanitizeDetailsAttrs(attrs)
 	case "callout":
 		sanitizeCalloutAttrs(attrs)
 	case "pull_quote":
@@ -157,13 +159,19 @@ func sanitizeImageAttrs(attrs map[string]interface{}) {
 // sanitizeCaption reduces `attrs.caption` (an image's, a table's) to non-empty text runs
 // with only the caption marks, each mark sanitized; an empty or malformed one is dropped.
 func sanitizeCaption(attrs map[string]interface{}) {
-	raw, present := attrs["caption"]
+	sanitizeCaptionRuns(attrs, "caption")
+}
+
+// sanitizeCaptionRuns is sanitizeCaption for the runs under `key` (a caption, a details'
+// summary, #421).
+func sanitizeCaptionRuns(attrs map[string]interface{}, key string) {
+	raw, present := attrs[key]
 	if !present {
 		return
 	}
 	runs, ok := raw.([]interface{})
 	if !ok {
-		delete(attrs, "caption")
+		delete(attrs, key)
 		return
 	}
 	kept := make([]interface{}, 0, len(runs))
@@ -191,10 +199,10 @@ func sanitizeCaption(attrs map[string]interface{}) {
 		kept = append(kept, clean)
 	}
 	if len(kept) == 0 {
-		delete(attrs, "caption")
+		delete(attrs, key)
 		return
 	}
-	attrs["caption"] = kept
+	attrs[key] = kept
 }
 
 // tableMaxSpan caps a table cell's colspan and rowspan (Block Spec `TABLE_MAX_SPAN`).

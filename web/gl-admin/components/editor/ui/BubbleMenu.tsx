@@ -5,7 +5,7 @@ import { applyTurnInto, computeTurnIntoFromSelection, type TurnIntoValue } from 
 import CommandSelect, { type CommandSelectOption } from "../ui/CommandSelect"
 import { catalogSelectOptions } from "./BlockIcon"
 import { NodeSelection } from "@tiptap/pm/state"
-import { CAPTION_MARKS } from "@gl-admin/lib/blocks-spec"
+import { CAPTION_MARKS, TEXT_PART_NODE_NAMES } from "@gl-admin/lib/blocks-spec"
 
 /** Safely check if editor view is mounted (TipTap v3 throws on .view access) */
 function isViewMounted(editor: any): boolean {
@@ -73,10 +73,11 @@ const BubbleMenu = ({ editor, className = "", openLinkModal, ...props }: any) =>
 
   if (!editor) return null
 
-  // In an image or table caption (#346, #420): no "turn into", and only the marks a
-  // caption allows. In a table cell (paragraphs only, #420): no "turn into" either.
+  // In an image or table caption or a details summary (#346, #420, #421): no "turn into",
+  // and only the marks a caption allows. In a table cell (paragraphs only, #420): no "turn
+  // into" either.
   const { $from } = editor.state.selection
-  const inCaption = $from.parent.type.name === "imageCaption" || $from.parent.type.name === "tableCaption"
+  const inCaption = TEXT_PART_NODE_NAMES.has($from.parent.type.name)
   const inCell = $from.depth > 1 && !!$from.node($from.depth - 1).type.spec.tableRole
   const mark = (name: string, label: string, run: () => void, content: ReactNode, style?: CSSProperties) =>
     inCaption && !(CAPTION_MARKS as readonly string[]).includes(name) ? null : (
