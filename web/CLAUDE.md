@@ -579,6 +579,23 @@ are the most fragile part of the codebase. **Before editing anything under
   The public `src/components/blocks/details/` is the browser's own `<details>` (no script) and the
   default theme styles it. History diffs its summary like a caption and `open` as an attribute.
   Rules: `gl-admin/lib/collaboration/CLAUDE.md` (blockBridge notes, Details).
+- **@ mentions, content links and dates (#320, the canvas's "Editor menus & states" ›
+  "Mention / link to content (@)"):** "@" after a space or at the start of a line (not in code
+  or a caption) opens `components/editor/ui/MentionMenu.tsx`: People, "Link to post or page",
+  then the dates (Today, Tomorrow, a typed YYYY-MM-DD, "Date or reminder"), in the slash
+  menu's list styles and keys (focus stays in the text with `aria-activedescendant`, ↑↓ across
+  groups and wrapping, ↵, Esc keeps the text, Tab closes; with nothing matched ↵ stays the
+  editor's). Results come from `lib/api/mentions.ts` (debounced, one answer per query, memory
+  only); the order and rows are `lib/mentionMenu.ts` (tested). "Date or reminder" opens
+  `ui/DateChipDialog.ts` (Date, optional Time, **Remind me**: an email to whoever set it then,
+  in the site's zone; must be ahead). The popup is the slash menu's `SuggestionPopupManager`
+  (`utils/slashCommandManager.ts`, `utils/mentionMenuManager.ts`). Nodes, views and rules:
+  `gl-admin/lib/collaboration/CLAUDE.md` (blockBridge notes, Inline nodes). **Public:** the API
+  sends a mention as its member's current name and a link with its target's current URL (none
+  for a draft: plain text); `PostPage.astro` gives date chips the site's format
+  (`src/lib/dateChips.ts` `labelDateChips`) before the theme renders; markup in
+  `src/components/blocks/README.md`. Mentions in block comments are not built (comments stay
+  plain text).
 - **Editing nested blocks (#417, design `docs/design/block-library.md` 3.5):** the gutter is
   our own plugin now (`components/editor/utils/gutterPlugin.ts`; TipTap 3.4.2's drag handle
   only finds top-level blocks): it follows the pointer to the innermost block (a block in a

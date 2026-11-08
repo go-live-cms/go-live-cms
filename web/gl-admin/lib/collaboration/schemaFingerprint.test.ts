@@ -251,6 +251,29 @@ describe("schemaFingerprint (#416)", () => {
       expect(schemaFingerprint(noLabel)).not.toBe(core)
     })
 
+    it("the inline nodes (#320) changed it, each on its own, and their attrs are in it", () => {
+      // The schema as it was before #320: no mention, content link or date chip.
+      const { mention, contentLink, dateChip, ...rest } = schemaExtensions({ collaborating: true })
+      const before = getSchema(Object.values(rest))
+      for (const name of ["mention", "contentLink", "dateChip"]) {
+        expect(before.nodes[name], name).toBeUndefined()
+        expect(getCoreSchema().nodes[name], name).toBeDefined()
+        expect(getCoreSchema().nodes[name].isInline && getCoreSchema().nodes[name].isAtom, name).toBe(true)
+      }
+      const old = schemaFingerprint(before)
+      expect(old).not.toBe(core)
+      // A stale tab with any one of them still differs from both: y-tiptap would delete
+      // the others a newer peer inserts (rule 10), so it is refused.
+      for (const added of [{ mention }, { contentLink }, { dateChip }]) {
+        const one = schemaFingerprint(getSchema(Object.values({ ...rest, ...added })))
+        expect(one, Object.keys(added)[0]).not.toBe(old)
+        expect(one, Object.keys(added)[0]).not.toBe(core)
+      }
+      // The attrs the API reads are in it: a tab whose date chip has no `reminder` is refused too.
+      const noReminder = getSchema(Object.values({ ...rest, mention, contentLink, dateChip: dateChip.extend({ addAttributes: () => ({ date: { default: null }, time: { default: null } }) }) }))
+      expect(schemaFingerprint(noReminder)).not.toBe(core)
+    })
+
     it("an extension without schema doesn't", () => {
       expect(withExtra(Extension.create({ name: "shortcuts", addKeyboardShortcuts: () => ({}) }))).toBe(core)
     })

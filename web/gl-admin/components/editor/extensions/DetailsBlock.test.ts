@@ -12,6 +12,7 @@ import { PasteSanitizer, sanitizePastedHTML } from "./PasteSanitizer"
 import { duplicateBlock } from "../utils/blockActions"
 import { childBlocks, editorBlockAtSelection, removalRange } from "../utils/blockTree"
 import { CORE_BLOCKS, menuEntries, slotAcceptsAt } from "../blocks/catalog"
+import { mentionMenuAllowed } from "../ui/MentionMenu"
 
 // The Details block in the editor (#421): the schema (the summary is a part, the blocks
 // are blocks), its commands and keys (↵ from the summary into the content, ⌫ never deletes
@@ -139,6 +140,15 @@ describe("Details in the schema (#421)", () => {
     expect(ed.state.doc.child(0).attrs.open).toBe(false)
     const open = makeEditor(detailsDoc(true))
     expect(open.state.doc.child(0).attrs.open).toBe(true)
+  })
+
+  it("the @ menu (#320) stays out of the summary (text only) and opens in its blocks", () => {
+    const ed = makeEditor(detailsDoc())
+    const { state } = ed
+    const details = state.doc.child(0)
+    // Inside the summary: the details opens at 0, the summary at 1.
+    expect(mentionMenuAllowed({ state, range: { from: 2 } })).toBe(false)
+    expect(mentionMenuAllowed({ state, range: { from: 1 + details.child(0).nodeSize + 1 } })).toBe(true)
   })
 })
 

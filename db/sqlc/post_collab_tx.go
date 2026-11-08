@@ -55,6 +55,43 @@ type StorePostCollabTxParams struct {
 	// touches no attribution. Each BlockID must be one of BlockIDs (the caller
 	// checks). A user that no longer exists is stored as NULL.
 	BlockEdits []PostBlockEditInput
+	// Mentions are every (block, member) mention in BlockDoc (#320), with who typed it
+	// when this store changed that block (MentionedBy, else 0). Those the ledger doesn't
+	// have yet are recorded (post_mention_notifications) and returned in NewMentions.
+	// Ignored without BlockDoc.
+	Mentions []MentionInput
+	// Reminders are every reminder chip in BlockDoc (#320). With BlockDoc, the post's
+	// pending reminders that aren't among them are deleted, and those with an owner
+	// (UserID, else 0: nobody typed it in this store) and a time still ahead are added.
+	// Ignored without BlockDoc.
+	Reminders []ReminderInput
+	// Now decides which reminders are still ahead (time.Now when zero).
+	Now time.Time
+}
+
+// MentionInput is one mention of a member in a block of a collab store's doc (#320).
+type MentionInput struct {
+	BlockID     string
+	UserID      int64
+	MentionedBy int64
+}
+
+// ReminderInput is one reminder chip in a collab store's doc (#320).
+type ReminderInput struct {
+	BlockID string
+	// RemindAt is the chip's day and time in the site's zone, as an instant.
+	RemindAt time.Time
+	// ChipDate (YYYY-MM-DD) and ChipTime (HH:MM) as the chip has them.
+	ChipDate string
+	ChipTime string
+	// UserID owns it: who typed it in this store (0 = nobody known).
+	UserID int64
+}
+
+// ReminderKey is how DeleteStalePostReminders names a reminder: its block, and its day and
+// time as written (never the instant, which a change of the site's zone moves).
+func ReminderKey(blockID, chipDate, chipTime string) string {
+	return blockID + " " + chipDate + " " + chipTime
 }
 
 // PostBlockEditInput is one block's attribution in a collab store (#328).
@@ -68,6 +105,9 @@ type StorePostCollabTxResult struct {
 	// BlockRevision is posts.block_revision after the store, which the Yjs
 	// state is now recorded against.
 	BlockRevision int64
+	// NewMentions are the mentions this store recorded for the first time (#320); the
+	// caller emails those that are due.
+	NewMentions []RecordPostMentionsRow
 }
 
 // StorePostCollabTx is the collab server's store (#206 / #280), all in one
@@ -113,6 +153,13 @@ func (store *SQLStore) StorePostCollabTx(ctx context.Context, arg StorePostColla
 			// Per-block attribution (#328): only with the block_doc it describes,
 			// and the rows of blocks no longer in it go.
 			if err := writeBlockEdits(ctx, q, arg); err != nil {
+				return err
+			}
+			// Mentions and reminders (#320): with the block_doc they come from.
+			if result.NewMentions, err = recordMentions(ctx, q, arg); err != nil {
+				return err
+			}
+			if err := syncReminders(ctx, q, arg); err != nil {
 				return err
 			}
 			// Only real edits (a block_doc store) count; the collab server sends
@@ -168,4 +215,68 @@ func writeBlockEdits(ctx context.Context, q *Queries, arg StorePostCollabTxParam
 		params.EditedAts[i] = edit.EditedAt.UTC().Format(time.RFC3339Nano)
 	}
 	return q.UpsertPostBlockEdits(ctx, params)
+}
+
+// recordMentions adds arg.Mentions to the ledger, inside StorePostCollabTx (#320).
+func recordMentions(ctx context.Context, q *Queries, arg StorePostCollabTxParams) ([]RecordPostMentionsRow, error) {
+	if len(arg.Mentions) == 0 {
+		return nil, nil
+	}
+	params := RecordPostMentionsParams{
+		PostID:      arg.PostID,
+		BlockIds:    make([]string, len(arg.Mentions)),
+		UserIds:     make([]int64, len(arg.Mentions)),
+		MentionedBy: make([]int64, len(arg.Mentions)),
+	}
+	for i, m := range arg.Mentions {
+		params.BlockIds[i] = m.BlockID
+		params.UserIds[i] = m.UserID
+		params.MentionedBy[i] = m.MentionedBy
+	}
+	return q.RecordPostMentions(ctx, params)
+}
+
+// syncReminders makes the post's pending reminders arg.Reminders, inside
+// StorePostCollabTx (#320): a chip that's gone takes its pending row with it, a new one
+// with an owner and a time still ahead is added. Sent and skipped rows stay.
+func syncReminders(ctx context.Context, q *Queries, arg StorePostCollabTxParams) error {
+	keep := make([]string, len(arg.Reminders))
+	for i, r := range arg.Reminders {
+		keep[i] = ReminderKey(r.BlockID, r.ChipDate, r.ChipTime)
+	}
+	if err := q.DeleteStalePostReminders(ctx, DeleteStalePostRemindersParams{PostID: arg.PostID, KeepKeys: keep}); err != nil {
+		return err
+	}
+	if len(arg.Reminders) > 0 {
+		retime := RetimePostRemindersParams{PostID: arg.PostID}
+		for _, r := range arg.Reminders {
+			retime.BlockIds = append(retime.BlockIds, r.BlockID)
+			retime.ChipDates = append(retime.ChipDates, r.ChipDate)
+			retime.ChipTimes = append(retime.ChipTimes, r.ChipTime)
+			retime.RemindAts = append(retime.RemindAts, r.RemindAt.UTC().Format(time.RFC3339))
+		}
+		if err := q.RetimePostReminders(ctx, retime); err != nil {
+			return err
+		}
+	}
+	now := arg.Now
+	if now.IsZero() {
+		now = time.Now()
+	}
+	params := AddPostRemindersParams{PostID: arg.PostID, BlockIds: []string{}, RemindAts: []string{}, ChipDates: []string{}, ChipTimes: []string{}, UserIds: []int64{}}
+	for _, r := range arg.Reminders {
+		if r.UserID <= 0 || !r.RemindAt.After(now) {
+			continue
+		}
+		params.BlockIds = append(params.BlockIds, r.BlockID)
+		params.RemindAts = append(params.RemindAts, r.RemindAt.UTC().Format(time.RFC3339))
+		params.ChipDates = append(params.ChipDates, r.ChipDate)
+		params.ChipTimes = append(params.ChipTimes, r.ChipTime)
+		params.UserIds = append(params.UserIds, r.UserID)
+	}
+	if len(params.BlockIds) == 0 {
+		return nil
+	}
+	_, err := q.AddPostReminders(ctx, params)
+	return err
 }

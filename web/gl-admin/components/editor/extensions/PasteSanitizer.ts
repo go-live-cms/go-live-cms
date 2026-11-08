@@ -9,6 +9,10 @@ import {
   isGroupStyle,
   normalizeBlockColor,
   normalizeCite,
+  normalizeChipDate,
+  normalizeChipTime,
+  normalizeEntityId,
+  normalizeInlineLabel,
 } from "@gl-admin/lib/blocks-spec"
 
 const pasteSanitizerPluginKey = new PluginKey("pasteSanitizer")
@@ -73,6 +77,21 @@ const BLOCK_COLOR_TAGS = new Set(["P", "H1", "H2", "H3", "H4", "H5", "H6", "BLOC
 const CONTAINER_DIV_TYPES = new Set(["group", "details", "details-summary"])
 const isGroupDiv = (node: Element) => node.nodeName === "DIV" && node.getAttribute("data-type") === "group"
 
+// The #320 inline nodes, from the editor's own clipboard (InlineNodes.ts): a `<span>` is kept
+// only with one of these types and a valid id or date (every other span is unwrapped, as
+// before), and each `data-*` value only on its own type, checked by the shared normalizers.
+// A pasted mention or reminder is the paster's (the API attributes it to whoever edited the
+// block), never the copied post's author.
+const INLINE_SPAN_TYPES: Readonly<Record<string, string>> = { mention: "data-user-id", "content-link": "data-post-id", date: "data-date" }
+const isInlineSpan = (node: Element): boolean => {
+  if (node.nodeName !== "SPAN") return false
+  const type = node.getAttribute("data-type") ?? ""
+  const key = INLINE_SPAN_TYPES[type]
+  if (!key) return false
+  const value = node.getAttribute(key)
+  return key === "data-date" ? normalizeChipDate(value) !== null : normalizeEntityId(value) !== null
+}
+
 // The #419 blocks, from the editor's own clipboard: a callout `<div data-type="callout"
 // data-tone>` (Callout.ts), a pull quote `<figure data-type="pull-quote" data-cite>`
 // (PullQuote.ts) and a to-do list `<ul data-type="taskList"><li data-type="taskItem"
@@ -81,11 +100,23 @@ const isGroupDiv = (node: Element) => node.nodeName === "DIV" && node.getAttribu
 // markup can claim to be one, and an unknown tone or a citation over the cap never gets in.
 const BLOCK_DATA_TYPES: Readonly<Record<string, ReadonlySet<string>>> = {
   DIV: new Set([...CONTAINER_DIV_TYPES, "callout"]),
+  SPAN: new Set(Object.keys(INLINE_SPAN_TYPES)),
   FIGURE: new Set(["pull-quote"]),
   UL: new Set(["taskList"]),
   LI: new Set(["taskItem"]),
 }
 const isTyped = (node: Element, tag: string, type: string) => node.nodeName === tag && node.getAttribute("data-type") === type
+
+// Each #320 attribute: only on its own inline span, normalized (null drops it).
+const onSpan = (node: Element, ...types: string[]) => node.nodeName === "SPAN" && types.includes(node.getAttribute("data-type") ?? "")
+const INLINE_ATTR_RULES: Readonly<Record<string, (node: Element, value: string) => string | null>> = {
+  "data-user-id": (node, value) => (onSpan(node, "mention") ? (normalizeEntityId(value)?.toString() ?? null) : null),
+  "data-post-id": (node, value) => (onSpan(node, "content-link") ? (normalizeEntityId(value)?.toString() ?? null) : null),
+  "data-label": (node, value) => (onSpan(node, "mention", "content-link") ? normalizeInlineLabel(value) : null),
+  "data-date": (node, value) => (onSpan(node, "date") ? normalizeChipDate(value) : null),
+  "data-time": (node, value) => (onSpan(node, "date") ? normalizeChipTime(value) : null),
+  "data-reminder": (node, value) => (onSpan(node, "date") && value === "true" ? "true" : null),
+}
 
 let purifier: ReturnType<typeof DOMPurify> | null = null
 
@@ -98,12 +129,17 @@ function getPurifier() {
     ALLOWED_ATTR: [
       "href", "class", "data-pm-slice", "data-block-color", "data-type", "data-style", "data-align",
       "data-tone", "data-cite", "data-checked", "colspan", "rowspan", "data-open",
+      "data-user-id", "data-post-id", "data-label", "data-date", "data-time", "data-reminder",
     ],
     ALLOW_DATA_ATTR: false,
     ALLOW_ARIA_ATTR: false,
     ALLOWED_URI_REGEXP,
     FORBID_CONTENTS,
     KEEP_CONTENT: true,
+  })
+  // A span survives only as one of the #320 inline nodes; every other one is unwrapped.
+  purifier.addHook("uponSanitizeElement", (node, data) => {
+    if (data.tagName === "span") data.allowedTags.span = isInlineSpan(node as Element)
   })
   purifier.addHook("uponSanitizeAttribute", (node, data) => {
     if (data.attrName === "class") {
@@ -136,6 +172,10 @@ function getPurifier() {
       const span = node.nodeName === "TD" || node.nodeName === "TH" ? clampTableSpan(data.attrValue) : 1
       if (span === 1) data.keepAttr = false
       else data.attrValue = String(span)
+    } else if (data.attrName in INLINE_ATTR_RULES) {
+      const value = INLINE_ATTR_RULES[data.attrName](node, data.attrValue)
+      if (value === null) data.keepAttr = false
+      else data.attrValue = value
     } else if (data.attrName === "data-pm-slice") {
       const value = sanitizeSliceContext(data.attrValue)
       if (value === null) data.keepAttr = false

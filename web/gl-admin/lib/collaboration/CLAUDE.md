@@ -405,6 +405,32 @@ kept so references in code stay valid.
   `MediaBlocks.collab.test.ts` (two users, the stored doc, a restart), the public
   `src/components/blocks/mediaBlocks.test.tsx`, Go `post_blocks_media_blocks_test.go` and two cases
   in `nestingVectors.json`.
+- **Inline nodes (#320, `components/editor/extensions/InlineNodes.ts`, rules in
+  `blocks-spec/inlineNodes.ts`): `mention` {userId, label}, `contentLink` {postId, label},
+  `dateChip` {date, time, reminder}.** Inline **atoms** in the `inline` group, so they live in a
+  text block's `pm` (paragraph, heading, list item, quote, pull quote, table cell; never a
+  caption, which is `text*`) and no block type or version changed. The bridge needed nothing:
+  they round-trip as pm JSON, and `leafText` (via `extendNodeSchema`) makes `textContent`, so a
+  block's `text` and search read "@Ana Costa", the link text, the date. Views (the member's
+  **current** name from `lib/mentionNames.ts`, the site's date format, a bell for a reminder)
+  are `InlineNodeViews.ts`; the @ menu is `ui/MentionMenu.tsx`, the date dialog
+  `ui/DateChipDialog.ts`. What they store, and why the public API rewrites them, is the header
+  of `inlineNodes.ts`.
+  - **Never in the doc:** a URL (the API resolves the target's current one), an email, or a
+    reminder's owner (the API takes it from the store's per-block attribution, #328, which a
+    client can't forge). Memory only for the names (rule 0).
+  - **Marks on them don't survive Yjs:** y-tiptap 3.0.0 stores marks on text only, so a bold
+    mention is bold only in the editor that made it; every peer and the stored doc have the
+    plain node. Nothing else is lost and nothing loops (pinned in `InlineNodes.test.ts`).
+  - **Paste:** `<span data-type="mention|content-link|date">` survives the sanitizer only with
+    a valid id or date, each `data-*` only on its own type and normalized; every other span is
+    still unwrapped (`uponSanitizeElement`).
+  - **Stale clients:** a bundle from before #320 lacks the three types; the fingerprint guard
+    (#416) refuses it (`schemaFingerprint.test.ts` pins each one, and the date chip's attrs).
+  - Tests: `InlineNodes.test.ts` (bridge, fragment, commands, clipboard, paste),
+    `InlineNodes.collab.test.ts` (two users on the relay, the stored doc, attribution, a
+    restart), `blocks-spec/inlineNodes.test.ts` (the vectors shared with Go),
+    `ui/MentionMenu.test.tsx`, `src/components/blocks/utils/inlineNodes.test.tsx`.
 - `pmToBlockDoc` regenerates duplicate/invalid block ids.
 - **Known limitation:** a `code_block` with empty code can't be shown in the editor
   (ProseMirror disallows empty text nodes). It is dropped like any other unbuildable

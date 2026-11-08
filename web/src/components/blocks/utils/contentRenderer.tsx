@@ -4,6 +4,9 @@ import type { Block } from "@gl-admin/lib/blocks-spec"
 import { safeHref, safeCssColor } from "./safeUrl"
 import { blockColorClass } from "./blockColor"
 import { calloutMarkup, plainText, pullQuoteMarkup, todoListMarkup } from "./textBlockMarkup"
+import { CONTENT_LINK_NODE, DATE_CHIP_NODE, dateChipAttrs, MENTION_NODE, normalizeInlineLabel } from "@gl-admin/lib/blocks-spec/inlineNodes"
+import { dateChipDateTime, formatDateChip } from "../../../lib/dateChips"
+import { DEFAULT_DATE_SETTINGS } from "../../../lib/siteDates"
 
 /**
  * Render a single text node with its marks (bold, italic, link, code, etc.)
@@ -11,8 +14,12 @@ import { calloutMarkup, plainText, pullQuoteMarkup, todoListMarkup } from "./tex
  */
 export function renderTextNode(node: PMNode, index: number): React.ReactNode {
   if (node.type !== "text" || !node.text) return null
+  return <React.Fragment key={index}>{applyMarks(node.text, node, index)}</React.Fragment>
+}
 
-  let content: React.ReactNode = node.text
+/** `content` wrapped in `node`'s marks, in order (a text run's, or an inline node's, #320). */
+function applyMarks(text: React.ReactNode, node: PMNode, index: number): React.ReactNode {
+  let content: React.ReactNode = text
 
   // Apply marks in order (wrapping progressively)
   if (node.marks && node.marks.length > 0) {
@@ -57,7 +64,47 @@ export function renderTextNode(node: PMNode, index: number): React.ReactNode {
     }
   }
 
-  return <React.Fragment key={index}>{content}</React.Fragment>
+  return content
+}
+
+/**
+ * The #320 inline nodes as the public API sends them (api/inline_nodes.go): a mention is
+ * the member's current name and nothing else (no id, no email); a content link is a link to
+ * the target's current URL, or its text alone when the target isn't published (no `href`);
+ * a date chip is a `<time>` with the site's format (`label`, from `labelDateChips`) or the
+ * default one. Only a path on this site is ever a link.
+ */
+export function renderInlineNode(node: PMNode, index: number): React.ReactNode {
+  const attrs = (node.attrs ?? {}) as Record<string, unknown>
+  const label = normalizeInlineLabel(attrs.label)
+  if (node.type === MENTION_NODE) {
+    if (!label) return null
+    return <React.Fragment key={index}>{applyMarks(<span className="gl-mention">{label}</span>, node, index)}</React.Fragment>
+  }
+  if (node.type === CONTENT_LINK_NODE) {
+    const text = label ?? ""
+    if (!text) return null
+    const href = typeof attrs.href === "string" && /^\/(?!\/)/.test(attrs.href) ? safeHref(attrs.href) : undefined
+    const content = href ? <a className="gl-content-link" href={href}>{text}</a> : text
+    return <React.Fragment key={index}>{applyMarks(content, node, index)}</React.Fragment>
+  }
+  if (node.type === DATE_CHIP_NODE) {
+    const chip = dateChipAttrs(attrs)
+    if (!chip) return null
+    const text = (typeof attrs.label === "string" && attrs.label) || formatDateChip(chip, DEFAULT_DATE_SETTINGS, "long")
+    return (
+      <React.Fragment key={index}>
+        {applyMarks(
+          <time className="gl-date" dateTime={dateChipDateTime(chip)}>
+            {text}
+          </time>,
+          node,
+          index,
+        )}
+      </React.Fragment>
+    )
+  }
+  return null
 }
 
 /**
@@ -115,6 +162,10 @@ export function renderContent(content: PMNode[] | undefined): React.ReactNode {
     // Handle hard break
     if (node.type === "hardBreak") {
       return <br key={index} />
+    }
+
+    if (node.type === MENTION_NODE || node.type === CONTENT_LINK_NODE || node.type === DATE_CHIP_NODE) {
+      return renderInlineNode(node, index)
     }
 
     // The #419 blocks inside a quote or a list item (the schema lets them go there): the

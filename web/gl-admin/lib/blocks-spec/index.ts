@@ -5,6 +5,7 @@ import { FILE_LABEL_MAX_LENGTH } from "./media"
 
 export * from "./nesting"
 export * from "./media"
+export * from "./inlineNodes"
 
 // Block Spec v1 - Authoritative Types
 export type BlockID = string

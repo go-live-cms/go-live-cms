@@ -9,6 +9,9 @@ import { CursorAwareness } from "./cursorAwareness"
 import { getActiveTheme, menuEntries, slotAcceptsAt, type CatalogEntry } from "../blocks/catalog"
 import { SlashCommandExtension } from "../ui/SlashCommand"
 import { PasteSanitizer } from "../extensions/PasteSanitizer"
+import { InlineNodeViews } from "../extensions/InlineNodeViews"
+import { MentionMenuExtension, mentionMenuAllowed } from "../ui/MentionMenu"
+import { mentionMenuManager } from "./mentionMenuManager"
 import { BlockNodeViews } from "../extensions/BlockNodeViews"
 import { TableKeyboard } from "../extensions/TableBlock"
 import { DetailsKeyboard } from "../extensions/DetailsBlock"
@@ -82,8 +85,13 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
       schema.file,
       // #423: insert, set the file of, and caption the media blocks; no schema.
       schema.mediaCommands,
+      schema.mention,
+      schema.contentLink,
+      schema.dateChip,
       schema.blockId,
       BlockNodeViews,
+      // #320: the mention's current name and the site's date format; no schema.
+      InlineNodeViews,
       // #420: Tab / ⇧Tab between cells, only while the caret is in one; no schema.
       TableKeyboard,
       // #421: ↵ from the summary into the content, ⌫ never deletes the summary; no schema.
@@ -178,6 +186,19 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
             onUpdate: (props: any) => slashCommandManager.update(props, getCursorCoords),
             onKeyDown: (props: any) => slashCommandManager.handleKeyDown(props),
             onExit: () => slashCommandManager.exit(),
+          }),
+        },
+      }),
+      // "@" (#320): people, posts and pages, dates. Anywhere text takes inline nodes (not
+      // code or a caption); the menu fetches its own results for the query.
+      MentionMenuExtension.configure({
+        suggestion: {
+          allow: mentionMenuAllowed,
+          render: () => ({
+            onStart: (props: any) => mentionMenuManager.start(props, getCursorCoords),
+            onUpdate: (props: any) => mentionMenuManager.update(props, getCursorCoords),
+            onKeyDown: (props: any) => mentionMenuManager.handleKeyDown(props),
+            onExit: () => mentionMenuManager.exit(),
           }),
         },
       }),

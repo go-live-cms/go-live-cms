@@ -441,6 +441,20 @@ Highlight, superscript, subscript ("Editor · text blocks", "Paragraph"; "Keyboa
 - Every mark is a rule 10 hazard (an unknown mark costs the text run, not just the mark),
   so marks ship after, or with, the schema guard (2.7).
 
+### 3.3b Inline nodes (#320)
+
+As built: `mention`, `contentLink` and `dateChip` are inline atoms (TipTap nodes in the
+`inline` group), not marks, so they ride inside any text block's `pm` with no block type or
+version change. Through the chain: Block Spec rules and normalizers
+(`blocks-spec/inlineNodes.ts`, `inlineNodeVectors.json` shared with Go), the schema
+(`schemaExtensions`, so the collab server has them; each changes the #416 fingerprint), the
+bridge (nothing: pm JSON round-trips; `leafText` feeds `text`), the paste sanitizer (typed
+`<span>`s only, values checked), the Go sanitizer (an allowlist per node,
+`sanitizeInlineNode`), the public API (`publicizeInlineNodes`: names and current URLs, no ids)
+and the renderer (`renderInlineNode`). Like a mark, every inline node is a rule 10 hazard, so it
+shipped after the fingerprint guard. y-tiptap keeps marks on text only, so marks on these
+nodes don't reach the shared doc.
+
 ### 3.4 The media picker
 
 `MediaSelector` / `FeaturedImageSelector` become one `MediaPicker`: a `kind` filter
