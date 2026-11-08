@@ -1002,6 +1002,24 @@ body {
   padding: 0 0.1em;
   border-radius: 2px;
 }
+/* A link in highlighted text (#418) keeps its underline in the text colour: the link
+   colour on the highlight is just under 4.5:1 in light (tokens.test.ts checks text). */
+.prose mark a {
+  color: var(--color-text);
+}
+/* Superscript and subscript (#418) sit on the line without changing its height. */
+.prose :is(sup, sub) {
+  font-size: 0.72em;
+  line-height: 0;
+  position: relative;
+  vertical-align: baseline;
+}
+.prose sup {
+  top: -0.5em;
+}
+.prose sub {
+  bottom: -0.25em;
+}
 .prose code {
   font-family: var(--font-mono);
   font-size: 0.82em;

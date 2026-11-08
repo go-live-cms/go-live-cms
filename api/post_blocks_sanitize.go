@@ -3,7 +3,6 @@ package api
 import (
 	"math"
 	"net/url"
-	"regexp"
 	"strings"
 	"unicode"
 )
@@ -13,8 +12,9 @@ import (
 // Block content is structured ProseMirror JSON, not an HTML string, so an HTML
 // sanitizer (bluemonday) is the wrong tool. We walk the block tree in place and
 // neutralise the stored-XSS vectors the public Astro renderer would otherwise
-// emit verbatim (link hrefs, image srcs, highlight colors), plus defence-in-depth
-// stripping of on* handler attributes and dangerous node types.
+// emit verbatim (link hrefs, image srcs), keeps only the editor's mark types and their
+// attrs (#418; a highlight has no colour), plus defence-in-depth stripping of on* handler
+// attributes and dangerous node types.
 //
 // Sanitization is best-effort and never rejects the save — the malicious payload
 // is simply stripped so it never reaches the database.
@@ -35,10 +35,6 @@ var safeHrefSchemes = map[string]bool{
 var safeImageSchemes = map[string]bool{
 	"http": true, "https": true,
 }
-
-// Conservative allowlist for a CSS color value: hex, rgb/rgba, hsl/hsla, or a
-// plain named color. Rejects anything containing url(), semicolons, etc.
-var safeColorRe = regexp.MustCompile(`^(#[0-9a-fA-F]{3,8}|[a-zA-Z]+|(?:rgb|rgba|hsl|hsla)\([0-9.,%\s/]+\))$`)
 
 // sanitize walks the block document in place, neutralising stored-XSS vectors.
 func (doc *BlockDocV1) sanitize() {
@@ -461,8 +457,13 @@ func sanitizePMNode(node map[string]interface{}) {
 		}
 	}
 
-	if marks, ok := node["marks"].([]interface{}); ok {
-		node["marks"] = sanitizeMarks(marks)
+	if raw, present := node["marks"]; present {
+		marks, _ := raw.([]interface{})
+		if marks = sanitizeMarks(marks); len(marks) > 0 {
+			node["marks"] = marks
+		} else {
+			delete(node, "marks") // as the bridge writes a run without marks
+		}
 	}
 
 	// Child content: drop disallowed node types, recurse into the rest.
@@ -491,35 +492,58 @@ func sanitizePMNode(node map[string]interface{}) {
 	}
 }
 
-// sanitizeMarks strips on* attrs, removes link marks with unsafe hrefs (keeping
-// the text), and drops unsafe highlight colors.
+// allowedMarkTypes is the allowlist of mark types (#418): every mark of the editor's
+// schema, and nothing else. A mark of any other type is dropped (its text stays): the
+// public renderer only knows these, and a type the editor can't build would cost the
+// text run in every open editor (rule 10 in web/gl-admin/lib/collaboration/CLAUDE.md).
+// The value says whether the mark keeps attrs: only a link has any (`href`, checked
+// below; `target`, `rel`, `class`). The highlight is one theme colour (no `color`), and
+// the others have none in the schema either.
+//
+// A new mark in the editor's schema must be added here: the web's
+// `blocks-spec/markAllowlist.test.ts` walks the editor schema's marks and fails on one
+// that isn't listed (or on one listed here that the schema no longer has).
+var allowedMarkTypes = map[string]bool{
+	"bold":        false,
+	"code":        false,
+	"italic":      false,
+	"strike":      false,
+	"underline":   false,
+	"link":        true,
+	"highlight":   false,
+	"superscript": false,
+	"subscript":   false,
+}
+
+// sanitizeMarks keeps only the allowed mark types (see allowedMarkTypes), strips on*
+// attrs, removes link marks with unsafe hrefs (keeping the text), and leaves no attrs on
+// the marks that have none. A malformed entry (not an object) is dropped.
 func sanitizeMarks(marks []interface{}) []interface{} {
 	kept := make([]interface{}, 0, len(marks))
 	for _, m := range marks {
 		markMap, ok := m.(map[string]interface{})
 		if !ok {
-			kept = append(kept, m)
 			continue
 		}
 
 		mType, _ := markMap["type"].(string)
+		keepsAttrs, allowed := allowedMarkTypes[mType]
+		if !allowed {
+			continue // an unknown mark type: drop the mark, the text content remains
+		}
+		if !keepsAttrs {
+			delete(markMap, "attrs")
+			kept = append(kept, markMap)
+			continue
+		}
+
 		mAttrs, _ := markMap["attrs"].(map[string]interface{})
 		if mAttrs != nil {
 			stripOnAttrs(mAttrs)
 		}
-
-		switch mType {
-		case "link":
-			if mAttrs != nil {
-				if href, ok := mAttrs["href"].(string); ok && !isSafeURL(href, safeHrefSchemes) {
-					continue // drop the whole link mark; the text content remains
-				}
-			}
-		case "highlight":
-			if mAttrs != nil {
-				if color, ok := mAttrs["color"].(string); ok && !isSafeColor(color) {
-					delete(mAttrs, "color")
-				}
+		if mType == "link" && mAttrs != nil {
+			if href, ok := mAttrs["href"].(string); ok && !isSafeURL(href, safeHrefSchemes) {
+				continue // drop the whole link mark; the text content remains
 			}
 		}
 
@@ -555,12 +579,4 @@ func isSafeURL(raw string, allowed map[string]bool) bool {
 		return true // relative URL (/uploads/x.png, #anchor, ?q=1, …)
 	}
 	return allowed[strings.ToLower(u.Scheme)]
-}
-
-func isSafeColor(color string) bool {
-	c := strings.TrimSpace(color)
-	if c == "" {
-		return true
-	}
-	return safeColorRe.MatchString(c)
 }

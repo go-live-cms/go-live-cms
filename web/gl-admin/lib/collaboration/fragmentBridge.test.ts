@@ -209,10 +209,12 @@ describe("theme marks on the server (#206)", () => {
     const doc = canonical(richDoc())
     const { ydoc, fragment } = seeded(doc)
     const outro = (fragment.get(fragment.length - 1) as Y.XmlElement).get(0) as Y.XmlText
-    ydoc.transact(() => outro.format(0, 3, { highlight: { color: "yellow" } }))
+    // (`spoiler`: `highlight` is a core mark since #418.)
+    expect(base.marks.spoiler).toBeUndefined()
+    ydoc.transact(() => outro.format(0, 3, { spoiler: { color: "yellow" } }))
     const out = fragmentToBlockDoc(fragment, base)
     const marks = (out.blocks[ids.outro].attrs as any).pm.content[0].marks
-    expect(marks).toEqual([{ type: "highlight", attrs: { color: "yellow" } }])
+    expect(marks).toEqual([{ type: "spoiler", attrs: { color: "yellow" } }])
     // ...and it seeds back unchanged.
     expect(fragmentToBlockDoc(seeded(out).fragment, base)).toEqual(out)
   })

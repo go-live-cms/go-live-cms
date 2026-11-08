@@ -102,6 +102,38 @@ func TestSanitize_DetailsAttrs(t *testing.T) {
 		}
 	})
 
+	t.Run("the mark allowlist (#418): bold, italic and link survive, other allowed marks don't reach a summary", func(t *testing.T) {
+		raw := `{"summary": [
+			{"type": "text", "text": "b", "marks": [{"type": "bold"}]},
+			{"type": "text", "text": "i", "marks": [{"type": "italic"}]},
+			{"type": "text", "text": "l", "marks": [{"type": "link", "attrs": {"href": "https://example.com/a", "target": "_blank", "rel": "noopener", "class": null}}]},
+			{"type": "text", "text": "all", "marks": [{"type": "bold"}, {"type": "italic"}, {"type": "link", "attrs": {"href": "/b"}}]}
+		]}`
+		var attrs, want map[string]interface{}
+		require.NoError(t, json.Unmarshal([]byte(raw), &attrs))
+		require.NoError(t, json.Unmarshal([]byte(raw), &want))
+		require.Equal(t, want, detailsAttrsAfterStore(t, attrs))
+
+		// In the allowlist for a pm, but not caption marks; and one nobody allows. The text stays.
+		for _, mark := range []string{"highlight", "superscript", "subscript", "code", "strike", "underline", "spoiler"} {
+			got := detailsAttrsAfterStore(t, map[string]interface{}{"summary": []interface{}{
+				map[string]interface{}{"type": "text", "text": "x", "marks": []interface{}{
+					map[string]interface{}{"type": mark, "attrs": map[string]interface{}{"color": "red"}},
+				}},
+			}})
+			require.Equal(t, []interface{}{map[string]interface{}{"type": "text", "text": "x"}}, got["summary"], mark)
+		}
+
+		// A link's on* attrs go, its href stays.
+		got := detailsAttrsAfterStore(t, map[string]interface{}{"summary": []interface{}{
+			map[string]interface{}{"type": "text", "text": "x", "marks": []interface{}{
+				map[string]interface{}{"type": "link", "attrs": map[string]interface{}{"href": "/ok", "onclick": "x"}},
+			}},
+		}})
+		run := got["summary"].([]interface{})[0].(map[string]interface{})
+		require.Equal(t, []interface{}{map[string]interface{}{"type": "link", "attrs": map[string]interface{}{"href": "/ok"}}}, run["marks"])
+	})
+
 	t.Run("a summary that isn't runs, or has none left, is dropped", func(t *testing.T) {
 		require.Empty(t, detailsAttrsAfterStore(t, map[string]interface{}{"summary": "Q"}))
 		require.Empty(t, detailsAttrsAfterStore(t, map[string]interface{}{"summary": []interface{}{map[string]interface{}{"type": "image"}}}))

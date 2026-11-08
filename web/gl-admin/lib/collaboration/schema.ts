@@ -15,6 +15,7 @@ import { PullQuote } from "../../components/editor/extensions/PullQuote"
 import { TodoItem, TodoList } from "../../components/editor/extensions/TodoList"
 import { TableBlock } from "../../components/editor/extensions/TableBlock"
 import { Details } from "../../components/editor/extensions/DetailsBlock"
+import { GlHighlight, GlSubscript, GlSuperscript } from "../../components/editor/extensions/InlineMarks"
 import { AudioBlock, FileBlock, MediaBlockCommands, VideoBlock } from "../../components/editor/extensions/MediaBlocks"
 import { ContentLink, DateChip, Mention } from "../../components/editor/extensions/InlineNodes"
 
@@ -66,6 +67,12 @@ export function schemaExtensions({ collaborating }: { collaborating: boolean }) 
         class: "editor-image",
       },
     }),
+    // #418: highlight (one theme colour, no attrs), superscript and subscript (each
+    // excludes the other). New marks change the schema fingerprint (#416, rule 10), and
+    // every mark here must be on the API's allowlist (`allowedMarkTypes`).
+    highlight: GlHighlight,
+    superscript: GlSuperscript,
+    subscript: GlSubscript,
     textAlign: TextAlign.configure({ types: ["heading", "paragraph"] }),
     quoteCitation: QuoteCitation,
     // #356: the block menu's Colour (a palette token, never a free colour).

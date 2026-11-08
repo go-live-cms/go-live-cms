@@ -123,6 +123,38 @@ describe("details round-trip (#421)", () => {
     expect(summary.firstChild!.marks.map((m) => m.type.name)).toEqual(["italic"])
     expect(pmToBlockDoc(node).blocks[D1].attrs).toMatchObject({ summary: [{ type: "text", text: "Hi", marks: [{ type: "italic" }] }], text: "Hi" })
   })
+
+  it("bold, italic and link survive Block Spec → PM → Yjs → Block Spec; #418's marks don't enter a summary", () => {
+    const link = { type: "link", attrs: { href: "https://example.com/roles" } }
+    const doc = detailsDoc()
+    ;(doc.blocks[D1].attrs as any).summary = [
+      { type: "text", text: "b", marks: [{ type: "bold" }] },
+      { type: "text", text: "i", marks: [{ type: "italic" }] },
+      { type: "text", text: "l", marks: [link] },
+      { type: "text", text: "h", marks: [{ type: "highlight" }] },
+      { type: "text", text: "s", marks: [{ type: "superscript" }] },
+    ]
+    const pm = blockDocToPMWithReport(doc, schema).node
+    const summary = pm.firstChild!.child(0)
+    expect(summary.textContent).toBe("bilhs")
+    expect(summary.child(0).marks.map((m) => m.type.name)).toEqual(["bold"])
+    expect(summary.child(1).marks.map((m) => m.type.name)).toEqual(["italic"])
+    expect(summary.child(2).marks.map((m) => m.type.name)).toEqual(["link"])
+    expect(summary.child(2).marks[0].attrs.href).toBe("https://example.com/roles")
+    // The last two runs lost their marks (Yjs joins them into one plain run below).
+    expect([summary.child(3).marks, summary.child(4).marks]).toEqual([[], []])
+
+    const stored = fragmentToBlockDoc(seed(canonical(doc, schema)).fragment, schema)
+    const runs = stored.blocks[D1].attrs.summary as any[]
+    expect(runs.map((r) => r.text)).toEqual(["b", "i", "l", "hs"])
+    expect(runs[0].marks).toEqual([{ type: "bold" }])
+    expect(runs[1].marks).toEqual([{ type: "italic" }])
+    expect(runs[2].marks).toHaveLength(1)
+    expect(runs[2].marks[0]).toMatchObject(link)
+    expect(runs[3].marks).toBeUndefined()
+    expect(stored.blocks[D1].attrs.text).toBe("bilhs")
+    expect(fragmentToBlockDoc(seed(stored).fragment, schema)).toEqual(stored)
+  })
 })
 
 describe("a details' bad child (#213 at depth)", () => {

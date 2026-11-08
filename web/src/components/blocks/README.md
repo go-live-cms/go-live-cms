@@ -238,6 +238,10 @@ interface BlockComponentProps {
   (`colgroup` when it spans columns; a header cell never spans rows). Cells come from
   `tableRows` (paragraphs only, spans clamped) and render like a list item's text. The theme
   makes `.table-scroll` scroll sideways (`themes/README.md`).
+- **Inline marks (`utils/contentRenderer.tsx`):** bold `<strong>`, italic `<em>`, underline `<u>`,
+  strike `<s>`, code `<code>`, link `<a>` (`safeHref`), and since #418 highlight `<mark>` (no
+  style: the theme's one colour), superscript `<sup>` and subscript `<sub>`, nested in schema
+  order (a link inside a highlight). Any other mark renders its text only.
 - **Video, audio, file (#423, "Published · media & embeds"):** they store only a media id, so
   they render from the `media` map the API attaches to a served doc (`utils/mediaFile.ts`
   `blockFileFor`: the entry's `media_path`, accepted only under `/uploads/`, never the block's

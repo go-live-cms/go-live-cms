@@ -28,6 +28,21 @@ const LinkIcon = () => (
   </svg>
 )
 
+const HighlightIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="m9 11-6 6v3h9l3-3M22 12l-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4" />
+  </svg>
+)
+// "x²" / "x₂", as the canvas draws them (the button's name is its aria-label).
+const ScriptLabel = ({ kind }: { kind: "sup" | "sub" }) => {
+  const Tag = kind
+  return (
+    <span aria-hidden="true" style={{ fontSize: 13 }}>
+      x<Tag style={{ fontSize: 9 }}>2</Tag>
+    </span>
+  )
+}
+
 // The selection toolbar ("Editor menus & states"): turn into, marks, link. Comment (#192)
 // isn't built yet, so it isn't shown.
 const BubbleMenu = ({ editor, className = "", openLinkModal, ...props }: any) => {
@@ -124,6 +139,15 @@ const BubbleMenu = ({ editor, className = "", openLinkModal, ...props }: any) =>
         })}
         {mark("code", "Inline code", () => editor.chain().focus().toggleCode().run(), <CodeIcon />)}
         {mark("link", "Link", openLinkModal, <LinkIcon />)}
+        {/* #418 ("Editor · text blocks", Paragraph). Not in a caption (CAPTION_MARKS). */}
+        {!inCaption && (
+          <>
+            <span aria-hidden="true" className="editor-toolbar__divider" />
+            {mark("highlight", "Highlight", () => editor.chain().focus().toggleHighlight().run(), <HighlightIcon />)}
+            {mark("superscript", "Superscript", () => editor.chain().focus().toggleSuperscript().run(), <ScriptLabel kind="sup" />)}
+            {mark("subscript", "Subscript", () => editor.chain().focus().toggleSubscript().run(), <ScriptLabel kind="sub" />)}
+          </>
+        )}
       </div>
     </TipTapBubbleMenu>
   )
