@@ -145,14 +145,15 @@ describe("details round-trip (#421)", () => {
     expect([summary.child(3).marks, summary.child(4).marks]).toEqual([[], []])
 
     const stored = fragmentToBlockDoc(seed(canonical(doc, schema)).fragment, schema)
-    const runs = stored.blocks[D1].attrs.summary as any[]
+    const attrs = stored.blocks[D1].attrs as any
+    const runs = attrs.summary as any[]
     expect(runs.map((r) => r.text)).toEqual(["b", "i", "l", "hs"])
     expect(runs[0].marks).toEqual([{ type: "bold" }])
     expect(runs[1].marks).toEqual([{ type: "italic" }])
     expect(runs[2].marks).toHaveLength(1)
     expect(runs[2].marks[0]).toMatchObject(link)
     expect(runs[3].marks).toBeUndefined()
-    expect(stored.blocks[D1].attrs.text).toBe("bilhs")
+    expect(attrs.text).toBe("bilhs")
     expect(fragmentToBlockDoc(seed(stored).fragment, schema)).toEqual(stored)
   })
 })
