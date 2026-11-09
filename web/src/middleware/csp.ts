@@ -119,11 +119,14 @@ export function buildPublicCsp(allowed: readonly EmbedProvider[]): string {
   return `frame-src ${hosts.length > 0 ? hosts.join(" ") : "'none'"}`
 }
 
-/** Sets the public CSP on an HTML response; anything else passes through untouched. */
-export function applyPublicCsp(response: Response, allowed: readonly EmbedProvider[]): Response {
+/**
+ * Sets the public CSP on an HTML response. Anything else passes through untouched, without
+ * asking for the allowed list: robots.txt or a feed has no reason to wait for the settings.
+ */
+export async function applyPublicCsp(response: Response, allowed: () => Promise<readonly EmbedProvider[]>): Promise<Response> {
   if (!(response.headers.get("content-type") || "").includes("text/html")) return response
   const headers = new Headers(response.headers)
-  headers.set("Content-Security-Policy", buildPublicCsp(allowed))
+  headers.set("Content-Security-Policy", buildPublicCsp(await allowed()))
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers })
 }
 

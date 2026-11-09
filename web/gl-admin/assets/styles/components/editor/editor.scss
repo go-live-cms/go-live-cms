@@ -406,7 +406,7 @@
 
   .editor-embed__player {
     aspect-ratio: 16 / 9;
-    background: #000;
+    background: var(--background-subtle);
     border-radius: 8px;
     overflow: hidden;
 

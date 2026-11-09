@@ -3,7 +3,7 @@ import type { Editor as TiptapEditor } from "@tiptap/core"
 import type { Node as PMNode } from "@tiptap/pm/model"
 import { capEmbedTitle, EMBED_PROVIDER_SPECS, EMBED_TITLE_MAX_LENGTH, embedProviderList, embedProviderOf, embedTargetOf } from "@gl-admin/lib/blocks-spec"
 import { currentAllowedEmbeds } from "@gl-admin/lib/editorSettings"
-import { applyEmbedLink, type EmbedLinkError } from "../blocks/embedLinks"
+import { applyEmbedLink, setEmbedAttrs, type EmbedLinkError } from "../blocks/embedLinks"
 import { resolveEditorBlock, type BlockRef } from "../utils/blockTree"
 
 // The settings panel's Block tab for an embed (#425, "Editor · embeds"): its link, its title
@@ -38,12 +38,8 @@ export default function EmbedBlockSettings({ editor, node, blockRef }: { editor:
   }
 
   const setTitle = (value: string) => {
-    if (!editor.isEditable) return
-    const block = resolveEditorBlock(editor.state.doc, blockRef)
-    if (!block) return
     const title = capEmbedTitle(value) || null
-    if (title === (block.node.attrs.title ?? null)) return
-    editor.view.dispatch(editor.state.tr.setNodeMarkup(block.pos, undefined, { ...block.node.attrs, title }))
+    if (title !== (resolveEditorBlock(editor.state.doc, blockRef)?.node.attrs.title ?? null)) setEmbedAttrs(editor, blockRef, { title })
   }
 
   return (

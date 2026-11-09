@@ -9,7 +9,7 @@ import { resetEditorSettings, setEditorSettings } from "@gl-admin/lib/editorSett
 import { BlockNodeViews } from "./BlockNodeViews"
 import { findSelectedEmbed } from "./EmbedBlock"
 import { CORE_BLOCKS, embedEntryId, menuEntries } from "../blocks/catalog"
-import { embedProviderOfHost, notAllowedError, openEmbedLinkField, pastedEmbedUrl, wrongProviderError } from "../blocks/embedLinks"
+import { embedProviderOfHost, notAllowedError, openEmbedLinkField, pastedEmbedUrl, setEmbedAttrs, wrongProviderError } from "../blocks/embedLinks"
 
 // The embed block in the editor (#425; the canvas's "Editor · embeds, custom HTML" and "Errors
 // & empty states"): the empty block's link field, a link that isn't allowed, the placeholder
@@ -103,6 +103,13 @@ describe("the menus", () => {
     for (const role of ["contributor", null]) expect(menuEntries({ role }, entries)).toHaveLength(0)
   })
 
+  it("offers a provider's own entry only while the site allows it, and Embed a link always", () => {
+    setEditorSettings({ editor_markdown_shortcuts: true, editor_allowed_embeds: ["vimeo"] })
+    expect(menuEntries({ role: "editor" }, entries).map((entry) => entry.name)).toEqual(["Vimeo", "Embed a link"])
+    resetEditorSettings()
+    expect(menuEntries({ role: "editor" }, entries)).toHaveLength(4)
+  })
+
   it.each([
     ["embed-youtube", "youtube", "Paste a YouTube link"],
     ["embed-vimeo", "vimeo", "Paste a Vimeo link"],
@@ -182,6 +189,35 @@ describe("the link field", () => {
     expect(attrs().ref).toBeNull()
   })
 
+  it("leaves the author where they went if they moved on while it was checking", async () => {
+    let answer!: (value: unknown) => void
+    api.resolveEmbed.mockReturnValue(new Promise((resolve) => (answer = resolve)))
+    makeEditor(docWith(embed({ provider: "youtube" }), paragraph))
+    input().value = "https://youtu.be/dQw4w9WgXcQ"
+    buttonNamed("Embed")!.click()
+    await flush()
+    const elsewhere = document.createElement("input")
+    document.body.append(elsewhere)
+    elsewhere.focus()
+    answer({ provider: "youtube", ref: "dQw4w9WgXcQ", title: "Late" })
+    await flush()
+    await flush()
+    expect(attrs().ref).toBe("dQw4w9WgXcQ")
+    expect(document.activeElement).toBe(elsewhere)
+    expect(editor!.state.selection).not.toBeInstanceOf(NodeSelection)
+    elsewhere.remove()
+  })
+
+  it("keeps focus in the field when a collaborator changes the title", () => {
+    makeEditor(docWith(filled, paragraph))
+    openEmbedLinkField(editor!, 0)
+    const field = input()
+    expect(document.activeElement).toBe(field)
+    editor!.view.dispatch(editor!.state.tr.setNodeMarkup(0, undefined, { ...attrs(), title: "Renamed" }))
+    expect(input()).toBe(field)
+    expect(document.activeElement).toBe(field)
+  })
+
   it("refuses what can't be a link before asking anyone", async () => {
     makeEditor(docWith(embed({ provider: null }), paragraph))
     await submit("javascript:alert(1)")
@@ -248,6 +284,14 @@ describe("the placeholder", () => {
     expect(document.querySelector("script[src*='widgets.js']")).toBeNull()
   })
 
+  it("doesn't restart an open player when the title changes", () => {
+    makeEditor(docWith(filled, paragraph))
+    buttonNamed("Load video")!.click()
+    const iframe = dom().querySelector("iframe")
+    editor!.view.dispatch(editor!.state.tr.setNodeMarkup(0, undefined, { ...attrs(), title: "Renamed" }))
+    expect(dom().querySelector("iframe")).toBe(iframe)
+  })
+
   it("closes the player when the link changes under it", () => {
     makeEditor(docWith(filled, paragraph))
     buttonNamed("Load video")!.click()
@@ -307,6 +351,26 @@ describe("Edit link", () => {
     openEmbedLinkField(editor!, 0)
     buttonNamed("Cancel")!.click()
     expect(dom().dataset.state).toBe("placeholder")
+  })
+})
+
+describe("changing the attrs", () => {
+  it("keeps a selected block selected, so the panel doesn't move to another block", () => {
+    makeEditor(docWith(filled, paragraph))
+    editor!.view.dispatch(editor!.state.tr.setSelection(NodeSelection.create(editor!.state.doc, 0)))
+    setEmbedAttrs(editor!, { id: YT, pos: 0 }, { title: "Typed" })
+    expect(editor!.state.selection).toBeInstanceOf(NodeSelection)
+    expect(editor!.state.selection.from).toBe(0)
+    expect(attrs().title).toBe("Typed")
+  })
+
+  it("does nothing for a block that's gone, or in a read-only editor", () => {
+    makeEditor(docWith(filled, paragraph))
+    setEmbedAttrs(editor!, { id: "not-this-block-000", pos: 999 }, { title: "x" })
+    expect(attrs().title).toBe("Two editors")
+    editor!.setEditable(false)
+    setEmbedAttrs(editor!, { id: YT, pos: 0 }, { title: "x" })
+    expect(attrs().title).toBe("Two editors")
   })
 })
 

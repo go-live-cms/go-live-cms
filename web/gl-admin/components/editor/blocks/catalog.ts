@@ -6,6 +6,7 @@ import { openTableSizePicker } from "../ui/TableSizePicker"
 import { TABLE_ICON } from "../extensions/TableBlock"
 import { EMBED_ICONS, MEDIA_BLOCK_ICONS, type EmbedProvider } from "@gl-admin/lib/blocks-spec"
 import { requestEmbedFieldFocus, takeEmbedFieldFocus } from "./embedLinks"
+import { currentAllowedEmbeds } from "@gl-admin/lib/editorSettings"
 
 // The block catalog (#415, docs/design/block-library.md 3.1): every block the editor can
 // insert, in one list. The slash menu, the + menu in the gutter, Turn into (turnInto.ts)
@@ -72,6 +73,8 @@ export interface CatalogEntry {
   roles?: readonly CatalogRole[]
   /** Set on a theme block: offered only while that theme is active. */
   theme?: string
+  /** False while the site has switched this block off (an embed provider off Allowed embeds, #425). */
+  available?: () => boolean
   insert: (editor: Editor, range: InsertRange) => void
   /** Turns the block holding the selection into this one (Turn into, the block-type toolbar). */
   turnInto?: (editor: Editor) => void
@@ -125,6 +128,10 @@ const insertEmbed = (editor: Editor, range: InsertRange, provider: EmbedProvider
   requestEmbedFieldFocus()
   if (!editor.chain().deleteRange(range).insertEmbedBlock(provider).run()) takeEmbedFieldFocus()
 }
+
+// Whether a provider's own entry makes sense here: one the site doesn't allow could only ever
+// refuse its links. Unknown until the setting has been read, and then the API decides.
+const embedProviderAllowed = (provider: EmbedProvider) => () => currentAllowedEmbeds()?.includes(provider) ?? true
 
 const EMBED_ENTRY_PROVIDERS = ["youtube", "vimeo", "x"]
 
@@ -334,6 +341,7 @@ export const CORE_BLOCKS: readonly CatalogEntry[] = [
     keywords: ["video", "yt", "embed"],
     icon: { path: EMBED_ICONS.youtube },
     roles: EMBED_ROLES,
+    available: embedProviderAllowed("youtube"),
     insert: (editor, range) => insertEmbed(editor, range, "youtube"),
   },
   {
@@ -344,6 +352,7 @@ export const CORE_BLOCKS: readonly CatalogEntry[] = [
     keywords: ["video", "embed"],
     icon: { path: EMBED_ICONS.vimeo },
     roles: EMBED_ROLES,
+    available: embedProviderAllowed("vimeo"),
     insert: (editor, range) => insertEmbed(editor, range, "vimeo"),
   },
   {
@@ -354,6 +363,7 @@ export const CORE_BLOCKS: readonly CatalogEntry[] = [
     keywords: ["twitter", "tweet", "post", "embed"],
     icon: { path: EMBED_ICONS.x },
     roles: EMBED_ROLES,
+    available: embedProviderAllowed("x"),
     insert: (editor, range) => insertEmbed(editor, range, "x"),
   },
   {
@@ -406,6 +416,7 @@ export function menuEntries(context: MenuContext, entries: readonly CatalogEntry
   return entries.filter(
     (entry) =>
       canInsert(entry, context.role) &&
+      (entry.available?.() ?? true) &&
       (!entry.theme || entry.theme === (context.theme ?? "default")) &&
       (context.accepts?.(entry) ?? true)
   )

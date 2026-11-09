@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { addNonceToScripts, applyAdminCsp, applyPublicCsp, buildAdminCsp, buildPublicCsp, isAccountPagePath, isAdminPath } from "./csp"
 import { EMBED_PROVIDERS, embedPreviewFrame, EMBED_PROVIDER_SPECS } from "@gl-admin/lib/blocks-spec/embeds"
 
@@ -44,21 +44,23 @@ describe("buildPublicCsp (#425)", () => {
 describe("applyPublicCsp (#425)", () => {
   it("sets the header on an HTML page and keeps the rest of the response", async () => {
     const response = new Response("<p>Hello</p>", { status: 404, headers: { "content-type": "text/html; charset=utf-8", "x-robots-tag": "noindex" } })
-    const applied = applyPublicCsp(response, ["youtube"])
+    const applied = await applyPublicCsp(response, async () => ["youtube"])
     expect(applied.headers.get("Content-Security-Policy")).toBe("frame-src https://www.youtube-nocookie.com")
     expect(applied.headers.get("x-robots-tag")).toBe("noindex")
     expect(applied.status).toBe(404)
     expect(await applied.text()).toBe("<p>Hello</p>")
   })
 
-  it("leaves anything else alone", () => {
+  it("leaves anything else alone, without reading the settings", async () => {
     const response = new Response("{}", { headers: { "content-type": "application/json" } })
-    expect(applyPublicCsp(response, ["youtube"])).toBe(response)
+    const allowed = vi.fn(async () => ["youtube" as const])
+    expect(await applyPublicCsp(response, allowed)).toBe(response)
+    expect(allowed).not.toHaveBeenCalled()
   })
 
-  it("works on a fetched response, whose headers are immutable", () => {
-    const response = Response.redirect("https://example.com/")
-    expect(() => applyPublicCsp(new Response(null, { status: 204, headers: response.headers }), [])).not.toThrow()
+  it("allows no frames when nothing is allowed", async () => {
+    const html = new Response("<p>x</p>", { headers: { "content-type": "text/html" } })
+    expect((await applyPublicCsp(html, async () => [])).headers.get("Content-Security-Policy")).toBe("frame-src 'none'")
   })
 })
 

@@ -559,11 +559,9 @@ func TestFetchEmbedTitle_ClassifiesFailures(t *testing.T) {
 	require.Empty(t, title)
 	require.Equal(t, "redirect", why)
 
-	server.embedClient = newEmbedClient(newEmbedTransport(), time.Second)
-	fakeResolver := &http.Client{Transport: roundTripperFunc(func(*http.Request) (*http.Response, error) {
+	server.embedClient = &http.Client{Transport: roundTripperFunc(func(*http.Request) (*http.Response, error) {
 		return nil, errors.New("connection reset")
 	})}
-	server.embedClient = fakeResolver
 	_, why = server.fetchEmbedTitle(context.Background(), spec, "dQw4w9WgXcQ")
 	require.Equal(t, "network", why)
 

@@ -4,16 +4,9 @@ import type { Editor as TiptapEditor } from "@tiptap/core"
 import { NodeSelection } from "@tiptap/pm/state"
 import { findSelectedEmbed } from "../extensions/EmbedBlock"
 import { openEmbedLinkField } from "../blocks/embedLinks"
+import { isViewMounted } from "./ImageToolbar"
 
 const isEmbedSelection = (selection: unknown) => selection instanceof NodeSelection && selection.node.type.name === "embed"
-
-function viewMounted(editor: TiptapEditor): boolean {
-  try {
-    return !!editor?.view?.dom?.parentElement
-  } catch {
-    return false
-  }
-}
 
 /** A selected embed's toolbar (#425, "Editor · embeds"): Edit link, and the caption on or off. */
 export default function EmbedToolbar({ editor }: { editor: TiptapEditor }) {
@@ -47,7 +40,7 @@ export default function EmbedToolbar({ editor }: { editor: TiptapEditor }) {
       editor={editor}
       pluginKey="embedToolbar"
       className="editor-toolbar image-toolbar"
-      shouldShow={({ editor: e, state: s }) => viewMounted(e) && e.isEditable && isEmbedSelection(s.selection)}
+      shouldShow={({ editor: e, state: s }) => isViewMounted(e) && e.isEditable && isEmbedSelection(s.selection)}
     >
       <div role="toolbar" aria-label="Embed" className="editor-toolbar__group">
         <button type="button" className="editor-toolbar__button editor-toolbar__button--text" onClick={editLink}>

@@ -91,20 +91,24 @@ export async function applyEmbedLink(editor: Editor, block: BlockRef, raw: strin
   }
   if (expected && resolved.provider !== expected) return wrongProviderError(resolved.provider, expected)
 
-  if (!editor.isEditable || editor.isDestroyed) return null
+  setEmbedAttrs(editor, block, { provider: resolved.provider, ref: resolved.ref, title: resolved.title || null })
+  return null
+}
+
+/**
+ * Changes attrs of the embed `block` names now, in one transaction. A selected block stays
+ * selected: ProseMirror would otherwise map the selection off it, and the settings panel
+ * would move to another block in the middle of typing a title.
+ */
+export function setEmbedAttrs(editor: Editor, block: BlockRef, attrs: Record<string, unknown>) {
+  if (!editor.isEditable || editor.isDestroyed) return
   const target = resolveEditorBlock(editor.state.doc, block)
-  if (!target || target.node.type.name !== "embed") return null
-  const tr = editor.state.tr.setNodeMarkup(target.pos, undefined, {
-    ...target.node.attrs,
-    provider: resolved.provider,
-    ref: resolved.ref,
-    title: resolved.title || null,
-  })
+  if (!target || target.node.type.name !== "embed") return
+  const tr = editor.state.tr.setNodeMarkup(target.pos, undefined, { ...target.node.attrs, ...attrs })
   if (editor.state.selection instanceof NodeSelection && editor.state.selection.from === target.pos) {
     tr.setSelection(NodeSelection.create(tr.doc, target.pos))
   }
   editor.view.dispatch(tr)
-  return null
 }
 
 // The next empty embed this client makes takes the focus: the menus insert it, and the

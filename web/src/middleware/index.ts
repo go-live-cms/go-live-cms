@@ -177,7 +177,7 @@ async function handleRequest(context: APIContext, next: MiddlewareNext, proxied:
   // A page the site answers 404 for may have moved (#331, redirects.ts). Frames on public
   // pages only from the allowed embed providers (#425); none if the setting can't be read.
   const response = withRobotsHeader(await redirectOn404(context.request, url, await next()), url.pathname)
-  return applyPublicCsp(response, (await getSiteSettings(context.locals)).allowedEmbeds)
+  return applyPublicCsp(response, async () => (await getSiteSettings(context.locals)).allowedEmbeds)
 }
 
 // X-Robots-Tag: noindex on error responses (404/500, whatever the theme's

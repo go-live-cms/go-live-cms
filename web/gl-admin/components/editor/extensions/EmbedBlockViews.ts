@@ -15,7 +15,7 @@ import {
 } from "@gl-admin/lib/blocks-spec"
 import { currentAllowedEmbeds } from "@gl-admin/lib/editorSettings"
 import { applyEmbedLink, EMBED_EDIT_EVENT, takeEmbedFieldFocus, type EmbedLinkError } from "../blocks/embedLinks"
-import { mediaIcon } from "./MediaBlockViews"
+import { button, mediaIcon } from "./MediaBlockViews"
 import { refOfBlock } from "../utils/blockTree"
 
 // The editor's view of an embed (#425; the canvas's "Editor · embeds, custom HTML" and
@@ -43,15 +43,6 @@ const PROMPTS: Record<EmbedProvider, { prompt: string; help: string; block: stri
 }
 
 const NOT_ALLOWED_NOTE = "This site is no longer allowed, so readers don't see this embed. An admin can allow it in Settings › Editor."
-
-function button(label: string, className = "editor-media__button"): HTMLButtonElement {
-  const el = document.createElement("button")
-  el.type = "button"
-  el.className = className
-  el.textContent = label
-  el.addEventListener("mousedown", (event) => event.preventDefault())
-  return el
-}
 
 function linkHelp(): string {
   const allowed = currentAllowedEmbeds()
@@ -154,7 +145,11 @@ export class EmbedBlockView implements NodeView {
       this.draft = ""
     }
     if (this.editor.isDestroyed) return
+    // The answer can take seconds: leave the author where they went meanwhile.
+    const active = document.activeElement
+    const stayed = !active || active === document.body || this.dom.contains(active)
     this.render(true)
+    if (!stayed) return
     if (failure) this.focusField()
     else this.selectSelf()
   }
@@ -183,7 +178,15 @@ export class EmbedBlockView implements NodeView {
 
     this.dom.dataset.state = state
     this.addCaption.hidden = this.node.childCount > 0 || !editable || !target
-    const key = JSON.stringify([state, editable, targetKey, title, this.node.attrs.provider, this.busy, this.error])
+    // Only what the state shows: a title edit must not restart an open player or take the
+    // focus out of the link field.
+    const key = JSON.stringify(
+      state === "field"
+        ? [state, editable, this.node.attrs.provider, this.busy, this.error]
+        : state === "loaded"
+          ? [state, targetKey]
+          : [state, editable, targetKey, title],
+    )
     if (!force && key === this.rendered) return
     this.rendered = key
     this.body.replaceChildren()
