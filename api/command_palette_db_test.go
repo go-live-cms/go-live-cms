@@ -46,6 +46,9 @@ func TestCommandPalette_ResultsFollowPermissions(t *testing.T) {
 
 	_, err = conn.Exec(`UPDATE users SET full_name = $1 WHERE id = $2`, "Member "+word, viewer.ID)
 	require.NoError(t, err)
+	// Found only by email: the row wouldn't show why, so the palette doesn't list them.
+	_, err = conn.Exec(`UPDATE users SET email = $1 WHERE id = $2`, word+"@example.test", editor.ID)
+	require.NoError(t, err)
 
 	var media db.Medium
 	require.NoError(t, conn.QueryRowContext(ctx,

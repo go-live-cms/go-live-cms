@@ -116,7 +116,8 @@ function PaletteDialog({ onClose }: { onClose: () => void }) {
 
   const trimmed = query.trim()
   // Only content roles may call the search (requireContentAuthor).
-  const { results, loading, failed } = usePaletteSearch(query, canCreateContent(role))
+  const canSearch = canCreateContent(role)
+  const { results, loading, failed } = usePaletteSearch(query, canSearch)
   const actions = useMemo(() => paletteActions(role), [role])
   const sections = useMemo(() => paletteSections({ query, actions, results }), [query, actions, results])
   const options = useMemo(() => flattenPaletteSections(sections), [sections])
@@ -153,7 +154,7 @@ function PaletteDialog({ onClose }: { onClose: () => void }) {
     setActive((at) => (Math.min(at, count - 1) + step + count) % count)
   }
 
-  const noResults = trimmed !== "" && !loading && !failed && options.length === 0
+  const noResults = canSearch && trimmed !== "" && !loading && !failed && options.length === 0
   const status = loading ? "Searching…" : failed ? "Search failed" : noResults ? `No results for ${trimmed}` : trimmed ? `${options.length} result${options.length === 1 ? "" : "s"}` : ""
   let footer: string[]
   if (loading) footer = ["Searching…", "esc to close"]
@@ -254,7 +255,7 @@ function PaletteDialog({ onClose }: { onClose: () => void }) {
         {failed && (
           <div className="gl-command-palette__empty">
             <b>Search isn't available</b>
-            <span>Check your connection and try again.</span>
+            <span>Try again in a moment.</span>
           </div>
         )}
 

@@ -234,6 +234,7 @@ describe("permissions", () => {
     type("draft")
     await afterDebounce()
     expect(api.search).not.toHaveBeenCalled()
+    expect(dialog()!.textContent).not.toContain("No results")
   })
 
   it("shows a Users group only when the API sent one", async () => {

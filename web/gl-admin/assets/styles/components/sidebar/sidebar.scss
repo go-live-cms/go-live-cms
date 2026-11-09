@@ -97,6 +97,11 @@ $mobile: 768px; // MOBILE_QUERY in Sidebar.tsx
     font-size: var(--type-caption);
     line-height: var(--type-caption-lh);
     padding: 0 5px;
+
+    // A phone has no Ctrl key.
+    @media (width <= 768px) {
+      display: none;
+    }
   }
 
   &__section {

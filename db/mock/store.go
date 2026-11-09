@@ -5106,6 +5106,21 @@ func (mr *MockStoreMockRecorder) SearchCommandPalettePosts(arg0, arg1 interface{
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SearchCommandPalettePosts", reflect.TypeOf((*MockStore)(nil).SearchCommandPalettePosts), arg0, arg1)
 }
 
+// SearchCommandPaletteUsers mocks base method.
+func (m *MockStore) SearchCommandPaletteUsers(arg0 context.Context, arg1 db.SearchCommandPaletteUsersParams) ([]db.SearchCommandPaletteUsersRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SearchCommandPaletteUsers", arg0, arg1)
+	ret0, _ := ret[0].([]db.SearchCommandPaletteUsersRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SearchCommandPaletteUsers indicates an expected call of SearchCommandPaletteUsers.
+func (mr *MockStoreMockRecorder) SearchCommandPaletteUsers(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SearchCommandPaletteUsers", reflect.TypeOf((*MockStore)(nil).SearchCommandPaletteUsers), arg0, arg1)
+}
+
 // SearchMediaByName mocks base method.
 func (m *MockStore) SearchMediaByName(arg0 context.Context, arg1 db.SearchMediaByNameParams) ([]db.SearchMediaByNameRow, error) {
 	m.ctrl.T.Helper()

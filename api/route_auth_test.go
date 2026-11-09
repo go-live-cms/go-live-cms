@@ -154,9 +154,8 @@ func TestBlockEditRoutesRequireAuth(t *testing.T) {
 }
 
 // commandPaletteRoutes is the admin command palette's route (#41). TestGETRoutesRequireAuth
-// already walks it; this also says what it answers and to whom, fails when another search
-// route is added without being listed (so its rule gets a look), and keeps it out of
-// /public.
+// already walks it; this also says what it answers and to whom, and fails when the route
+// is removed or another method is added on it without being listed.
 var commandPaletteRoutes = map[string]string{
 	"GET /api/v1/search": "content roles; posts through postsViewerID, users for admins only",
 }

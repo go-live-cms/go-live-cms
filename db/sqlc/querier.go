@@ -759,6 +759,11 @@ type Querier interface {
 	// It runs on every pause in typing, so no ranking or tsvector: SearchPostsWithMeta took
 	// seconds at 30,000 posts, and this is one scan.
 	SearchCommandPalettePosts(ctx context.Context, arg SearchCommandPalettePostsParams) ([]SearchCommandPalettePostsRow, error)
+	// The admin command palette (#41): members whose name or username contains the text
+	// (@pattern, @prefix_pattern: ILIKE patterns the API escapes), those that start with it
+	// first. Not the email: the row doesn't show one, so a hit on "co" (every .com address)
+	// would list people for no visible reason.
+	SearchCommandPaletteUsers(ctx context.Context, arg SearchCommandPaletteUsersParams) ([]SearchCommandPaletteUsersRow, error)
 	SearchMediaByName(ctx context.Context, arg SearchMediaByNameParams) ([]SearchMediaByNameRow, error)
 	// The admin posts list's search: the list's filters (type, status, owner) plus
 	// the search, ranked. Same columns as ListPostsWithMeta, so the handler shapes

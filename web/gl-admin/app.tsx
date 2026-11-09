@@ -110,7 +110,10 @@ function AppLayout() {
           </ErrorBoundary>
         </div>
       </section>
-      <CommandPalette />
+      {/* Its own boundary too: a crash in it must not take the page behind it down. */}
+      <ErrorBoundary resetKey={pathname} fallback={null}>
+        <CommandPalette />
+      </ErrorBoundary>
       <Toaster />
     </main>
   )

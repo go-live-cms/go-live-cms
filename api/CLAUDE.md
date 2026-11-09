@@ -773,7 +773,9 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   first, then latest edited; `postsViewerID`, never the trash; only types post and page).
   Deliberately not `SearchPostsWithMeta`: its ranking took 1-7 s at 30,000 posts; this route
   answers in about 200 ms at 30,000 posts plus 30,000 media, so it has no index. Terms:
-  `SearchTermsAcrossTaxonomies` (`show_ui` taxonomies only). `q` is cut by
+  `SearchTermsAcrossTaxonomies` (`show_ui` taxonomies only). Users:
+  `SearchCommandPaletteUsers` (name or username, not the email, which the row doesn't show,
+  so "co" doesn't list every .com address). `q` is cut by
   `normalizeSearchQuery`, LIKE wildcards escaped.
 - The palette cancels stale requests, so a search the client aborted answers **499**
   (`statusClientClosedRequest`), not a 500 that would reach the metrics and error reporter.

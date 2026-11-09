@@ -54,8 +54,7 @@ type CommandPaletteTerm struct {
 	TaxonomyLabel string `json:"taxonomy_label"`
 }
 
-// CommandPaletteUser is a member as the palette shows them: never an email, though an
-// admin can search by one.
+// CommandPaletteUser is a member as the palette shows them: never an email.
 type CommandPaletteUser struct {
 	ID       int64   `json:"id"`
 	Username string  `json:"username"`
@@ -65,7 +64,7 @@ type CommandPaletteUser struct {
 }
 
 // CommandPaletteResponse is GET /search's answer. Users is left out for everyone but
-// admins, so its absence says the caller can't list members.
+// admins, and for an admin when no member matches.
 type CommandPaletteResponse struct {
 	Query string               `json:"query"`
 	Posts []CommandPalettePost `json:"posts"`
@@ -99,6 +98,7 @@ func (server *Server) searchCommandPalette(c *gin.Context) {
 				c.Status(statusClientClosedRequest)
 				return
 			}
+			server.requestLog(c).Warn("command_palette_search_failed", "error", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to search"})
 			return
 		}
@@ -110,10 +110,11 @@ func (server *Server) fillCommandPalette(c *gin.Context, caller db.User, respons
 	ctx := c.Request.Context()
 	query := response.Query
 	pattern := memberSearchPattern(query)
+	prefix := likeEscaper.Replace(query) + "%"
 
 	posts, err := server.store.SearchCommandPalettePosts(ctx, db.SearchCommandPalettePostsParams{
 		Pattern:       pattern,
-		PrefixPattern: likeEscaper.Replace(query) + "%",
+		PrefixPattern: prefix,
 		ViewerID:      postsViewerID(caller),
 		LimitPerType:  commandPaletteLimit,
 	})
@@ -164,10 +165,10 @@ func (server *Server) fillCommandPalette(c *gin.Context, caller db.User, respons
 	if !isSiteAdmin(caller) {
 		return nil
 	}
-	members, err := server.store.ListMembers(ctx, db.ListMembersParams{
-		Pattern:    pattern,
-		SortBy:     "username_asc",
-		LimitCount: commandPaletteLimit,
+	members, err := server.store.SearchCommandPaletteUsers(ctx, db.SearchCommandPaletteUsersParams{
+		Pattern:       pattern,
+		PrefixPattern: prefix,
+		LimitCount:    commandPaletteLimit,
 	})
 	if err != nil {
 		return err
@@ -175,11 +176,11 @@ func (server *Server) fillCommandPalette(c *gin.Context, caller db.User, respons
 	response.Users = make([]CommandPaletteUser, len(members))
 	for i, row := range members {
 		response.Users[i] = CommandPaletteUser{
-			ID:       row.User.ID,
-			Username: row.User.Username,
-			FullName: row.User.FullName,
-			Avatar:   avatarResponse(row.User.AvatarUrl),
-			Role:     row.User.Role,
+			ID:       row.ID,
+			Username: row.Username,
+			FullName: row.FullName,
+			Avatar:   avatarResponse(row.AvatarUrl),
+			Role:     row.Role,
 		}
 	}
 	return nil

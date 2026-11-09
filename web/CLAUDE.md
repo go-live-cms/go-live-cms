@@ -680,8 +680,8 @@ are the most fragile part of the codebase. **Before editing anything under
 - **Command palette (#41; the canvas's "Search · command palette"):** the sidebar's Search
   button or Ctrl/⌘ K (`components/command-palette/CommandPalette.tsx`, mounted in `AppLayout`,
   opened through `openCommandPalette`). In the block editor (`isEditorFocused`: focus inside
-  `.ProseMirror`) Ctrl K stays the link dialog, and `Editor`'s own listener only acts there; it
-  doesn't open over another `aria-modal` dialog either (that dialog's Tab trap would take focus).
+  `.ProseMirror`) Ctrl K stays the link dialog (`OpenLinkModal`'s `Mod-k`); it doesn't open over
+  another `aria-modal` dialog either (that dialog's Tab trap would take focus).
   One call, `GET /search?q=` (`lib/api/commandPalette.ts`, `api/command_palette.go`), debounced
   150 ms; every change aborts the request before it (`apiCall`'s `signal`) and an answer for
   other text is never shown. Rules, what each result opens and the group order are

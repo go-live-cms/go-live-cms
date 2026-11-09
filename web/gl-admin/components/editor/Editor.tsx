@@ -3,7 +3,6 @@ import { EditorContent, useEditor } from "@tiptap/react"
 import type { Editor as TiptapEditor } from "@tiptap/core"
 import { blockAPIClient } from "@gl-admin/lib/api/blockAPI"
 import { authManager } from "@gl-admin/lib/auth"
-import { isEditorFocused } from "@gl-admin/lib/commandPalette"
 import { pmToBlockDoc, setEditorBlockDoc } from "@gl-admin/lib/collaboration/blockBridge"
 import type { BlockDocV1 } from "@gl-admin/lib/blocks-spec"
 import { CollabSaveStatus, type SaveState } from "@gl-admin/lib/collaboration/CollabSaveStatus"
@@ -375,21 +374,6 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
     if (!editor) return
     openLinkModal(editor, setUrl, setIsLinkModalOpen)
   }, [editor])
-
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (!((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k")) return
-      if (!editor || readOnly) return
-      // Outside the editor Ctrl K is the command palette's (#41), even with text selected.
-      if (!isEditorFocused(document.activeElement)) return
-      const selection = editor.state.selection
-      if (selection.empty || selection.from === selection.to) return
-      e.preventDefault()
-      openLinkModalWithEditor()
-    }
-    window.addEventListener("keydown", onKeyDown)
-    return () => window.removeEventListener("keydown", onKeyDown)
-  }, [editor, readOnly, openLinkModalWithEditor])
 
   // Block comments (#192): refetch on the server's nudge, after every (re)sync (a nudge may
   // have been missed while disconnected) and on an access change; the blocks the editor

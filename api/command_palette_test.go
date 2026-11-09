@@ -44,7 +44,7 @@ func TestSearchCommandPaletteByRole(t *testing.T) {
 	editor := withRole(RoleEditor, 1)
 	contributor := withRole(RoleContributor, 2)
 	subscriber := withRole("subscriber", 3)
-	member := db.User{ID: 9, Username: "ana", FullName: "Ana Costa", Email: "ana@example.test", HashedPassword: "secret-hash", Role: RoleEditor}
+	member := db.SearchCommandPaletteUsersRow{ID: 9, Username: "ana", FullName: "Ana Costa", Role: RoleEditor}
 
 	testCases := []struct {
 		name       string
@@ -71,8 +71,8 @@ func TestSearchCommandPaletteByRole(t *testing.T) {
 			caller: &admin,
 			expect: func(store *mockdb.MockStore) {
 				expectCommandPaletteLookups(store, "draft", 0)
-				store.EXPECT().ListMembers(gomock.Any(), db.ListMembersParams{Pattern: "%draft%", SortBy: "username_asc", LimitCount: commandPaletteLimit}).
-					Return([]db.ListMembersRow{{User: member}}, nil)
+				store.EXPECT().SearchCommandPaletteUsers(gomock.Any(), db.SearchCommandPaletteUsersParams{Pattern: "%draft%", PrefixPattern: "draft%", LimitCount: commandPaletteLimit}).
+					Return([]db.SearchCommandPaletteUsersRow{member}, nil)
 			},
 			wantStatus: http.StatusOK,
 			check: func(t *testing.T, raw string, got CommandPaletteResponse) {
@@ -81,8 +81,6 @@ func TestSearchCommandPaletteByRole(t *testing.T) {
 				require.Equal(t, int64(3), got.Media[0].ID)
 				require.Equal(t, []CommandPaletteTerm{{ID: 4, Name: "Guides", Slug: "guides", TaxonomyType: "category", TaxonomyLabel: "Categories"}}, got.Terms)
 				require.Equal(t, []CommandPaletteUser{{ID: 9, Username: "ana", FullName: "Ana Costa", Role: RoleEditor}}, got.Users)
-				require.NotContains(t, raw, "ana@example.test")
-				require.NotContains(t, raw, "secret-hash")
 			},
 		},
 		{
