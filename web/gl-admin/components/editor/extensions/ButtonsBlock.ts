@@ -10,7 +10,7 @@ import {
   type ButtonsAlign,
   type ButtonVariant,
 } from "@gl-admin/lib/blocks-spec"
-import { editorBlockAtSelection, holderAcceptsType } from "../utils/blockTree"
+import { editorBlockAtSelection, holderAcceptsType, replaceLineOrInsertAfter } from "../utils/blockTree"
 
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {
@@ -160,13 +160,10 @@ export const Buttons = Node.create({
         ({ state, tr, dispatch }) => {
           const block = editorBlockAtSelection(state)
           if (!holderAcceptsType(block?.holder.type.name ?? "doc", "buttons")) return false
-          const { buttons, button, paragraph } = state.schema.nodes
+          const { buttons, button } = state.schema.nodes
           const node = buttons.create(null, button.create())
           if (dispatch) {
-            const emptyLine = block?.node.type === paragraph && block.node.content.size === 0
-            const at = block ? (emptyLine ? block.pos : block.pos + block.node.nodeSize) : state.doc.content.size
-            if (block && emptyLine) tr.replaceWith(block.pos, block.pos + block.node.nodeSize, node)
-            else tr.insert(at, node)
+            const at = replaceLineOrInsertAfter(tr, block, node)
             tr.setSelection(TextSelection.create(tr.doc, at + 2)).scrollIntoView()
           }
           return true

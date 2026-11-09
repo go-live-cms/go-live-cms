@@ -127,7 +127,7 @@ func TestSanitize_ButtonsAttrs(t *testing.T) {
 		}
 	})
 
-	t.Run("an href on a button in another block's pm is checked too", func(t *testing.T) {
+	t.Run("a button in another block's pm loses an unsafe href too", func(t *testing.T) {
 		doc := layoutDocWith("paragraph", map[string]interface{}{"pm": map[string]interface{}{
 			"type": "paragraph", "content": []interface{}{button(map[string]interface{}{"href": "javascript:alert(1)"}, "x")},
 		}})
@@ -172,9 +172,21 @@ func TestSanitize_ButtonsAttrs(t *testing.T) {
 		require.Equal(t, 200, len([]rune(label)))
 	})
 
-	t.Run("an over-long href is dropped", func(t *testing.T) {
+	t.Run("an over-long href is dropped, counted in code points as the editor does", func(t *testing.T) {
 		attrs := buttonNodeAttrsAfter(t, map[string]interface{}{"href": "/" + strings.Repeat("a", buttonHrefMaxLength)})
 		require.NotContains(t, attrs, "href")
+		wide := "/" + strings.Repeat("é", buttonHrefMaxLength-1)
+		require.Equal(t, wide, buttonNodeAttrsAfter(t, map[string]interface{}{"href": wide})["href"])
+	})
+
+	t.Run("a custom block's button node keeps its own attrs, losing only an unsafe href", func(t *testing.T) {
+		doc := layoutDocWith("sidenote", map[string]interface{}{"pm": map[string]interface{}{
+			"type": "sidenote", "content": []interface{}{button(map[string]interface{}{"href": "javascript:alert(1)", "label": "Go", "color": "red"}, "x")},
+		}})
+		require.NoError(t, doc.prepareForStore(ThemeBlockManifest{}))
+		pm := doc.Blocks["block-0001"].(map[string]interface{})["attrs"].(map[string]interface{})["pm"].(map[string]interface{})
+		attrs := pm["content"].([]interface{})[0].(map[string]interface{})["attrs"]
+		require.Equal(t, map[string]interface{}{"label": "Go", "color": "red"}, attrs)
 	})
 
 	t.Run("a pm that isn't a buttons node is dropped", func(t *testing.T) {

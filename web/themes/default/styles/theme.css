@@ -1228,14 +1228,17 @@ body {
 .prose .column > * + * {
   margin-top: 0.8em;
 }
+/* Full width keeps the page's gutter, as a full-width tinted group does. */
+.prose .columns.alignfull {
+  box-sizing: border-box;
+  padding-inline: var(--container-gutter);
+}
 /* A row of columns in a group fills the group: the width classes are for the page. */
 .prose .group .columns:is(.alignwide, .alignfull) {
   width: auto;
   margin-left: 0;
+  padding-inline: 0;
   transform: none;
-}
-.prose .group > .columns {
-  max-width: none;
 }
 @media (max-width: 640px) {
   .columns,

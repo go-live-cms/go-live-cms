@@ -468,6 +468,19 @@ describe("buttons", () => {
     expect(row.dataset.align).toBe("center")
   })
 
+  it("the toolbar follows the caret between buttons, and an open Link field closes", () => {
+    const ed = makeEditor(buttonsDoc())
+    ed.commands.setTextSelection(startOfButton(ed, 0) + 1)
+    const row = ed.view.dom.querySelector<HTMLElement>('[data-type="buttons"]')!
+    const pressed = () => row.querySelector('[aria-label="Button style"] [aria-pressed="true"]')!.textContent
+    expect(pressed()).toBe("Primary")
+    ;(row.querySelector('[aria-label="Link"]') as HTMLButtonElement).click()
+    expect(row.querySelector(".editor-buttons__link")).not.toBeNull()
+    ed.commands.setTextSelection(startOfButton(ed, 1) + 1)
+    expect(pressed()).toBe("Secondary")
+    expect(row.querySelector(".editor-buttons__link")).toBeNull()
+  })
+
   it("Add button adds a secondary one after the current one, with the caret in it", () => {
     const ed = makeEditor(buttonsDoc())
     ed.commands.setTextSelection(startOfButton(ed, 0) + 1)

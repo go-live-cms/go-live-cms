@@ -28,18 +28,13 @@ import {
 import { setColumnCount } from "../utils/columnActions"
 import { refOfBlock } from "../utils/blockTree"
 import { currentButton } from "./ButtonsBlock"
+import { setBlockId } from "./MediaBlockViews"
 
 // The editor's views of the layout blocks (#426, the canvas's "Editor · columns, group,
 // buttons, spacer"): columns (Columns, Layout, Width), buttons (Link, Style, Add button,
 // alignment) and the spacer (its hatching and its handle). Editor only: the schema
 // extensions stay DOM-free, so the collab server can build them. Every control is one
 // ordinary transaction from the user's own input (no appendTransaction, rule 7).
-
-function setBlockId(dom: HTMLElement, node: PMNode) {
-  const id = node.attrs["data-block-id"]
-  if (typeof id === "string" && id) dom.setAttribute("data-block-id", id)
-  else dom.removeAttribute("data-block-id")
-}
 
 const WIDTH_LABELS: Record<GroupAlign, string> = { content: "Content", wide: "Wide", full: "Full" }
 const STYLE_LABELS: Record<ButtonVariant, string> = { primary: "Primary", secondary: "Secondary" }
@@ -247,6 +242,8 @@ export class ButtonsView implements NodeView {
   private styleButtons: Map<string, HTMLButtonElement>
   private alignButtons: Map<string, HTMLButtonElement>
   private linkPanel: { dom: HTMLElement; input: HTMLInputElement; error: HTMLElement } | null = null
+  /** The position of the button the open Link field belongs to. */
+  private linkFor: number | undefined
 
   constructor(
     private node: PMNode,
@@ -308,6 +305,13 @@ export class ButtonsView implements NodeView {
     this.contentDOM = doc.createElement("div")
     this.contentDOM.className = "editor-buttons__content"
     this.dom.append(this.toolbar, this.contentDOM)
+    this.render()
+    this.editor.on("selectionUpdate", this.onSelection)
+  }
+
+  /** The toolbar shows the button the caret is in: moving between them changes no node. */
+  private onSelection = () => {
+    if (this.linkPanel && this.current()?.pos !== this.linkFor) this.closeLink()
     this.render()
   }
 
@@ -377,6 +381,7 @@ export class ButtonsView implements NodeView {
     panel.append(label, input, error, remove)
     this.toolbar.append(panel)
     this.linkPanel = { dom: panel, input, error }
+    this.linkFor = this.current()?.pos
     this.linkButton.setAttribute("aria-expanded", "true")
     input.focus()
   }
@@ -437,6 +442,7 @@ export class ButtonsView implements NodeView {
   }
 
   destroy() {
+    this.editor.off("selectionUpdate", this.onSelection)
     this.closeLink()
   }
 }

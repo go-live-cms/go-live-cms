@@ -256,6 +256,20 @@ export function removalRange(doc: PMNode, block: EditorBlock): BlockRemoval | nu
   }
 }
 
+/**
+ * Puts `node` where the menus' block goes: in place of `block` when it's an empty paragraph,
+ * else right after it (at the end of the doc when there's no block). Returns its position.
+ */
+export function replaceLineOrInsertAfter(tr: Transaction, block: EditorBlock | null, node: PMNode): number {
+  if (block && block.node.type.name === "paragraph" && block.node.content.size === 0) {
+    tr.replaceWith(block.pos, block.pos + block.node.nodeSize, node)
+    return block.pos
+  }
+  const at = block ? block.pos + block.node.nodeSize : tr.doc.content.size
+  tr.insert(at, node)
+  return at
+}
+
 /** A place a block can go: between the holder's children at `index`, i.e. at `pos`. */
 export type DropTarget = { pos: number; holderPos: number; index: number }
 

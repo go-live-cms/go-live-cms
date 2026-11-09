@@ -5,14 +5,12 @@ export default function Segment<T extends string>({
   labels,
   value,
   onPick,
-  disabled,
 }: {
   label: string
   values: readonly T[]
   labels: Record<T, string>
   value: T
   onPick: (value: T) => void
-  disabled?: (value: T) => boolean
 }) {
   const id = `block-settings-${label.toLowerCase().replace(/\s+/g, "-")}`
   return (
@@ -28,7 +26,6 @@ export default function Segment<T extends string>({
             role="radio"
             aria-checked={option === value}
             className="block-settings__option"
-            disabled={disabled?.(option)}
             onClick={() => onPick(option)}
           >
             {labels[option]}

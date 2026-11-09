@@ -73,7 +73,7 @@ describe("the bridge (#426)", () => {
     expect(dropped).toEqual([])
     expect(() => node.check()).not.toThrow()
     const out = pmToBlockDoc(node)
-    expect(canonical(out)).toEqual(canonical(normalizedPm(layoutDoc())))
+    expect(canonical(out)).toEqual(canonical(layoutDoc()))
     expect(() => validateBlockDoc(out)).not.toThrow()
   })
 
@@ -82,7 +82,7 @@ describe("the bridge (#426)", () => {
     expect(dropped.entries).toEqual([])
     const out = fragmentToBlockDoc(fragment, schema)
     expect(() => validateBlockDoc(out)).not.toThrow()
-    expect(canonical(out)).toEqual(canonical(normalizedPm(layoutDoc())))
+    expect(canonical(out)).toEqual(canonical(layoutDoc()))
     expect(out.blocks[C].children).toEqual([C1, C2])
     expect(out.blocks[C2].children).toEqual([P2, B])
   })
@@ -186,11 +186,6 @@ describe("the bridge (#426)", () => {
     expect(stampFragmentBlockIds(fragment)).toBe(0)
   })
 })
-
-// `pm` as the bridge writes it (a button's variant only when not the default).
-function normalizedPm(doc: BlockDocV1): BlockDocV1 {
-  return doc
-}
 
 describe("repairColumnsFragment (#426)", () => {
   function columnsFragment(columnTexts: string[][]) {

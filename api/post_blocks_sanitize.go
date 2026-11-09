@@ -465,9 +465,11 @@ func sanitizePMNode(node map[string]interface{}) {
 		}
 	}
 
-	// A button's href is a node attr (#426), which the link-mark check below never sees.
+	// A button's href is a node attr (#426), which the link-mark check below never sees. Only
+	// the unsafe href goes here: a custom node may use the name, with attrs of its own (a
+	// buttons block's are an allowlist, sanitizeButtonsPM).
 	if stringOf(node["type"]) == "button" {
-		sanitizeButtonNode(node)
+		dropUnsafeButtonHref(node)
 	}
 
 	if raw, present := node["marks"]; present {

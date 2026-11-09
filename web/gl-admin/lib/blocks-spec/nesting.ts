@@ -101,8 +101,9 @@ export interface ContainerRule {
    * two people can break at once. y-tiptap deletes an element whose children fail the content
    * check, for every peer, so two people adding a fourth column at once would delete the whole
    * row (and the group around it). `min`/`max` still hold everywhere else: the validators
-   * (`nestingIssues`), every local change (`blockTree.ts`'s `withChildren`, the commands), and
-   * the collab server repairs the fragment before a store (`repairColumnsFragment`).
+   * (`nestingIssues`), moves, deletes and the commands (`blockTree.ts`'s `withChildren`), and the
+   * collab server repairs the fragment before a store (`repairColumnsFragment`), which also
+   * covers a paste, the one local change that doesn't go through those.
    */
   countNotInSchema?: boolean
 }

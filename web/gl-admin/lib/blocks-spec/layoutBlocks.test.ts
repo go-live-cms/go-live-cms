@@ -36,6 +36,8 @@ describe("button hrefs (buttonHrefVectors.json, shared with the API)", () => {
     expect(normalizeButtonHref(null)).toBeNull()
     expect(normalizeButtonHref(42)).toBeNull()
     expect(normalizeButtonHref(`/${"a".repeat(2048)}`)).toBeNull()
+    // In code points, as the API counts.
+    expect(normalizeButtonHref(`/${"😀".repeat(2047)}`)).not.toBeNull()
   })
 })
 
@@ -44,6 +46,7 @@ describe("the Link field", () => {
     expect(buttonHrefFromInput("  ")).toEqual({ href: null })
     expect(buttonHrefFromInput("/changelog")).toEqual({ href: "/changelog" })
     expect(buttonHrefFromInput("example.com/docs")).toEqual({ href: "https://example.com/docs" })
+    expect(buttonHrefFromInput("example.com:8080/docs")).toEqual({ href: "https://example.com:8080/docs" })
     expect(buttonHrefFromInput("mailto:ana@example.com")).toEqual({ href: "mailto:ana@example.com" })
   })
   it("says why for anything that isn't a safe link", () => {

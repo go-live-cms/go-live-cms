@@ -97,6 +97,21 @@ describe("the Block tab for the layout blocks (#426)", () => {
     expect(editor.state.doc.firstChild!.attrs.align).toBe("center")
   })
 
+  it("buttons: the Link field follows the caret, and blurring it changes nothing unedited", () => {
+    remount('<div data-type="buttons" data-block-id="blk-0426-buttons-00001"><div data-type="button" data-href="/guide">Read</div><div data-type="button">Log</div></div>')
+    act(() => {
+      editor.commands.setTextSelection(3)
+    })
+    const input = container.querySelector<HTMLInputElement>("#block-settings-button-link")!
+    expect(input.value).toBe("/guide")
+    act(() => {
+      editor.commands.setTextSelection(editor.state.doc.firstChild!.child(0).nodeSize + 3)
+    })
+    expect(input.value).toBe("")
+    act(() => input.dispatchEvent(new FocusEvent("focusout", { bubbles: true })))
+    expect(editor.state.doc.firstChild!.child(1).attrs.href).toBeNull()
+  })
+
   it("spacer: the theme's steps, in px", () => {
     remount('<div data-type="spacer" data-size="7" data-block-id="blk-0426-spacer-00001"></div><p>after</p>')
     expect(name()).toBe("Spacer")

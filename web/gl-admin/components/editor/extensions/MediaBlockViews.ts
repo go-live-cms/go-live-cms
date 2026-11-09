@@ -112,7 +112,7 @@ export function missingPanel(
 }
 
 /** The `data-block-id` the node's renderHTML would put on it (BlockIdExtension). */
-function setBlockId(dom: HTMLElement, node: PMNode) {
+export function setBlockId(dom: HTMLElement, node: PMNode) {
   const id = node.attrs["data-block-id"]
   if (typeof id === "string" && id) dom.setAttribute("data-block-id", id)
   else dom.removeAttribute("data-block-id")

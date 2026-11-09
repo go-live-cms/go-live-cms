@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useReducer, useState } from "react"
 import type { Editor as TiptapEditor } from "@tiptap/core"
 import { NodeSelection } from "prosemirror-state"
 import {
@@ -84,6 +84,15 @@ export function ColumnsSettings({ editor, block }: { editor: TiptapEditor; block
 }
 
 export function ButtonsSettings({ editor, block }: { editor: TiptapEditor; block: EditorBlock }) {
+  // The panel re-renders when the block changes; moving between its buttons doesn't.
+  const [, refresh] = useReducer((count: number) => count + 1, 0)
+  useEffect(() => {
+    const update = () => refresh()
+    editor.on("selectionUpdate", update)
+    return () => {
+      editor.off("selectionUpdate", update)
+    }
+  }, [editor])
   const button = currentButton(editor.state, { pos: block.pos, node: block.node })
   const href = normalizeButtonHref(button?.node.attrs.href) ?? ""
   const [value, setValue] = useState(href)
@@ -95,7 +104,7 @@ export function ButtonsSettings({ editor, block }: { editor: TiptapEditor; block
   }, [href, button?.pos])
 
   const apply = () => {
-    if (!editor.isEditable) return
+    if (!editor.isEditable || value === href) return
     const result = buttonHrefFromInput(value)
     if ("error" in result) {
       setError(result.error)

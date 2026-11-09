@@ -1,5 +1,7 @@
 package api
 
+import "unicode/utf8"
+
 // The layout blocks' sanitizing (#426, docs/design/block-library.md 2.2, 4): columns and
 // column (containers, the rows are in post_blocks_nesting.go), buttons and spacer (flow).
 // Each is an allowlist like a group's: an attr outside it is deleted, an invalid value is
@@ -92,17 +94,29 @@ func buttonLabel(button map[string]interface{}) string {
 	return stringOf(attrs["label"])
 }
 
-// sanitizeButtonNode is the allowlist for a `button` node's attrs (#426): an `href` that
-// passes isSafeURL with safeHrefSchemes, and a known `variant`; an unsafe href costs the
-// link, never the button (the public renderer leaves out a button with no link).
-//
-// A button's href is a node attr, which the link-mark check in sanitizeMarks never sees, so
-// without this a `javascript:` href would reach the public page. It runs from sanitizePMNode
-// too, for a `button` node in any block's pm.
+// isSafeButtonHref: a link a button may keep (#426). A button's href is a node attr, which
+// the link-mark check in sanitizeMarks never sees, so without this a `javascript:` href
+// would reach the public page. Capped in code points, as the web's `normalizeButtonHref`.
+func isSafeButtonHref(href string) bool {
+	return href != "" && utf8.RuneCountInString(href) <= buttonHrefMaxLength && isSafeURL(href, safeHrefSchemes)
+}
+
+// dropUnsafeButtonHref removes an unsafe href from a `button` node in any block's pm
+// (sanitizePMNode) and leaves its other attrs alone.
+func dropUnsafeButtonHref(node map[string]interface{}) {
+	attrs, _ := node["attrs"].(map[string]interface{})
+	if href, ok := attrs["href"].(string); ok && !isSafeButtonHref(href) {
+		delete(attrs, "href")
+	}
+}
+
+// sanitizeButtonNode is the allowlist for the attrs of a buttons block's `button` nodes
+// (#426): a safe `href` and a known `variant`. An unsafe href costs the link, never the
+// button (the public renderer leaves out a button with no link).
 func sanitizeButtonNode(node map[string]interface{}) {
 	attrs, _ := node["attrs"].(map[string]interface{})
 	kept := map[string]interface{}{}
-	if href, ok := attrs["href"].(string); ok && href != "" && len(href) <= buttonHrefMaxLength && isSafeURL(href, safeHrefSchemes) {
+	if href, ok := attrs["href"].(string); ok && isSafeButtonHref(href) {
 		kept["href"] = href
 	}
 	if variant, ok := attrs["variant"].(string); ok && buttonVariants[variant] && variant != "primary" {

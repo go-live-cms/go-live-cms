@@ -11,7 +11,7 @@ import {
   type ColumnsLayout,
   type GroupAlign,
 } from "@gl-admin/lib/blocks-spec"
-import { editorBlockAtSelection, holderAcceptsType } from "../utils/blockTree"
+import { editorBlockAtSelection, holderAcceptsType, replaceLineOrInsertAfter } from "../utils/blockTree"
 
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {
@@ -136,10 +136,7 @@ export const Columns = Node.create({
             Array.from({ length: columns }, () => emptyColumn(state.schema)),
           )
           if (dispatch) {
-            const emptyLine = block?.node.type === state.schema.nodes.paragraph && block.node.content.size === 0
-            const at = block ? (emptyLine ? block.pos : block.pos + block.node.nodeSize) : state.doc.content.size
-            if (block && emptyLine) tr.replaceWith(block.pos, block.pos + block.node.nodeSize, node)
-            else tr.insert(at, node)
+            const at = replaceLineOrInsertAfter(tr, block, node)
             // columns › column › paragraph.
             tr.setSelection(TextSelection.create(tr.doc, at + 3)).scrollIntoView()
           }

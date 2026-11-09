@@ -61,7 +61,7 @@ export const BUTTONS_ALIGNS = ["left", "center"] as const
 export type ButtonsAlign = (typeof BUTTONS_ALIGNS)[number]
 export const DEFAULT_BUTTONS_ALIGN: ButtonsAlign = "left"
 
-/** The longest href and label stored, here and in the API (`buttonHrefMaxLength`, `buttonLabelMaxRunes`). */
+/** The longest href and label stored, in code points, here and in the API (`buttonHrefMaxLength`, `buttonLabelMaxRunes`). */
 export const BUTTON_HREF_MAX_LENGTH = 2048
 export const BUTTON_LABEL_MAX_LENGTH = 200
 
@@ -85,7 +85,7 @@ const SAFE_BUTTON_SCHEMES = new Set(["http", "https", "mailto", "tel"])
 export function normalizeButtonHref(value: unknown): string | null {
   if (typeof value !== "string") return null
   const href = value.trim()
-  if (href === "" || href.length > BUTTON_HREF_MAX_LENGTH) return null
+  if (href === "" || [...href].length > BUTTON_HREF_MAX_LENGTH) return null
   if (/[\u0000-\u001f\u007f]/.test(href)) return null
   // A bad percent escape outside the query: Go's url.Parse refuses it.
   if (/%(?![0-9a-fA-F]{2})/.test(href.split("?")[0])) return null
@@ -117,7 +117,7 @@ export const BUTTON_HREF_ERROR = "Use a web address, a mailto: or tel: link, or 
 export function buttonHrefFromInput(value: string): { href: string | null } | { error: string } {
   const typed = value.trim()
   if (typed === "") return { href: null }
-  const withScheme = /^[\w-]+(\.[\w-]+)+([/?#].*)?$/.test(typed) && !typed.includes(":") ? `https://${typed}` : typed
+  const withScheme = /^[\w-]+(\.[\w-]+)+(:\d+)?([/?#].*)?$/.test(typed) ? `https://${typed}` : typed
   const href = normalizeButtonHref(withScheme)
   return href === null ? { error: BUTTON_HREF_ERROR } : { href }
 }

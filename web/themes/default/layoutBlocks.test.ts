@@ -44,6 +44,17 @@ describe("at 1280: the rows", () => {
     const body = rule(".prose .group .columns:is(.alignwide, .alignfull)")
     expect(body).toContain("width: auto")
     expect(body).toContain("transform: none")
+    expect(body).toContain("padding-inline: 0")
+  })
+
+  it("a full-width row keeps the page's gutter", () => {
+    const body = rule(".prose .columns.alignfull")
+    expect(body).toContain("padding-inline: var(--container-gutter)")
+    expect(body).toContain("box-sizing: border-box")
+  })
+
+  it("nothing lifts a row out of a full-width group's content column", () => {
+    expect(rule(".prose .group > .columns")).toBe("")
   })
 })
 
