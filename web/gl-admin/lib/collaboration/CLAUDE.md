@@ -248,7 +248,7 @@ kept so references in code stay valid.
 - Every block node type needs the **`data-block-id`** attr (added globally by
   `BlockIdExtension` to paragraph/heading/blockquote/codeBlock/horizontalRule/image/
   bullet_list/ordered_list/listItem, callout/pullQuote/taskList/taskItem (#419), tableBlock (#420),
-  video/audio/file (#423), embed (#425) and every container, `CONTAINER_NODE_NAMES`). Custom/theme nodes must declare it too or
+  video/audio/file (#423), embed (#425), buttons/spacer (#426) and every container, `CONTAINER_NODE_NAMES`). Custom/theme nodes must declare it too or
   `schema.nodeFromJSON` throws "Unsupported attribute".
 - **Callout, pull quote, to-do list (#419, three flow blocks).** Schema in `schemaExtensions`
   (`components/editor/extensions/Callout.ts`, `PullQuote.ts`, `TodoList.ts`: TipTap's TaskList/
@@ -425,6 +425,37 @@ kept so references in code stay valid.
     keys, picker, toolbar, paste), `TableBlock.collab.test.ts` (two users in different cells; a
     column and a row at once), `src/components/blocks/table/TableBlock.test.tsx`, Go
     `post_blocks_table_test.go`, and two cases in `nestingVectors.json`.
+- **Columns, buttons, spacer (#426, `components/editor/extensions/ColumnsBlock.ts`, `ButtonsBlock.ts`,
+  `SpacerBlock.ts`; rules `blocks-spec/layoutBlocks.ts`).** Columns are two rows of the table (`columns`,
+  `column`; a group may hold columns, a column flow and details, never a group).
+  - **The 2–4 limit is not in the content expression (`column+`, `countNotInSchema`).** y-tiptap's
+    `createNodeFromYElement` uses `schema.node()`, which is `createChecked`: it **deletes** an element
+    whose children fail the content check, for every peer. With `column{2,4}`, two people adding a
+    fourth column at once would delete the whole row, and the group around it
+    (`LayoutBlocks.collab.test.ts` found it). So the schema allows any count of columns and the
+    limit lives in the table: `nestingIssues` and Go refuse a stored doc outside it, `blockTree.ts`'s
+    `withChildren` and the commands keep local changes inside it, and the collab server's store runs
+    `repairColumnsFragment` first (a fifth column's blocks move to the fourth, one column gets an empty
+    one beside it, an empty column an empty paragraph), origin `SERVER_ORIGIN`, like stamping ids.
+    **Any new limit two people can break at once must do the same.**
+  - **A removed column's blocks are never deleted** (`utils/columnActions.ts`, `setColumnCount`): they
+    move, with their ids, to the end of the last column that stays, as one move through
+    `applyBlockMove` (so two people removing the same column get two copies, never a loss).
+    Only empty paragraphs aren't carried over. A column's last block deleted or moved away leaves
+    an empty line (`fillWhenEmptied`); deleting a selected column is the ordinary block delete.
+  - **Buttons are parts, kept in `pm`** (`button` nodes, no ids: `isBlockNode`). `href` is a node attr,
+    so nothing else checks it: `normalizeButtonHref` in the bridge (both ways), the node's HTML, the
+    command and the paste sanitizer, `isSafeURL` in Go, and the renderer again. `buttonHrefVectors.json`
+    pins that the editor and the API agree. A peer's bad Yjs update costs the link, never the store.
+    The editor never renders a live `<a>` for one.
+  - **The spacer's `size` is a step of the theme's scale** (`SPACER_STEPS`), never pixels; one
+    `setSpacerSize` per step, last writer wins.
+  - **Stale clients:** a bundle from before #426 lacks the five node types (and a narrower doc, group,
+    details and column), so the fingerprint guard (#416) refuses it (`schemaFingerprint.test.ts`).
+  - Tests: `blockBridge.layout.test.ts`, `extensions/LayoutBlocks.test.ts`, `LayoutBlocks.collab.test.ts`
+    (four users in a tinted group of three columns, concurrent adds and removals, a restart),
+    `blocks-spec/layoutBlocks.test.ts`, `src/components/blocks/layoutBlocks.test.tsx`,
+    `themes/default/layoutBlocks.test.ts`, Go `post_blocks_layout_test.go`, cases in `nestingVectors.json`.
 - **Inline marks highlight, superscript, subscript (#418, `components/editor/extensions/InlineMarks.ts`).**
   TipTap's Highlight (`multicolor: false`: **no `color` attr**, one theme colour), Superscript
   and Subscript 3.4.2, in `schemaExtensions`. Superscript and subscript **exclude each other**

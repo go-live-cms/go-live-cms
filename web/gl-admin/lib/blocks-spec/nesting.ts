@@ -44,6 +44,9 @@ export const FLOW_TYPES = [
   "file",
   // #425
   "embed",
+  // #426
+  "buttons",
+  "spacer",
 ] as const
 
 /**
@@ -54,7 +57,8 @@ export const FLOW_TYPES = [
  * there, would drop them. The flow content expressions name them next to `block`.
  */
 // The media blocks (#423) and embeds (#425) too: one in a quote's pm would never render.
-export const STANDALONE_FLOW_NODE_NAMES = ["tableBlock", "video", "audio", "file", "embed"] as const
+// Buttons and the spacer (#426) too: the page renders them from their own blocks only.
+export const STANDALONE_FLOW_NODE_NAMES = ["tableBlock", "video", "audio", "file", "embed", "buttons", "spacer"] as const
 
 /**
  * The list types: `children` are their items, as before #414. Each list has one item
@@ -94,6 +98,18 @@ export interface ContainerRule {
   parts?: readonly string[]
   /** The parts come after the blocks instead of before them (a gallery's caption, under its images). */
   partsLast?: boolean
+  /** Stays when its last block is deleted or moved away, with an empty paragraph in it (a column). */
+  fillWhenEmptied?: boolean
+  /**
+   * The ProseMirror content expression doesn't enforce `min` and `max` (a `+` instead): a limit
+   * two people can break at once. y-tiptap deletes an element whose children fail the content
+   * check, for every peer, so two people adding a fourth column at once would delete the whole
+   * row (and the group around it). `min`/`max` still hold everywhere else: the validators
+   * (`nestingIssues`), moves, deletes and the commands (`blockTree.ts`'s `withChildren`), and the
+   * collab server repairs the fragment before a store (`repairColumnsFragment`), which also
+   * covers a paste, the one local change that doesn't go through those.
+   */
+  countNotInSchema?: boolean
 }
 
 /**
@@ -110,11 +126,16 @@ export interface ContainerRule {
  * editor state, not an error, so nothing is synthesized and nothing dropped for it). Its
  * caption is a part too (`galleryCaption`, `attrs.caption` runs), after the images, where
  * readers see it.
+ *
+ * Columns (#426) are two rows: `columns` holds 2–4 `column`s and exists at the top level or
+ * in a group; a `column` only exists inside its `columns` and holds flow and details. **No
+ * group in a column** (design 7's open question, decided by the canvas: it draws a group
+ * holding columns, never the reverse), so the table stays acyclic.
  */
 export const CONTAINERS = {
   group: {
     node: "group",
-    accepts: ["flow", "details"],
+    accepts: ["flow", "details", "columns"],
     min: 1,
     topLevel: true,
     synthesize: { type: "paragraph", role: "paragraph" },
@@ -134,6 +155,23 @@ export const CONTAINERS = {
     topLevel: true,
     parts: ["galleryCaption"],
     partsLast: true,
+  },
+  columns: {
+    node: "columns",
+    accepts: ["column"],
+    min: 2,
+    max: 4,
+    topLevel: true,
+    synthesize: { type: "column", role: "column-part" },
+    countNotInSchema: true,
+  },
+  column: {
+    node: "column",
+    accepts: ["flow", "details"],
+    min: 1,
+    topLevel: false,
+    synthesize: { type: "paragraph", role: "paragraph" },
+    fillWhenEmptied: true,
   },
 } as const satisfies Record<string, ContainerRule>
 
@@ -162,6 +200,9 @@ export const BLOCK_NODE_NAMES: Readonly<Record<string, string>> = {
   file: "file",
   // #425
   embed: "embed",
+  // #426
+  buttons: "buttons",
+  spacer: "spacer",
   ...Object.fromEntries(Object.entries(CONTAINERS).map(([type, rule]) => [type, rule.node])),
 }
 
@@ -250,7 +291,8 @@ export function containerContent(type: ContainerType): string {
   const names = rule.accepts.flatMap((accepted) => (accepted === "flow" ? FLOW_NAMES : [BLOCK_NODE_NAMES[accepted]]))
   const choice = names.length === 1 ? names[0] : `(${names.join(" | ")})`
   let blocks: string
-  if (rule.max !== undefined) blocks = `${choice}{${rule.min},${rule.max}}`
+  if (rule.countNotInSchema) blocks = `${choice}+`
+  else if (rule.max !== undefined) blocks = `${choice}{${rule.min},${rule.max}}`
   else blocks = rule.min === 0 ? `${choice}*` : rule.min === 1 ? `${choice}+` : `${choice}{${rule.min},}`
   const parts = rule.parts ?? []
   return (rule.partsLast ? [blocks, ...parts] : [...parts, blocks]).join(" ")
@@ -261,10 +303,10 @@ export const CONTAINER_PART_NODE_NAMES: ReadonlySet<string> = new Set(Object.val
 
 /**
  * The text nodes that are part of a block, not blocks (#346, #420, #421, #424): an image's,
- * a table's or a gallery's caption and a details summary. One line with bold, italic and
- * link only: no block menu, no Turn into and no "Type /" hint in them.
+ * a table's or a gallery's caption, a details summary and a button's label (#426, plain text).
+ * One line with bold, italic and link at most: no block menu, no Turn into and no "Type /" hint in them.
  */
-export const TEXT_PART_NODE_NAMES: ReadonlySet<string> = new Set(["imageCaption", "tableCaption", ...CONTAINER_PART_NODE_NAMES])
+export const TEXT_PART_NODE_NAMES: ReadonlySet<string> = new Set(["imageCaption", "tableCaption", "button", ...CONTAINER_PART_NODE_NAMES])
 
 /** The doc's content expression: flow (`block` and the standalone flow nodes) plus every container allowed at the top. */
 export function topLevelContent(): string {
@@ -397,7 +439,8 @@ export interface NestingIssue {
  * 2. Each block is referenced at most once across `blocks_order` and every `children`.
  * 3. No cycles (a block can't be its own descendant).
  * 4. A container's children are of the types and in the count the table allows; a core
- *    block that is neither a container nor a list has no `children`.
+ *    block that is neither a container nor a list has no `children`; a container that only
+ *    exists inside its parent (a `column`, #426) isn't in `blocks_order`.
  * An unreferenced block is not an error (restores and dropped blocks pass through such
  * states). `children` that isn't an array of strings is an error. Theme and unknown types
  * may have children (as before #414); rules 1–3 apply to them too.
@@ -423,7 +466,12 @@ export function nestingIssues(doc: unknown): NestingIssue[] {
     referencedBy.set(id, parent)
   }
 
-  order.forEach((id, index) => reference(id, null, ["blocks_order", index]))
+  order.forEach((id, index) => {
+    reference(id, null, ["blocks_order", index])
+    // A `column` (#426) only exists inside its `columns`.
+    const rule = has(id) ? containerRule(blocks[id as string].type) : undefined
+    if (rule && !rule.topLevel) issues.push({ path: ["blocks_order", index], message: `a ${String(blocks[id as string].type)} can't be at the top level` })
+  })
 
   const keys = Object.keys(blocks).sort()
   for (const key of keys) {

@@ -14,6 +14,8 @@ import { BlockIcon } from "./BlockIcon"
 import Switch from "../../ui/Switch"
 import { DETAILS_OPEN_HELP, DETAILS_OPEN_LABEL } from "../extensions/DetailsBlock"
 import MediaBlockSettings from "./MediaBlockSettings"
+import Segment from "./BlockSettingsSegment"
+import { ButtonsSettings, ColumnsSettings, SpacerSettings } from "./LayoutBlockSettings"
 import GallerySettings from "./GallerySettings"
 import { galleryImageCount } from "../extensions/GalleryBlock"
 import EmbedBlockSettings from "./EmbedBlockSettings"
@@ -56,6 +58,8 @@ export function blockInfo(block: Pick<EditorBlock, "node">): BlockInfo {
         : entries.find((e) => e.type === type)
   if (entry) return { name: entry.name, icon: entry.icon }
   if (block.node.type.name === "listItem") return { name: "List item", icon: { glyph: "•" } }
+  // #426: not in the catalog (it only exists inside a columns block).
+  if (block.node.type.name === "column") return { name: "Column", icon: { path: "M3 4h18v16H3z" } }
   return { name: type, icon: { glyph: "?" } }
 }
 
@@ -65,43 +69,6 @@ function snapshot(editor: TiptapEditor): Snapshot {
   if (editor.isDestroyed) return null
   const block = editorBlockAtSelection(editor.state)
   return block ? { block, path: ancestorBlocks(editor.state.doc, block) } : null
-}
-
-function Segment<T extends string>({
-  label,
-  values,
-  labels,
-  value,
-  onPick,
-}: {
-  label: string
-  values: readonly T[]
-  labels: Record<T, string>
-  value: T
-  onPick: (value: T) => void
-}) {
-  const id = `block-settings-${label.toLowerCase()}`
-  return (
-    <div className="post-settings__field">
-      <span className="post-settings__label" id={id}>
-        {label}
-      </span>
-      <div className="block-settings__segment" role="radiogroup" aria-labelledby={id}>
-        {values.map((option) => (
-          <button
-            key={option}
-            type="button"
-            role="radio"
-            aria-checked={option === value}
-            className="block-settings__option"
-            onClick={() => onPick(option)}
-          >
-            {labels[option]}
-          </button>
-        ))}
-      </div>
-    </div>
-  )
 }
 
 export default function BlockSettingsPanel({ editor }: { editor: TiptapEditor }) {
@@ -232,6 +199,12 @@ export default function BlockSettingsPanel({ editor }: { editor: TiptapEditor })
         />
       ) : block.node.type.name === "embed" ? (
         <EmbedBlockSettings key={ref.id ?? ref.pos} editor={editor} node={block.node} blockRef={ref} />
+      ) : block.node.type.name === "columns" ? (
+        <ColumnsSettings editor={editor} block={block} />
+      ) : block.node.type.name === "buttons" ? (
+        <ButtonsSettings editor={editor} block={block} />
+      ) : block.node.type.name === "spacer" ? (
+        <SpacerSettings editor={editor} block={block} />
       ) : (
         <p className="post-settings__hint">This block has no settings here. Its toolbar has its options.</p>
       )}

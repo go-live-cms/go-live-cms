@@ -232,7 +232,7 @@ describe("paste sanitizer and containers (#128)", () => {
     )
     expect(out('<div data-type="group" data-style="loud" data-align="huge"><p>a</p></div>')).toBe('<div data-type="group"><p>a</p></div>')
     expect(out('<p data-type="group" data-style="tinted">a</p>')).toBe("<p>a</p>")
-    expect(out('<div data-type="columns"><p>a</p></div>')).toBe("<div><p>a</p></div>")
+    expect(out('<div data-type="sidebar"><p>a</p></div>')).toBe("<div><p>a</p></div>")
     expect(out('<div data-style="tinted" data-align="wide"><p>a</p></div>')).toBe("<div><p>a</p></div>")
     expect(out('<div data-type="group" data-block-id="x-0000000000"><p>a</p></div>')).toBe('<div data-type="group"><p>a</p></div>')
   })

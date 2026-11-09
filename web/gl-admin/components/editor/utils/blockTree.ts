@@ -209,7 +209,19 @@ export function holderAcceptsType(holderName: string, type: string): boolean {
 }
 
 function withChildren(holder: PMNode, children: PMNode[]): boolean {
+  // The table's count (`countNotInSchema`: a column row's 2–4 isn't in its content expression).
+  const rule = containerOfNode(holder.type.name)
+  if (rule) {
+    const blocks = children.filter((child) => isEditorBlock(child, holder)).length
+    if (blocks < rule.min || (rule.max !== undefined && blocks > rule.max)) return false
+  }
   return holder.type.validContent(Fragment.fromArray(children))
+}
+
+/** Whether `holder` may take one more block (the table's maximum, a schema that fits it). */
+export function holderHasRoom(holder: PMNode): boolean {
+  const max = containerOfNode(holder.type.name)?.max
+  return max === undefined || holder.childCount < max
 }
 
 function childrenOf(node: PMNode): PMNode[] {
@@ -218,24 +230,44 @@ function childrenOf(node: PMNode): PMNode[] {
   return out
 }
 
+/** What a move or a delete of a block takes away; `fill`: an empty paragraph stays in its place. */
+export type BlockRemoval = { from: number; to: number; fill?: boolean }
+
 /**
  * The range a move or a delete of `block` removes: the block itself, or, when it is the
  * only block of its container, that container too (a container may not be empty), and so
- * on up. Null when removing it would leave its holder invalid in another way (fewer
+ * on up. A column (#426, `fillWhenEmptied`) doesn't go with its last block: it would change
+ * the row's layout, and with two columns it couldn't, so an empty line stays instead
+ * (`fill`). Null when removing it would leave its holder invalid in another way (fewer
  * columns than the table's minimum), so the caller refuses.
  */
-export function removalRange(doc: PMNode, block: EditorBlock): { from: number; to: number } | null {
+export function removalRange(doc: PMNode, block: EditorBlock): BlockRemoval | null {
   let at: EditorBlock = block
   for (;;) {
     const remaining = childrenOf(at.holder).filter((_, index) => index !== at.index)
     if (withChildren(at.holder, remaining)) return { from: at.pos, to: at.pos + at.node.nodeSize }
     if (remaining.some((child) => isEditorBlock(child, at.holder))) return null
+    if (containerOfNode(at.holder.type.name)?.fillWhenEmptied) return { from: at.pos, to: at.pos + at.node.nodeSize, fill: true }
     // The doc itself: the caller replaces the last block with an empty paragraph.
     if (at.holderPos < 0) return { from: at.pos, to: at.pos + at.node.nodeSize }
     const container = containerBlockOf(doc, at)
     if (!container) return null
     at = container
   }
+}
+
+/**
+ * Puts `node` where the menus' block goes: in place of `block` when it's an empty paragraph,
+ * else right after it (at the end of the doc when there's no block). Returns its position.
+ */
+export function replaceLineOrInsertAfter(tr: Transaction, block: EditorBlock | null, node: PMNode): number {
+  if (block && block.node.type.name === "paragraph" && block.node.content.size === 0) {
+    tr.replaceWith(block.pos, block.pos + block.node.nodeSize, node)
+    return block.pos
+  }
+  const at = block ? block.pos + block.node.nodeSize : tr.doc.content.size
+  tr.insert(at, node)
+  return at
 }
 
 /** A place a block can go: between the holder's children at `index`, i.e. at `pos`. */
@@ -289,9 +321,15 @@ export function planBlockMove(state: EditorState, block: EditorBlock, target: Dr
   const range = removalRange(state.doc, block)
   if (!range) return null
   if (target.pos > range.from && target.pos < range.to) return null
-  const removedDoc = state.tr.delete(range.from, range.to).doc
+  const removedDoc = takeAway(state.tr, range, range.from, range.to).doc
   const tr = moveTr(state, block, target, range)
   return { tr, removedDoc }
+}
+
+/** Removes `from..to` (`removal` mapped through the transaction), or leaves an empty line for a `fill`. */
+function takeAway(tr: Transaction, removal: BlockRemoval, from: number, to: number): Transaction {
+  if (removal.fill) return tr.replaceWith(from, to, tr.doc.type.schema.nodes.paragraph.create())
+  return tr.delete(from, to)
 }
 
 /** `planBlockMove`'s transaction alone (tests, and editors without Yjs). */
@@ -299,14 +337,14 @@ export function moveBlockTr(state: EditorState, block: EditorBlock, target: Drop
   return planBlockMove(state, block, target)?.tr ?? null
 }
 
-function moveTr(state: EditorState, block: EditorBlock, target: DropTarget, range: { from: number; to: number }): Transaction {
+function moveTr(state: EditorState, block: EditorBlock, target: DropTarget, range: BlockRemoval): Transaction {
   const { selection } = state
   const caretInside =
     selection instanceof TextSelection && selection.from > block.pos && selection.to < block.pos + block.node.nodeSize
   const tr = state.tr.insert(target.pos, block.node)
   const from = tr.mapping.map(range.from, 1)
   const to = tr.mapping.map(range.to, -1)
-  tr.delete(from, to)
+  takeAway(tr, range, from, to)
   const at = tr.mapping.slice(1).map(target.pos, -1)
   if (caretInside) {
     tr.setSelection(TextSelection.create(tr.doc, at + (selection.anchor - block.pos), at + (selection.head - block.pos)))
@@ -332,7 +370,10 @@ export function deleteBlockTr(state: EditorState, block: EditorBlock): Transacti
   const range = removalRange(state.doc, block)
   if (!range) return null
   const tr = state.tr
-  if (range.from === 0 && range.to === state.doc.content.size) {
+  if (range.fill) {
+    takeAway(tr, range, range.from, range.to)
+    tr.setSelection(TextSelection.create(tr.doc, range.from + 1))
+  } else if (range.from === 0 && range.to === state.doc.content.size) {
     tr.replaceWith(0, state.doc.content.size, state.schema.nodes.paragraph.create())
     tr.setSelection(TextSelection.create(tr.doc, 1))
   } else {

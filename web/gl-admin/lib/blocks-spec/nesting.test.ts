@@ -110,12 +110,15 @@ describe("the nesting table", () => {
   })
 
   it("derives the content expressions", () => {
-    expect(containerContent("group")).toBe("(block | tableBlock | video | audio | file | embed | details)+")
+    expect(containerContent("group")).toBe("(block | tableBlock | video | audio | file | embed | buttons | spacer | details | columns)+")
     // #421: its part first, then flow.
-    expect(containerContent("details")).toBe("detailsSummary (block | tableBlock | video | audio | file | embed)+")
+    expect(containerContent("details")).toBe("detailsSummary (block | tableBlock | video | audio | file | embed | buttons | spacer)+")
     // #424: image blocks, none is fine, then its caption.
     expect(containerContent("gallery")).toBe("image* galleryCaption")
-    expect(topLevelContent()).toBe("(block | tableBlock | video | audio | file | embed | group | details | gallery)+")
+    // #426: the 2–4 limit is the table's, not the schema's (`countNotInSchema`), each column holding flow and details.
+    expect(containerContent("columns")).toBe("column+")
+    expect(containerContent("column")).toBe("(block | tableBlock | video | audio | file | embed | buttons | spacer | details)+")
+    expect(topLevelContent()).toBe("(block | tableBlock | video | audio | file | embed | buttons | spacer | group | details | gallery | columns)+")
   })
 
   it("details (#421): holds flow, sits at the top or in a group, its summary a part (never a block)", () => {
@@ -131,7 +134,7 @@ describe("the nesting table", () => {
     expect(isBlockNode("paragraph", "details")).toBe(true)
     expect(isBlockNode("detailsSummary", "details")).toBe(false)
     expect(CONTAINER_PART_NODE_NAMES.has("detailsSummary")).toBe(true)
-    expect(TEXT_PART_NODE_NAMES).toEqual(new Set(["imageCaption", "tableCaption", "detailsSummary", "galleryCaption"]))
+    expect(TEXT_PART_NODE_NAMES).toEqual(new Set(["imageCaption", "tableCaption", "button", "detailsSummary", "galleryCaption"]))
   })
 
   it("a group holds flow: core flow types, theme blocks and unknown types, never a container or a list item", () => {

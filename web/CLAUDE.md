@@ -580,6 +580,14 @@ are the most fragile part of the codebase. **Before editing anything under
   The public `src/components/blocks/details/` is the browser's own `<details>` (no script) and the
   default theme styles it. History diffs its summary like a caption and `open` as an attribute.
   Rules: `gl-admin/lib/collaboration/CLAUDE.md` (blockBridge notes, Details).
+- **Columns, buttons, spacer (#426, design `docs/design/block-library.md` 2.2, 4):** Layout
+  entries in the catalog (`/columns`, whose insert opens `ui/ColumnsPicker.ts`: four layouts, Esc
+  inserts nothing; `/buttons`; `/spacer`). Nodes in `extensions/ColumnsBlock.ts`, `ButtonsBlock.ts`,
+  `SpacerBlock.ts`, views in `extensions/LayoutBlockViews.ts` (toolbars, the Link field, the spacer's
+  handle: ↑ ↓ one step, or drag), the Block tab in `ui/LayoutBlockSettings.tsx`. Rules, and what a
+  removed column's blocks do: `gl-admin/lib/collaboration/CLAUDE.md` (blockBridge notes, Layout
+  blocks). Public markup: `src/components/blocks/README.md`, the default theme's rules in
+  `themes/default/styles/theme.css` (`themes/default/layoutBlocks.test.ts`).
 - **Gallery (#424):** a Media entry in the catalog (`/gallery`, an empty gallery on the line, the
   caret in its caption). The node and its commands are `extensions/GalleryBlock.ts`; the view (a grid,
   **Add images** while the cursor is in it, and with no images the empty state: Upload and Choose from

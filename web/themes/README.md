@@ -979,6 +979,9 @@ These are always available and don't need registration:
 | `todo_item`    | A to-do list's item, `checked` or not                     |
 | `group`        | Blocks kept together (`div.group`, `is-tinted`, `alignwide`/`alignfull`) |
 | `details`      | A summary readers open to see its blocks (`<details [open]><summary>`, below) |
+| `columns`      | Blocks side by side (`div.columns > div.column`, below) |
+| `buttons`      | Links styled as buttons (`div.buttons > a.btn.btn-primary`, `.btn-secondary`) |
+| `spacer`       | Empty space, a step of your spacing scale (`div.spacer`) |
 | `table`        | Rows and columns with an optional header row and caption (below) |
 | `video`        | A video from Media with the browser's player (`figure.video-block > video`), never autoplaying |
 | `audio`        | An audio file with the browser's player (`figure.audio-block > audio`) |
@@ -1048,6 +1051,13 @@ text passes 4.5:1 on, in light and dark (a link inside it too), and keep `sup`/`
 opening up the line: the default theme's `styles/theme.css` uses
 `font-size: 0.72em; line-height: 0; position: relative; vertical-align: baseline` with
 `top: -0.5em` / `bottom: -0.25em`.
+
+**Columns, buttons, spacer (#426).** `.columns` is yours to lay out: a row of `div.column`, two by
+default, `is-3-columns` / `is-4-columns`, `is-33-67` / `is-67-33` for the two-column splits, and
+`alignwide` / `alignfull` like a group. Stack them on phones with the DOM order: don't reorder a
+column. A spacer's height is `var(--space-5)`, `--space-7`, `--space-8` or `--space-9`; define those on
+your scale, or it uses the default theme's (24, 48, 64, 96 px). Style `.btn`, `.btn-primary` and
+`.btn-secondary`. The default theme's rules are in `styles/theme.css`.
 
 **Media blocks (#423).** Video, audio and file render only when the file is there: a block
 whose media was deleted is left out with its caption (so is an image), and files come only

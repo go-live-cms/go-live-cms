@@ -245,6 +245,13 @@ interface BlockComponentProps {
   (`colgroup` when it spans columns; a header cell never spans rows). Cells come from
   `tableRows` (paragraphs only, spans clamped) and render like a list item's text. The theme
   makes `.table-scroll` scroll sideways (`themes/README.md`).
+- **Columns, buttons, spacer (#426, "Published · layout"):** `columns/` is `div.columns` of
+  `div.column` (`column/`, through `renderBlock`), `is-3-columns` / `is-4-columns` past two,
+  `is-33-67` / `is-67-33` for the splits, `alignwide` / `alignfull` as on a group; each column gets
+  its own `ImageSizesContext` (`columnImageSizes`). `buttons/` is `div.buttons` (`is-center`) of
+  `a.btn.btn-primary` / `.btn-secondary`: every href goes through `normalizeButtonHref` again, and
+  a button with no link or label is left out. `spacer/` is an empty `div.spacer`, `aria-hidden`, its
+  height `var(--space-<n>, <px>)` from the theme's scale.
 - **Inline marks (`utils/contentRenderer.tsx`):** bold `<strong>`, italic `<em>`, underline `<u>`,
   strike `<s>`, code `<code>`, link `<a>` (`safeHref`), and since #418 highlight `<mark>` (no
   style: the theme's one colour), superscript `<sup>` and subscript `<sub>`, nested in schema

@@ -97,6 +97,14 @@ func sanitizeBlock(block map[string]interface{}) {
 		sanitizeFileAttrs(attrs)
 	case "embed":
 		sanitizeEmbedAttrs(attrs)
+	case "columns":
+		sanitizeColumnsAttrs(attrs)
+	case "column":
+		keepOnlyAttrs(attrs)
+	case "buttons":
+		sanitizeButtonsAttrs(attrs)
+	case "spacer":
+		sanitizeSpacerAttrs(attrs)
 	}
 
 	// Block colour (#356): a palette token on the core blocks that take one.
@@ -459,6 +467,13 @@ func sanitizePMNode(node map[string]interface{}) {
 		if colorablePMTypes[stringOf(node["type"])] {
 			sanitizeBlockColor(nattrs)
 		}
+	}
+
+	// A button's href is a node attr (#426), which the link-mark check below never sees. Only
+	// the unsafe href goes here: a custom node may use the name, with attrs of its own (a
+	// buttons block's are an allowlist, sanitizeButtonsPM).
+	if stringOf(node["type"]) == "button" {
+		dropUnsafeButtonHref(node)
 	}
 
 	if raw, present := node["marks"]; present {

@@ -15,6 +15,9 @@ collab server (`web/collab-server/`) converts between the two. See
   kind each takes (`MEDIA_BLOCK_KINDS`), the upload `accept` lists, the file label's rules, the
   "PDF · 240 KB" line, the icons, and `isMediaMissing` (the API's `media_missing`: a deleted
   media, not a failed lookup).
+- `layoutBlocks.ts` (#426): the rules of columns, buttons and the spacer (layouts, widths, the
+  button href check `normalizeButtonHref`, the spacer's theme steps). `buttonHrefVectors.json` is
+  shared with the API.
 - `embeds.ts` (#425): the embed providers: ref patterns, player addresses and their iframe
   attributes, frame hosts (the CSPs), and the title's rules.
 - `nesting.ts` (#414): **the nesting table** (which types are containers and what each holds),
@@ -83,6 +86,15 @@ posts.block_doc → publish → post_versions → public site (SSR)
 - **file** (#423): flow; `attrs.mediaId` and `attrs.label`, the link text (plain, by
   `normalizeFileLabel`: trimmed, at most `FILE_LABEL_MAX_LENGTH` code points; absent: the file's
   name)
+- **columns** / **column** (#426): containers. `columns` holds 2–4 `column` blocks (`attrs.layout`
+  `50-50`/`33-67`/`67-33`, absent: equal, applying only with exactly two; `attrs.align` `wide`/`full`,
+  absent: content), at the top or in a group. A `column` only exists in a `columns` and holds flow and
+  details, never a group (the table stays acyclic)
+- **buttons** (#426): flow, its buttons in `attrs.pm` (a `buttons` node of `button` nodes, each
+  `href` when it has one, `variant` when `secondary`, its label as one text run; parts, no ids),
+  `attrs.text` the labels, `attrs.align` `center` (absent: left)
+- **spacer** (#426): flow, `attrs.size` a step of the theme's spacing scale: `5`, `7`, `8`, `9`
+  (`SPACER_STEPS`), never pixels
 - Theme blocks: unknown types keep their ProseMirror JSON in `attrs.pm` and round-trip
   unchanged.
 

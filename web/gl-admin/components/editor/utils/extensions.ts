@@ -15,6 +15,7 @@ import { mentionMenuManager } from "./mentionMenuManager"
 import { BlockNodeViews } from "../extensions/BlockNodeViews"
 import { TableKeyboard } from "../extensions/TableBlock"
 import { DetailsKeyboard } from "../extensions/DetailsBlock"
+import { ButtonsKeyboard } from "../extensions/ButtonsBlock"
 import { GalleryKeyboard } from "../extensions/GalleryKeyboard"
 import { TEXT_PART_NODE_NAMES } from "@gl-admin/lib/blocks-spec/nesting"
 import { BlockActions } from "./blockActions"
@@ -94,6 +95,10 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
       schema.embed,
       // #425: insert an embed, its caption; no schema.
       schema.embedCommands,
+      // #426
+      schema.columns,
+      schema.buttons,
+      schema.spacer,
       schema.mention,
       schema.contentLink,
       schema.dateChip,
@@ -105,6 +110,8 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
       TableKeyboard,
       // #421: ↵ from the summary into the content, ⌫ never deletes the summary; no schema.
       DetailsKeyboard,
+      // #426: ↵ leaves a button for the line under it, ⌫ never joins two; no schema.
+      ButtonsKeyboard,
       // #424: ← → between images, ⌘⇧← → reorder, ↵ to the image's alt text; no schema.
       GalleryKeyboard,
       // The block menu's Ctrl D / Ctrl Shift P (#356); no schema.
@@ -137,6 +144,10 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
               return "Write a caption…"
             case "detailsSummary":
               return "Summary"
+            case "button":
+              return "Button text"
+            case "spacer":
+              return ""
             case "pullQuote":
               return "Pull quote"
             case "heading":

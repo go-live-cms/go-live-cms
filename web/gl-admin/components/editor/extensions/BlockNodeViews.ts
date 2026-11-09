@@ -32,6 +32,7 @@ import { chooseGalleryImages, chooseMediaFor, uploadGalleryImages } from "../blo
 import { deleteBlockTr, editorBlockAt, refOfBlock } from "../utils/blockTree"
 import { moveGalleryImage, removeGalleryImage } from "../utils/galleryActions"
 import { focalObjectPosition } from "@gl-admin/lib/mediaLibrary"
+import { ButtonsView, ColumnsView, SpacerView } from "./LayoutBlockViews"
 
 const blockNodeViewsKey = new PluginKey("blockNodeViews")
 
@@ -95,6 +96,10 @@ export const BlockNodeViews = Extension.create({
             file: (node, view, getPos) => new MediaBlockView(node, view, getPos as () => number | undefined, editor),
             // #425 (EmbedBlockViews.ts): nothing from the provider loads until Load.
             embed: (node, view, getPos) => new EmbedBlockView(node, view, getPos as () => number | undefined, editor),
+            // #426: columns, buttons and the spacer (LayoutBlockViews.ts).
+            columns: (node, view, getPos) => new ColumnsView(node, view, getPos as () => number | undefined, editor),
+            buttons: (node, view, getPos) => new ButtonsView(node, view, getPos as () => number | undefined, editor),
+            spacer: (node, view, getPos) => new SpacerView(node, view, getPos as () => number | undefined, editor),
           },
           // Marks the quote or pull quote the cursor is in, so its empty citation field
           // shows, and the group or callout it is in (or the selected group), so its
@@ -126,9 +131,9 @@ export const BlockNodeViews = Extension.create({
 })
 
 /** The nodes whose view shows a field or settings while the cursor is in them. */
-const MARKED_WHILE_IN = new Set(["blockquote", "pullQuote", "group", "callout", "tableBlock", "details", "gallery"])
+const MARKED_WHILE_IN = new Set(["blockquote", "pullQuote", "group", "callout", "tableBlock", "details", "gallery", "columns", "buttons"])
 /** The nodes whose view shows its toolbar while it is selected. */
-const MARKED_WHEN_SELECTED = new Set(["group", "tableBlock", "details", "gallery"])
+const MARKED_WHEN_SELECTED = new Set(["group", "tableBlock", "details", "gallery", "columns", "buttons"])
 
 /** The `data-block-id` the node's renderHTML would put on it (BlockIdExtension). */
 function setBlockId(dom: HTMLElement, node: PMNode) {

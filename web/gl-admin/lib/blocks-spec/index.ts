@@ -2,11 +2,23 @@ import { z } from "zod"
 import { isThemeBlockType, themeBlockIssues, type ThemeBlockLookup } from "./themeBlocks"
 import { nestingIssues } from "./nesting"
 import { FILE_LABEL_MAX_LENGTH } from "./media"
+import {
+  BUTTON_LABEL_MAX_LENGTH,
+  BUTTON_VARIANTS,
+  BUTTONS_ALIGNS,
+  COLUMNS_LAYOUTS,
+  normalizeButtonHref,
+  SPACER_SIZES,
+  type ButtonsAlign,
+  type ColumnsLayout,
+  type SpacerSize,
+} from "./layoutBlocks"
 import { EMBED_PROVIDERS, isValidEmbedRef, normalizeEmbedTitle, type EmbedProvider } from "./embeds"
 
 export * from "./nesting"
 export * from "./media"
 export * from "./inlineNodes"
+export * from "./layoutBlocks"
 export * from "./embeds"
 
 // Block Spec v1 - Authoritative Types
@@ -35,6 +47,10 @@ export type KnownBlockType =
   | "audio"
   | "file"
   | "embed"
+  | "columns"
+  | "column"
+  | "buttons"
+  | "spacer"
 
 /** BlockType allows known types + arbitrary custom types from themes */
 export type BlockType = KnownBlockType | (string & {})
@@ -495,6 +511,41 @@ export type FileBlock = BaseBlock<
 >
 
 /**
+ * Columns (#426), a container (`nesting.ts`): `children` are its 2–4 `column` blocks.
+ * Defaults left out: no `layout` means equal widths, no `align` the content width.
+ */
+export type ColumnsBlock = BaseBlock<
+  "columns",
+  {
+    /** Absent: "equal". The two-column splits only apply with exactly two columns. */
+    layout?: ColumnsLayout
+    /** Absent: "content". */
+    align?: GroupAlign
+  }
+>
+
+/** One column (#426): only inside a `columns`. `children` are its blocks (flow, details). */
+export type ColumnBlock = BaseBlock<"column", {}>
+
+/**
+ * Buttons (#426), a flow block: its buttons are parts, kept in `attrs.pm` (a `buttons` node
+ * of `button` nodes, each `href`, `variant` and label text), not blocks. `attrs.text` is the
+ * labels (what search reads).
+ */
+export type ButtonsBlock = BaseBlock<
+  "buttons",
+  {
+    pm: any
+    text?: string
+    /** Absent: "left". */
+    align?: ButtonsAlign
+  }
+>
+
+/** Spacer (#426), a flow block: `size` is a step of the theme's spacing scale, not pixels. */
+export type SpacerBlock = BaseBlock<"spacer", { size?: SpacerSize }>
+
+/**
  * Custom block type for theme-defined blocks (e.g., alert, callout, etc.)
  * Preserves the full ProseMirror JSON for round-trip fidelity.
  */
@@ -530,6 +581,10 @@ export type Block =
   | VideoBlock
   | AudioBlock
   | FileBlock
+  | ColumnsBlock
+  | ColumnBlock
+  | ButtonsBlock
+  | SpacerBlock
   | CustomBlock
 
 export interface BlockDocV1 {
@@ -769,6 +824,53 @@ export const zFile = zBase.extend({
   }),
 })
 
+// #426. Count and child types are the nesting table's (nestingIssues).
+export const zColumns = zBase.extend({
+  type: z.literal("columns"),
+  attrs: z.object({
+    layout: z.enum(COLUMNS_LAYOUTS).optional(),
+    align: z.enum(GROUP_ALIGNS).optional(),
+  }),
+  children: z.array(zBlockID),
+})
+
+export const zColumn = zBase.extend({
+  type: z.literal("column"),
+  attrs: z.object({}),
+  children: z.array(zBlockID),
+})
+
+// A button's only attrs are its link and style (`.strict()`, as the API keeps nothing else),
+// and its href is one the API would keep: the bridge never writes another.
+const zButton = z.object({
+  type: z.literal("button"),
+  attrs: z
+    .object({
+      href: z.string().refine((href) => normalizeButtonHref(href) === href.trim(), "not a safe link").optional(),
+      variant: z.enum(BUTTON_VARIANTS).optional(),
+    })
+    .strict()
+    .optional(),
+  content: z
+    .array(z.object({ type: z.literal("text"), text: z.string().min(1) }).strict())
+    .refine((runs) => [...runs.map((run) => run.text).join("")].length <= BUTTON_LABEL_MAX_LENGTH, "label too long")
+    .optional(),
+})
+
+export const zButtons = zBase.extend({
+  type: z.literal("buttons"),
+  attrs: z.object({
+    pm: z.object({ type: z.literal("buttons"), content: z.array(zButton).min(1) }),
+    text: z.string().optional(),
+    align: z.enum(BUTTONS_ALIGNS).optional(),
+  }),
+})
+
+export const zSpacer = zBase.extend({
+  type: z.literal("spacer"),
+  attrs: z.object({ size: z.enum(SPACER_SIZES).optional() }),
+})
+
 // #425. A ref is checked against its own provider's pattern, a title by the rules the
 // bridge writes it with (`embeds.ts`, the same as the API's).
 export const zEmbed = zBase.extend({
@@ -824,6 +926,10 @@ const knownBlockSchemas: Record<KnownBlockType, z.ZodTypeAny> = {
   audio: zAudio,
   file: zFile,
   embed: zEmbed,
+  columns: zColumns,
+  column: zColumn,
+  buttons: zButtons,
+  spacer: zSpacer,
 }
 
 // A known type must match its own schema; only other types fall back to the custom

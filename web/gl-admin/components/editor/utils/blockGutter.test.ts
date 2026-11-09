@@ -6,6 +6,7 @@ import { CORE_BLOCKS } from "../blocks/catalog"
 import { refOf, topLevelBlockAt } from "./blockActions"
 import { insertFromGutter } from "./blockGutter"
 import { currentTableSizePicker } from "../ui/TableSizePicker"
+import { currentColumnsPicker } from "../ui/ColumnsPicker"
 
 // Inserting from the gutter's + (#415): every catalog block, below a block or into the
 // empty line + is on, by the block's id.
@@ -43,10 +44,17 @@ const PM_NODE: Record<string, string> = {
   embed: "embed",
   audio: "audio",
   file: "file",
+  columns: "columns",
+  buttons: "buttons",
+  spacer: "spacer",
 }
 
 // The table asks for its size first (#420): Create table with the defaults.
-const createPickedTable = () => currentTableSizePicker()?.submit()
+const createPickedTable = () => {
+  currentTableSizePicker()?.submit()
+  // The columns ask for a layout (#426).
+  currentColumnsPicker()?.pick(0)
+}
 
 const types = (ed: Editor) => {
   const out: string[] = []

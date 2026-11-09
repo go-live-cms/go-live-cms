@@ -745,6 +745,271 @@
     }
   }
 
+  // Columns (#426, "Editor · columns, group, buttons, spacer"): a grid of columns, each a
+  // dashed box, and the toolbar (Columns, Layout, Width) while the cursor is in it.
+  .editor-columns {
+    margin: 12px 0;
+    position: relative;
+
+    &[data-align="wide"] {
+      margin-inline: -24px;
+    }
+
+    &[data-align="full"] {
+      margin-inline: -48px;
+    }
+
+    @media (width <= 768px) {
+      &[data-align="wide"],
+      &[data-align="full"] {
+        margin-inline: 0;
+      }
+    }
+  }
+
+  .editor-columns__toolbar,
+  .editor-buttons__toolbar {
+    align-items: center;
+    display: none;
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-4);
+    margin-bottom: var(--space-2);
+    position: relative;
+    user-select: none;
+  }
+
+  .editor-columns.has-selection > .editor-columns__toolbar,
+  .editor-buttons.has-selection > .editor-buttons__toolbar {
+    display: flex;
+  }
+
+  .editor-group__field[hidden] {
+    display: none;
+  }
+
+  .editor-columns__content {
+    display: grid;
+    gap: var(--space-3);
+    grid-template-columns: repeat(var(--columns, 2), minmax(0, 1fr));
+  }
+
+  .editor-columns[data-layout="33-67"] > .editor-columns__content {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  }
+
+  .editor-columns[data-layout="67-33"] > .editor-columns__content {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  }
+
+  .editor-column {
+    border: 1px dashed var(--border-color);
+    border-radius: var(--radius-sm);
+    min-width: 0;
+    padding: var(--space-2) var(--space-3);
+    position: relative;
+
+    > :first-child {
+      margin-top: 0;
+    }
+
+    > :last-child {
+      margin-bottom: 0;
+    }
+  }
+
+  // Buttons (#426): a row of labels styled as buttons, edited in place; a button with no
+  // link has a dashed outline, so it reads as unfinished.
+  .editor-buttons {
+    margin: 12px 0;
+    position: relative;
+  }
+
+  .editor-buttons__content {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .editor-buttons[data-align="center"] > .editor-buttons__content {
+    justify-content: center;
+  }
+
+  .editor-button {
+    border: 1px solid transparent;
+    border-radius: var(--radius-md);
+    font-weight: 500;
+    min-height: 36px;
+    min-width: 80px;
+    padding: var(--space-2) var(--space-4);
+    text-align: center;
+
+    &[data-variant="primary"] {
+      background: var(--accent-solid);
+      color: var(--accent-on);
+    }
+
+    &[data-variant="secondary"] {
+      border-color: var(--border-strong);
+      color: var(--text-primary);
+    }
+
+    &:not([data-href]) {
+      border-color: var(--border-strong);
+      border-style: dashed;
+    }
+  }
+
+  .editor-buttons__icon {
+    align-items: center;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: inline-flex;
+    height: 28px;
+    justify-content: center;
+    width: 28px;
+
+    &:hover {
+      background: var(--background-hover);
+      color: var(--text-primary);
+    }
+
+    &.is-active {
+      color: var(--text-selected);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--focus-ring);
+      outline-offset: 1px;
+    }
+  }
+
+  .editor-buttons__link {
+    background: var(--background);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-2);
+    width: min(300px, 100%);
+
+    input {
+      background: var(--background);
+      border: 1px solid var(--control-border);
+      border-radius: var(--radius-sm);
+      color: var(--text-primary);
+      font: inherit;
+      font-size: var(--type-footnote);
+      min-height: 32px;
+      padding: 0 var(--space-2);
+
+      &[aria-invalid="true"] {
+        border-color: var(--danger-text);
+      }
+
+      &:focus-visible {
+        border-color: var(--focus-ring);
+        outline: 2px solid var(--focus-ring);
+        outline-offset: -1px;
+      }
+    }
+  }
+
+  .editor-buttons__link-error {
+    color: var(--danger-text);
+    font-size: var(--type-footnote);
+    margin: 0;
+  }
+
+  .editor-buttons__link-remove {
+    align-self: flex-end;
+    background: transparent;
+    border: 0;
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    cursor: pointer;
+    font: inherit;
+    font-size: var(--type-footnote);
+    min-height: 28px;
+    padding: 0 var(--space-2);
+
+    &:hover {
+      background: var(--background-hover);
+      color: var(--text-primary);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--focus-ring);
+      outline-offset: 1px;
+    }
+  }
+
+  // The spacer (#426): just space, hatched with its height while hovered or selected.
+  .editor-spacer {
+    border-radius: var(--radius-sm);
+    position: relative;
+
+    &:hover,
+    &.ProseMirror-selectednode {
+      background: repeating-linear-gradient(135deg, var(--background-hover) 0 6px, transparent 6px 12px);
+      outline: 1px dashed var(--border-strong);
+    }
+
+    &.ProseMirror-selectednode {
+      outline: 2px solid var(--focus-ring);
+    }
+  }
+
+  .editor-spacer__label {
+    color: var(--text-secondary);
+    display: none;
+    font-size: var(--type-footnote);
+    left: 50%;
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    user-select: none;
+  }
+
+  .editor-spacer:hover > .editor-spacer__label,
+  .editor-spacer.ProseMirror-selectednode > .editor-spacer__label {
+    display: inline;
+  }
+
+  .editor-spacer__toolbar {
+    bottom: -7px;
+    display: none;
+    left: 50%;
+    position: absolute;
+    transform: translateX(-50%);
+  }
+
+  .editor-spacer:hover > .editor-spacer__toolbar,
+  .editor-spacer.ProseMirror-selectednode > .editor-spacer__toolbar,
+  .editor-spacer__toolbar:focus-within {
+    display: block;
+  }
+
+  .editor-spacer__handle {
+    background: var(--background);
+    border: 1px solid var(--border-strong);
+    border-radius: 7px;
+    cursor: ns-resize;
+    display: block;
+    height: 14px;
+    padding: 0;
+    touch-action: none;
+    width: 44px;
+
+    &:focus-visible {
+      outline: 2px solid var(--focus-ring);
+      outline-offset: 1px;
+    }
+  }
+
   // Details (#421, "Editor · table, details, …"): a chevron, the summary in bold, the blocks
   // under it (always shown, open by default or not) with a rule beside them, and the "Open
   // by default" switch while the cursor is in it.
@@ -1037,6 +1302,9 @@
   &[contenteditable="false"] .editor-callout > .editor-callout__settings,
   &[contenteditable="false"] .editor-table > .editor-table__toolbar,
   &[contenteditable="false"] .editor-details > .editor-details__toolbar,
+  &[contenteditable="false"] .editor-columns > .editor-columns__toolbar,
+  &[contenteditable="false"] .editor-buttons > .editor-buttons__toolbar,
+  &[contenteditable="false"] .editor-spacer > .editor-spacer__toolbar,
   &[contenteditable="false"] .editor-gallery > .editor-gallery__toolbar,
   &[contenteditable="false"] .editor-gallery__empty .editor-media__actions,
   &[contenteditable="false"] .editor-gallery-image__tools {
@@ -2267,6 +2535,58 @@
     &:focus-visible {
       outline: 2px solid var(--focus-ring);
       outline-offset: 2px;
+    }
+  }
+}
+
+// The columns' layout picker (#426, `ui/ColumnsPicker.ts`): the table picker's dialog, four
+// layouts drawn as their columns.
+.editor-columns-picker {
+  &__hint {
+    color: var(--text-secondary);
+    font-size: var(--type-footnote);
+    margin: 0;
+  }
+
+  &__options {
+    display: grid;
+    gap: var(--space-2);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  &__option {
+    background: var(--background);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    font: inherit;
+    font-size: var(--type-footnote);
+    gap: 6px;
+    min-height: 44px;
+    padding: var(--space-2);
+
+    &:hover {
+      background: var(--background-hover);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--focus-ring);
+      outline-offset: 2px;
+    }
+  }
+
+  &__preview {
+    display: grid;
+    gap: 3px;
+    height: 28px;
+    width: 100%;
+
+    span {
+      background: var(--background-active);
+      border-radius: 3px;
     }
   }
 }

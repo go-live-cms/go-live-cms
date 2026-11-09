@@ -19,6 +19,7 @@ import {
 import { applyTurnInto, computeTurnIntoFromSelection } from "../utils/turnInto"
 import { stubJsdomRangeLayout } from "@gl-admin/lib/collaboration/testHelpers"
 import { currentTableSizePicker } from "../ui/TableSizePicker"
+import { currentColumnsPicker } from "../ui/ColumnsPicker"
 
 // The block catalog (#415): one list for the slash menu, the + menu and Turn into.
 
@@ -78,7 +79,7 @@ describe("the catalog", () => {
         ],
       ],
       ["Media", ["Image", "Gallery", "Video", "Audio", "File"]],
-      ["Layout", ["Divider", "Group"]],
+      ["Layout", ["Divider", "Group", "Columns", "Buttons", "Spacer"]],
       ["Embeds", ["YouTube", "Vimeo", "X", "Embed a link"]],
     ])
     expect(BLOCK_GROUPS.map((g) => g.label)).toEqual(["Text", "Media", "Layout", "Embeds", "Advanced"])
@@ -217,6 +218,9 @@ const PM_NODE: Record<string, string> = {
   audio: "audio",
   file: "file",
   embed: "embed",
+  columns: "columns",
+  buttons: "buttons",
+  spacer: "spacer",
 }
 
 describe("insert", () => {
@@ -225,8 +229,9 @@ describe("insert", () => {
     const from = ed.state.doc.firstChild!.nodeSize + 1
     ed.commands.setTextSelection(from + 4)
     entry.insert(ed, { from, to: from + 4 })
-    // The table asks for its size first (#420): Create table with the defaults.
+    // The table asks for its size first (#420), the columns for a layout (#426).
     currentTableSizePicker()?.submit()
+    currentColumnsPicker()?.pick(0)
     const types: string[] = []
     ed.state.doc.forEach((node) => types.push(node.type.name))
     expect(types).toContain(PM_NODE[entry.type])

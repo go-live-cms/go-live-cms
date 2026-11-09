@@ -184,7 +184,9 @@ differs, and the API compares it with the password change alone).
 
 Hocuspocus `debounce: 2000`, `maxDebounce: 10000` (env-tunable), and on the last
 disconnect. `prepareStore`:
-1. `stampFragmentBlockIds` in the live doc (origin `SERVER_ORIGIN`; not a client edit);
+1. `repairColumnsFragment` (#426: a columns count Yjs merged past 2–4, or an empty column, put
+   back in shape; a fifth column's blocks move to the fourth, nothing is lost) and
+   `stampFragmentBlockIds` in the live doc (origin `SERVER_ORIGIN`; not a client edit);
 2. `fragmentToBlockDoc` with `meta.dropped` (→ `restoreDroppedBlocks`) and the previous
    doc for nodes that can't be converted (a container's children one at a time, #414),
    then `dedupeBlockRefs` (repeats within one list, as the API does);

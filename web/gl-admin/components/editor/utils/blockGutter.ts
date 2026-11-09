@@ -49,7 +49,9 @@ export const BlockGutterKeys = Extension.create<Record<string, never>, BlockGutt
  * offers no group.
  */
 export function gutterAccepts(editor: Editor, ref: BlockRef): (entry: CatalogEntry) => boolean {
-  const holder = resolveBlock(editor.state.doc, ref)?.holder.type.name ?? "doc"
+  const block = resolveBlock(editor.state.doc, ref)
+  // A column's + adds to the column (#426): nothing the menus offer can go beside it.
+  const holder = block?.node.type.name === "column" ? "column" : (block?.holder.type.name ?? "doc")
   return (entry) => holderAcceptsType(holder, entry.type)
 }
 
@@ -69,7 +71,8 @@ export function insertFromGutter(editor: Editor, ref: BlockRef, entry: CatalogEn
     at = pos + 1
     editor.chain().focus().setTextSelection(at).run()
   } else {
-    const after = pos + node.nodeSize
+    // A new line after the block, or at the end of a column (#426).
+    const after = pos + node.nodeSize - (node.type.name === "column" ? 1 : 0)
     editor.chain().focus().insertContentAt(after, { type: "paragraph" }).setTextSelection(after + 1).run()
     at = after + 1
   }

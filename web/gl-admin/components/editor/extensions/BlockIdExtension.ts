@@ -133,6 +133,9 @@ export const BlockIdExtension = Extension.create({
           "file",
           // #425
           "embed",
+          // #426: a row of buttons is one block (its `button`s are parts, with no id).
+          "buttons",
+          "spacer",
           ...CONTAINER_NODE_NAMES,
         ],
         attributes: {

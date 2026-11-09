@@ -547,6 +547,208 @@
           "gallery-02": { "id": "gallery-02", "type": "gallery", "version": 1, "attrs": {}, "children": [] }
         }
       }
+    },
+    {
+      "name": "columns (#426): two columns of flow and a details",
+      "valid": true,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["columns-01"],
+        "blocks": {
+          "columns-01": { "id": "columns-01", "type": "columns", "version": 1, "attrs": { "layout": "33-67", "align": "wide" }, "children": ["column-001", "column-002"] },
+          "column-001": { "id": "column-001", "type": "column", "version": 1, "attrs": {}, "children": ["para-00001"] },
+          "column-002": { "id": "column-002", "type": "column", "version": 1, "attrs": {}, "children": ["details-01", "buttons-01", "spacer-001"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "x" } },
+          "details-01": { "id": "details-01", "type": "details", "version": 1, "attrs": {}, "children": ["para-00002"] },
+          "para-00002": { "id": "para-00002", "type": "paragraph", "version": 1, "attrs": { "text": "x" } },
+          "buttons-01": { "id": "buttons-01", "type": "buttons", "version": 1, "attrs": { "pm": { "type": "buttons", "content": [{ "type": "button", "attrs": { "href": "/a" }, "content": [{ "type": "text", "text": "Go" }] }] }, "text": "Go" } },
+          "spacer-001": { "id": "spacer-001", "type": "spacer", "version": 1, "attrs": { "size": "7" } }
+        }
+      }
+    },
+    {
+      "name": "columns (#426): four columns is the most",
+      "valid": true,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["columns-01"],
+        "blocks": {
+          "columns-01": { "id": "columns-01", "type": "columns", "version": 1, "attrs": {}, "children": ["column-001", "column-002", "column-003", "column-004"] },
+          "column-001": { "id": "column-001", "type": "column", "version": 1, "attrs": {}, "children": ["para-00001"] },
+          "column-002": { "id": "column-002", "type": "column", "version": 1, "attrs": {}, "children": ["para-00002"] },
+          "column-003": { "id": "column-003", "type": "column", "version": 1, "attrs": {}, "children": ["para-00003"] },
+          "column-004": { "id": "column-004", "type": "column", "version": 1, "attrs": {}, "children": ["para-00004"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "x" } },
+          "para-00002": { "id": "para-00002", "type": "paragraph", "version": 1, "attrs": { "text": "x" } },
+          "para-00003": { "id": "para-00003", "type": "paragraph", "version": 1, "attrs": { "text": "x" } },
+          "para-00004": { "id": "para-00004", "type": "paragraph", "version": 1, "attrs": { "text": "x" } }
+        }
+      }
+    },
+    {
+      "name": "columns (#426): a group may hold columns",
+      "valid": true,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["group-0001"],
+        "blocks": {
+          "group-0001": { "id": "group-0001", "type": "group", "version": 1, "attrs": { "style": "tinted" }, "children": ["columns-01"] },
+          "columns-01": { "id": "columns-01", "type": "columns", "version": 1, "attrs": {}, "children": ["column-001", "column-002"] },
+          "column-001": { "id": "column-001", "type": "column", "version": 1, "attrs": {}, "children": ["para-00001"] },
+          "column-002": { "id": "column-002", "type": "column", "version": 1, "attrs": {}, "children": ["para-00002"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "x" } },
+          "para-00002": { "id": "para-00002", "type": "paragraph", "version": 1, "attrs": { "text": "x" } }
+        }
+      }
+    },
+    {
+      "name": "columns (#426): one column is too few",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["columns-01"],
+        "blocks": {
+          "columns-01": { "id": "columns-01", "type": "columns", "version": 1, "attrs": {}, "children": ["column-001"] },
+          "column-001": { "id": "column-001", "type": "column", "version": 1, "attrs": {}, "children": ["para-00001"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "x" } }
+        }
+      }
+    },
+    {
+      "name": "columns (#426): five columns is too many",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["columns-01"],
+        "blocks": {
+          "columns-01": { "id": "columns-01", "type": "columns", "version": 1, "attrs": {}, "children": ["column-001", "column-002", "column-003", "column-004", "column-005"] },
+          "column-001": { "id": "column-001", "type": "column", "version": 1, "attrs": {}, "children": ["para-00001"] },
+          "column-002": { "id": "column-002", "type": "column", "version": 1, "attrs": {}, "children": ["para-00002"] },
+          "column-003": { "id": "column-003", "type": "column", "version": 1, "attrs": {}, "children": ["para-00003"] },
+          "column-004": { "id": "column-004", "type": "column", "version": 1, "attrs": {}, "children": ["para-00004"] },
+          "column-005": { "id": "column-005", "type": "column", "version": 1, "attrs": {}, "children": ["para-00005"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "x" } },
+          "para-00002": { "id": "para-00002", "type": "paragraph", "version": 1, "attrs": { "text": "x" } },
+          "para-00003": { "id": "para-00003", "type": "paragraph", "version": 1, "attrs": { "text": "x" } },
+          "para-00004": { "id": "para-00004", "type": "paragraph", "version": 1, "attrs": { "text": "x" } },
+          "para-00005": { "id": "para-00005", "type": "paragraph", "version": 1, "attrs": { "text": "x" } }
+        }
+      }
+    },
+    {
+      "name": "columns (#426): a columns block holds columns only",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["columns-01"],
+        "blocks": {
+          "columns-01": { "id": "columns-01", "type": "columns", "version": 1, "attrs": {}, "children": ["para-00001", "para-00002"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "x" } },
+          "para-00002": { "id": "para-00002", "type": "paragraph", "version": 1, "attrs": { "text": "x" } }
+        }
+      }
+    },
+    {
+      "name": "column (#426): not at the top level",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["column-001"],
+        "blocks": {
+          "column-001": { "id": "column-001", "type": "column", "version": 1, "attrs": {}, "children": ["para-00001"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "x" } }
+        }
+      }
+    },
+    {
+      "name": "column (#426): empty",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["columns-01"],
+        "blocks": {
+          "columns-01": { "id": "columns-01", "type": "columns", "version": 1, "attrs": {}, "children": ["column-001", "column-002"] },
+          "column-001": { "id": "column-001", "type": "column", "version": 1, "attrs": {}, "children": [] },
+          "column-002": { "id": "column-002", "type": "column", "version": 1, "attrs": {}, "children": ["para-00001"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "x" } }
+        }
+      }
+    },
+    {
+      "name": "column (#426): no group in a column (it stays acyclic)",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["columns-01"],
+        "blocks": {
+          "columns-01": { "id": "columns-01", "type": "columns", "version": 1, "attrs": {}, "children": ["column-001", "column-002"] },
+          "column-001": { "id": "column-001", "type": "column", "version": 1, "attrs": {}, "children": ["group-0001"] },
+          "column-002": { "id": "column-002", "type": "column", "version": 1, "attrs": {}, "children": ["para-00001"] },
+          "group-0001": { "id": "group-0001", "type": "group", "version": 1, "attrs": {}, "children": ["para-00002"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "x" } },
+          "para-00002": { "id": "para-00002", "type": "paragraph", "version": 1, "attrs": { "text": "x" } }
+        }
+      }
+    },
+    {
+      "name": "column (#426): no columns in a column",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["columns-01"],
+        "blocks": {
+          "columns-01": { "id": "columns-01", "type": "columns", "version": 1, "attrs": {}, "children": ["column-001", "column-002"] },
+          "column-001": { "id": "column-001", "type": "column", "version": 1, "attrs": {}, "children": ["columns-02"] },
+          "column-002": { "id": "column-002", "type": "column", "version": 1, "attrs": {}, "children": ["para-00001"] },
+          "columns-02": { "id": "columns-02", "type": "columns", "version": 1, "attrs": {}, "children": ["column-003", "column-004"] },
+          "column-003": { "id": "column-003", "type": "column", "version": 1, "attrs": {}, "children": ["para-00002"] },
+          "column-004": { "id": "column-004", "type": "column", "version": 1, "attrs": {}, "children": ["para-00003"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "x" } },
+          "para-00002": { "id": "para-00002", "type": "paragraph", "version": 1, "attrs": { "text": "x" } },
+          "para-00003": { "id": "para-00003", "type": "paragraph", "version": 1, "attrs": { "text": "x" } }
+        }
+      }
+    },
+    {
+      "name": "column (#426): only a columns block may hold one",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["group-0001"],
+        "blocks": {
+          "group-0001": { "id": "group-0001", "type": "group", "version": 1, "attrs": {}, "children": ["column-001"] },
+          "column-001": { "id": "column-001", "type": "column", "version": 1, "attrs": {}, "children": ["para-00001"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "x" } }
+        }
+      }
+    },
+    {
+      "name": "columns (#426): not in a details",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["details-01"],
+        "blocks": {
+          "details-01": { "id": "details-01", "type": "details", "version": 1, "attrs": {}, "children": ["columns-01"] },
+          "columns-01": { "id": "columns-01", "type": "columns", "version": 1, "attrs": {}, "children": ["column-001", "column-002"] },
+          "column-001": { "id": "column-001", "type": "column", "version": 1, "attrs": {}, "children": ["para-00001"] },
+          "column-002": { "id": "column-002", "type": "column", "version": 1, "attrs": {}, "children": ["para-00002"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "x" } },
+          "para-00002": { "id": "para-00002", "type": "paragraph", "version": 1, "attrs": { "text": "x" } }
+        }
+      }
+    },
+    {
+      "name": "buttons and spacer (#426): flow, so no children",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["spacer-001"],
+        "blocks": {
+          "spacer-001": { "id": "spacer-001", "type": "spacer", "version": 1, "attrs": {}, "children": ["para-00001"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "x" } }
+        }
+      }
     }
   ]
 }

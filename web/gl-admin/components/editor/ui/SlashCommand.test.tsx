@@ -178,8 +178,8 @@ describe("the slash menu", () => {
     expect(active()!.textContent).toBe("Divider---")
     press("ArrowDown")
     expect(active()!.textContent).toBe("Group")
-    // The embeds (#425), then it wraps.
-    for (const name of ["YouTube", "Vimeo", "X", "Embed a link"]) {
+    // Columns, Buttons and Spacer (#426), the embeds (#425), then it wraps.
+    for (const name of ["Columns", "Buttons", "Spacer", "YouTube", "Vimeo", "X", "Embed a link"]) {
       press("ArrowDown")
       expect(active()!.textContent).toBe(name)
     }
@@ -187,7 +187,7 @@ describe("the slash menu", () => {
     expect(active()!.textContent).toBe("Paragraph")
     press("ArrowUp")
     expect(active()!.textContent).toBe("Embed a link")
-    for (const name of ["X", "Vimeo", "YouTube", "Group", "Divider---"]) {
+    for (const name of ["X", "Vimeo", "YouTube", "Spacer", "Buttons", "Columns", "Group", "Divider---"]) {
       press("ArrowUp")
       expect(active()!.textContent).toBe(name)
     }

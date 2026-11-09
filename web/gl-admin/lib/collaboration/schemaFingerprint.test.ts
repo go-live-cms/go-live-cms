@@ -3,6 +3,7 @@ import { createHash } from "node:crypto"
 import { Extension, getSchema, Mark, Node } from "@tiptap/core"
 import { Schema, type MarkSpec, type NodeSpec } from "prosemirror-model"
 import { TableCell, TableHeader } from "@tiptap/extension-table"
+import { Details } from "../../components/editor/extensions/DetailsBlock"
 import Subscript from "@tiptap/extension-subscript"
 import Superscript from "@tiptap/extension-superscript"
 import { getCoreSchema, schemaExtensions } from "./schema"
@@ -220,7 +221,7 @@ describe("schemaFingerprint (#416)", () => {
     it("the table (#420) changed it: new node types, and a doc and a group that name the table block", () => {
       // The schema as it was before #420: no table nodes (nor #421's details), `(block | group)+`
       // doc, `block+` group.
-      const { table: _table, document: _document, group: _group, details: _details, ...rest } = schemaExtensions({ collaborating: true })
+      const { table: _table, document: _document, group: _group, details: _details, columns: _columns, ...rest } = schemaExtensions({ collaborating: true })
       const OldDocument = Node.create({ name: "doc", topNode: true, content: "(block | group)+" })
       const OldGroup = Group.extend({ content: "block+" })
       const before = getSchema([OldDocument, ...Object.values({ ...rest, group: OldGroup })])
@@ -240,7 +241,7 @@ describe("schemaFingerprint (#416)", () => {
 
     it("details (#421) changed it: new node types, and a doc and a group that name details", () => {
       // The schema as it was before #421 (after #423): no details nodes, a doc and a group without them.
-      const { document: _document, group: _group, details, ...rest } = schemaExtensions({ collaborating: true })
+      const { document: _document, group: _group, details, columns: _columns, ...rest } = schemaExtensions({ collaborating: true })
       const OldDocument = Node.create({ name: "doc", topNode: true, content: "(block | tableBlock | video | audio | file | group)+" })
       const OldGroup = Group.extend({ content: "(block | tableBlock | video | audio | file)+" })
       const before = getSchema([OldDocument, ...Object.values({ ...rest, group: OldGroup })])
@@ -276,7 +277,7 @@ describe("schemaFingerprint (#416)", () => {
     })
 
     it("the embed block (#425) changed it: a node type, named by the doc and a group", () => {
-      const { embed, embedCommands: _commands, document: _document, group: _group, details: _details, ...rest } = schemaExtensions({ collaborating: true })
+      const { embed, embedCommands: _commands, document: _document, group: _group, details: _details, columns: _columns, ...rest } = schemaExtensions({ collaborating: true })
       const flow = "(block | tableBlock | video | audio | file)"
       const OldDocument = Node.create({ name: "doc", topNode: true, content: `(block | tableBlock | video | audio | file | group | details)+` })
       const OldGroup = _group.extend({ content: `(${flow.slice(1, -1)} | details)+` })
@@ -289,10 +290,33 @@ describe("schemaFingerprint (#416)", () => {
       expect(embed).toBeDefined()
     })
 
+    it("columns, buttons and the spacer (#426) changed it: new node types, named by the doc, a group and a details", () => {
+      // The schema as it was before #426: none of them, and a doc, group and details without them.
+      const { columns, buttons, spacer, document: _document, group: _group, details: _details, ...rest } = schemaExtensions({ collaborating: true })
+      const OldDocument = Node.create({ name: "doc", topNode: true, content: "(block | tableBlock | video | audio | file | embed | group | details | gallery)+" })
+      const OldGroup = Group.extend({ content: "(block | tableBlock | video | audio | file | embed | details)+" })
+      const OldDetails = Details.extend({ content: "detailsSummary (block | tableBlock | video | audio | file | embed)+" })
+      const before = getSchema([OldDocument, ...Object.values({ ...rest, group: OldGroup, details: OldDetails })])
+      for (const name of ["columns", "column", "buttons", "button", "spacer"]) {
+        expect(before.nodes[name], name).toBeUndefined()
+        expect(getCoreSchema().nodes[name], name).toBeDefined()
+      }
+      expect(schemaFingerprint(before)).not.toBe(core)
+      // A tab whose button row has no align, or whose spacer no size, is refused too.
+      const alignless = getSchema(Object.values({ ...schemaExtensions({ collaborating: true }), buttons: buttons.extend({ addAttributes: () => ({}) }) }))
+      expect(schemaFingerprint(alignless)).not.toBe(core)
+      const sizeless = getSchema(Object.values({ ...schemaExtensions({ collaborating: true }), spacer: spacer.extend({ addAttributes: () => ({}) }) }))
+      expect(schemaFingerprint(sizeless)).not.toBe(core)
+      const layoutless = getSchema(Object.values({ ...schemaExtensions({ collaborating: true }), columns: columns.extend({ addAttributes: () => ({}) }) }))
+      expect(schemaFingerprint(layoutless)).not.toBe(core)
+      // The column count isn't in it (y-tiptap deletes what fails a content check, #426).
+      expect(getCoreSchema().nodes.columns.spec.content).toBe("column+")
+    })
+
     it("the video, audio and file blocks (#423) changed it: three node types, named by the doc and a group", () => {
       // The schema as it was before #423 (and #421): no media nodes, no details, and the doc and the group name
       // only the table next to `block`.
-      const { video, audio, file, mediaCommands: _commands, document: _document, group: _group, details: _details, ...rest } = schemaExtensions({ collaborating: true })
+      const { video, audio, file, mediaCommands: _commands, document: _document, group: _group, details: _details, columns: _columns, ...rest } = schemaExtensions({ collaborating: true })
       const OldDocument = Node.create({ name: "doc", topNode: true, content: "(block | tableBlock | group)+" })
       const OldGroup = Group.extend({ content: "(block | tableBlock)+" })
       const before = getSchema([OldDocument, ...Object.values({ ...rest, group: OldGroup })])
