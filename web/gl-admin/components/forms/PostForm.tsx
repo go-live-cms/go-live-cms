@@ -500,6 +500,12 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
     setSidebarVisible(true)
     setSettingsTabRequest((previous) => ({ tab: "block", key: (previous?.key ?? 0) + 1 }))
   }, [])
+  // ↵ on a gallery image (#424): the Block tab, never a toggle.
+  const openBlockSettings = useCallback(() => {
+    setCommentsOpen(false)
+    setSidebarVisible(true)
+    setSettingsTabRequest((previous) => ({ tab: "block", key: (previous?.key ?? 0) + 1 }))
+  }, [])
   // Only the count: the store changes on every keystroke (the blocks), the count doesn't.
   const openComments = useSyncExternalStore(comments?.subscribe ?? noSubscribe, comments?.openCount ?? noCount)
 
@@ -1411,6 +1417,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
               // The settings panel's Block tab (#417)
               onEditorReady={setBlockEditor}
               onToggleBlockSettings={toggleBlockSettings}
+              onOpenBlockSettings={openBlockSettings}
               enableCollaboration={collabEnabled} // Edit mode, for users who may edit this post
               // Block Spec v1 persistence callbacks
               onSaveStart={() => {

@@ -16,7 +16,7 @@ import { resolveEditorBlock, type BlockRef } from "../utils/blockTree"
 
 const NEVER_AUTOPLAY = "Readers start it themselves; it never plays on its own."
 
-function useLookup(mediaId: unknown): MediaLookup | { status: "loading" } | null {
+export function useMediaLookup(mediaId: unknown): MediaLookup | { status: "loading" } | null {
   const id = typeof mediaId === "number" && Number.isInteger(mediaId) && mediaId > 0 ? mediaId : null
   const [state, setState] = useState<{ id: number | null; lookup: MediaLookup | { status: "loading" } | null }>(() => ({
     id,
@@ -36,7 +36,7 @@ function useLookup(mediaId: unknown): MediaLookup | { status: "loading" } | null
 
 export default function MediaBlockSettings({ editor, node, blockRef }: { editor: TiptapEditor; node: PMNode; blockRef: BlockRef }) {
   const kind = node.type.name as MediaNode
-  const lookup = useLookup(node.attrs.mediaId)
+  const lookup = useMediaLookup(node.attrs.mediaId)
   const media = lookup?.status === "found" ? lookup.media : null
 
   const replace = () => {

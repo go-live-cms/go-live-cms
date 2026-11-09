@@ -257,6 +257,24 @@ describe("schemaFingerprint (#416)", () => {
       expect(schemaFingerprint(openless)).not.toBe(core)
     })
 
+    it("the gallery (#424) changed it: new node types, and a doc that names it", () => {
+      // The schema as it was before #424: no gallery nodes, a doc without it.
+      const { document: _document, gallery, ...rest } = schemaExtensions({ collaborating: true })
+      const OldDocument = Node.create({ name: "doc", topNode: true, content: "(block | tableBlock | video | audio | file | group | details)+" })
+      const before = getSchema([OldDocument, ...Object.values(rest)])
+      expect(before.nodes.gallery).toBeUndefined()
+      for (const name of ["gallery", "galleryCaption"]) expect(getCoreSchema().nodes[name], name).toBeDefined()
+      const old = schemaFingerprint(before)
+      expect(old).not.toBe(core)
+      // A stale tab with the nodes but the old doc differs from both.
+      const nodesOnly = schemaFingerprint(getSchema([OldDocument, ...Object.values({ ...rest, gallery })]))
+      expect(nodesOnly).not.toBe(old)
+      expect(nodesOnly).not.toBe(core)
+      // The columns attr is in it: a tab whose gallery has none is refused too.
+      const columnless = getSchema(Object.values({ ...schemaExtensions({ collaborating: true }), gallery: gallery.extend({ addAttributes: () => ({}) }) }))
+      expect(schemaFingerprint(columnless)).not.toBe(core)
+    })
+
     it("the video, audio and file blocks (#423) changed it: three node types, named by the doc and a group", () => {
       // The schema as it was before #423 (and #421): no media nodes, no details, and the doc and the group name
       // only the table next to `block`.

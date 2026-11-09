@@ -76,7 +76,7 @@ describe("the catalog", () => {
           "Details",
         ],
       ],
-      ["Media", ["Image", "Video", "Audio", "File"]],
+      ["Media", ["Image", "Gallery", "Video", "Audio", "File"]],
       ["Layout", ["Divider", "Group"]],
     ])
     expect(BLOCK_GROUPS.map((g) => g.label)).toEqual(["Text", "Media", "Layout", "Embeds", "Advanced"])
@@ -204,6 +204,7 @@ const PM_NODE: Record<string, string> = {
   todo_list: "taskList",
   table: "tableBlock",
   details: "details",
+  gallery: "gallery",
   video: "video",
   audio: "audio",
   file: "file",

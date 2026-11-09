@@ -77,9 +77,16 @@ export function pickBlock(doc: PMNode, rectOf: (pos: number) => Rect | null, x: 
     if (!isContainerBlock(hit.block) || x < hit.rect.left) return chosen
     const children = childBlocks(doc, hit.block)
     if (children.length === 0) return chosen
+    // Below a gallery's images (its caption, #424): the gallery, not the nearest image.
+    if (hit.block.node.type.name === "gallery" && !children.some((child) => spansY(rectOf(child.pos), y))) return chosen
     level = children
   }
 }
+
+const spansY = (rect: Rect | null, y: number) => !!rect && y >= rect.top && y <= rect.bottom
+
+/** A gallery's images sit side by side (#424): a drop among them is left or right of an image, not above or below it. */
+const inGrid = (block: EditorBlock) => block.holder.type.name === "gallery"
 
 /** Where a block dragged over (x, y) lands: before or after the block there, by the table. */
 export function dropTargetAt(
@@ -91,14 +98,31 @@ export function dropTargetAt(
 ): DropTarget | null {
   const hit = pickBlock(doc, rectOf, x, y)
   if (!hit) return null
-  const side = y < (hit.rect.top + hit.rect.bottom) / 2 ? "before" : "after"
-  return dropTargetFor(doc, dragged, hit.block, side)
+  const before = inGrid(hit.block) ? x < (hit.rect.left + hit.rect.right) / 2 : y < (hit.rect.top + hit.rect.bottom) / 2
+  return dropTargetFor(doc, dragged, hit.block, before ? "before" : "after")
 }
 
-/** The line a drop target is drawn as: the top of the block after it, or the bottom of the one before. */
-export function dropLine(doc: PMNode, target: DropTarget, rectOf: (pos: number) => Rect | null): { y: number; left: number; right: number } | null {
+/**
+ * The line a drop target is drawn as: the top of the block after it, or the bottom of the one
+ * before. Among a gallery's images (#424) it is an upright line: the left edge of the image
+ * after it, or the right edge of the one before (`height` set).
+ */
+export function dropLine(
+  doc: PMNode,
+  target: DropTarget,
+  rectOf: (pos: number) => Rect | null,
+): { y: number; left: number; right: number; height?: number } | null {
   const holder = target.holderPos < 0 ? doc : doc.nodeAt(target.holderPos)
   if (!holder) return null
+  if (holder.type.name === "gallery") {
+    const next = target.index < holder.childCount ? holder.child(target.index) : null
+    const previous = target.index > 0 ? holder.child(target.index - 1) : null
+    const after = next?.type.name === "image" ? rectOf(target.pos) : null
+    const rect = after ?? (previous ? rectOf(target.pos - previous.nodeSize) : null)
+    if (!rect) return null
+    const x = after ? rect.left : rect.right
+    return { y: rect.top, left: x, right: x, height: rect.bottom - rect.top }
+  }
   if (target.index < holder.childCount) {
     const rect = rectOf(target.pos)
     if (rect) return { y: rect.top, left: rect.left, right: rect.right }
@@ -303,7 +327,8 @@ export function createGutterPlugin(options: GutterPluginOptions) {
             Object.assign(line.style, {
               top: `${at.y - base.top}px`,
               left: `${at.left - base.left}px`,
-              width: `${at.right - at.left}px`,
+              width: at.height === undefined ? `${at.right - at.left}px` : "2px",
+              height: at.height === undefined ? "" : `${at.height}px`,
             })
           } else line.hidden = true
           return true

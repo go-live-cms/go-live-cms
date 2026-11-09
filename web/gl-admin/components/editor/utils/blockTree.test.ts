@@ -58,6 +58,19 @@ const D = "d-00000000004"
 
 const base = () => doc(group(G1, p(A, "alpha"), p(B, "beta")), p(C, "gamma"), group(G2, p(D, "delta")))
 
+/** A gallery of three images and its caption (#424). */
+const galleryLayoutDoc = () =>
+  doc({
+    type: "gallery",
+    attrs: { "data-block-id": "gallery-aaaa-00000000" },
+    content: [
+      { type: "image", attrs: { "data-block-id": "image-aaaa-0000000000", src: "/a.jpg" } },
+      { type: "image", attrs: { "data-block-id": "image-bbbb-0000000000", src: "/b.jpg" } },
+      { type: "image", attrs: { "data-block-id": "image-cccc-0000000000", src: "/c.jpg" } },
+      { type: "galleryCaption" },
+    ],
+  })
+
 describe("the nesting table at a drop (#417)", () => {
   it("a paragraph goes into a group; a group never into a group", () => {
     const d = base()
@@ -190,6 +203,33 @@ describe("the pointer (#417, gutterPlugin.ts)", () => {
     // At the end of a group: the bottom of its last block.
     const end = dropTargetAt(d, block(d, C), rectOf, 100, 80)!
     expect(dropLine(d, end, rectOf)).toEqual({ y: 90, left: 20, right: 480 })
+  })
+
+  it("among a gallery's images a drop lands left or right of the image, and the line stands upright (#424)", () => {
+    const doc2 = galleryLayoutDoc()
+    const G = "gallery-aaaa-00000000"
+    const [I1, I2, I3] = ["image-aaaa-0000000000", "image-bbbb-0000000000", "image-cccc-0000000000"]
+    const tiles: Record<string, Rect> = {
+      [G]: { top: 0, bottom: 150, left: 0, right: 330 },
+      [I1]: { top: 0, bottom: 100, left: 0, right: 100 },
+      [I2]: { top: 0, bottom: 100, left: 110, right: 210 },
+      [I3]: { top: 0, bottom: 100, left: 220, right: 320 },
+    }
+    const rect = (pos: number) => tiles[String(doc2.nodeAt(pos)?.attrs["data-block-id"])] ?? null
+    const at = (id: string) => block(doc2, id)
+
+    const leftOfSecond = dropTargetAt(doc2, at(I3), rect, 120, 50)!
+    expect(leftOfSecond).toMatchObject({ holderPos: at(G).pos, index: 1 })
+    expect(dropLine(doc2, leftOfSecond, rect)).toEqual({ y: 0, left: 110, right: 110, height: 100 })
+    const rightOfSecond = dropTargetAt(doc2, at(I1), rect, 200, 50)!
+    expect(rightOfSecond).toMatchObject({ holderPos: at(G).pos, index: 2 })
+    // After the last image, in front of the caption: the right edge of that image.
+    const afterLast = dropTargetAt(doc2, at(I1), rect, 310, 50)!
+    expect(afterLast).toMatchObject({ holderPos: at(G).pos, index: 3 })
+    expect(dropLine(doc2, afterLast, rect)).toEqual({ y: 0, left: 320, right: 320, height: 100 })
+    // Under the images (its caption) the gallery is what the pointer is on.
+    expect(pickBlock(doc2, rect, 100, 130)?.block.node.attrs["data-block-id"]).toBe(G)
+    expect(pickBlock(doc2, rect, 150, 50)?.block.node.attrs["data-block-id"]).toBe(I2)
   })
 
   it("a group dragged over another group's block gets the place beside that group", () => {

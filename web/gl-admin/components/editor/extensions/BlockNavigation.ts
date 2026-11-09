@@ -97,13 +97,17 @@ export const BlockSelectionKeys = Extension.create({
  * Esc and ⌘⇧↑/↓. After every other keymap and plugin (the slash menu's Esc closes the
  * menu first, a list keeps its own keys).
  */
-export const BlockNavigationKeys = Extension.create<Record<string, never>, { toggleBlockSettings: (() => void) | null }>({
+export const BlockNavigationKeys = Extension.create<
+  Record<string, never>,
+  { toggleBlockSettings: (() => void) | null; openBlockSettings: (() => void) | null }
+>({
   name: "blockNavigationKeys",
   priority: 20,
 
   addStorage() {
-    // Set by the editor when a settings panel can show the Block tab (⌘⇧,).
-    return { toggleBlockSettings: null }
+    // Set by the editor when a settings panel can show the Block tab: ⌘⇧, toggles it, and
+    // openBlockSettings only opens it (↵ on a gallery image, #424).
+    return { toggleBlockSettings: null, openBlockSettings: null }
   },
 
   addKeyboardShortcuts() {

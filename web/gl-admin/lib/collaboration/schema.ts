@@ -15,6 +15,7 @@ import { PullQuote } from "../../components/editor/extensions/PullQuote"
 import { TodoItem, TodoList } from "../../components/editor/extensions/TodoList"
 import { TableBlock } from "../../components/editor/extensions/TableBlock"
 import { Details } from "../../components/editor/extensions/DetailsBlock"
+import { Gallery } from "../../components/editor/extensions/GalleryBlock"
 import { GlHighlight, GlSubscript, GlSuperscript } from "../../components/editor/extensions/InlineMarks"
 import { AudioBlock, FileBlock, MediaBlockCommands, VideoBlock } from "../../components/editor/extensions/MediaBlocks"
 import { ContentLink, DateChip, Mention } from "../../components/editor/extensions/InlineNodes"
@@ -91,6 +92,9 @@ export function schemaExtensions({ collaborating }: { collaborating: boolean }) 
     // #421: the second container (its summary, `detailsSummary`, comes with it). It and
     // Group's wider content change the schema fingerprint (#416).
     details: Details,
+    // #424: the third container (image blocks and its caption, `galleryCaption`). It and
+    // the doc's wider content change the schema fingerprint (#416).
+    gallery: Gallery,
     // #423: video, audio and file (media library files by id; the image is above). Not in
     // the `block` group, like the table. Each changes the fingerprint (#416).
     video: VideoBlock,

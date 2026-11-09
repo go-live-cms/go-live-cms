@@ -38,6 +38,7 @@ const PM_NODE: Record<string, string> = {
   todo_list: "taskList",
   table: "tableBlock",
   details: "details",
+  gallery: "gallery",
   video: "video",
   audio: "audio",
   file: "file",

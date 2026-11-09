@@ -5,6 +5,7 @@ import {
   CONTAINER_PART_NODE_NAMES,
   CONTAINERS,
   containerContent,
+  type ContainerRule,
   dedupeBlockRefs,
   isBlockNode,
   isFlowType,
@@ -81,7 +82,8 @@ describe("dedupeBlockRefs", () => {
 
 describe("the nesting table", () => {
   it("is acyclic: no container can hold itself, directly or through another", () => {
-    const holds = (type: string): string[] => (CONTAINERS as any)[type].accepts.filter((t: string) => t !== "flow")
+    // Containers only: a row may name a flow type too (a gallery's images, #424).
+    const holds = (type: string): string[] => (CONTAINERS as any)[type].accepts.filter((t: string) => t in CONTAINERS)
     const visit = (type: string, path: string[]) => {
       expect(path).not.toContain(type)
       for (const child of holds(type)) visit(child, [...path, type])
@@ -94,7 +96,13 @@ describe("the nesting table", () => {
   })
 
   it("synthesized ids are deterministic and at least 10 characters past the container id", () => {
-    for (const [type, rule] of Object.entries(CONTAINERS)) {
+    for (const [type, row] of Object.entries(CONTAINERS)) {
+      const rule: ContainerRule = row
+      // A container that may be empty (a gallery, #424) has nothing to synthesize.
+      if (!rule.synthesize) {
+        expect(rule.min, type).toBe(0)
+        continue
+      }
       expect(rule.synthesize.role.length, type).toBeGreaterThanOrEqual(9)
       expect(synthesizedChildId("g", rule.synthesize.role).length).toBeGreaterThanOrEqual(11)
       expect(synthesizedChildId("blk-0001-x", rule.synthesize.role)).toBe(synthesizedChildId("blk-0001-x", rule.synthesize.role))
@@ -105,7 +113,9 @@ describe("the nesting table", () => {
     expect(containerContent("group")).toBe("(block | tableBlock | video | audio | file | details)+")
     // #421: its part first, then flow.
     expect(containerContent("details")).toBe("detailsSummary (block | tableBlock | video | audio | file)+")
-    expect(topLevelContent()).toBe("(block | tableBlock | video | audio | file | group | details)+")
+    // #424: image blocks, none is fine, then its caption.
+    expect(containerContent("gallery")).toBe("image* galleryCaption")
+    expect(topLevelContent()).toBe("(block | tableBlock | video | audio | file | group | details | gallery)+")
   })
 
   it("details (#421): holds flow, sits at the top or in a group, its summary a part (never a block)", () => {
@@ -121,7 +131,7 @@ describe("the nesting table", () => {
     expect(isBlockNode("paragraph", "details")).toBe(true)
     expect(isBlockNode("detailsSummary", "details")).toBe(false)
     expect(CONTAINER_PART_NODE_NAMES.has("detailsSummary")).toBe(true)
-    expect(TEXT_PART_NODE_NAMES).toEqual(new Set(["imageCaption", "tableCaption", "detailsSummary"]))
+    expect(TEXT_PART_NODE_NAMES).toEqual(new Set(["imageCaption", "tableCaption", "detailsSummary", "galleryCaption"]))
   })
 
   it("a group holds flow: core flow types, theme blocks and unknown types, never a container or a list item", () => {

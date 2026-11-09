@@ -341,6 +341,46 @@ kept so references in code stay valid.
     restart), the #414 vectors, `comments.hocuspocus.test.ts` / `blockEdits.hocuspocus.test.ts`
     (threads and "Last edited by" on blocks in a details; a summary edit is the details'),
     `src/components/blocks/details/DetailsBlock.test.tsx`, Go `post_blocks_details_test.go`.
+- **Gallery (#424, `components/editor/extensions/GalleryBlock.ts`): the third container.** A row of
+  the nesting table (`gallery`: `image` only, 0+, top level only) whose part comes **last**
+  (`partsLast`: `image* galleryCaption`), so the caret walks images, then caption, as a reader sees
+  them.
+  - **The children are ordinary image blocks** (image v2: alt, caption, media id, each with its own
+    id), so "Used in", media attachment, the sanitizer and the renderer need nothing new.
+  - **The caption is a child node, never a block:** `galleryCaption` (`text*`, caption marks), no
+    `data-block-id`, always the last child (empty = none). Block Spec: `attrs.caption` runs, like an
+    image's (search reads `caption` runs already). `columns` (2–4, `normalizeGalleryColumns`, always
+    written) is a node attribute, last writer wins.
+  - **It may be empty** (`min: 0`, so `synthesize` is optional): the bridge keeps it, `pmToBlockDoc`
+    doesn't skip it, nothing is synthesized or dropped. `fragmentToBlockDoc` still falls a gallery
+    back as a whole when it **had** images and none built: that isn't an empty one.
+  - **Reorder** is `moveGalleryImage` (`utils/galleryActions.ts`): #417's `planBlockMove` plus
+    `applyBlockMove`, one Yjs transaction, id kept, from the keys, a tile's buttons and a drag
+    (`gutterPlugin`: among images a drop is left or right, the line upright). **Adding** several is
+    one transaction (`addGalleryImages`, from the picker's multi-select or an upload). Removing the
+    last image leaves the gallery (`removalRange`: the schema allows it).
+  - **The panel's caption field** (`ui/GallerySettings.tsx`) edits the image's `imageCaption` by
+    **the characters that changed** (`imageCaptionTr`), so a field in the panel merges per character
+    like the caption itself and keeps marks on the rest. The field always shows the doc's value
+    (`SyncedField`): it compares what's typed with what the post says now, never with a stale copy.
+    Alt text is an attribute, last writer wins, flagged per image (`galleryImageMissingAlt`).
+  - **Keys** (`GalleryKeyboard.ts`, editor only, priority 200, no appendTransaction): ← → between
+    images, ⌘⇧← → reorder, ↵ on a selected image opens the Block tab with focus in its alt text
+    (`requestGalleryAltFocus`), ↵ in the gallery's caption goes under the gallery, ↵ in an image's
+    caption back to the image (ImageCaption's own Enter would put a paragraph in the gallery), ⌫ never
+    deletes the caption on its own. The tile's Move and Remove are `data-block-toolbar`, so #417's Tab
+    reaches them; a gallery image has no + (only images go in a gallery, through Add images).
+  - **Paste:** `div[data-type=gallery][data-columns]` and its caption survive with valid values only;
+    images are dropped as everywhere, so a pasted gallery has its caption and no images.
+  - **Stale clients:** a bundle from before #424 has no gallery nodes (and a narrower doc); the
+    fingerprint guard (#416) refuses such a tab (`schemaFingerprint.test.ts`).
+  - Tests: `blockBridge.gallery.test.ts`, `extensions/GalleryBlock.test.ts` (commands, keys, views,
+    missing media per image, the caption field, paste), `extensions/GalleryBlock.collab.test.ts` (two
+    users on the relay: a keyboard and a drag reorder each one Yjs transaction, concurrent reorder and
+    captioning, several images added at once, every image removed, a restart),
+    `ui/GallerySettings.test.tsx` (per-image alt flags), `utils/blockTree.test.ts` (the drop),
+    `src/components/blocks/gallery/GalleryBlock.test.tsx`, Go `post_blocks_gallery_test.go`, and six
+    cases in `nestingVectors.json`.
 - **Table (#420, `components/editor/extensions/TableBlock.ts`): a flow block, not a container.**
   The block node is `tableBlock` (`table tableCaption`, `BLOCK_NODE_NAMES.table`): TipTap's
   `table` (prosemirror-tables reads every child of `table` as a row, so the caption can't live

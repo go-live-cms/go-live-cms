@@ -83,24 +83,31 @@ export interface ContainerRule {
   /**
    * What the bridge adds when fewer than `min` children are left after drops (design
    * 2.5): the child's Block Spec type and the `role` its deterministic id is made from
-   * (`synthesizedChildId`).
+   * (`synthesizedChildId`). None on a container that may be empty (`min: 0`).
    */
-  synthesize: { type: string; role: string }
+  synthesize?: { type: string; role: string }
   /** An id-less wrapper node between the container and its children, if any (design 2.4). */
   slot?: string
   /** Child nodes that are parts of the block, not blocks (a summary, a caption): no ids. */
   parts?: readonly string[]
+  /** The parts come after the blocks instead of before them (a gallery's caption, under its images). */
+  partsLast?: boolean
 }
 
 /**
- * The containers. Group (#414) is the first, Details (#421) the second; columns, column,
- * cover, media & text, gallery and footnotes follow in their own issues (#352's build
- * order), each a row here.
+ * The containers. Group (#414) is the first, Details (#421) the second, Gallery (#424) the
+ * third; columns, column, cover, media & text and footnotes follow in their own issues
+ * (#352's build order), each a row here.
  *
  * Details' summary is a **part** (`detailsSummary`, rich text): a child node with no id,
  * always its first child, stored as the block's `attrs.summary` runs, never as a block
  * (design 2.4). There is no slot: our own node holds its blocks right after the summary,
  * so TipTap's Details extension (and its `detailsContent` wrapper) isn't used.
+ *
+ * A gallery holds image blocks only and may be empty (`min: 0`: every image removed is an
+ * editor state, not an error, so nothing is synthesized and nothing dropped for it). Its
+ * caption is a part too (`galleryCaption`, `attrs.caption` runs), after the images, where
+ * readers see it.
  */
 export const CONTAINERS = {
   group: {
@@ -117,6 +124,14 @@ export const CONTAINERS = {
     topLevel: true,
     synthesize: { type: "paragraph", role: "paragraph" },
     parts: ["detailsSummary"],
+  },
+  gallery: {
+    node: "gallery",
+    accepts: ["image"],
+    min: 0,
+    topLevel: true,
+    parts: ["galleryCaption"],
+    partsLast: true,
   },
 } as const satisfies Record<string, ContainerRule>
 
@@ -223,7 +238,8 @@ const FLOW_NAMES: readonly string[] = ["block", ...STANDALONE_FLOW_NODE_NAMES]
  * TipTap's `block` group plus the standalone flow nodes (the table, #420): no container is
  * in either, so they hold exactly the nodes that hold no blocks (core flow nodes, theme
  * blocks, stand-ins). Containers are named. Its parts come first, each exactly once
- * (details: `detailsSummary (block | tableBlock)+`, #421).
+ * (details: `detailsSummary (block | tableBlock)+`, #421), or last with `partsLast`
+ * (gallery: `image* galleryCaption`, #424).
  */
 export function containerContent(type: ContainerType): string {
   const rule: ContainerRule = CONTAINERS[type]
@@ -232,16 +248,17 @@ export function containerContent(type: ContainerType): string {
   let blocks: string
   if (rule.max !== undefined) blocks = `${choice}{${rule.min},${rule.max}}`
   else blocks = rule.min === 0 ? `${choice}*` : rule.min === 1 ? `${choice}+` : `${choice}{${rule.min},}`
-  return [...(rule.parts ?? []), blocks].join(" ")
+  const parts = rule.parts ?? []
+  return (rule.partsLast ? [blocks, ...parts] : [...parts, blocks]).join(" ")
 }
 
 /** The ProseMirror node names that are a container's parts (a summary): never blocks, never ids. */
 export const CONTAINER_PART_NODE_NAMES: ReadonlySet<string> = new Set(Object.values(CONTAINER_RULES).flatMap((rule) => [...(rule.parts ?? [])]))
 
 /**
- * The text nodes that are part of a block, not blocks (#346, #420, #421): an image's or a
- * table's caption and a details summary. One line with bold, italic and link only: no
- * block menu, no Turn into and no "Type /" hint in them.
+ * The text nodes that are part of a block, not blocks (#346, #420, #421, #424): an image's,
+ * a table's or a gallery's caption and a details summary. One line with bold, italic and
+ * link only: no block menu, no Turn into and no "Type /" hint in them.
  */
 export const TEXT_PART_NODE_NAMES: ReadonlySet<string> = new Set(["imageCaption", "tableCaption", ...CONTAINER_PART_NODE_NAMES])
 

@@ -146,13 +146,13 @@ describe("the slash menu", () => {
     expect(document.querySelector('[role="listbox"]')!.getAttribute("aria-label")).toBe("Blocks matching he")
     expect(document.querySelector(".editor-insert__footer")!.textContent).toBe("6 results↵ inserts Heading 1")
 
-    // Something only a keyword has: "/photo" (Image's keyword, shown on the right).
+    // Something only keywords have: "/photo" (Image's and Gallery's, shown on the right).
     act(() => {
       const { from } = editor!.state.selection
       editor!.view.dispatch(editor!.state.tr.delete(from - 2, from))
     })
     type("photo")
-    expect(options().map((o) => o.textContent)).toEqual(["Imagephoto"])
+    expect(options().map((o) => o.textContent)).toEqual(["Imagephoto", "Galleryphotos"])
   })
 
   it("moves across groups with ↑↓, wrapping, and ↵ inserts the highlighted block in place of /query", () => {
@@ -169,8 +169,8 @@ describe("the slash menu", () => {
     expect(active()!.textContent).toBe("Details")
     press("ArrowDown")
     expect(active()!.textContent).toBe("Image")
-    // Video, audio and file (#423), then Layout.
-    for (const name of ["Video", "Audio", "File"]) {
+    // Gallery (#424), video, audio and file (#423), then Layout.
+    for (const name of ["Gallery", "Video", "Audio", "File"]) {
       press("ArrowDown")
       expect(active()!.textContent).toBe(name)
     }

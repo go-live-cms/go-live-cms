@@ -1080,6 +1080,100 @@
     }
   }
 
+  // A gallery (#424): "6 images", then each image in a row: its thumbnail, its name and its
+  // "No alt text" flag. The selected image's row opens its alt text and caption.
+  &__sub {
+    color: var(--text-secondary);
+    display: block;
+    font-size: var(--type-caption);
+  }
+
+  &__gallery-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  &__gallery-row {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+
+    &.is-selected {
+      border-color: var(--accent-border);
+    }
+  }
+
+  &__gallery-pick {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-radius: 8px;
+    color: var(--text-primary);
+    cursor: pointer;
+    display: flex;
+    font: inherit;
+    gap: var(--space-2);
+    padding: 6px;
+    text-align: left;
+    width: 100%;
+
+    &:hover {
+      background: var(--background-hover);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--focus-ring);
+      outline-offset: -2px;
+    }
+
+    .block-settings__file-thumb {
+      background: var(--background-subtle);
+      height: 32px;
+      width: 32px;
+    }
+  }
+
+  &__gallery-name {
+    flex: 1;
+    font-size: var(--type-footnote);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__pill {
+    border-radius: 999px;
+    flex: none;
+    font-size: var(--type-caption);
+    padding: 1px 6px;
+
+    &.is-warning {
+      background: var(--warning-bg);
+      color: var(--warning-text);
+    }
+  }
+
+  &__gallery-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 2px var(--space-2) var(--space-2);
+
+    .block-settings__file-replace {
+      align-self: flex-start;
+      margin-top: var(--space-1);
+    }
+  }
+
+  &__optional {
+    color: var(--text-secondary);
+    font-weight: 400;
+  }
+
   &__option {
     background: transparent;
     border: 1px solid var(--border-strong);

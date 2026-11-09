@@ -530,7 +530,7 @@ tests at each step including the collab round trip.
 | Footnotes | container + inline node | `footnoteRef`: inline atom with `footnoteId`; `footnotes` holds `footnote` blocks (id = footnoteId) | Numbered by order of references. The `footnotes` block is created by the insert command, never by an appendTransaction (rule 7). |
 | Video, audio | flow | `mediaId`, `caption` | Native players. Built in #423: outside the `block` group like the table, the caption is the image's caption node, no `src` (the public page takes the URL from the API's `media` map, only under `/uploads`), `preload="none"`, no autoplay. |
 | File | flow | `mediaId`, `label` | A download link with type and size. Built in #423: an atom; `label` is a node attr typed in the block (absent: the media's name); both links `download` under the uploaded name. |
-| Gallery | container of `image` | `columns` (2–4), `caption` | Each image is an image block (alt, caption, reorder with ⌘⇧←/→). |
+| Gallery | container of `image` | `columns` (2–4), `caption` | Each image is an image block (alt, caption, reorder with ⌘⇧←/→). Built in #424: the caption (`galleryCaption`) comes after the images (`partsLast`, the only part so far that does), `attrs.caption` runs like an image's; an image's alt and caption are edited in the settings panel's image list, the caption by the characters that changed, so it merges per character. Published as `ul.gallery` with `--cols`, two columns on a phone. |
 | Embed | flow | `provider`, `ref`, `title`, `caption` | Section 5. |
 | Columns / column | container | 2.2 | Stack in order on phones. |
 | Group | container | `style`, `align` | |
