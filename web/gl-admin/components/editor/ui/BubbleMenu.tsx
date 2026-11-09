@@ -102,7 +102,7 @@ const BubbleMenu = ({ editor, className = "", openLinkModal, ...props }: any) =>
         if (!isViewMounted(e)) return false
         // A selected media block has its own toolbar (ImageToolbar: #346, #423).
         const { selection } = e.state
-        if (selection instanceof NodeSelection && ["image", "video", "audio", "file"].includes(selection.node.type.name)) return false
+        if (selection instanceof NodeSelection && ["image", "video", "audio", "file", "embed"].includes(selection.node.type.name)) return false
         // Default: show when there's a text selection
         const { from, to } = selection
         return from !== to

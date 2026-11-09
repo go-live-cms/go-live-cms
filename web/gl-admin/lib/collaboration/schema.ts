@@ -18,6 +18,7 @@ import { Details } from "../../components/editor/extensions/DetailsBlock"
 import { GlHighlight, GlSubscript, GlSuperscript } from "../../components/editor/extensions/InlineMarks"
 import { AudioBlock, FileBlock, MediaBlockCommands, VideoBlock } from "../../components/editor/extensions/MediaBlocks"
 import { ContentLink, DateChip, Mention } from "../../components/editor/extensions/InlineNodes"
+import { EmbedBlock, EmbedBlockCommands } from "../../components/editor/extensions/EmbedBlock"
 
 const lowlight = createLowlight(common)
 
@@ -99,6 +100,11 @@ export function schemaExtensions({ collaborating }: { collaborating: boolean }) 
     // Their commands (insert, set the file, caption): no schema, kept next to the nodes so
     // every editor built from these has them, like the table's.
     mediaCommands: MediaBlockCommands,
+    // #425: embeds (a provider, its id and a title, never HTML from the provider). Not in
+    // the `block` group, like the media blocks; a new node type, so it changes the
+    // fingerprint (#416).
+    embed: EmbedBlock,
+    embedCommands: EmbedBlockCommands,
     // #320: inline atoms inside text (an @ mention, a link to a post, a date chip). New
     // node types, so they change the fingerprint (#416) like a new block does.
     mention: Mention,

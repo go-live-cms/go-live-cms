@@ -7,6 +7,7 @@ import { getSettings } from "@/lib/api"
 import { SITE_TITLE } from "@/consts"
 import { normalizeDateSettings, type DateSettings } from "@/lib/siteDates"
 import { log } from "@/lib/log"
+import { knownEmbedProviders, type EmbedProvider } from "@gl-admin/lib/blocks-spec/embeds"
 
 export interface SiteSettings extends DateSettings {
   title: string
@@ -20,6 +21,9 @@ export interface SiteSettings extends DateSettings {
   // The page shown at / (#336), as stored (null = the latest posts). The page route uses
   // it for that page's canonical URL; whether / shows it is /public/front-page's answer.
   frontPageId: number | null
+  // The sites embeds may come from (#425): the public CSP's frame-src. Empty when the
+  // settings can't be read, so a failed lookup never widens what a page may frame.
+  allowedEmbeds: EmbedProvider[]
 }
 
 // Error pages render this too, and an unreachable API is a common cause of a 500: give
@@ -51,6 +55,7 @@ async function loadSiteSettings(): Promise<SiteSettings> {
     urlStructure: settings?.post_url_structure,
     allowSignup: settings?.allow_signup === true,
     frontPageId: Number.isInteger(settings?.front_page_id) && (settings?.front_page_id as number) > 0 ? (settings?.front_page_id as number) : null,
+    allowedEmbeds: knownEmbedProviders(settings?.editor_allowed_embeds),
     ...normalizeDateSettings({
       language: settings?.site_language,
       timeZone: settings?.site_timezone,

@@ -7,6 +7,8 @@
 // script-src allows only 'self' + that nonce: no 'unsafe-inline', and a script injected
 // later by an XSS in the SPA (innerHTML, a theme block, an attribute handler) is blocked.
 
+import { EMBED_PROVIDERS, embedFrameHosts, type EmbedProvider } from "../../gl-admin/lib/blocks-spec/embeds"
+
 export interface AdminCspOptions {
   nonce: string
   // Origin the page was requested on, e.g. "https://cms.example.com". Collab runs on the
@@ -66,6 +68,9 @@ export function buildAdminCsp({ nonce, pageOrigin, apiUrl, collabUrl }: AdminCsp
     // History's diff worker (#355) is a bundled same-origin file. Explicit, so blob: and
     // data: workers stay blocked whatever script-src (its fallback) allows later.
     "worker-src": ["'self'"],
+    // An embed's player, framed in the editor only when someone clicks Load (#425). Every
+    // provider's: the allowed list is a site setting, and the block itself checks it.
+    "frame-src": embedFrameHosts(EMBED_PROVIDERS),
     "object-src": ["'none'"],
     "base-uri": ["'self'"],
     "form-action": ["'self'"],
@@ -101,6 +106,25 @@ const ACCOUNT_PAGES = ["/login", "/forgot-password", "/reset-password", "/accept
 export function isAccountPagePath(pathname: string): boolean {
   const path = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname
   return ACCOUNT_PAGES.includes(path)
+}
+
+/**
+ * The CSP of the public site's pages (#425): one directive, so frames can only come from the
+ * allowed embed providers. Nothing else is restricted, so themes' scripts, styles and fonts
+ * keep working. X's widget script can't be limited without a `script-src`, which would
+ * constrain themes; it is only ever requested after a click.
+ */
+export function buildPublicCsp(allowed: readonly EmbedProvider[]): string {
+  const hosts = embedFrameHosts(allowed)
+  return `frame-src ${hosts.length > 0 ? hosts.join(" ") : "'none'"}`
+}
+
+/** Sets the public CSP on an HTML response; anything else passes through untouched. */
+export function applyPublicCsp(response: Response, allowed: readonly EmbedProvider[]): Response {
+  if (!(response.headers.get("content-type") || "").includes("text/html")) return response
+  const headers = new Headers(response.headers)
+  headers.set("Content-Security-Policy", buildPublicCsp(allowed))
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers })
 }
 
 // Wraps an admin HTML response: nonces its scripts and sets the CSP header. Non-HTML

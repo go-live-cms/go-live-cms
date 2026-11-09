@@ -390,8 +390,9 @@ are the most fragile part of the codebase. **Before editing anything under
   runbook). **Markdown shortcuts** = TipTap `enableInputRules`/`enablePasteRules` only
   (`lib/editorSettings.ts`: off keeps `typography` and `link`), read when the editor is created
   (`LiveGate` waits for the setting before mounting; connecting doesn't); never a `useEditor`
-  dependency, so a change never recreates a bound editor. "Allowed embeds" stays hidden until
-  #352 (the API stores and checks `editor_allowed_embeds`).
+  dependency, so a change never recreates a bound editor. **Allowed embeds** (#425) is the Editor
+  section's list of checkboxes (`editor_allowed_embeds`; an id this build doesn't list is left out
+  of the draft, or the API would refuse the save).
 - **Scheduled publishing (#147):** the Publish menu's Schedule… / Reschedule… / Cancel schedule
   and the sidebar's Publish date open `components/editor/ui/ScheduleDialog.tsx` (owned by
   `PostForm`); a scheduled post shows a banner (Reschedule, Cancel schedule) or, after a failed
@@ -604,6 +605,21 @@ are the most fragile part of the codebase. **Before editing anything under
   (`src/lib/dateChips.ts` `labelDateChips`) before the theme renders; markup in
   `src/components/blocks/README.md`. Mentions in block comments are not built (comments stay
   plain text).
+- **Embeds (#425, design `docs/design/block-library.md` section 5):** YouTube, Vimeo, X and "Embed a
+  link" in the catalog's Embeds group (`roles`: editors and admins, who are who may resolve a link).
+  Nothing from a provider loads until someone clicks, in the editor and on the site. The table is
+  `blocks-spec/embeds.ts` (players, frame hosts, ref patterns); the words for a link that can't be
+  used are `components/editor/blocks/embedLinks.ts`; the view is `extensions/EmbedBlockViews.ts`
+  (link field, placeholder, player), with `ui/EmbedToolbar.tsx` and `ui/EmbedBlockSettings.tsx`. A
+  player opened in the editor is that view's alone, never in the doc. On the site the placeholder is
+  `src/components/blocks/embed/`, with no provider address in it; `public/gl-embeds.js` (plain,
+  unbundled, its templates compared with the table by `EmbedBlock.test.tsx`) builds the player on
+  click, with `sandbox`, `referrerpolicy` and `loading`, and moves focus in. `BlockRenderer` adds
+  that script only for a post with an embed. X loads its widget on click on the site; in the editor
+  it is a plain iframe of the post, because the admin's `script-src` stays closed. **Public CSP:**
+  `applyPublicCsp` (`src/middleware/csp.ts`) sends one directive, `frame-src`, the allowed providers'
+  hosts (`'none'` if the settings can't be read); no other directive, so themes are unaffected. The
+  admin's CSP frames every provider's host.
 - **Editing nested blocks (#417, design `docs/design/block-library.md` 3.5):** the gutter is
   our own plugin now (`components/editor/utils/gutterPlugin.ts`; TipTap 3.4.2's drag handle
   only finds top-level blocks): it follows the pointer to the innermost block (a block in a

@@ -23,6 +23,7 @@ import { TableView } from "@tiptap/extension-table"
 import { hasHeaderRow } from "./TableBlock"
 import { DETAILS_OPEN_HELP, DETAILS_OPEN_LABEL } from "./DetailsBlock"
 import { MediaBlockView, MediaLookupTracker, missingPanel } from "./MediaBlockViews"
+import { EmbedBlockView } from "./EmbedBlockViews"
 import { chooseMediaFor } from "../blocks/mediaPicking"
 
 const blockNodeViewsKey = new PluginKey("blockNodeViews")
@@ -84,6 +85,8 @@ export const BlockNodeViews = Extension.create({
             video: (node, view, getPos) => new MediaBlockView(node, view, getPos as () => number | undefined, editor),
             audio: (node, view, getPos) => new MediaBlockView(node, view, getPos as () => number | undefined, editor),
             file: (node, view, getPos) => new MediaBlockView(node, view, getPos as () => number | undefined, editor),
+            // #425 (EmbedBlockViews.ts): nothing from the provider loads until Load.
+            embed: (node, view, getPos) => new EmbedBlockView(node, view, getPos as () => number | undefined, editor),
           },
           // Marks the quote or pull quote the cursor is in, so its empty citation field
           // shows, and the group or callout it is in (or the selected group), so its

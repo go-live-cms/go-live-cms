@@ -199,7 +199,7 @@ func TestSiteSettingsHelpers(t *testing.T) {
 	}
 
 	require.Nil(t, normalizeEmbeds(nil))
-	require.Equal(t, []string{"x", "loom"}, normalizeEmbeds([]string{"x", "loom", "x"}))
+	require.Equal(t, []string{"x", "spotify"}, normalizeEmbeds([]string{"x", "spotify", "x"}))
 	require.False(t, isSingleLine("a\tb"))
 	require.True(t, isSingleLine("Notes — from the team"))
 }

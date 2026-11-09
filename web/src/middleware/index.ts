@@ -7,7 +7,8 @@ import { ThemeSettingsImpl } from "../lib/theme-settings"
 import { ThemeAPIClientImpl } from "../lib/theme-api-client"
 import { safeExecute } from "../lib/theme-api"
 import type { ThemeFunctions, ThemeFunctionsContext } from "../lib/theme-api"
-import { applyAdminCsp, isAccountPagePath, isAdminPath } from "./csp"
+import { applyAdminCsp, applyPublicCsp, isAccountPagePath, isAdminPath } from "./csp"
+import { getSiteSettings } from "../lib/siteSettings"
 import { isApiProxyPath, proxyToApi } from "./apiProxy"
 import { redirectOn404 } from "./redirects"
 import { shouldNoindex } from "../lib/seo"
@@ -173,8 +174,10 @@ async function handleRequest(context: APIContext, next: MiddlewareNext, proxied:
     })
   }
 
-  // A page the site answers 404 for may have moved (#331, redirects.ts).
-  return withRobotsHeader(await redirectOn404(context.request, url, await next()), url.pathname)
+  // A page the site answers 404 for may have moved (#331, redirects.ts). Frames on public
+  // pages only from the allowed embed providers (#425); none if the setting can't be read.
+  const response = withRobotsHeader(await redirectOn404(context.request, url, await next()), url.pathname)
+  return applyPublicCsp(response, (await getSiteSettings(context.locals)).allowedEmbeds)
 }
 
 // X-Robots-Tag: noindex on error responses (404/500, whatever the theme's

@@ -39,6 +39,7 @@ const PM_NODE: Record<string, string> = {
   table: "tableBlock",
   details: "details",
   video: "video",
+  embed: "embed",
   audio: "audio",
   file: "file",
 }

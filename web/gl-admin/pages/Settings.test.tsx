@@ -154,6 +154,7 @@ describe("the unsaved-changes bar", () => {
         posts_per_page: 10,
         post_url_structure: "slug",
         editor_markdown_shortcuts: true,
+        editor_allowed_embeds: ["youtube", "vimeo"],
         allow_signup: false,
       },
       "token"
@@ -309,12 +310,51 @@ describe("General and Editor (#330)", () => {
   })
 })
 
-it("hides the settings that have no backend yet (#352)", async () => {
+it("hides the settings that have no backend yet", async () => {
   await render()
   const text = container.textContent ?? ""
-  for (const hidden of ["Allowed embeds", "Media", "Email"]) {
+  for (const hidden of ["Media", "Email"]) {
     expect(text).not.toContain(hidden)
   }
+})
+
+describe("Allowed embeds (#425)", () => {
+  const box = (label: string) =>
+    [...container.querySelectorAll<HTMLLabelElement>("#gl-settings-editor label")].find((l) => l.textContent?.includes(label))!.querySelector<HTMLInputElement>("input")!
+
+  it("lists the six providers, ticked as saved", async () => {
+    await render()
+    const section = container.querySelector("#gl-settings-editor")!
+    expect(section.textContent).toContain("Allowed embeds")
+    expect([...section.querySelectorAll("label")].map((l) => l.textContent)).toEqual(["YouTube", "Vimeo", "X", "CodePen", "SoundCloud", "Spotify"])
+    expect(box("YouTube").checked).toBe(true)
+    expect(box("Vimeo").checked).toBe(true)
+    expect(box("Spotify").checked).toBe(false)
+  })
+
+  it("says nothing is unsaved until a box changes", async () => {
+    await render()
+    expect(bar()).toBeNull()
+  })
+
+  it("saves the changed list, in the list's order", async () => {
+    await render()
+    await act(async () => box("Spotify").click())
+    await act(async () => box("Vimeo").click())
+    expect(bar()?.textContent).toContain("allowed embeds")
+    await act(async () => button("Save changes").click())
+    await settle()
+    expect(api.updateSettings.mock.calls[0][0].editor_allowed_embeds).toEqual(["youtube", "spotify"])
+  })
+
+  it("can allow nothing at all", async () => {
+    await render()
+    await act(async () => box("YouTube").click())
+    await act(async () => box("Vimeo").click())
+    await act(async () => button("Save changes").click())
+    await settle()
+    expect(api.updateSettings.mock.calls[0][0].editor_allowed_embeds).toEqual([])
+  })
 })
 
 describe("Accounts (#191)", () => {

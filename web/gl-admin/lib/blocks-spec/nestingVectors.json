@@ -188,6 +188,31 @@
       }
     },
     {
+      "name": "an embed (#425) is flow: at the top and in a group",
+      "valid": true,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["embed-0001", "group-0001"],
+        "blocks": {
+          "embed-0001": { "id": "embed-0001", "type": "embed", "version": 1, "attrs": { "provider": "youtube", "ref": "dQw4w9WgXcQ", "title": "Two editors" } },
+          "group-0001": { "id": "group-0001", "type": "group", "version": 1, "attrs": {}, "children": ["embed-0002"] },
+          "embed-0002": { "id": "embed-0002", "type": "embed", "version": 1, "attrs": { "provider": "x" } }
+        }
+      }
+    },
+    {
+      "name": "children on an embed (#425: it holds no blocks)",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["embed-0001"],
+        "blocks": {
+          "embed-0001": { "id": "embed-0001", "type": "embed", "version": 1, "attrs": { "provider": "youtube", "ref": "dQw4w9WgXcQ" }, "children": ["para-00001"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "Hello" } }
+        }
+      }
+    },
+    {
       "name": "children on a video (#423: it holds no blocks)",
       "valid": false,
       "doc": {

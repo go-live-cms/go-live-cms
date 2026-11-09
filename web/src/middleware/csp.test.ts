@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { addNonceToScripts, applyAdminCsp, buildAdminCsp, isAccountPagePath, isAdminPath } from "./csp"
+import { addNonceToScripts, applyAdminCsp, applyPublicCsp, buildAdminCsp, buildPublicCsp, isAccountPagePath, isAdminPath } from "./csp"
+import { EMBED_PROVIDERS, embedPreviewFrame, EMBED_PROVIDER_SPECS } from "@gl-admin/lib/blocks-spec/embeds"
 
 function directives(csp: string): Record<string, string[]> {
   return Object.fromEntries(
@@ -9,6 +10,57 @@ function directives(csp: string): Record<string, string[]> {
     }),
   )
 }
+
+describe("buildPublicCsp (#425)", () => {
+  it("has one directive: frames only from the allowed providers' embed hosts", () => {
+    expect(buildPublicCsp(["youtube", "vimeo"])).toBe("frame-src https://www.youtube-nocookie.com https://player.vimeo.com")
+  })
+
+  it("has no other directive, so themes' scripts, styles and fonts are unaffected", () => {
+    for (const csp of [buildPublicCsp([...EMBED_PROVIDERS]), buildPublicCsp([])]) {
+      expect(csp).not.toContain(";")
+      expect(Object.keys(directives(csp))).toEqual(["frame-src"])
+    }
+  })
+
+  it("allows no frame at all when no provider is allowed", () => {
+    expect(buildPublicCsp([])).toBe("frame-src 'none'")
+  })
+
+  it("names X's widget frame host only while X is allowed", () => {
+    expect(buildPublicCsp(["x"])).toBe("frame-src https://platform.twitter.com")
+    expect(buildPublicCsp(["youtube"])).not.toContain("twitter")
+  })
+
+  it("covers every player the table can build, and never a host of another provider", () => {
+    for (const provider of EMBED_PROVIDERS) {
+      const ref = { youtube: "dQw4w9WgXcQ", vimeo: "76979871", x: "20", codepen: "a/b1", soundcloud: "a/b", spotify: "track/4cOdK2wGLETKBW3PvgPWqT" }[provider]
+      const frame = EMBED_PROVIDER_SPECS[provider].frame?.(ref) ?? embedPreviewFrame(provider, ref)
+      expect(buildPublicCsp([provider]).split(" ")).toContain(new URL(frame.src).origin)
+    }
+  })
+})
+
+describe("applyPublicCsp (#425)", () => {
+  it("sets the header on an HTML page and keeps the rest of the response", async () => {
+    const response = new Response("<p>Hello</p>", { status: 404, headers: { "content-type": "text/html; charset=utf-8", "x-robots-tag": "noindex" } })
+    const applied = applyPublicCsp(response, ["youtube"])
+    expect(applied.headers.get("Content-Security-Policy")).toBe("frame-src https://www.youtube-nocookie.com")
+    expect(applied.headers.get("x-robots-tag")).toBe("noindex")
+    expect(applied.status).toBe(404)
+    expect(await applied.text()).toBe("<p>Hello</p>")
+  })
+
+  it("leaves anything else alone", () => {
+    const response = new Response("{}", { headers: { "content-type": "application/json" } })
+    expect(applyPublicCsp(response, ["youtube"])).toBe(response)
+  })
+
+  it("works on a fetched response, whose headers are immutable", () => {
+    const response = Response.redirect("https://example.com/")
+    expect(() => applyPublicCsp(new Response(null, { status: 204, headers: response.headers }), [])).not.toThrow()
+  })
+})
 
 describe("buildAdminCsp", () => {
   const prod = directives(
@@ -29,6 +81,18 @@ describe("buildAdminCsp", () => {
     // #423: the editor's players load /uploads like the images.
     expect(prod["media-src"]).toEqual(["'self'", "https://api.example.com"])
     expect(prod["connect-src"]).not.toContain("ws://localhost:1234")
+  })
+
+  it("frames only the embed providers' players, and keeps X's widget script out (#425)", () => {
+    expect(prod["frame-src"]).toEqual([
+      "https://www.youtube-nocookie.com",
+      "https://player.vimeo.com",
+      "https://platform.twitter.com",
+      "https://codepen.io",
+      "https://w.soundcloud.com",
+      "https://open.spotify.com",
+    ])
+    expect(prod["script-src"]).not.toContain("https://platform.twitter.com")
   })
 
   it("allows same-origin workers only: History's bundled diff worker, no blob:/data: (#355)", () => {

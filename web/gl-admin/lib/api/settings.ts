@@ -19,7 +19,7 @@ export interface Settings {
   date_format: DateFormat
   // #330: Editor (workspace-wide)
   editor_markdown_shortcuts: boolean
-  // Embed provider ids (EMBED_PROVIDERS in settingsForm.ts); used by #352's embed block.
+  // Embed provider ids (Block Spec's EMBED_PROVIDERS): the sites embeds may come from (#425).
   editor_allowed_embeds: string[]
   // #191: "Allow anyone to sign up" (off by default). Public: the sign-in page reads it.
   allow_signup: boolean

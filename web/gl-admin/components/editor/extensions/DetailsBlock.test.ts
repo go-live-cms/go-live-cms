@@ -110,7 +110,7 @@ describe("Details in the schema (#421)", () => {
   it("is a container the doc and a group hold; its first child is the summary, then flow blocks", () => {
     const ed = makeEditor({ type: "doc", content: [{ type: "paragraph" }] })
     const { nodes } = ed.schema
-    expect(nodes.details.spec.content).toBe("detailsSummary (block | tableBlock | video | audio | file)+")
+    expect(nodes.details.spec.content).toBe("detailsSummary (block | tableBlock | video | audio | file | embed)+")
     expect(nodes.details.spec.group).toBeUndefined()
     expect(nodes.doc.contentMatch.matchType(nodes.details)).toBeTruthy()
     expect(nodes.group.contentMatch.matchType(nodes.details)).toBeTruthy()

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { getSettings, type Settings } from "@gl-admin/lib/api/settings"
+import { knownEmbedProviders, type EmbedProvider } from "@gl-admin/lib/blocks-spec"
 
 // The workspace's editor settings (#330), read from GET /settings once per page load
 // and refreshed when the Settings page saves.
@@ -11,9 +12,12 @@ import { getSettings, type Settings } from "@gl-admin/lib/api/settings"
 
 export interface EditorSettings {
   markdownShortcuts: boolean
+  // Allowed embeds (#425): null until read. The API is what enforces the list; the editor
+  // only says so on a block whose site was taken off it.
+  allowedEmbeds: EmbedProvider[] | null
 }
 
-const DEFAULTS: EditorSettings = { markdownShortcuts: true }
+const DEFAULTS: EditorSettings = { markdownShortcuts: true, allowedEmbeds: null }
 
 // Rules that aren't Markdown and stay on either way: smart punctuation ("--" → "—",
 // curly quotes) and linking a pasted URL.
@@ -29,8 +33,13 @@ export function markdownRuleOptions(markdownShortcuts: boolean): {
     : { enableInputRules: KEPT_INPUT_RULES, enablePasteRules: KEPT_PASTE_RULES }
 }
 
-export function toEditorSettings(settings: Pick<Settings, "editor_markdown_shortcuts"> | null | undefined): EditorSettings {
-  return { markdownShortcuts: typeof settings?.editor_markdown_shortcuts === "boolean" ? settings.editor_markdown_shortcuts : DEFAULTS.markdownShortcuts }
+type StoredEditorSettings = Pick<Settings, "editor_markdown_shortcuts"> & Partial<Pick<Settings, "editor_allowed_embeds">>
+
+export function toEditorSettings(settings: StoredEditorSettings | null | undefined): EditorSettings {
+  return {
+    markdownShortcuts: typeof settings?.editor_markdown_shortcuts === "boolean" ? settings.editor_markdown_shortcuts : DEFAULTS.markdownShortcuts,
+    allowedEmbeds: Array.isArray(settings?.editor_allowed_embeds) ? knownEmbedProviders(settings.editor_allowed_embeds) : DEFAULTS.allowedEmbeds,
+  }
 }
 
 let current: EditorSettings | null = null
@@ -56,12 +65,17 @@ export function loadEditorSettings(): Promise<EditorSettings> {
 }
 
 // The Settings page calls this with what it saved.
-export function setEditorSettings(settings: Pick<Settings, "editor_markdown_shortcuts">): EditorSettings {
+export function setEditorSettings(settings: StoredEditorSettings): EditorSettings {
   current = toEditorSettings(settings)
   pending = null
   version++
   listeners.forEach((listener) => listener(current!))
   return current
+}
+
+// The sites embeds may come from, for code that isn't React (a node view); null until loaded.
+export function currentAllowedEmbeds(): EmbedProvider[] | null {
+  return current?.allowedEmbeds ?? null
 }
 
 // null until loaded.
