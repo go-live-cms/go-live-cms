@@ -245,6 +245,12 @@ function ChangedBlock({ entry, version, working }: { entry: BlockDiffEntry; vers
         {entry.children.map((child) => (
           <DiffBlock key={`${child.status}:${child.id}`} entry={child} version={version} working={working} />
         ))}
+        {/* A gallery's caption (#424), under its images. */}
+        {block.type === "gallery" && entry.caption && entry.caption.length > 0 && (
+          <p className="version-diff__summary">
+            <DiffText segments={entry.caption} />
+          </p>
+        )}
       </div>
     )
   }
@@ -286,7 +292,7 @@ function ChangedBlock({ entry, version, working }: { entry: BlockDiffEntry; vers
     }
   }
 
-  if (["image", "table", "video", "audio"].includes(block.type) && !typeChanged) {
+  if (["image", "table", "video", "audio", "embed"].includes(block.type) && !typeChanged) {
     // The image (or table, #420, or video or audio, #423) as it renders, with its caption
     // replaced by the caption's diff; a table's changed cell text under it.
     const attrs = { ...(block.attrs as Record<string, unknown>) }

@@ -1,6 +1,6 @@
 import { NodeSelection } from "@tiptap/pm/state"
 import type { Editor as TiptapEditor } from "@tiptap/core"
-import { findEntry, turnIntoEntries, type CatalogEntry } from "../blocks/catalog"
+import { embedEntryId, findEntry, turnIntoEntries, type CatalogEntry } from "../blocks/catalog"
 
 // Turn into (the selection toolbar's and the block-type toolbar's picker) reads the block
 // catalog (#415): the options are the catalog entries that have a `turnInto`, the value
@@ -19,6 +19,7 @@ export const computeTurnIntoFromSelection = (editor: TiptapEditor): TurnIntoValu
     if (node.type.name === "image") return "image"
     // #423
     if (node.type.name === "video" || node.type.name === "audio" || node.type.name === "file") return node.type.name
+    if (node.type.name === "embed") return embedEntryId(node.attrs.provider)
     if (node.type.name === "horizontalRule") return "divider"
     if (node.type.name === "codeBlock") return "code-block"
     if (node.type.name === "blockquote") return "quote"
@@ -52,6 +53,7 @@ export const computeTurnIntoFromSelection = (editor: TiptapEditor): TurnIntoValu
     if (node.type.name === "horizontalRule") return "divider"
     if (node.type.name === "image") return "image"
     if (node.type.name === "video" || node.type.name === "audio") return node.type.name
+    if (node.type.name === "embed") return embedEntryId(node.attrs.provider)
   }
 
   return "paragraph"

@@ -130,7 +130,7 @@ describe("the slash menu", () => {
     makeEditor()
     type("/")
     const groups = Array.from(document.querySelectorAll('[role="listbox"] > [role="group"]')).map((g) => g.getAttribute("aria-label"))
-    expect(groups).toEqual(["Text", "Media", "Layout"])
+    expect(groups).toEqual(["Text", "Media", "Layout", "Embeds"])
     expect(document.querySelector(".editor-insert__footer")!.textContent).toBe("↑↓ to move↵ to insertesc to close")
 
     type("he")
@@ -146,13 +146,13 @@ describe("the slash menu", () => {
     expect(document.querySelector('[role="listbox"]')!.getAttribute("aria-label")).toBe("Blocks matching he")
     expect(document.querySelector(".editor-insert__footer")!.textContent).toBe("6 results↵ inserts Heading 1")
 
-    // Something only a keyword has: "/photo" (Image's keyword, shown on the right).
+    // Something only keywords have: "/photo" (Image's and Gallery's, shown on the right).
     act(() => {
       const { from } = editor!.state.selection
       editor!.view.dispatch(editor!.state.tr.delete(from - 2, from))
     })
     type("photo")
-    expect(options().map((o) => o.textContent)).toEqual(["Imagephoto"])
+    expect(options().map((o) => o.textContent)).toEqual(["Imagephoto", "Galleryphotos"])
   })
 
   it("moves across groups with ↑↓, wrapping, and ↵ inserts the highlighted block in place of /query", () => {
@@ -169,8 +169,8 @@ describe("the slash menu", () => {
     expect(active()!.textContent).toBe("Details")
     press("ArrowDown")
     expect(active()!.textContent).toBe("Image")
-    // Video, audio and file (#423), then Layout.
-    for (const name of ["Video", "Audio", "File"]) {
+    // Gallery (#424), video, audio and file (#423), then Layout.
+    for (const name of ["Gallery", "Video", "Audio", "File"]) {
       press("ArrowDown")
       expect(active()!.textContent).toBe(name)
     }
@@ -178,16 +178,16 @@ describe("the slash menu", () => {
     expect(active()!.textContent).toBe("Divider---")
     press("ArrowDown")
     expect(active()!.textContent).toBe("Group")
-    // Columns, Buttons and Spacer (#426), then it wraps.
-    for (const name of ["Columns", "Buttons", "Spacer"]) {
+    // Columns, Buttons and Spacer (#426), the embeds (#425), then it wraps.
+    for (const name of ["Columns", "Buttons", "Spacer", "YouTube", "Vimeo", "X", "Embed a link"]) {
       press("ArrowDown")
       expect(active()!.textContent).toBe(name)
     }
     press("ArrowDown")
     expect(active()!.textContent).toBe("Paragraph")
     press("ArrowUp")
-    expect(active()!.textContent).toBe("Spacer")
-    for (const name of ["Buttons", "Columns", "Group", "Divider---"]) {
+    expect(active()!.textContent).toBe("Embed a link")
+    for (const name of ["X", "Vimeo", "YouTube", "Spacer", "Buttons", "Columns", "Group", "Divider---"]) {
       press("ArrowUp")
       expect(active()!.textContent).toBe(name)
     }
@@ -290,10 +290,12 @@ describe("the role gate in the menu", () => {
     expect(html.querySelector(".editor-insert__pill")!.textContent).toBe("Admins")
     expect(html.closest('[role="group"]')!.getAttribute("aria-label")).toBe("Advanced")
 
-    for (const role of ["editor", "contributor"]) {
+    // A contributor isn't offered the embeds (#425).
+    const embeds = CORE_BLOCKS.filter((entry) => entry.group === "embeds").length
+    for (const [role, count] of [["editor", CORE_BLOCKS.length], ["contributor", CORE_BLOCKS.length - embeds]] as const) {
       makeEditor("<p>first</p><p></p>", menuEntries({ role }, [...CORE_BLOCKS, customHtml]))
       type("/")
-      expect(options()).toHaveLength(CORE_BLOCKS.length)
+      expect(options()).toHaveLength(count)
       expect(options().some((o) => o.textContent?.includes("Custom HTML"))).toBe(false)
       expect(document.querySelector('[role="group"][aria-label="Advanced"]')).toBeNull()
     }

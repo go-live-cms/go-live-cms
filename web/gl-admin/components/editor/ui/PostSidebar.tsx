@@ -132,7 +132,10 @@ export default function PostSidebar({
   const panelRef = useRef<HTMLElement>(null)
   const tabChanged = useRef(onTabChange)
   tabChanged.current = onTabChange
-  useEffect(() => tabChanged.current?.(activeTab), [activeTab])
+  // In braces: an effect's return value is its cleanup, and the callback may return one.
+  useEffect(() => {
+    tabChanged.current?.(activeTab)
+  }, [activeTab])
 
   // ⌘⇧, (#417): the Block tab, with focus on it.
   useEffect(() => {

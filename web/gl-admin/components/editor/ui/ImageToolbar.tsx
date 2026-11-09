@@ -8,7 +8,7 @@ import { findSelectedMediaBlock, MEDIA_NODE_NAMES } from "../extensions/MediaBlo
 import { chooseMediaFor } from "../blocks/mediaPicking"
 
 /** Safely check if editor view is mounted (TipTap v3 throws on .view access) */
-function isViewMounted(editor: TiptapEditor): boolean {
+export function isViewMounted(editor: TiptapEditor): boolean {
   try {
     return !!editor?.view?.dom?.parentElement
   } catch {
@@ -119,7 +119,10 @@ const ImageToolbar = ({ editor }: ImageToolbarProps) => {
       editor={editor}
       pluginKey="imageToolbar"
       className="editor-toolbar image-toolbar"
-      shouldShow={({ editor: e, state: s }) => isViewMounted(e) && e.isEditable && isMediaSelection(s.selection)}
+      // A gallery's image (#424) has its own controls on the tile and in the settings panel.
+      shouldShow={({ editor: e, state: s }) =>
+        isViewMounted(e) && e.isEditable && isMediaSelection(s.selection) && s.selection.$from.parent.type.name !== "gallery"
+      }
     >
       <div role="toolbar" aria-label={LABELS[state.name] ?? "Media"} className="editor-toolbar__group">
         {state.name === "image" && WIDTHS.map((width) => (

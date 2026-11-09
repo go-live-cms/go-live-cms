@@ -39,7 +39,9 @@ const PM_NODE: Record<string, string> = {
   todo_list: "taskList",
   table: "tableBlock",
   details: "details",
+  gallery: "gallery",
   video: "video",
+  embed: "embed",
   audio: "audio",
   file: "file",
   columns: "columns",
@@ -61,6 +63,15 @@ const types = (ed: Editor) => {
 }
 
 describe("insertFromGutter", () => {
+  it("refuses a block inside a gallery: only images go there, through Add images (#424)", () => {
+    const ed = makeEditor('<div data-type="gallery"><figure data-align="inline"><img src="/a.jpg" data-block-id="image-aaaa-0000000000"></figure><div data-type="gallery-caption"></div></div><p>end</p>')
+    expect(ed.state.doc.child(0).child(0).type.name).toBe("image")
+    const before = ed.state.doc.toJSON()
+    const entry = CORE_BLOCKS.find((e) => e.id === "image")!
+    expect(insertFromGutter(ed, { id: ed.state.doc.child(0).child(0).attrs["data-block-id"], pos: 1 }, entry)).toBe(false)
+    expect(ed.state.doc.toJSON()).toEqual(before)
+  })
+
   it.each(CORE_BLOCKS.map((e) => [e.id, e] as const))("inserts %s on a new line below a block, which keeps its text", (_id, entry) => {
     const ed = makeEditor("<h2>Intro</h2><p>alpha</p><p>end</p>")
     const alpha = topLevelBlockAt(ed.state.doc, ed.state.doc.firstChild!.nodeSize)!

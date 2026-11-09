@@ -15,6 +15,9 @@ import {
   isGroupAlign,
   isGroupStyle,
   isImageAlign,
+  MEDIA_BLOCK_ICONS,
+  MEDIA_KIND_ACCEPT,
+  normalizeGalleryColumns,
   type GroupAlign,
   type GroupStyle,
 } from "@gl-admin/lib/blocks-spec"
@@ -22,8 +25,13 @@ import {
 import { TableView } from "@tiptap/extension-table"
 import { hasHeaderRow } from "./TableBlock"
 import { DETAILS_OPEN_HELP, DETAILS_OPEN_LABEL } from "./DetailsBlock"
-import { MediaBlockView, MediaLookupTracker, missingPanel } from "./MediaBlockViews"
-import { chooseMediaFor } from "../blocks/mediaPicking"
+import { button, MediaBlockView, MediaLookupTracker, mediaIcon, missingPanel } from "./MediaBlockViews"
+import { EmbedBlockView } from "./EmbedBlockViews"
+import { GALLERY_EMPTY_FRESH, GALLERY_EMPTY_TEXT, GALLERY_EMPTY_TITLE } from "./GalleryBlock"
+import { chooseGalleryImages, chooseMediaFor, uploadGalleryImages } from "../blocks/mediaPicking"
+import { deleteBlockTr, editorBlockAt, refOfBlock } from "../utils/blockTree"
+import { moveGalleryImage, removeGalleryImage } from "../utils/galleryActions"
+import { focalObjectPosition } from "@gl-admin/lib/mediaLibrary"
 import { ButtonsView, ColumnsView, SpacerView } from "./LayoutBlockViews"
 
 const blockNodeViewsKey = new PluginKey("blockNodeViews")
@@ -77,6 +85,7 @@ export const BlockNodeViews = Extension.create({
             pullQuote: (node, view, getPos) => new QuoteView(node, view, getPos as () => number | undefined, "pullQuote"),
             group: (node, view, getPos) => new GroupView(node, view, getPos as () => number | undefined),
             details: (node, view, getPos) => new DetailsView(node, view, getPos as () => number | undefined),
+            gallery: (node, view, getPos) => new GalleryView(node, view, getPos as () => number | undefined, editor),
             callout: (node, view, getPos) => new CalloutView(node, view, getPos as () => number | undefined),
             // #420: the table block (its toolbar) and the grid, which scrolls in its own box.
             tableBlock: (node, view, getPos) => new TableBlockView(node, view, getPos as () => number | undefined, editor),
@@ -85,6 +94,8 @@ export const BlockNodeViews = Extension.create({
             video: (node, view, getPos) => new MediaBlockView(node, view, getPos as () => number | undefined, editor),
             audio: (node, view, getPos) => new MediaBlockView(node, view, getPos as () => number | undefined, editor),
             file: (node, view, getPos) => new MediaBlockView(node, view, getPos as () => number | undefined, editor),
+            // #425 (EmbedBlockViews.ts): nothing from the provider loads until Load.
+            embed: (node, view, getPos) => new EmbedBlockView(node, view, getPos as () => number | undefined, editor),
             // #426: columns, buttons and the spacer (LayoutBlockViews.ts).
             columns: (node, view, getPos) => new ColumnsView(node, view, getPos as () => number | undefined, editor),
             buttons: (node, view, getPos) => new ButtonsView(node, view, getPos as () => number | undefined, editor),
@@ -120,9 +131,9 @@ export const BlockNodeViews = Extension.create({
 })
 
 /** The nodes whose view shows a field or settings while the cursor is in them. */
-const MARKED_WHILE_IN = new Set(["blockquote", "pullQuote", "group", "callout", "tableBlock", "details", "columns", "buttons"])
+const MARKED_WHILE_IN = new Set(["blockquote", "pullQuote", "group", "callout", "tableBlock", "details", "gallery", "columns", "buttons"])
 /** The nodes whose view shows its toolbar while it is selected. */
-const MARKED_WHEN_SELECTED = new Set(["group", "tableBlock", "details", "columns", "buttons"])
+const MARKED_WHEN_SELECTED = new Set(["group", "tableBlock", "details", "gallery", "columns", "buttons"])
 
 /** The `data-block-id` the node's renderHTML would put on it (BlockIdExtension). */
 function setBlockId(dom: HTMLElement, node: PMNode) {
@@ -135,7 +146,9 @@ function setBlockId(dom: HTMLElement, node: PMNode) {
  * An image: the picture, its caption and "Add caption" (#346). Since #423 an image whose
  * media was deleted (the lookup's 404, `lib/mediaLookup.ts`) shows "The image file is
  * missing" with Replace instead of a broken picture; a lookup that failed any other way
- * leaves the image as it is (it still has its src).
+ * leaves the image as it is (it still has its src). In a gallery (#424) it is a tile: no "Add
+ * caption" (the panel's list has the field), and Move earlier, Move later and Remove while
+ * it's selected.
  */
 class ImageView implements NodeView {
   dom: HTMLElement
@@ -144,6 +157,7 @@ class ImageView implements NodeView {
   private addCaption: HTMLButtonElement
   private missing: { dom: HTMLElement; replace: HTMLButtonElement } | null = null
   private lookup = new MediaLookupTracker(() => this.render())
+  private tileTools: HTMLElement | null = null
 
   constructor(
     private node: PMNode,
@@ -164,6 +178,12 @@ class ImageView implements NodeView {
     this.addCaption.contentEditable = "false"
     this.addCaption.textContent = "Add caption"
     this.dom.append(this.img, this.contentDOM, this.addCaption)
+    // A node view stays under one parent (a move makes a new one), so this is decided once.
+    const at = this.getPos()
+    if (at !== undefined && this.view.state.doc.resolve(at).parent.type.name === "gallery") {
+      this.tileTools = this.buildTileTools()
+      this.dom.append(this.tileTools)
+    }
 
     // The image isn't a leaf any more (it holds its caption), so ProseMirror's click
     // would put a cursor next to it instead of selecting it: select it here.
@@ -187,6 +207,56 @@ class ImageView implements NodeView {
     this.render()
   }
 
+  /** A gallery image's own controls (#424, the canvas's selected tile): each one transaction. */
+  private buildTileTools(): HTMLElement {
+    const tools = document.createElement("div")
+    tools.className = "editor-gallery-image__tools"
+    tools.contentEditable = "false"
+    tools.setAttribute("role", "toolbar")
+    tools.setAttribute("aria-label", "Image in gallery")
+    // Tab from its drag handle lands here (#417, ui/DragHandle.tsx); Esc goes back.
+    tools.setAttribute("data-block-toolbar", "")
+    const act = (run: () => void) => () => {
+      if (!this.view.editable) return
+      run()
+      this.view.focus()
+    }
+    const ref = () => {
+      const pos = this.getPos()
+      return pos === undefined ? null : refOfBlock({ node: this.node, pos })
+    }
+    const tool = (label: string, path: string, run: () => void) => {
+      const el = button("", "editor-gallery-image__tool")
+      el.setAttribute("aria-label", label)
+      el.title = label
+      el.append(mediaIcon(path, 14))
+      el.addEventListener("click", act(run))
+      tools.append(el)
+    }
+    const move = (dir: -1 | 1) => () => {
+      const target = ref()
+      if (target) moveGalleryImage(this.editor, target, dir)
+    }
+    tool("Move image earlier", "m15 18-6-6 6-6", move(-1))
+    tool("Move image later", "m9 18 6-6-6-6", move(1))
+    tool("Remove image from gallery", "M18 6 6 18M6 6l12 12", () => {
+      const target = ref()
+      if (target) removeGalleryImage(this.editor, target)
+    })
+    tools.addEventListener("keydown", (event) => {
+      const buttons = Array.from(tools.querySelectorAll("button"))
+      const index = buttons.indexOf(event.target as HTMLButtonElement)
+      if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
+        event.preventDefault()
+        buttons[(index + (event.key === "ArrowRight" ? 1 : buttons.length - 1)) % buttons.length]?.focus()
+      } else if (event.key === "Escape") {
+        event.preventDefault()
+        this.view.focus()
+      }
+    })
+    return tools
+  }
+
   private render() {
     const { src, alt, title, mediaId, align } = this.node.attrs
     if (src) this.img.setAttribute("src", src)
@@ -198,8 +268,13 @@ class ImageView implements NodeView {
     else delete this.img.dataset.mediaId
     this.dom.dataset.align = isImageAlign(align) ? align : "inline"
     setBlockId(this.dom, this.node)
-    this.addCaption.hidden = this.node.childCount > 0 || !this.view.editable
+    this.addCaption.hidden = this.node.childCount > 0 || !this.view.editable || this.tileTools !== null
     this.renderMissing()
+    // A tile is cropped square, so it needs the media's focal point (#255), as the page does.
+    if (this.tileTools) {
+      const found = this.lookup.state?.status === "found" ? this.lookup.state.media : null
+      this.img.style.objectPosition = found?.focal_point ? focalObjectPosition(found.focal_point) : ""
+    }
   }
 
   private renderMissing() {
@@ -236,7 +311,7 @@ class ImageView implements NodeView {
 
   stopEvent(event: Event) {
     const target = event.target as globalThis.Node | null
-    if (target && (this.addCaption.contains(target) || this.missing?.dom.contains(target))) return true
+    if (target && (this.addCaption.contains(target) || this.missing?.dom.contains(target) || this.tileTools?.contains(target))) return true
     return event.type === "mousedown" && target === this.img
   }
 
@@ -588,6 +663,173 @@ class DetailsView implements NodeView {
   stopEvent(event: Event) {
     const target = event.target as globalThis.Node | null
     return Boolean(target && this.toolbar.contains(target))
+  }
+
+  ignoreMutation(mutation: MutationRecord | { type: "selection"; target: globalThis.Node }) {
+    if (mutation.type === "selection") return false
+    return !this.contentDOM.contains(mutation.target)
+  }
+}
+
+const GALLERY_ICON = MEDIA_BLOCK_ICONS.gallery
+const PLUS_ICON = "M12 5v14M5 12h14"
+
+/**
+ * A gallery (#424): its image tiles in a grid of `columns`, its caption under them, "Add
+ * images" while the cursor is in it (or it is selected), and with no images the empty state.
+ * A gallery nobody has added to yet offers Upload and Choose from Media ("Editor · image,
+ * gallery…"); one that had images, or has a caption, says it has none, with Add images and
+ * Remove block ("Errors & empty states"). Adding is one transaction (`addGalleryImages`).
+ */
+class GalleryView implements NodeView {
+  dom: HTMLElement
+  contentDOM: HTMLElement
+  private toolbar: HTMLElement
+  private empty: HTMLElement
+  private status: HTMLElement
+  private fileInput: HTMLInputElement
+  private hadImages = false
+  private emptyState: "none" | "fresh" | "emptied" | null = null
+
+  constructor(
+    private node: PMNode,
+    private view: EditorView,
+    private getPos: () => number | undefined,
+    private editor: Editor,
+  ) {
+    const doc = view.dom.ownerDocument
+    this.dom = doc.createElement("div")
+    this.dom.className = "editor-gallery"
+    this.dom.dataset.type = "gallery"
+    // Remote carets' name labels flip at this edge (#417, utils/cursorAwareness.ts).
+    this.dom.setAttribute("data-collab-bounds", "")
+    this.toolbar = doc.createElement("div")
+    this.toolbar.className = "editor-gallery__toolbar"
+    this.toolbar.contentEditable = "false"
+    this.toolbar.setAttribute("role", "toolbar")
+    this.toolbar.setAttribute("aria-label", "Gallery")
+    // Tab from its drag handle lands here (#417, ui/DragHandle.tsx); Esc goes back.
+    this.toolbar.setAttribute("data-block-toolbar", "")
+    const add = button("", "editor-gallery__add")
+    add.append(mediaIcon(PLUS_ICON, 14), doc.createTextNode("Add images"))
+    add.addEventListener("click", () => this.choose())
+    this.toolbar.append(add)
+    this.toolbar.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape") return
+      event.preventDefault()
+      const pos = this.getPos()
+      if (pos !== undefined && this.view.state.doc.nodeAt(pos)?.type.name === "gallery") {
+        this.view.dispatch(this.view.state.tr.setSelection(NodeSelection.create(this.view.state.doc, pos)))
+      }
+      this.view.focus()
+    })
+    this.empty = doc.createElement("div")
+    this.empty.className = "editor-gallery__empty"
+    this.empty.contentEditable = "false"
+    this.status = doc.createElement("p")
+    this.status.className = "editor-media__status"
+    this.status.setAttribute("role", "status")
+    this.status.contentEditable = "false"
+    this.fileInput = doc.createElement("input")
+    this.fileInput.type = "file"
+    this.fileInput.multiple = true
+    this.fileInput.hidden = true
+    this.fileInput.accept = MEDIA_KIND_ACCEPT.image
+    this.fileInput.setAttribute("aria-label", "Upload images")
+    this.fileInput.addEventListener("change", () => {
+      const files = Array.from(this.fileInput.files ?? [])
+      this.fileInput.value = ""
+      if (files.length > 0) void this.upload(files)
+    })
+    this.contentDOM = doc.createElement("div")
+    this.contentDOM.className = "editor-gallery__grid"
+    this.dom.append(this.toolbar, this.empty, this.status, this.fileInput, this.contentDOM)
+    this.render()
+  }
+
+  private choose() {
+    if (!this.view.editable) return
+    const pos = this.getPos()
+    if (pos !== undefined) chooseGalleryImages(this.editor, pos)
+  }
+
+  private async upload(files: File[]) {
+    const pos = this.getPos()
+    if (pos === undefined || !this.view.editable) return
+    this.status.textContent = files.length === 1 ? `Uploading ${files[0].name}…` : `Uploading ${files.length} images…`
+    try {
+      await uploadGalleryImages(this.editor, pos, files)
+      this.status.textContent = ""
+    } catch (error) {
+      this.status.textContent = `Upload failed: ${error instanceof Error ? error.message : "the file couldn't be uploaded"}`
+    }
+  }
+
+  private removeBlock() {
+    if (!this.view.editable) return
+    const pos = this.getPos()
+    const block = pos === undefined ? null : editorBlockAt(this.view.state.doc, pos)
+    const tr = block ? deleteBlockTr(this.view.state, block) : null
+    if (tr) this.view.dispatch(tr)
+  }
+
+  private renderEmpty() {
+    const images = this.node.childCount - 1
+    if (images > 0) this.hadImages = true
+    const state = images > 0 ? "none" : this.hadImages || (this.node.lastChild?.content.size ?? 0) > 0 ? "emptied" : "fresh"
+    if (state === this.emptyState) return
+    this.emptyState = state
+    this.empty.replaceChildren()
+    this.empty.hidden = state === "none"
+    this.empty.dataset.state = state
+    if (state === "none") return
+    const doc = this.dom.ownerDocument
+    const actions = doc.createElement("div")
+    actions.className = "editor-media__actions"
+    if (state === "fresh") {
+      const head = doc.createElement("div")
+      head.className = "editor-media__drop-head"
+      head.append(mediaIcon(GALLERY_ICON, 16), "Gallery")
+      const text = doc.createElement("p")
+      text.textContent = GALLERY_EMPTY_FRESH
+      const upload = button("Upload")
+      upload.addEventListener("click", () => this.view.editable && this.fileInput.click())
+      const choose = button("Choose from Media")
+      choose.addEventListener("click", () => this.choose())
+      actions.append(upload, choose)
+      this.empty.append(head, text, actions)
+      return
+    }
+    const icon = mediaIcon(GALLERY_ICON, 28)
+    const title = doc.createElement("b")
+    title.className = "editor-gallery__empty-title"
+    title.textContent = GALLERY_EMPTY_TITLE
+    const text = doc.createElement("p")
+    text.textContent = GALLERY_EMPTY_TEXT
+    const add = button("Add images", "editor-media__button editor-media__button--primary")
+    add.addEventListener("click", () => this.choose())
+    const remove = button("Remove block", "editor-media__button editor-media__button--danger")
+    remove.addEventListener("click", () => this.removeBlock())
+    actions.append(add, remove)
+    this.empty.append(icon, title, text, actions)
+  }
+
+  private render() {
+    setBlockId(this.dom, this.node)
+    this.contentDOM.style.setProperty("--gallery-columns", String(normalizeGalleryColumns(this.node.attrs.columns)))
+    this.renderEmpty()
+  }
+
+  update(node: PMNode) {
+    if (node.type !== this.node.type) return false
+    this.node = node
+    this.render()
+    return true
+  }
+
+  stopEvent(event: Event) {
+    const target = event.target as globalThis.Node | null
+    return Boolean(target && (this.toolbar.contains(target) || this.empty.contains(target) || this.fileInput === target))
   }
 
   ignoreMutation(mutation: MutationRecord | { type: "selection"; target: globalThis.Node }) {

@@ -76,6 +76,17 @@ ORDER BY
 LIMIT sqlc.arg(limit_count)
 OFFSET sqlc.arg(offset_count);
 
+-- name: SearchCommandPaletteUsers :many
+-- The admin command palette (#41): members whose name or username contains the text
+-- (@pattern, @prefix_pattern: ILIKE patterns the API escapes), those that start with it
+-- first. Not the email: the row doesn't show one, so a hit on "co" (every .com address)
+-- would list people for no visible reason.
+SELECT u.id, u.username, u.full_name, u.avatar_url, u.role
+FROM users u
+WHERE u.full_name ILIKE @pattern::text OR u.username ILIKE @pattern::text
+ORDER BY (u.full_name ILIKE @prefix_pattern::text OR u.username ILIKE @prefix_pattern::text) DESC, lower(u.full_name), u.id
+LIMIT @limit_count::int;
+
 -- name: CountMembers :one
 -- ListMembers' filters, for its total.
 SELECT count(*) FROM users u

@@ -46,7 +46,8 @@ const video = (name: string, group: CatalogEntry["group"], keywords: string[] = 
   icon: { path: ICONS.image },
   insert: () => {},
 })
-const withEmbeds = [...CORE_BLOCKS, video("YouTube", "embeds", ["video"]), video("Vimeo", "embeds", ["video"])]
+// The Embeds group's real entries (#425).
+const withEmbeds = CORE_BLOCKS
 
 const names = (entries: readonly CatalogEntry[]) => entries.map((e) => e.name)
 const sectionNames = (query: string, entries: readonly CatalogEntry[] = CORE_BLOCKS) =>
@@ -77,8 +78,9 @@ describe("the catalog", () => {
           "Details",
         ],
       ],
-      ["Media", ["Image", "Video", "Audio", "File"]],
+      ["Media", ["Image", "Gallery", "Video", "Audio", "File"]],
       ["Layout", ["Divider", "Group", "Columns", "Buttons", "Spacer"]],
+      ["Embeds", ["YouTube", "Vimeo", "X", "Embed a link"]],
     ])
     expect(BLOCK_GROUPS.map((g) => g.label)).toEqual(["Text", "Media", "Layout", "Embeds", "Advanced"])
   })
@@ -140,7 +142,11 @@ describe("search (names and keywords)", () => {
 
   it("finds nothing for /map, and leaves out empty groups", () => {
     expect(searchCatalog(CORE_BLOCKS, "map")).toEqual([])
-    expect(sectionNames("code")).toEqual([["Text", ["Code"]]])
+    expect(sectionNames("code")).toEqual([
+      ["Text", ["Code"]],
+      // #425: CodePen, by keyword.
+      ["Embeds", ["Embed a link"]],
+    ])
   })
 
   it("has no item cap", () => {
@@ -156,9 +162,11 @@ describe("the role gate", () => {
   it("offers Advanced entries to admins only, with the Admins pill", () => {
     expect(names(menuEntries({ role: "admin" }, entries))).toContain("Custom HTML")
     expect(names(menuEntries({ role: "Admin" }, entries))).toContain("Custom HTML")
-    for (const role of ["editor", "contributor", null, undefined]) {
+    // Contributors don't get the embeds (#425: resolving a link is for editors and up).
+    const embeds = CORE_BLOCKS.filter((entry) => entry.group === "embeds").length
+    for (const [role, count] of [["editor", CORE_BLOCKS.length], ["contributor", CORE_BLOCKS.length - embeds], [null, CORE_BLOCKS.length - embeds], [undefined, CORE_BLOCKS.length - embeds]] as const) {
       expect(names(menuEntries({ role }, entries))).not.toContain("Custom HTML")
-      expect(menuEntries({ role }, entries)).toHaveLength(CORE_BLOCKS.length)
+      expect(menuEntries({ role }, entries)).toHaveLength(count)
     }
     expect(isAdminOnly(customHtml)).toBe(true)
     expect(CORE_BLOCKS.some(isAdminOnly)).toBe(false)
@@ -205,9 +213,11 @@ const PM_NODE: Record<string, string> = {
   todo_list: "taskList",
   table: "tableBlock",
   details: "details",
+  gallery: "gallery",
   video: "video",
   audio: "audio",
   file: "file",
+  embed: "embed",
   columns: "columns",
   buttons: "buttons",
   spacer: "spacer",

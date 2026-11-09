@@ -13,11 +13,13 @@ import {
   type ColumnsLayout,
   type SpacerSize,
 } from "./layoutBlocks"
+import { EMBED_PROVIDERS, isValidEmbedRef, normalizeEmbedTitle, type EmbedProvider } from "./embeds"
 
 export * from "./nesting"
 export * from "./media"
 export * from "./inlineNodes"
 export * from "./layoutBlocks"
+export * from "./embeds"
 
 // Block Spec v1 - Authoritative Types
 export type BlockID = string
@@ -35,6 +37,7 @@ export type KnownBlockType =
   | "list_item"
   | "group"
   | "details"
+  | "gallery"
   | "callout"
   | "pull_quote"
   | "todo_list"
@@ -43,6 +46,7 @@ export type KnownBlockType =
   | "video"
   | "audio"
   | "file"
+  | "embed"
   | "columns"
   | "column"
   | "buttons"
@@ -92,6 +96,16 @@ export function isGroupStyle(value: unknown): value is GroupStyle {
 
 export function isGroupAlign(value: unknown): value is GroupAlign {
   return typeof value === "string" && (GROUP_ALIGNS as readonly string[]).includes(value)
+}
+
+/** How many columns a gallery may have (#424), and the one a new gallery starts with. */
+export const GALLERY_COLUMNS = [2, 3, 4] as const
+export const GALLERY_DEFAULT_COLUMNS = 3
+
+/** A gallery's columns: a number clamped to 2–4 (the API's `sanitizeGalleryAttrs`), anything else the default. */
+export function normalizeGalleryColumns(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return GALLERY_DEFAULT_COLUMNS
+  return Math.min(GALLERY_COLUMNS[GALLERY_COLUMNS.length - 1], Math.max(GALLERY_COLUMNS[0], Math.trunc(value)))
 }
 
 /**
@@ -362,6 +376,21 @@ export type GroupBlock = BaseBlock<
 >
 
 /**
+ * Gallery (#424), a container (`nesting.ts`): `children` are image blocks (image v2, each
+ * with its own alt, caption and media id), none is fine. The caption is a part, not a
+ * block: runs like an image's.
+ */
+export type GalleryBlock = BaseBlock<
+  "gallery",
+  {
+    /** 2–4 (`GALLERY_COLUMNS`); absent reads as `GALLERY_DEFAULT_COLUMNS`. */
+    columns?: number
+    /** The gallery's own caption, under its images. Absent: none. */
+    caption?: CaptionText[]
+  }
+>
+
+/**
  * Details (#421), a container (`nesting.ts`): `children` are the blocks a reader sees when
  * it's open (flow only). The summary is a part, not a block: its runs (bold, italic, link,
  * like a caption's) in `attrs.summary`, its plain text in `attrs.text` (search reads it).
@@ -443,6 +472,20 @@ export type VideoBlock = BaseBlock<
   {
     /** The media library item. Absent: the block has no file yet. */
     mediaId?: number
+    caption?: CaptionText[]
+  }
+>
+
+/**
+ * Embed (#425), a flow block: which provider and item, and a plain-text title. A provider
+ * with no ref is an empty block waiting for its link. `embeds.ts`.
+ */
+export type EmbedBlock = BaseBlock<
+  "embed",
+  {
+    provider?: EmbedProvider
+    ref?: string
+    title?: string
     caption?: CaptionText[]
   }
 >
@@ -529,6 +572,7 @@ export type Block =
   | ListItemBlock
   | GroupBlock
   | DetailsBlock
+  | GalleryBlock
   | CalloutBlock
   | PullQuoteBlock
   | TodoListBlock
@@ -703,6 +747,16 @@ export const zGroup = zBase.extend({
   children: z.array(zBlockID),
 })
 
+// #424. Children are image blocks, none is fine (the nesting table's count and types).
+export const zGallery = zBase.extend({
+  type: z.literal("gallery"),
+  attrs: z.object({
+    columns: z.number().int().min(GALLERY_COLUMNS[0]).max(GALLERY_COLUMNS[GALLERY_COLUMNS.length - 1]).optional(),
+    caption: z.array(zCaptionText).optional(),
+  }),
+  children: z.array(zBlockID),
+})
+
 // #421. The bridge writes `open` only when true and the summary only when not empty.
 export const zDetails = zBase.extend({
   type: z.literal("details"),
@@ -817,6 +871,27 @@ export const zSpacer = zBase.extend({
   attrs: z.object({ size: z.enum(SPACER_SIZES).optional() }),
 })
 
+// #425. A ref is checked against its own provider's pattern, a title by the rules the
+// bridge writes it with (`embeds.ts`, the same as the API's).
+export const zEmbed = zBase.extend({
+  type: z.literal("embed"),
+  attrs: z
+    .object({
+      provider: z.enum(EMBED_PROVIDERS).optional(),
+      ref: z.string().optional(),
+      title: z
+        .string()
+        .refine((title) => normalizeEmbedTitle(title) === title, "must be plain text, trimmed and within the length limit")
+        .optional(),
+      caption: z.array(zCaptionText).optional(),
+    })
+    .superRefine((attrs, ctx) => {
+      if (attrs.ref !== undefined && !isValidEmbedRef(attrs.provider, attrs.ref)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["ref"], message: "is not valid for its provider" })
+      }
+    }),
+})
+
 /**
  * Catch-all for theme/custom block types not in the known set. Any version: a theme
  * block keeps the version its theme wrote even when that theme isn't installed here.
@@ -841,6 +916,7 @@ const knownBlockSchemas: Record<KnownBlockType, z.ZodTypeAny> = {
   list_item: zListItem,
   group: zGroup,
   details: zDetails,
+  gallery: zGallery,
   callout: zCallout,
   pull_quote: zPullQuote,
   todo_list: zTodoList,
@@ -849,6 +925,7 @@ const knownBlockSchemas: Record<KnownBlockType, z.ZodTypeAny> = {
   video: zVideo,
   audio: zAudio,
   file: zFile,
+  embed: zEmbed,
   columns: zColumns,
   column: zColumn,
   buttons: zButtons,

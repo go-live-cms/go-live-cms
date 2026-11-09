@@ -14,9 +14,10 @@
 // The result holds ids, not blocks: the renderer reads the blocks from the docs it already
 // has, so the worker sends back little.
 
-import { CALLOUT_TONE_LABELS, type Block, type BlockDocV1 } from "../blocks-spec"
+import { CALLOUT_TONE_LABELS, normalizeGalleryColumns, type Block, type BlockDocV1 } from "../blocks-spec"
 // The nesting table only: pure, no imports of its own, so the worker stays small.
 import { isContainerType } from "../blocks-spec/nesting"
+import { EMBED_PROVIDER_SPECS, embedTargetOf } from "../blocks-spec/embeds"
 // Pure too.
 import { COLUMNS_LAYOUT_LABELS, isColumnsLayout, spacerPx, type ColumnsLayout } from "../blocks-spec/layoutBlocks"
 import {
@@ -236,6 +237,7 @@ const TYPE_LABELS: Record<string, string> = {
   ordered_list: "Numbered list",
   list_item: "List item",
   group: "Group",
+  gallery: "Gallery",
   // #419
   callout: "Callout",
   pull_quote: "Pull quote",
@@ -246,6 +248,8 @@ const TYPE_LABELS: Record<string, string> = {
   video: "Video",
   audio: "Audio",
   file: "File",
+  // #425
+  embed: "Embed",
   // #426
   columns: "Columns",
   column: "Column",
@@ -254,9 +258,9 @@ const TYPE_LABELS: Record<string, string> = {
 }
 
 /** The media blocks without text of their own (#423): their caption or label is diffed instead. */
-const MEDIA_ONLY = new Set(["image", "video", "audio", "file"])
+const MEDIA_ONLY = new Set(["image", "video", "audio", "file", "embed"])
 /** The blocks whose caption is a word diff (an image's, a table's, a video's, an audio block's). */
-const CAPTIONED = new Set(["image", "table", "video", "audio"])
+const CAPTIONED = new Set(["image", "table", "video", "audio", "embed"])
 
 /** "Heading", "Bulleted list", or a theme block's name ("theme:example/alert" → "Alert"). */
 export function blockTypeLabel(type: string): string {
@@ -349,6 +353,16 @@ function attrChanges(v: Block, w: Block): AttrChange[] {
       if (v.type === "file") add("label", "Link text", display(va.label), display(wa.label))
       break
     }
+    // #425: the item's address, built from the block's provider and id, and its title.
+    case "embed": {
+      const link = (a: Record<string, unknown>) => {
+        const target = embedTargetOf(a)
+        return target ? EMBED_PROVIDER_SPECS[target.provider].canonical(target.ref) : null
+      }
+      add("link", "Link", link(va), link(wa))
+      add("title", "Title", display(va.title), display(wa.title))
+      break
+    }
     case "group": {
       const width = (a: Record<string, unknown>) => GROUP_WIDTH_LABELS[String(a.align ?? "content")] ?? GROUP_WIDTH_LABELS.content
       const style = (a: Record<string, unknown>) => GROUP_STYLE_LABELS[String(a.style ?? "none")] ?? GROUP_STYLE_LABELS.none
@@ -362,6 +376,10 @@ function attrChanges(v: Block, w: Block): AttrChange[] {
       add("open", "Open by default", open(va), open(wa))
       break
     }
+    // #424: the caption is diffed like an image's, the images as children.
+    case "gallery":
+      add("columns", "Columns", display(normalizeGalleryColumns(va.columns)), display(normalizeGalleryColumns(wa.columns)))
+      break
     // #419: a missing or unknown tone reads as info, as the editor and the page show it.
     case "callout": {
       const tone = (a: Record<string, unknown>) => (CALLOUT_TONE_LABELS as Record<string, string>)[String(a.tone)] ?? CALLOUT_TONE_LABELS.info
@@ -560,8 +578,13 @@ function diffBlock(id: string, v: Block, w: Block, vDoc: Doc, wDoc: Doc, moved: 
     // Same container type: its attributes, and its children by id at any depth.
     const attrs = attrChanges(v, w)
     const children = diffEntries(childIds(v, vDoc), childIds(w, wDoc), vDoc, wDoc)
-    // A details' summary (#421) is its own text, diffed like a caption.
-    const summary = v.type === "details" ? diffTokens(summaryTokens(w), summaryTokens(v)) : undefined
+    // A details' summary (#421) and a gallery's caption (#424) are their own text, diffed like a caption.
+    const summary =
+      v.type === "details"
+        ? diffTokens(summaryTokens(w), summaryTokens(v))
+        : v.type === "gallery"
+          ? diffTokens(captionTokens(w), captionTokens(v))
+          : undefined
     const changed =
       attrs.length > 0 || (summary ? hasChanges(summary) : false) || children.some((child) => child.status !== "same" || child.moved)
     return { id, status: changed ? "changed" : "same", moved, children, attrs, ...(changed && summary ? { caption: summary } : {}) }

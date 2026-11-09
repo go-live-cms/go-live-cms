@@ -63,6 +63,10 @@ type Server struct {
 	// pingDB backs /readyz: store.Ping, a field so tests can stub it.
 	pingDB func(ctx context.Context) error
 
+	// embedClient fetches embed titles (embeds_resolve.go, #425): the API's only outbound
+	// request on a user's behalf. A field so tests can point it at a fake server.
+	embedClient *http.Client
+
 	// themeBlocks is web/themes/blocks.manifest.json (theme_blocks.go, #376): the
 	// installed theme blocks prepareForStore validates. Empty in test mode.
 	themeBlocks ThemeBlockManifest
@@ -169,6 +173,7 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 
 		collabTickets:      tokenMaker,
 		collabFlushTimeout: collabFlushTimeout,
+		embedClient:        newEmbedClient(newEmbedTransport(), embedFetchTimeout),
 		rateLimits:         limits,
 
 		mailer:    mail,
@@ -459,6 +464,10 @@ func (server *Server) setupRoutes() error {
 
 	// The editor's @ menu (#320, mentions.go)
 	server.registerMentionRoutes(v1)
+	server.registerCommandPaletteRoutes(v1)
+
+	// Embeds: which provider a pasted link belongs to, and its title (#425, embeds_resolve.go)
+	server.registerEmbedRoutes(v1)
 
 	// Public API routes for SSR/public content
 	server.registerPublicRoutes(public)

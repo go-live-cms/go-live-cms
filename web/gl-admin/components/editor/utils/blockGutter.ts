@@ -63,7 +63,8 @@ export function gutterAccepts(editor: Editor, ref: BlockRef): (entry: CatalogEnt
  */
 export function insertFromGutter(editor: Editor, ref: BlockRef, entry: CatalogEntry): boolean {
   const block = resolveBlock(editor.state.doc, ref)
-  if (!block) return false
+  // A gallery holds images only, added through its Add images: no line can go between them (#424).
+  if (!block || block.holder.type.name === "gallery") return false
   const { node, pos } = block
   let at: number
   if (node.type.name === "paragraph" && node.content.size === 0) {

@@ -123,6 +123,23 @@ const Taxonomies: React.FC = () => {
     }))
   }, [terms])
 
+  // The command palette opens a term (#41): ?term= opens its panel once its terms are in,
+  // then leaves the URL, so a reload or a type switch doesn't reopen it. Until the
+  // term is there (another type's list may still be loaded) the parameter stays.
+  const termParam = Number(searchParams.get("term"))
+  useEffect(() => {
+    if (!canEdit || !termParam || !terms.some((t) => t.id === termParam)) return
+    setMerging(false)
+    setEditingId(termParam)
+    setSearchParams(
+      (params) => {
+        params.delete("term")
+        return params
+      },
+      { replace: true }
+    )
+  }, [canEdit, termParam, terms, setSearchParams])
+
   const editingTerm = terms.find((t) => t.id === editingId)
   const deletingTerms = terms.filter((t) => deletingIds.includes(t.id))
   const selectedTerms = terms.filter((t) => selectedIds.includes(t.id))

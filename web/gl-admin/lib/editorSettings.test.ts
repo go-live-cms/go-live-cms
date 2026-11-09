@@ -94,6 +94,18 @@ describe("the editor with Markdown shortcuts", () => {
   })
 })
 
+describe("Allowed embeds (#425)", () => {
+  it("reads the list, keeping only the providers this build has, in its order", () => {
+    expect(toEditorSettings({ editor_markdown_shortcuts: true, editor_allowed_embeds: ["x", "loom", "youtube"] }).allowedEmbeds).toEqual(["youtube", "x"])
+    expect(toEditorSettings({ editor_markdown_shortcuts: true, editor_allowed_embeds: [] }).allowedEmbeds).toEqual([])
+  })
+
+  it("is unknown until it has been read", () => {
+    expect(toEditorSettings(null).allowedEmbeds).toBeNull()
+    expect(toEditorSettings({ editor_markdown_shortcuts: true }).allowedEmbeds).toBeNull()
+  })
+})
+
 describe("loading the setting", () => {
   beforeEach(() => {
     resetEditorSettings()
@@ -103,20 +115,20 @@ describe("loading the setting", () => {
 
   it("reads editor_markdown_shortcuts from /settings once", async () => {
     api.getSettings.mockResolvedValue({ editor_markdown_shortcuts: false })
-    expect(await loadEditorSettings()).toEqual({ markdownShortcuts: false })
-    expect(await loadEditorSettings()).toEqual({ markdownShortcuts: false })
+    expect(await loadEditorSettings()).toMatchObject({ markdownShortcuts: false })
+    expect(await loadEditorSettings()).toMatchObject({ markdownShortcuts: false })
     expect(api.getSettings).toHaveBeenCalledTimes(1)
   })
 
   it("falls back to shortcuts on when the lookup fails, and retries next time", async () => {
     api.getSettings.mockRejectedValueOnce(new Error("down")).mockResolvedValue({ editor_markdown_shortcuts: false })
-    expect(await loadEditorSettings()).toEqual({ markdownShortcuts: true })
-    expect(await loadEditorSettings()).toEqual({ markdownShortcuts: false })
+    expect(await loadEditorSettings()).toMatchObject({ markdownShortcuts: true })
+    expect(await loadEditorSettings()).toMatchObject({ markdownShortcuts: false })
   })
 
   it("takes what the Settings page saved without another request", async () => {
     setEditorSettings({ editor_markdown_shortcuts: false })
-    expect(await loadEditorSettings()).toEqual({ markdownShortcuts: false })
+    expect(await loadEditorSettings()).toMatchObject({ markdownShortcuts: false })
     expect(api.getSettings).not.toHaveBeenCalled()
   })
 
@@ -126,12 +138,12 @@ describe("loading the setting", () => {
     const loading = loadEditorSettings()
     setEditorSettings({ editor_markdown_shortcuts: false })
     answer({ editor_markdown_shortcuts: true })
-    expect(await loading).toEqual({ markdownShortcuts: false })
-    expect(await loadEditorSettings()).toEqual({ markdownShortcuts: false })
+    expect(await loading).toMatchObject({ markdownShortcuts: false })
+    expect(await loadEditorSettings()).toMatchObject({ markdownShortcuts: false })
   })
 
   it("treats a missing field (an older API) as on", () => {
-    expect(toEditorSettings({} as never)).toEqual({ markdownShortcuts: true })
-    expect(toEditorSettings(null)).toEqual({ markdownShortcuts: true })
+    expect(toEditorSettings({} as never)).toMatchObject({ markdownShortcuts: true })
+    expect(toEditorSettings(null)).toMatchObject({ markdownShortcuts: true })
   })
 })

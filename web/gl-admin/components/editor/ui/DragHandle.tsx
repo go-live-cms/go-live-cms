@@ -52,6 +52,8 @@ export default function DragHandle({
   onComment?: (ref: BlockRef) => void
 }) {
   const [showDrag, setShowDrag] = useState(false)
+  // No + on a gallery's image (#424): only images go in a gallery, through its Add images.
+  const [showAdd, setShowAdd] = useState(true)
   // The hovered block by id (its position as a fallback), so an edit by anyone between
   // showing the gutter and pressing + or the handle never retargets it.
   const hovered = useRef<BlockRef | null>(null)
@@ -74,6 +76,7 @@ export default function DragHandle({
     // Every block but an empty line: images and dividers have a menu too. An empty line
     // has + only (the design's "An empty line between blocks").
     setShowDrag(!!block && !(block.node.isTextblock && block.node.content.size === 0))
+    setShowAdd(block?.holder.type.name !== "gallery")
   }, [])
 
   useEffect(() => {
@@ -111,7 +114,8 @@ export default function DragHandle({
     if (!storage) return
     storage.focusAddButton = (ref) => {
       if (!gutter.current?.place(ref)) return false
-      addRef.current?.focus()
+      const inGallery = resolveBlock(editor.state.doc, ref)?.holder.type.name === "gallery"
+      ;(inGallery ? buttonRef : addRef).current?.focus()
       return true
     }
     return () => {
@@ -181,7 +185,8 @@ export default function DragHandle({
           <button
             ref={addRef}
             type="button"
-            className={`editor-gutter__add${addFor ? " is-open" : ""}`}
+            className={`editor-gutter__add${addFor ? " is-open" : ""}${showAdd ? "" : " is-hidden"}`}
+            tabIndex={showAdd ? undefined : -1}
             title="Add a block below"
             aria-label="Add block"
             aria-haspopup="listbox"

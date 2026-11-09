@@ -1,4 +1,4 @@
-import { Fragment, type Node as PMNode } from "prosemirror-model"
+import { Fragment, type Node as PMNode, type ResolvedPos } from "prosemirror-model"
 import { NodeSelection, Selection, TextSelection, type EditorState, type Transaction } from "prosemirror-state"
 import {
   acceptsChild,
@@ -381,7 +381,30 @@ export function deleteBlockTr(state: EditorState, block: EditorBlock): Transacti
     // On to the block that took its place, as ProseMirror's own delete does; back only at
     // the end of its container.
     const $at = tr.doc.resolve(Math.min(range.from, tr.doc.content.size))
-    tr.setSelection($at.nodeAfter ? Selection.near($at, 1) : Selection.near($at, -1))
+    const neighbour = galleryNeighbour($at)
+    if (neighbour !== null) tr.setSelection(NodeSelection.create(tr.doc, neighbour))
+    else tr.setSelection($at.nodeAfter ? Selection.near($at, 1) : Selection.near($at, -1))
   }
   return tr.scrollIntoView()
+}
+
+/**
+ * After an image is removed from a gallery (#424), the image to select next: the one that
+ * took its place, else the one before. An image without a caption isn't a selection target
+ * for `Selection.near` (it isn't an atom), so that would fall through to a caption and the
+ * keys that walk the tiles would stop working. Null anywhere else, or with no image left.
+ */
+function galleryNeighbour($at: ResolvedPos): number | null {
+  if ($at.parent.type.name !== "gallery") return null
+  if ($at.nodeAfter?.type.name === "image") return $at.pos
+  return $at.nodeBefore?.type.name === "image" ? $at.pos - $at.nodeBefore.nodeSize : null
+}
+
+/**
+ * A selected block stays selected through a change of its own attributes: ProseMirror maps
+ * a NodeSelection through `setNodeMarkup` to a caret inside it.
+ */
+export function keepBlockSelected(state: EditorState, pos: number, tr: Transaction): Transaction {
+  if (state.selection instanceof NodeSelection && state.selection.from === pos) tr.setSelection(NodeSelection.create(tr.doc, pos))
+  return tr
 }

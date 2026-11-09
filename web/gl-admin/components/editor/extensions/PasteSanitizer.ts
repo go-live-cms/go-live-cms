@@ -4,6 +4,7 @@ import DOMPurify from "dompurify"
 import {
   clampTableSpan,
   CONTAINER_NODE_NAMES,
+  GALLERY_COLUMNS,
   isButtonsAlign,
   isButtonVariant,
   isCalloutTone,
@@ -84,7 +85,10 @@ const BLOCK_COLOR_TAGS = new Set(["P", "H1", "H2", "H3", "H4", "H5", "H6", "BLOC
 // `<summary>` (normalizeClipboardMarkup), which DetailsBlock.ts parses.
 // Columns, buttons and the spacer (#426), from the editor's own clipboard (`ColumnsBlock.ts`,
 // `ButtonsBlock.ts`, `SpacerBlock.ts`). `data-href` is a link: only a safe one survives.
-const CONTAINER_DIV_TYPES = new Set(["group", "details", "details-summary", "columns", "column", "buttons", "button", "spacer"])
+// Gallery (#424): `<div data-type="gallery" data-columns>` and its caption, from the editor's
+// own clipboard. Images are dropped as everywhere (they come from the media library), so a
+// pasted gallery has its caption and columns and no images, and shows the empty-gallery state.
+const CONTAINER_DIV_TYPES = new Set(["group", "details", "details-summary", "gallery", "gallery-caption", "columns", "column", "buttons", "button", "spacer"])
 const isGroupDiv = (node: Element) => node.nodeName === "DIV" && node.getAttribute("data-type") === "group"
 const isColumnsDiv = (node: Element) => isTyped(node, "DIV", "columns")
 const isButtonsDiv = (node: Element) => isTyped(node, "DIV", "buttons")
@@ -140,7 +144,7 @@ function getPurifier() {
     ALLOWED_TAGS,
     ALLOWED_ATTR: [
       "href", "class", "data-pm-slice", "data-block-color", "data-type", "data-style", "data-align",
-      "data-tone", "data-cite", "data-checked", "colspan", "rowspan", "data-open",
+      "data-tone", "data-cite", "data-checked", "colspan", "rowspan", "data-open", "data-columns",
       "data-layout", "data-href", "data-variant", "data-size",
       "data-user-id", "data-post-id", "data-label", "data-date", "data-time", "data-reminder",
     ],
@@ -191,6 +195,8 @@ function getPurifier() {
       if (!isTyped(node, "DIV", "spacer") || !isSpacerSize(data.attrValue)) data.keepAttr = false
     } else if (data.attrName === "data-open") {
       if (!isTyped(node, "DIV", "details") || data.attrValue !== "true") data.keepAttr = false
+    } else if (data.attrName === "data-columns") {
+      if (!isTyped(node, "DIV", "gallery") || !(GALLERY_COLUMNS as readonly number[]).includes(Number(data.attrValue))) data.keepAttr = false
     } else if (data.attrName === "colspan" || data.attrName === "rowspan") {
       // A cell's span (#420), on a cell only, as the integer Block Spec stores (1..TABLE_MAX_SPAN).
       const span = node.nodeName === "TD" || node.nodeName === "TH" ? clampTableSpan(data.attrValue) : 1
@@ -309,6 +315,10 @@ function normalizeClipboardMarkup(root: HTMLElement) {
   for (const cell of Array.from(root.querySelectorAll("td, th"))) {
     if (root.contains(cell)) flattenCell(cell as HTMLElement)
   }
+
+  // A gallery's images are dropped with every other pasted image (#424), and an image's
+  // caption goes with it: left behind, its text would close the gallery, which holds no text.
+  for (const figure of Array.from(root.querySelectorAll('div[data-type="gallery"] > figure'))) figure.remove()
 
   // A details (#421) becomes the editor's own markup: its first <summary> child the summary,
   // `open` as data-open. Any other <summary> is a plain div below.

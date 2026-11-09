@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react"
 import type { Editor as TiptapEditor } from "@tiptap/core"
-import { NodeSelection, type EditorState, type Transaction } from "prosemirror-state"
+import { NodeSelection } from "prosemirror-state"
 import {
   GROUP_ALIGNS,
   GROUP_STYLES,
@@ -9,17 +9,21 @@ import {
   type GroupAlign,
   type GroupStyle,
 } from "@gl-admin/lib/blocks-spec"
-import { catalogEntries, type BlockIconSpec } from "../blocks/catalog"
+import { catalogEntries, embedEntryId, type BlockIconSpec } from "../blocks/catalog"
 import { BlockIcon } from "./BlockIcon"
 import Switch from "../../ui/Switch"
 import { DETAILS_OPEN_HELP, DETAILS_OPEN_LABEL } from "../extensions/DetailsBlock"
 import MediaBlockSettings from "./MediaBlockSettings"
 import Segment from "./BlockSettingsSegment"
 import { ButtonsSettings, ColumnsSettings, SpacerSettings } from "./LayoutBlockSettings"
+import GallerySettings from "./GallerySettings"
+import { galleryImageCount } from "../extensions/GalleryBlock"
+import EmbedBlockSettings from "./EmbedBlockSettings"
 import {
   ancestorBlocks,
   blockSpecTypeOf,
   editorBlockAtSelection,
+  keepBlockSelected,
   refOfBlock,
   resolveEditorBlock,
   type BlockRef,
@@ -49,21 +53,14 @@ export function blockInfo(block: Pick<EditorBlock, "node">): BlockInfo {
   const entry =
     type === "heading"
       ? entries.find((e) => e.id === `heading-${Number(block.node.attrs.level) || 1}`)
-      : entries.find((e) => e.type === type)
+      : type === "embed"
+        ? entries.find((e) => e.id === embedEntryId(block.node.attrs.provider))
+        : entries.find((e) => e.type === type)
   if (entry) return { name: entry.name, icon: entry.icon }
   if (block.node.type.name === "listItem") return { name: "List item", icon: { glyph: "•" } }
   // #426: not in the catalog (it only exists inside a columns block).
   if (block.node.type.name === "column") return { name: "Column", icon: { path: "M3 4h18v16H3z" } }
   return { name: type, icon: { glyph: "?" } }
-}
-
-/**
- * A selected block stays selected through a change of its own attributes: ProseMirror maps
- * a NodeSelection through `setNodeMarkup` to a caret inside it.
- */
-export function keepBlockSelected(state: EditorState, pos: number, tr: Transaction): Transaction {
-  if (state.selection instanceof NodeSelection && state.selection.from === pos) tr.setSelection(NodeSelection.create(tr.doc, pos))
-  return tr
 }
 
 type Snapshot = { block: EditorBlock; path: EditorBlock[] } | null
@@ -109,7 +106,7 @@ export default function BlockSettingsPanel({ editor }: { editor: TiptapEditor })
   )
 
   const setAttr = useCallback(
-    (ref: BlockRef, attr: string, value: string | boolean) => {
+    (ref: BlockRef, attr: string, value: string | boolean | number) => {
       if (!editor.isEditable) return
       const block = resolveEditorBlock(editor.state.doc, ref)
       if (!block || block.node.attrs[attr] === value) return
@@ -122,9 +119,15 @@ export default function BlockSettingsPanel({ editor }: { editor: TiptapEditor })
     return <p className="post-settings__hint block-settings__empty">Select a block, or put the cursor in one, to see its settings.</p>
   }
 
-  const { block, path } = state
+  // #424: a gallery's image shows the gallery's panel with that image's row open.
+  const parent = state.path[state.path.length - 1]
+  const inGallery = state.block.node.type.name === "image" && parent?.node.type.name === "gallery"
+  const selectedImageId = inGallery ? refOfBlock(state.block).id : null
+  const block = inGallery ? parent : state.block
+  const path = inGallery ? state.path.slice(0, -1) : state.path
   const ref = refOfBlock(block)
   const info = blockInfo(block)
+  const isGallery = block.node.type.name === "gallery"
   const isGroup = block.node.type.name === "group"
   const isDetails = block.node.type.name === "details"
   // #423: the file a media block shows, with Replace.
@@ -136,7 +139,10 @@ export default function BlockSettingsPanel({ editor }: { editor: TiptapEditor })
         <span className="block-settings__tile" aria-hidden="true">
           <BlockIcon icon={info.icon} />
         </span>
-        <b className="block-settings__name">{info.name}</b>
+        <div>
+          <b className="block-settings__name">{info.name}</b>
+          {isGallery && <span className="block-settings__sub">{galleryImageCount(block.node)}</span>}
+        </div>
       </div>
       {path.length > 0 && (
         <nav className="block-settings__path" aria-label="Inside">
@@ -183,6 +189,16 @@ export default function BlockSettingsPanel({ editor }: { editor: TiptapEditor })
         />
       ) : isMedia ? (
         <MediaBlockSettings editor={editor} node={block.node} blockRef={ref} />
+      ) : isGallery ? (
+        <GallerySettings
+          editor={editor}
+          gallery={block.node}
+          galleryPos={block.pos}
+          selectedId={selectedImageId}
+          onColumns={(columns) => setAttr(ref, "columns", columns)}
+        />
+      ) : block.node.type.name === "embed" ? (
+        <EmbedBlockSettings key={ref.id ?? ref.pos} editor={editor} node={block.node} blockRef={ref} />
       ) : block.node.type.name === "columns" ? (
         <ColumnsSettings editor={editor} block={block} />
       ) : block.node.type.name === "buttons" ? (

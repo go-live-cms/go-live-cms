@@ -16,6 +16,7 @@ import { BlockNodeViews } from "../extensions/BlockNodeViews"
 import { TableKeyboard } from "../extensions/TableBlock"
 import { DetailsKeyboard } from "../extensions/DetailsBlock"
 import { ButtonsKeyboard } from "../extensions/ButtonsBlock"
+import { GalleryKeyboard } from "../extensions/GalleryKeyboard"
 import { TEXT_PART_NODE_NAMES } from "@gl-admin/lib/blocks-spec/nesting"
 import { BlockActions } from "./blockActions"
 import { BlockGutterKeys } from "./blockGutter"
@@ -85,11 +86,15 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
       schema.todoItem,
       schema.table,
       schema.details,
+      schema.gallery,
       schema.video,
       schema.audio,
       schema.file,
       // #423: insert, set the file of, and caption the media blocks; no schema.
       schema.mediaCommands,
+      schema.embed,
+      // #425: insert an embed, its caption; no schema.
+      schema.embedCommands,
       // #426
       schema.columns,
       schema.buttons,
@@ -107,6 +112,8 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
       DetailsKeyboard,
       // #426: ↵ leaves a button for the line under it, ⌫ never joins two; no schema.
       ButtonsKeyboard,
+      // #424: ← → between images, ⌘⇧← → reorder, ↵ to the image's alt text; no schema.
+      GalleryKeyboard,
       // The block menu's Ctrl D / Ctrl Shift P (#356); no schema.
       BlockActions,
       // Blocks at any depth from the keyboard (#417): Esc, ↵, ↑↓, ⌘⇧↑↓, ⌫; no schema.
@@ -129,9 +136,11 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
             case "video":
             case "audio":
             case "file":
+            case "embed":
               return ""
             case "imageCaption":
             case "tableCaption":
+            case "galleryCaption":
               return "Write a caption…"
             case "detailsSummary":
               return "Summary"

@@ -2,11 +2,12 @@ import React, { useContext } from "react"
 import { captionRuns, isImageAlign, isMediaMissing } from "@gl-admin/lib/blocks-spec"
 import type { BlockComponentProps } from "../types"
 import { renderContent } from "../utils/contentRenderer"
-import { blockMediaFor, ImageSizesContext, isFirstImageBlock, responsiveImageAttrs } from "../utils/responsiveImage"
+import { blockMediaFor, ImageInGalleryContext, ImageSizesContext, isFirstImageBlock, responsiveImageAttrs } from "../utils/responsiveImage"
 
 const ImageBlock: React.FC<BlockComponentProps> = ({ block, doc, anchorId }) => {
   const attrs = block.attrs as Record<string, unknown>
   const sizes = useContext(ImageSizesContext)
+  const inGallery = useContext(ImageInGalleryContext)
   // The image was deleted from Media (#423, the API's `media_missing`): left out, caption
   // and all, rather than a broken image. A failed lookup is not that: the image then
   // renders from its own src.
@@ -29,7 +30,7 @@ const ImageBlock: React.FC<BlockComponentProps> = ({ block, doc, anchorId }) => 
   // carries the block anchor (#356) itself. Only text runs and caption marks (the API
   // sanitizer strips the rest too).
   const caption = captionRuns(attrs?.caption)
-  const align = isImageAlign(attrs?.align) && attrs.align !== "inline" ? attrs.align : null
+  const align = !inGallery && isImageAlign(attrs?.align) && attrs.align !== "inline" ? attrs.align : null
   const bare = caption.length === 0 && !align
 
   const img = (

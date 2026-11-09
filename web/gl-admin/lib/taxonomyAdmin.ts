@@ -13,6 +13,15 @@ export const CATEGORY_TAXONOMY = "category"
 
 type TypeInfo = Pick<TaxonomyType, "name" | "hierarchical"> & Partial<Pick<TaxonomyType, "public" | "default_term_id" | "label">>
 
+// "category" from "Categories": the types only carry a plural label.
+export function singularTaxonomyLabel(type: Pick<TaxonomyType, "label" | "name">): string {
+  const label = type.label.trim()
+  const lower = label.toLowerCase()
+  if (lower.endsWith("ies")) return lower.slice(0, -3) + "y"
+  if (lower.endsWith("s") && !lower.endsWith("ss")) return lower.slice(0, -1)
+  return lower || type.name
+}
+
 export function isCategoryType(type: Pick<TaxonomyType, "name">): boolean {
   return type.name === CATEGORY_TAXONOMY
 }

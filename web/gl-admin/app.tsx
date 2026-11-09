@@ -7,6 +7,7 @@ import ErrorBoundary from "@gl-admin/components/ErrorBoundary"
 import RequireRole from "@gl-admin/components/RequireRole"
 import { isContentModerator, isSiteAdmin } from "@gl-admin/lib/roles"
 import Sidebar from "@gl-admin/components/sidebar/Sidebar"
+import CommandPalette from "@gl-admin/components/command-palette/CommandPalette"
 import { Toaster } from "@gl-admin/components/ui/Toast"
 import "@gl-admin/assets/styles/global.scss"
 import NewContent from "./pages/NewContent"
@@ -109,6 +110,10 @@ function AppLayout() {
           </ErrorBoundary>
         </div>
       </section>
+      {/* Its own boundary too: a crash in it must not take the page behind it down. */}
+      <ErrorBoundary resetKey={pathname} fallback={null}>
+        <CommandPalette />
+      </ErrorBoundary>
       <Toaster />
     </main>
   )

@@ -986,6 +986,8 @@ These are always available and don't need registration:
 | `video`        | A video from Media with the browser's player (`figure.video-block > video`), never autoplaying |
 | `audio`        | An audio file with the browser's player (`figure.audio-block > audio`) |
 | `file`         | A download row (`div.file-block`: `.file-icon`, `.file-text` with the link and `.file-meta` "PDF · 240 KB", `a.btn.file-download`) |
+| `gallery`      | Images in a grid (`figure.gallery-block > ul.gallery`, `--cols` the column count), each with its own alt and caption (below) |
+| `embed`        | A placeholder for YouTube, Vimeo, X, CodePen, SoundCloud or Spotify that loads nothing until a reader clicks (below) |
 
 **Every theme styles the three #419 blocks** and defines `.sr-only` (the callout says its
 tone in a visually hidden span): they render with only their classes
@@ -1028,6 +1030,21 @@ page; the box is focusable, so show its focus ring (the arrow keys scroll it). W
 caption the region is named "Table" (`aria-label`). Cells hold paragraphs only, rendered
 inline with `<br>` between them. The default theme's rules are in `styles/theme.css`.
 
+**Gallery markup (#424).** A theme lays out the grid; a block with no image left to show renders nothing:
+
+```html
+<figure class="gallery-block" id="b-<id>">
+  <ul class="gallery" style="--cols: 3">       <!-- 2, 3 or 4 -->
+    <li><img …></li>                           <!-- an image block: <figure><img><figcaption> when it has a caption -->
+  </ul>
+  <figcaption>…</figcaption>                   <!-- only with a caption -->
+</figure>
+```
+
+Use `repeat(var(--cols, 3), minmax(0, 1fr))` for the columns and drop to two on a phone (the images'
+`sizes` say `50vw` below 640px). The default theme crops tiles square (`aspect-ratio: 1 / 1`, the
+image's own focal point keeps its subject in frame); its rules are in `styles/theme.css`.
+
 **Inline marks (#418).** Post text may carry `<mark>` (a highlight: one colour, the theme's;
 the markup never has a colour of its own), `<sup>` and `<sub>`. Style `mark` with a fill your
 text passes 4.5:1 on, in light and dark (a link inside it too), and keep `sup`/`sub` from
@@ -1047,6 +1064,15 @@ whose media was deleted is left out with its caption (so is an image), and files
 from `/uploads`. Give `.video-block video` and `.audio-block audio` the text column's width
 and lay `.file-block` out as a row that wraps on a phone; the default theme's rules are in
 `styles/theme.css`.
+
+**Embeds (#425).** A placeholder until the reader clicks, so opening a post sends nothing to another
+site. Style `.embed-frame` (a 16:9 box; `.is-card` for a post on X, `.is-compact` for an audio
+player), `.embed-provider`, `.embed-title`, `.embed-note` and `.btn`, and after the click
+`.embed-frame.is-loaded` holding an `iframe` as wide and tall as the box. Don't give the placeholder a
+provider's thumbnail: that is a request to the provider. **Public pages send one CSP directive,
+`frame-src`, limited to the sites in Settings › Editor › Allowed embeds**, so an `<iframe>` a theme
+writes itself must be one of those (no other directive is sent: scripts, styles and fonts are yours).
+The default theme's rules are in `styles/theme.css`.
 
 ---
 

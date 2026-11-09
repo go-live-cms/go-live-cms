@@ -1,7 +1,7 @@
 import type { Editor } from "@tiptap/core"
 import type { Node as PMNode } from "@tiptap/pm/model"
 import { getMediaURL } from "@gl-admin/lib/api"
-import { MEDIA_BLOCK_KINDS, type MediaPickerKind } from "@gl-admin/lib/blocks-spec"
+import { MEDIA_BLOCK_KINDS, mimeMatchesKind, type MediaPickerKind } from "@gl-admin/lib/blocks-spec"
 import { knownMedia, rememberMedia, uploadMediaFile } from "@gl-admin/lib/mediaLookup"
 import type { Media } from "@gl-admin/lib/api/types"
 import { blockSpecTypeOf, refOfBlock, resolveEditorBlock, type BlockRef } from "../utils/blockTree"
@@ -19,6 +19,9 @@ export interface MediaPickRequest {
   /** The file the block shows now (Replace), marked in the picker. */
   current?: Media | null
   onPick: (media: Media) => void
+  /** Several files at once (a gallery's Add images, #424), in the order they were chosen. */
+  multiple?: boolean
+  onPickMany?: (media: Media[]) => void
 }
 
 export interface MediaPickerHostHandlers {
@@ -52,6 +55,16 @@ export function mediaKindOfNode(node: PMNode): MediaPickerKind | null {
   return (MEDIA_BLOCK_KINDS as Record<string, MediaPickerKind>)[type] ?? null
 }
 
+/** An image block's attrs from its media: the URL, alt text (a decorative image gets none, #325), name and id. */
+function imageAttrsOf(media: Media) {
+  return {
+    src: getMediaURL(media.media_path),
+    alt: media.decorative ? "" : media.alt?.trim() || "",
+    title: media.name || "",
+    mediaId: media.id,
+  }
+}
+
 /**
  * Points the block `ref` names at `media`, in one transaction. An image also takes the
  * media's URL, alt text and name, as before #423 (`MediaBlockManager`): its caption and
@@ -66,13 +79,7 @@ export function applyMediaToBlock(editor: Editor, ref: BlockRef, media: Media): 
   if (!block || !mediaKindOfNode(block.node)) return false
   rememberMedia(media)
   if (block.node.type.name === "image") {
-    const tr = editor.state.tr.setNodeMarkup(block.pos, undefined, {
-      ...block.node.attrs,
-      src: getMediaURL(media.media_path),
-      alt: media.decorative ? "" : media.alt?.trim() || "",
-      title: media.name || "",
-      mediaId: media.id,
-    })
+    const tr = editor.state.tr.setNodeMarkup(block.pos, undefined, { ...block.node.attrs, ...imageAttrsOf(media) })
     editor.view.dispatch(tr)
     hosts.get(editor)?.applied?.(media)
     return true
@@ -96,6 +103,54 @@ export function chooseMediaFor(editor: Editor, pos: number): boolean {
   if (!node || !kind || !editor.isEditable) return false
   const ref = refOfBlock({ node, pos })
   return requestMediaPick(editor, { kind, current: currentMedia(node), onPick: (media) => applyMediaToBlock(editor, ref, media) })
+}
+
+/**
+ * Adds `media` to the gallery `ref` names, at its end, as image blocks in one transaction, so
+ * collaborators get one update and one undo step takes them all back (#424). Each is an
+ * ordinary image block with the media's alt text and name. The host links each to the post.
+ */
+export function addMediaToGallery(editor: Editor, ref: BlockRef, media: Media[]): boolean {
+  if (!editor.isEditable || media.length === 0) return false
+  const block = resolveEditorBlock(editor.state.doc, ref)
+  if (!block || block.node.type.name !== "gallery") return false
+  media.forEach(rememberMedia)
+  const added = editor.commands.addGalleryImages(block.pos, media.map(imageAttrsOf))
+  if (added) media.forEach((item) => hosts.get(editor)?.applied?.(item))
+  return added
+}
+
+/** Opens the picker for the gallery at `pos` (Add images): several images at once. */
+export function chooseGalleryImages(editor: Editor, pos: number): boolean {
+  const node = editor.state.doc.nodeAt(pos)
+  if (!node || node.type.name !== "gallery" || !editor.isEditable) return false
+  const ref = refOfBlock({ node, pos })
+  return requestMediaPick(editor, {
+    kind: "image",
+    multiple: true,
+    onPick: (media) => addMediaToGallery(editor, ref, [media]),
+    onPickMany: (media) => addMediaToGallery(editor, ref, media),
+  })
+}
+
+/**
+ * Uploads `files` and adds them to the gallery at `pos` (its own Upload), found again by id
+ * after the uploads. What uploaded before a failure is added; rejects with the failure.
+ */
+export async function uploadGalleryImages(editor: Editor, pos: number, files: File[]): Promise<Media[]> {
+  const node = editor.state.doc.nodeAt(pos)
+  if (!node || node.type.name !== "gallery") throw new Error("This block can't hold images")
+  // The file dialog's filter is only a hint ("All files"), as in the picker's Upload.
+  const wrong = files.find((file) => file.type && !mimeMatchesKind(file.type, "image"))
+  if (wrong) throw new Error(`${wrong.name} isn't an image`)
+  const ref = refOfBlock({ node, pos })
+  const uploaded: Media[] = []
+  try {
+    for (const file of files) uploaded.push(await uploadMediaFile(file))
+  } finally {
+    addMediaToGallery(editor, ref, uploaded)
+  }
+  return uploaded
 }
 
 /**

@@ -231,6 +231,13 @@ interface BlockComponentProps {
   blocks through `renderBlock`. No script: the browser opens and closes it (a click, ↵ or Space
   on the summary). Nothing renders when none of its blocks does. The default theme styles
   `details`/`summary` (rules, a chevron that turns).
+- **Gallery (#424, `gallery/`):** `figure.gallery-block > ul.gallery[style="--cols:N"] > li`, one
+  per image through `renderBlock` (the ordinary image block: its own alt, caption, focal point,
+  `srcset`), then the caption as the figure's `figcaption`. `sizes` comes from the column count
+  (`gallerySizes`, through `ImageSizesContext`); `ImageInGalleryContext` makes an image ignore its
+  own width. An image whose media was deleted is left out with its caption; a gallery with no image
+  left to show is left out entirely, caption included. The theme lays the grid out
+  (`themes/README.md`).
 - **Table (#420, `table/`):** `figure.table-block > div.table-scroll[role=region][tabindex=0]
   [aria-labelledby=<caption id>] > table`, then `figcaption#b-<id>-caption` (the id comes from
   the block id, so a table in a group has one too; without a caption the region is
@@ -260,6 +267,15 @@ interface BlockComponentProps {
   `download` = the uploaded file's name. Nothing renders for a block with no file, a media the
   API lists in `media_missing` (deleted: left out with its caption, the image too), or one with
   no entry (the lookup failed; an image then renders from its own `src`).
+- **Embeds (#425, `embed/`, "Published · media & embeds"):** `figure.embed-block > div.embed-frame` (`.is-card`
+  for X, `.is-compact` for SoundCloud and Spotify) with `.embed-provider`, `p.embed-title`, the Load
+  button (`[data-embed-load]`, `.btn.btn-primary`, X's `.btn-secondary`) and `.embed-note` ("Loading it
+  connects to youtube.com"), then `figcaption`. **No third-party request on page load:** no iframe,
+  image or provider address in the markup, only `data-embed-provider` and `data-embed-ref`.
+  `/gl-embeds.js` (from `BlockRenderer`, for a post with an embed) builds the player from its own
+  per-provider templates on click, adds `.is-loaded`, `role="region"` and moves focus in; X loads its
+  widget then. Nothing renders for an empty block, an invalid one, or a provider the site no longer
+  allows (the API empties those).
 - **Mentions, content links, dates (#320, inline nodes in any text, `renderInlineNode` in
   `utils/contentRenderer.tsx`):** a mention is `<span class="gl-mention">Ana Costa</span>` (the
   member's current name from the API, never an id or email, no "@"); a content link is

@@ -668,6 +668,28 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   an active one of theirs (else 409 `session_not_active`), then `BlockOtherSessionsForUser`. Other
   devices' access tokens live out `ACCESS_TOKEN_DURATION`, as after a logout.
 
+## Embeds (#425, `embeds.go`, `embeds_resolve.go`)
+
+- Block `embed` v1: `provider`, `ref`, `title`, `caption`, an allowlist (`sanitizeEmbedAttrs`). `ref` is
+  checked against its provider's pattern, a title is plain text (`normalizeEmbedTitle`: one holding
+  a tag is dropped, `a < b` isn't). `embedVectors.json` (web) is shared with `embeds_test.go`.
+- **`POST /embeds/resolve {url}` (`requireContentEditor`) is the API's only outbound request made
+  on a user's behalf, so treat every line of it as SSRF surface.** The pasted URL only ever yields a
+  ref; what is fetched is `embedProviderTable[id].oEmbed`, a literal per provider, asked about the
+  URL rebuilt from the ref. HTTPS only, `embedFetchTimeout` 3s for the whole exchange,
+  `embedMaxAnswerBytes` 64 KB, no redirect to another host or to HTTP (`refuseOtherHostRedirects`,
+  ≤3 on the same host), no proxy from the environment, no cookies, and the dialer refuses internal
+  addresses after DNS (`refuseNonPublicEmbedAddress`). Only `title` / `author_name` are decoded; X
+  has no title, so it is "Post by <author>". A URL matching no allowed provider is 400
+  `embed_not_allowed`, nothing fetched; a title that can't be read is still a 200 with `title: ""`
+  (logged as `embed_title_failed` with a fixed reason, never the URL). A new provider is a row in
+  the table, `embedProviders`, and `blocks-spec/embeds.ts`; a new route goes in `embedRoutes`
+  (`route_auth_test.go`).
+- **A provider taken off Allowed embeds** (`editor_allowed_embeds`): `hideDisallowedEmbeds` empties
+  those blocks' attrs in every `/public` doc (`publicizeBlockDocs`), so nothing about them reaches
+  a reader. Stored docs and versions aren't touched: allowing it again brings them back. Only a doc
+  with an embed costs the settings lookup; if the lookup fails every embed is hidden.
+
 ## Categories, merges and redirects (#331, #146, `000047`)
 
 - **One category per post** (taxonomy `category`, `db.CategoryTaxonomy`): `PUT
@@ -763,13 +785,31 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   first); `highlightHTML` escapes everything and turns only those into `<mark>`. Never
   return ts_headline output any other way.
 
+## Command palette (#41, `command_palette.go`)
+
+- `GET /search?q=` (content roles): at most 5 posts, pages, media and terms, plus users for
+  admins only (the key is left out otherwise, and the query isn't run). One route because the
+  per-type ones would mean five or more rate-limited calls per pause in typing (terms are per
+  taxonomy, `/users` is admin-only) and the client would need a copy of who gets what.
+- Posts and pages: `SearchCommandPalettePosts` (title or slug, titles starting with the text
+  first, then latest edited; `postsViewerID`, never the trash; only types post and page).
+  Deliberately not `SearchPostsWithMeta`: its ranking took 1-7 s at 30,000 posts; this route
+  answers in about 200 ms at 30,000 posts plus 30,000 media, so it has no index. Terms:
+  `SearchTermsAcrossTaxonomies` (`show_ui` taxonomies only). Users:
+  `SearchCommandPaletteUsers` (name or username, not the email, which the row doesn't show,
+  so "co" doesn't list every .com address). `q` is cut by
+  `normalizeSearchQuery`, LIKE wildcards escaped.
+- The palette cancels stale requests, so a search the client aborted answers **499**
+  (`statusClientClosedRequest`), not a 500 that would reach the metrics and error reporter.
+  Listed in `route_auth_test.go` (`commandPaletteRoutes`).
+
 ## Site settings (#330)
 
 - `settings` (singleton) gained `site_tagline` (≤160, one line, trimmed), `site_language`
   (BCP-47 from `siteLanguages`), `site_timezone` (IANA, `time.LoadLocation`; `time/tzdata` is
   embedded so the image needs no zoneinfo; `Local`/`""` refused), `date_format`
   (`month_day_year`|`day_month_year`|`iso`), `editor_markdown_shortcuts` and
-  `editor_allowed_embeds` (`embedProviders`, ≤20, deduped; absent keeps, `[]` clears) (`000025`).
+  `editor_allowed_embeds` (`embedProviders`, the sites embeds may come from, #425; ≤20, deduped; absent keeps, `[]` clears) (`000025`).
   Lists and validator tags (`site_language`, `time_zone`, `embed_provider`, `single_line`) live
   in `settings_utils.go`; the web copies are checked against it by its tests.
 - GET `/settings` also returns `site_address` (`PUBLIC_BASE_URL`, read-only, `""` if unusable):
@@ -1322,6 +1362,11 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   button's `href` is a node attr, which the link-mark check never saw:** `sanitizeButtonNode` keeps
   only an `isSafeURL(href, safeHrefSchemes)` one and runs from `sanitizePMNode` too, so a `button` in
   any block's pm is covered. `buttonHrefVectors.json` is the web's too.
+- **Gallery (#424, `post_blocks_gallery_test.go`):** a container (`blockContainers`: `image` only,
+  0+; a group doesn't accept it). Its caption is an attr, not a child: `sanitizeGalleryAttrs` is an
+  allowlist (`columns` a number clamped to 2–4, anything else deleted; `caption` reduced like an
+  image's by `sanitizeCaption`). Its images are image blocks, so they get the image rules and are in
+  `post_media` through `walkBlocks` ("Used in"). Six cases in `nestingVectors.json`.
 - **Marks are an allowlist (#418, `post_blocks_marks_test.go`):** `sanitizeMarks` keeps only
   `allowedMarkTypes` (bold, code, italic, strike, underline, link, highlight, superscript,
   subscript: exactly the editor schema's marks, checked by the web's

@@ -5,7 +5,9 @@ import { createImagePlaceholder } from "./mediaBlocks"
 import { openTableSizePicker } from "../ui/TableSizePicker"
 import { COLUMNS_ICON, openColumnsPicker } from "../ui/ColumnsPicker"
 import { TABLE_ICON } from "../extensions/TableBlock"
-import { MEDIA_BLOCK_ICONS } from "@gl-admin/lib/blocks-spec"
+import { EMBED_ICONS, MEDIA_BLOCK_ICONS, type EmbedProvider } from "@gl-admin/lib/blocks-spec"
+import { requestEmbedFieldFocus, takeEmbedFieldFocus } from "./embedLinks"
+import { currentAllowedEmbeds } from "@gl-admin/lib/editorSettings"
 
 // The block catalog (#415, docs/design/block-library.md 3.1): every block the editor can
 // insert, in one list. The slash menu, the + menu in the gutter, Turn into (turnInto.ts)
@@ -72,6 +74,8 @@ export interface CatalogEntry {
   roles?: readonly CatalogRole[]
   /** Set on a theme block: offered only while that theme is active. */
   theme?: string
+  /** False while the site has switched this block off (an embed provider off Allowed embeds, #425). */
+  available?: () => boolean
   insert: (editor: Editor, range: InsertRange) => void
   /** Turns the block holding the selection into this one (Turn into, the block-type toolbar). */
   turnInto?: (editor: Editor) => void
@@ -99,6 +103,8 @@ export const ICONS = {
   video: MEDIA_BLOCK_ICONS.video,
   audio: MEDIA_BLOCK_ICONS.audio,
   file: MEDIA_BLOCK_ICONS.file,
+  // #424, the canvas's Gallery tile.
+  gallery: MEDIA_BLOCK_ICONS.gallery,
   // #426 ("Editor · columns, group, buttons, spacer")
   columns: COLUMNS_ICON,
   buttons: "M3 8h18v8H3zM8 12h8",
@@ -118,6 +124,28 @@ function closestList(editor: Editor): string | null {
 }
 
 const HEADING_LEVELS = [1, 2, 3, 4, 5, 6] as const
+
+// #425: resolving a link is for editors and admins, so the menus are too. A contributor can
+// still move an embed someone else added.
+const EMBED_ROLES: readonly CatalogRole[] = ["admin", "editor"]
+
+// No `.focus()`: TipTap focuses the editor a frame later, which would take focus from the
+// block's own link field.
+const insertEmbed = (editor: Editor, range: InsertRange, provider: EmbedProvider | null) => {
+  requestEmbedFieldFocus()
+  if (!editor.chain().deleteRange(range).insertEmbedBlock(provider).run()) takeEmbedFieldFocus()
+}
+
+// Whether a provider's own entry makes sense here: one the site doesn't allow could only ever
+// refuse its links. Unknown until the setting has been read, and then the API decides.
+const embedProviderAllowed = (provider: EmbedProvider) => () => currentAllowedEmbeds()?.includes(provider) ?? true
+
+const EMBED_ENTRY_PROVIDERS = ["youtube", "vimeo", "x"]
+
+/** The catalog id of the embed entry for a stored provider: its own, or "Embed a link". */
+export function embedEntryId(provider: unknown): string {
+  return typeof provider === "string" && EMBED_ENTRY_PROVIDERS.includes(provider) ? `embed-${provider}` : "embed-link"
+}
 
 export const CORE_BLOCKS: readonly CatalogEntry[] = [
   // Text
@@ -260,6 +288,17 @@ export const CORE_BLOCKS: readonly CatalogEntry[] = [
     icon: { path: ICONS.image },
     insert: (editor, range) => createImagePlaceholder(editor, range),
   },
+  // #424, a container of image blocks: an empty gallery on the line it's typed on, with its
+  // Upload and Choose from Media. Images come from the picker's multi-select.
+  {
+    id: "gallery",
+    type: "gallery",
+    name: "Gallery",
+    group: "media",
+    keywords: ["images", "photos", "grid", "album"],
+    icon: { path: ICONS.gallery },
+    insert: (editor, range) => chain(editor, range).insertGallery().run(),
+  },
   // #423: an empty block ("Upload" / "Choose from Media"); the file comes from the shared
   // media picker or an upload (blocks/mediaPicking.ts). The line it's typed on is replaced.
   {
@@ -344,6 +383,51 @@ export const CORE_BLOCKS: readonly CatalogEntry[] = [
     icon: { path: ICONS.spacer },
     insert: (editor, range) => chain(editor, range).insertSpacer().run(),
   },
+  // Embeds (#425): an empty block whose field takes the pasted link; the canvas's slash
+  // names are /youtube, /vimeo, /x and /embed.
+  {
+    id: "embed-youtube",
+    type: "embed",
+    name: "YouTube",
+    group: "embeds",
+    keywords: ["video", "yt", "embed"],
+    icon: { path: EMBED_ICONS.youtube },
+    roles: EMBED_ROLES,
+    available: embedProviderAllowed("youtube"),
+    insert: (editor, range) => insertEmbed(editor, range, "youtube"),
+  },
+  {
+    id: "embed-vimeo",
+    type: "embed",
+    name: "Vimeo",
+    group: "embeds",
+    keywords: ["video", "embed"],
+    icon: { path: EMBED_ICONS.vimeo },
+    roles: EMBED_ROLES,
+    available: embedProviderAllowed("vimeo"),
+    insert: (editor, range) => insertEmbed(editor, range, "vimeo"),
+  },
+  {
+    id: "embed-x",
+    type: "embed",
+    name: "X",
+    group: "embeds",
+    keywords: ["twitter", "tweet", "post", "embed"],
+    icon: { path: EMBED_ICONS.x },
+    roles: EMBED_ROLES,
+    available: embedProviderAllowed("x"),
+    insert: (editor, range) => insertEmbed(editor, range, "x"),
+  },
+  {
+    id: "embed-link",
+    type: "embed",
+    name: "Embed a link",
+    group: "embeds",
+    keywords: ["url", "oembed", "codepen", "soundcloud", "spotify"],
+    icon: { path: EMBED_ICONS.link },
+    roles: EMBED_ROLES,
+    insert: (editor, range) => insertEmbed(editor, range, null),
+  },
 ]
 
 /** The whole catalog: the core blocks, then every installed theme block (lib/theme-blocks). */
@@ -384,6 +468,7 @@ export function menuEntries(context: MenuContext, entries: readonly CatalogEntry
   return entries.filter(
     (entry) =>
       canInsert(entry, context.role) &&
+      (entry.available?.() ?? true) &&
       (!entry.theme || entry.theme === (context.theme ?? "default")) &&
       (context.accepts?.(entry) ?? true)
   )

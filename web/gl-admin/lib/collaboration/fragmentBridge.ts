@@ -109,7 +109,8 @@ export function fragmentToBlockDoc(
 
   // A node, with a container's children built one at a time.
   const build = (node: any): PMNode => {
-    if (!containerOfNode(node?.type)) return schema.nodeFromJSON(node)
+    const rule = containerOfNode(node?.type)
+    if (!rule) return schema.nodeFromJSON(node)
     const containerId = idOf(node)
     const children: PMNode[] = []
     let afterId: BlockID | null = null
@@ -126,8 +127,12 @@ export function fragmentToBlockDoc(
       if (id) afterId = id
     }
     // Its parts (a details' summary, #421) don't count: a container with only those would
-    // be skipped by pmToBlockDoc and lost, where falling back keeps its previous version.
-    if (!children.some((child) => isBlockNode(child.type.name, node.type))) {
+    // be skipped by pmToBlockDoc and lost, where falling back keeps its previous version. A
+    // gallery may be empty (#424), but a gallery whose images all failed to build is not
+    // an empty one: it falls back too.
+    const lostBlocks = node.content?.some((child: any) => isBlockNode(String(child?.type), node.type)) === true
+    const holdsBlock = children.some((child) => isBlockNode(child.type.name, node.type))
+    if (!holdsBlock && (rule.min > 0 || lostBlocks)) {
       throw new Error(`${node.type} ${containerId ?? ""} has no block that can be converted`)
     }
     const shell = schema.nodeFromJSON({ type: node.type, attrs: node.attrs, marks: node.marks })

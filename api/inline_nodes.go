@@ -352,7 +352,7 @@ func (server *Server) publicizeInlineNodes(ctx context.Context, docs ...map[stri
 	}
 }
 
-// publicizePostResponses runs publicizeInlineNodes over the published blocks of a page of
+// publicizePostResponses runs publicizeBlockDocs over the published blocks of a page of
 // list rows (author, term and type archives use them for excerpts).
 func (server *Server) publicizePostResponses(ctx context.Context, posts []PostWithMetaResponse) {
 	docs := make([]map[string]interface{}, 0, len(posts))
@@ -362,7 +362,7 @@ func (server *Server) publicizePostResponses(ctx context.Context, posts []PostWi
 		}
 	}
 	if len(docs) > 0 {
-		server.publicizeInlineNodes(ctx, docs...)
+		server.publicizeBlockDocs(ctx, docs...)
 	}
 }
 

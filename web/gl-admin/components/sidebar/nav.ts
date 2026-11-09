@@ -5,7 +5,7 @@ import type { PostType, TaxonomyType } from "@gl-admin/lib/api/types"
 // what is a UI hint only (lib/roles.ts): the API enforces the real checks, and the
 // router guards the admin-only pages (RequireRole in app.tsx).
 
-export type NavIcon = "home" | "new" | "post" | "page" | "content" | "media" | "users" | "types" | "themes" | "menus" | "settings"
+export type NavIcon = "home" | "new" | "post" | "page" | "content" | "media" | "users" | "types" | "themes" | "menus" | "settings" | "tag"
 
 export type NavItem = {
   key: string

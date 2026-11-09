@@ -79,6 +79,8 @@ func sanitizeBlock(block map[string]interface{}) {
 		sanitizeGroupAttrs(attrs)
 	case "details":
 		sanitizeDetailsAttrs(attrs)
+	case "gallery":
+		sanitizeGalleryAttrs(attrs)
 	case "callout":
 		sanitizeCalloutAttrs(attrs)
 	case "pull_quote":
@@ -93,6 +95,8 @@ func sanitizeBlock(block map[string]interface{}) {
 		sanitizePlayableAttrs(attrs)
 	case "file":
 		sanitizeFileAttrs(attrs)
+	case "embed":
+		sanitizeEmbedAttrs(attrs)
 	case "columns":
 		sanitizeColumnsAttrs(attrs)
 	case "column":

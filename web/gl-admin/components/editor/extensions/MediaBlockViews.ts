@@ -70,7 +70,7 @@ const EMPTY_TEXTS: Record<Exclude<MediaNode, "image">, string> = {
   file: "Upload a document or choose one from Media.",
 }
 
-function button(label: string, className = "editor-media__button"): HTMLButtonElement {
+export function button(label: string, className = "editor-media__button"): HTMLButtonElement {
   const el = document.createElement("button")
   el.type = "button"
   el.className = className

@@ -8,7 +8,7 @@ import type { TaxonomyTerm, TaxonomyType } from "@gl-admin/lib/api/types"
 import type { PostUrlStructure } from "@gl-admin/lib/api/settings"
 import { createTaxonomyTerm, updateTaxonomyTerm } from "@gl-admin/lib/api/taxonomies"
 import { slugify } from "@gl-admin/lib/taxonomy/terms"
-import { isDefaultTerm, nestsOneLevel, parentHint, slugHint, slugPrefix, termErrorMessage, termParentOptions } from "@gl-admin/lib/taxonomyAdmin"
+import { isDefaultTerm, nestsOneLevel, parentHint, singularTaxonomyLabel as singular, slugHint, slugPrefix, termErrorMessage, termParentOptions } from "@gl-admin/lib/taxonomyAdmin"
 
 interface TermFormProps {
   type: TaxonomyType
@@ -212,11 +212,4 @@ export default function TermForm({ type, terms, term, structure, onCancel, onSav
   )
 }
 
-// "category" from "Categories": the types only carry a plural label.
-export function singular(type: Pick<TaxonomyType, "label" | "name">): string {
-  const label = type.label.trim()
-  const lower = label.toLowerCase()
-  if (lower.endsWith("ies")) return lower.slice(0, -3) + "y"
-  if (lower.endsWith("s") && !lower.endsWith("ss")) return lower.slice(0, -1)
-  return lower || type.name
-}
+export { singular }

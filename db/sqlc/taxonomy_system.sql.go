@@ -1272,6 +1272,61 @@ func (q *Queries) SearchTaxonomyTerms(ctx context.Context, arg SearchTaxonomyTer
 	return items, nil
 }
 
+const searchTermsAcrossTaxonomies = `-- name: SearchTermsAcrossTaxonomies :many
+SELECT tt.id, tt.name, tt.slug, ttype.name AS taxonomy_type, ttype.label AS taxonomy_label
+FROM taxonomy_terms tt
+JOIN taxonomy_types ttype ON tt.taxonomy_type_id = ttype.id
+WHERE ttype.show_ui
+    AND (tt.name ILIKE $1::text OR tt.slug ILIKE $1::text)
+ORDER BY tt.name, tt.id
+LIMIT $2::int
+`
+
+type SearchTermsAcrossTaxonomiesParams struct {
+	Pattern    string `json:"pattern"`
+	LimitCount int32  `json:"limit_count"`
+}
+
+type SearchTermsAcrossTaxonomiesRow struct {
+	ID            int64  `json:"id"`
+	Name          string `json:"name"`
+	Slug          string `json:"slug"`
+	TaxonomyType  string `json:"taxonomy_type"`
+	TaxonomyLabel string `json:"taxonomy_label"`
+}
+
+// The admin command palette (#41): terms of every taxonomy the admin shows (the
+// Taxonomies page lists show_ui types only) whose name or slug matches @pattern (an ILIKE
+// pattern the API escapes), by name.
+func (q *Queries) SearchTermsAcrossTaxonomies(ctx context.Context, arg SearchTermsAcrossTaxonomiesParams) ([]SearchTermsAcrossTaxonomiesRow, error) {
+	rows, err := q.db.QueryContext(ctx, searchTermsAcrossTaxonomies, arg.Pattern, arg.LimitCount)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SearchTermsAcrossTaxonomiesRow{}
+	for rows.Next() {
+		var i SearchTermsAcrossTaxonomiesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Slug,
+			&i.TaxonomyType,
+			&i.TaxonomyLabel,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateTaxonomyTerm = `-- name: UpdateTaxonomyTerm :one
 UPDATE taxonomy_terms
 SET name = COALESCE($2, name),

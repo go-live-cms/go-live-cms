@@ -15,9 +15,11 @@ import { PullQuote } from "../../components/editor/extensions/PullQuote"
 import { TodoItem, TodoList } from "../../components/editor/extensions/TodoList"
 import { TableBlock } from "../../components/editor/extensions/TableBlock"
 import { Details } from "../../components/editor/extensions/DetailsBlock"
+import { Gallery } from "../../components/editor/extensions/GalleryBlock"
 import { GlHighlight, GlSubscript, GlSuperscript } from "../../components/editor/extensions/InlineMarks"
 import { AudioBlock, FileBlock, MediaBlockCommands, VideoBlock } from "../../components/editor/extensions/MediaBlocks"
 import { ContentLink, DateChip, Mention } from "../../components/editor/extensions/InlineNodes"
+import { EmbedBlock, EmbedBlockCommands } from "../../components/editor/extensions/EmbedBlock"
 import { Columns } from "../../components/editor/extensions/ColumnsBlock"
 import { Buttons } from "../../components/editor/extensions/ButtonsBlock"
 import { Spacer } from "../../components/editor/extensions/SpacerBlock"
@@ -94,6 +96,9 @@ export function schemaExtensions({ collaborating }: { collaborating: boolean }) 
     // #421: the second container (its summary, `detailsSummary`, comes with it). It and
     // Group's wider content change the schema fingerprint (#416).
     details: Details,
+    // #424: the third container (image blocks and its caption, `galleryCaption`). It and
+    // the doc's wider content change the schema fingerprint (#416).
+    gallery: Gallery,
     // #423: video, audio and file (media library files by id; the image is above). Not in
     // the `block` group, like the table. Each changes the fingerprint (#416).
     video: VideoBlock,
@@ -102,6 +107,11 @@ export function schemaExtensions({ collaborating }: { collaborating: boolean }) 
     // Their commands (insert, set the file, caption): no schema, kept next to the nodes so
     // every editor built from these has them, like the table's.
     mediaCommands: MediaBlockCommands,
+    // #425: embeds (a provider, its id and a title, never HTML from the provider). Not in
+    // the `block` group, like the media blocks; a new node type, so it changes the
+    // fingerprint (#416).
+    embed: EmbedBlock,
+    embedCommands: EmbedBlockCommands,
     // #426: columns (with `column`) and, in flow, buttons (with `button`) and the spacer.
     // Each changes the fingerprint (#416), so a stale tab is refused rather than deleting them.
     columns: Columns,

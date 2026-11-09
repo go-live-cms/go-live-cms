@@ -1486,6 +1486,40 @@ body {
 .prose details > :last-child:not(summary) {
   margin-bottom: 1.25em;
 }
+/* Gallery (#424, "Published · media & embeds"): a grid of square tiles, each cropped at its
+   focal point, --cols wide (the block's Columns), two columns on a phone. */
+.prose .gallery {
+  --cols: 3; /* the block's Columns override it on the element */
+  display: grid;
+  grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.prose .gallery li {
+  margin: 0;
+}
+.prose .gallery figure {
+  margin: 0;
+}
+.prose .gallery img {
+  aspect-ratio: 1 / 1;
+  border-radius: var(--radius-sm);
+}
+.prose .gallery figcaption {
+  margin-top: 0.4em;
+  font-size: var(--size-xs);
+}
+.prose > .block-content > .gallery-block {
+  margin-block: 2em;
+}
+@media (max-width: 640px) {
+  .prose .gallery {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-2);
+  }
+}
 /* Video, audio, file (#423, "Published · media & embeds"): the browser's own players,
    full width of the text column, and a download row with the file's type and size. The
    video's box is black in both palettes (what a player shows before it starts); the rest
@@ -1546,6 +1580,96 @@ body {
   }
   .prose .file-block .file-download {
     width: 100%;
+  }
+}
+
+/* Embeds (#425, "Published · media & embeds"): a placeholder until the reader clicks. */
+.prose .embed-frame {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  aspect-ratio: 16 / 9;
+  min-height: 240px;
+  padding: var(--space-5);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+  text-align: center;
+  font-family: var(--font-heading);
+  line-height: var(--leading-normal);
+}
+.prose .embed-frame.is-card {
+  aspect-ratio: auto;
+  min-height: 0;
+  max-width: 560px;
+  align-items: flex-start;
+  text-align: left;
+}
+.prose .embed-frame.is-compact {
+  aspect-ratio: auto;
+  min-height: 166px;
+}
+.prose .embed-provider {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--size-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+.prose .embed-title {
+  margin: 0;
+  max-width: 30ch;
+  font-size: var(--size-lg);
+  font-weight: 700;
+  line-height: var(--leading-snug);
+  color: var(--color-secondary);
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+.prose .embed-note {
+  font-size: var(--size-xs);
+  color: var(--color-text-muted);
+}
+.prose .embed-frame.is-loaded {
+  padding: 0;
+  overflow: hidden;
+  border-color: #000000;
+  background: #000000;
+}
+.prose .embed-frame.is-loaded iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+.prose .embed-frame.is-compact.is-loaded {
+  height: 166px;
+  min-height: 0;
+}
+/* X's widget sizes its own card. */
+.prose .embed-frame.is-card.is-loaded {
+  max-width: none;
+  min-height: 200px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-text-muted);
+}
+.prose .embed-frame.is-card.is-loaded iframe {
+  height: auto;
+}
+.prose .embed-frame.is-loaded:focus {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+@media (max-width: 480px) {
+  .prose .embed-frame:not(.is-card, .is-loaded) {
+    aspect-ratio: auto;
+    padding: var(--space-4);
   }
 }
 

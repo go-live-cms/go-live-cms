@@ -40,5 +40,15 @@ export default function MediaPickerHost({ editor, postId }: { editor: TiptapEdit
     [request]
   )
 
-  return <MediaPicker isOpen={request !== null} onClose={close} onSelect={select} kind={request?.kind} current={request?.current ?? null} />
+  return (
+    <MediaPicker
+      isOpen={request !== null}
+      onClose={close}
+      onSelect={select}
+      kind={request?.kind}
+      current={request?.current ?? null}
+      multiple={request?.multiple}
+      onSelectMany={request?.onPickMany}
+    />
+  )
 }

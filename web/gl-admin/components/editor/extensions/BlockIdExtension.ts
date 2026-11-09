@@ -131,6 +131,8 @@ export const BlockIdExtension = Extension.create({
           "video",
           "audio",
           "file",
+          // #425
+          "embed",
           // #426: a row of buttons is one block (its `button`s are parts, with no id).
           "buttons",
           "spacer",

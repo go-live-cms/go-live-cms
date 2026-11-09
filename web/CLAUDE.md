@@ -390,8 +390,9 @@ are the most fragile part of the codebase. **Before editing anything under
   runbook). **Markdown shortcuts** = TipTap `enableInputRules`/`enablePasteRules` only
   (`lib/editorSettings.ts`: off keeps `typography` and `link`), read when the editor is created
   (`LiveGate` waits for the setting before mounting; connecting doesn't); never a `useEditor`
-  dependency, so a change never recreates a bound editor. "Allowed embeds" stays hidden until
-  #352 (the API stores and checks `editor_allowed_embeds`).
+  dependency, so a change never recreates a bound editor. **Allowed embeds** (#425) is the Editor
+  section's list of checkboxes (`editor_allowed_embeds`; an id this build doesn't list is left out
+  of the draft, or the API would refuse the save).
 - **Scheduled publishing (#147):** the Publish menu's Schedule… / Reschedule… / Cancel schedule
   and the sidebar's Publish date open `components/editor/ui/ScheduleDialog.tsx` (owned by
   `PostForm`); a scheduled post shows a banner (Reschedule, Cancel schedule) or, after a failed
@@ -587,6 +588,19 @@ are the most fragile part of the codebase. **Before editing anything under
   removed column's blocks do: `gl-admin/lib/collaboration/CLAUDE.md` (blockBridge notes, Layout
   blocks). Public markup: `src/components/blocks/README.md`, the default theme's rules in
   `themes/default/styles/theme.css` (`themes/default/layoutBlocks.test.ts`).
+- **Gallery (#424):** a Media entry in the catalog (`/gallery`, an empty gallery on the line, the
+  caret in its caption). The node and its commands are `extensions/GalleryBlock.ts`; the view (a grid,
+  **Add images** while the cursor is in it, and with no images the empty state: Upload and Choose from
+  Media for a new one, "This gallery has no images" with Add images and Remove block once it had some
+  or has a caption) is `GalleryView` in `BlockNodeViews.ts`; a tile is the image's own view
+  (`ImageView`: Move earlier, Move later and Remove while selected). Keys: `extensions/GalleryKeyboard.ts`.
+  The settings panel's Block tab is `ui/GallerySettings.tsx` (Columns, then the images one by one, "No
+  alt text" per image; the selected image's row opens Alt text and Caption, a gallery image selecting
+  shows the gallery's panel with that row open). Images come from the shared picker's multi-select
+  (`chooseGalleryImages`, `addMediaToGallery`) or Upload (`uploadGalleryImages`, several at once), one
+  transaction each. The public `src/components/blocks/gallery/` and the default theme's `.gallery`
+  rules (two columns at 640px). History diffs the caption like a caption, columns as an attribute and
+  the images as children. Rules: `gl-admin/lib/collaboration/CLAUDE.md` (blockBridge notes, Gallery).
 - **Inline marks (#418, design `docs/design/block-library.md` 3.3):** Highlight, Superscript and
   Subscript in the selection toolbar (`ui/BubbleMenu.tsx`, after Link; not in a caption), ⌘⇧H,
   ⌘. and ⌘,. The marks are `extensions/InlineMarks.ts` (rules, the concurrent-edit case and the
@@ -612,6 +626,21 @@ are the most fragile part of the codebase. **Before editing anything under
   (`src/lib/dateChips.ts` `labelDateChips`) before the theme renders; markup in
   `src/components/blocks/README.md`. Mentions in block comments are not built (comments stay
   plain text).
+- **Embeds (#425, design `docs/design/block-library.md` section 5):** YouTube, Vimeo, X and "Embed a
+  link" in the catalog's Embeds group (`roles`: editors and admins, who are who may resolve a link).
+  Nothing from a provider loads until someone clicks, in the editor and on the site. The table is
+  `blocks-spec/embeds.ts` (players, frame hosts, ref patterns); the words for a link that can't be
+  used are `components/editor/blocks/embedLinks.ts`; the view is `extensions/EmbedBlockViews.ts`
+  (link field, placeholder, player), with `ui/EmbedToolbar.tsx` and `ui/EmbedBlockSettings.tsx`. A
+  player opened in the editor is that view's alone, never in the doc. On the site the placeholder is
+  `src/components/blocks/embed/`, with no provider address in it; `public/gl-embeds.js` (plain,
+  unbundled, its templates compared with the table by `EmbedBlock.test.tsx`) builds the player on
+  click, with `sandbox`, `referrerpolicy` and `loading`, and moves focus in. `BlockRenderer` adds
+  that script only for a post with an embed. X loads its widget on click on the site; in the editor
+  it is a plain iframe of the post, because the admin's `script-src` stays closed. **Public CSP:**
+  `applyPublicCsp` (`src/middleware/csp.ts`) sends one directive, `frame-src`, the allowed providers'
+  hosts (`'none'` if the settings can't be read); no other directive, so themes are unaffected. The
+  admin's CSP frames every provider's host.
 - **Editing nested blocks (#417, design `docs/design/block-library.md` 3.5):** the gutter is
   our own plugin now (`components/editor/utils/gutterPlugin.ts`; TipTap 3.4.2's drag handle
   only finds top-level blocks): it follows the pointer to the innermost block (a block in a
@@ -685,6 +714,20 @@ are the most fragile part of the codebase. **Before editing anything under
   History's preview fills the `media` map from the same lookups (`lib/docMedia.ts`). The admin CSP
   has `media-src` for the players. Rules: `gl-admin/lib/collaboration/CLAUDE.md` (blockBridge
   notes, Media blocks).
+- **Command palette (#41; the canvas's "Search · command palette"):** the sidebar's Search
+  button or Ctrl/⌘ K (`components/command-palette/CommandPalette.tsx`, mounted in `AppLayout`,
+  opened through `openCommandPalette`). In the block editor (`isEditorFocused`: focus inside
+  `.ProseMirror`) Ctrl K stays the link dialog (`OpenLinkModal`'s `Mod-k`); it doesn't open over
+  another `aria-modal` dialog either (that dialog's Tab trap would take focus).
+  One call, `GET /search?q=` (`lib/api/commandPalette.ts`, `api/command_palette.go`), debounced
+  150 ms; every change aborts the request before it (`apiCall`'s `signal`) and an answer for
+  other text is never shown. Rules, what each result opens and the group order are
+  `lib/commandPalette.ts` (tested): jump actions first (they need no answer, so the highlighted
+  row doesn't move when results arrive), then Posts, Pages, Media, Terms, Users. Settings and
+  Users are admins' only; a role without content access gets no search. Rows and keys are the
+  slash menu's (the field is the combobox, `aria-activedescendant`, ↑↓ wrap across groups), but
+  it's a modal: Tab stays inside, Esc returns focus to where it was. A term opens as
+  `/taxonomies?type=&term=`, which opens its panel for editors and admins.
 - The admin Content list route `/content/:typeName` keys its component by `typeName`
   (`ContentByType` in `app.tsx`) so switching post types remounts + refetches.
 
