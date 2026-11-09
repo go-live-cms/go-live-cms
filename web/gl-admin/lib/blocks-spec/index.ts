@@ -25,6 +25,7 @@ export type KnownBlockType =
   | "list_item"
   | "group"
   | "details"
+  | "gallery"
   | "callout"
   | "pull_quote"
   | "todo_list"
@@ -79,6 +80,16 @@ export function isGroupStyle(value: unknown): value is GroupStyle {
 
 export function isGroupAlign(value: unknown): value is GroupAlign {
   return typeof value === "string" && (GROUP_ALIGNS as readonly string[]).includes(value)
+}
+
+/** How many columns a gallery may have (#424), and the one a new gallery starts with. */
+export const GALLERY_COLUMNS = [2, 3, 4] as const
+export const GALLERY_DEFAULT_COLUMNS = 3
+
+/** A gallery's columns: a number clamped to 2–4 (the API's `sanitizeGalleryAttrs`), anything else the default. */
+export function normalizeGalleryColumns(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return GALLERY_DEFAULT_COLUMNS
+  return Math.min(GALLERY_COLUMNS[GALLERY_COLUMNS.length - 1], Math.max(GALLERY_COLUMNS[0], Math.trunc(value)))
 }
 
 /**
@@ -349,6 +360,21 @@ export type GroupBlock = BaseBlock<
 >
 
 /**
+ * Gallery (#424), a container (`nesting.ts`): `children` are image blocks (image v2, each
+ * with its own alt, caption and media id), none is fine. The caption is a part, not a
+ * block: runs like an image's.
+ */
+export type GalleryBlock = BaseBlock<
+  "gallery",
+  {
+    /** 2–4 (`GALLERY_COLUMNS`); absent reads as `GALLERY_DEFAULT_COLUMNS`. */
+    columns?: number
+    /** The gallery's own caption, under its images. Absent: none. */
+    caption?: CaptionText[]
+  }
+>
+
+/**
  * Details (#421), a container (`nesting.ts`): `children` are the blocks a reader sees when
  * it's open (flow only). The summary is a part, not a block: its runs (bold, italic, link,
  * like a caption's) in `attrs.summary`, its plain text in `attrs.text` (search reads it).
@@ -495,6 +521,7 @@ export type Block =
   | ListItemBlock
   | GroupBlock
   | DetailsBlock
+  | GalleryBlock
   | CalloutBlock
   | PullQuoteBlock
   | TodoListBlock
@@ -665,6 +692,16 @@ export const zGroup = zBase.extend({
   children: z.array(zBlockID),
 })
 
+// #424. Children are image blocks, none is fine (the nesting table's count and types).
+export const zGallery = zBase.extend({
+  type: z.literal("gallery"),
+  attrs: z.object({
+    columns: z.number().int().min(GALLERY_COLUMNS[0]).max(GALLERY_COLUMNS[GALLERY_COLUMNS.length - 1]).optional(),
+    caption: z.array(zCaptionText).optional(),
+  }),
+  children: z.array(zBlockID),
+})
+
 // #421. The bridge writes `open` only when true and the summary only when not empty.
 export const zDetails = zBase.extend({
   type: z.literal("details"),
@@ -777,6 +814,7 @@ const knownBlockSchemas: Record<KnownBlockType, z.ZodTypeAny> = {
   list_item: zListItem,
   group: zGroup,
   details: zDetails,
+  gallery: zGallery,
   callout: zCallout,
   pull_quote: zPullQuote,
   todo_list: zTodoList,

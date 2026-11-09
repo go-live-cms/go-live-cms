@@ -176,8 +176,8 @@ describe("+ in the margin (#415)", () => {
     await placed()
     typeInto(search(), "i")
     const names = () => Array.from(addMenu()!.querySelectorAll('[role="option"] .editor-insert__name')).map((n) => n.textContent)
-    // Callout by its keyword "info" (#419), Image by its name.
-    expect(names()).toEqual(["Callout", "Image"])
+    // Callout by its keyword "info" (#419), Image by its name, Gallery by its keyword "images" (#424).
+    expect(names()).toEqual(["Callout", "Image", "Gallery"])
     typeInto(search(), "l")
     // Three names ("list") in Text, one keyword ("line") in Layout.
     expect(names()).toEqual(["Bulleted list", "Numbered list", "To-do list", "Divider"])

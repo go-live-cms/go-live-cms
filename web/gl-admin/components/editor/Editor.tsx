@@ -114,6 +114,8 @@ export type EditorProps = {
   onEditorReady?: (editor: TiptapEditor | null) => void
   /** ⌘⇧, (#417, "Toolbar and settings"): open or close the settings panel on its Block tab. */
   onToggleBlockSettings?: () => void
+  /** Opens the settings panel on the Block tab (↵ on a gallery image, #424). */
+  onOpenBlockSettings?: () => void
 }
 
 export interface EditorRef {
@@ -171,6 +173,7 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
     comments,
     onEditorReady,
     onToggleBlockSettings,
+    onOpenBlockSettings,
     collab,
     unbuildable,
     autoFocus = true,
@@ -408,15 +411,21 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
     }
   }, [editor, comments, collab])
   // The settings panel's Block tab (#417) reads the editable editor; ⌘⇧, opens it.
-  const panel = useRef({ onEditorReady, onToggleBlockSettings })
-  panel.current = { onEditorReady, onToggleBlockSettings }
+  const panel = useRef({ onEditorReady, onToggleBlockSettings, onOpenBlockSettings })
+  panel.current = { onEditorReady, onToggleBlockSettings, onOpenBlockSettings }
   useEffect(() => {
     if (!editor || readOnly) return
     panel.current.onEditorReady?.(editor)
-    const storage = (editor.storage as unknown as Record<string, { toggleBlockSettings: (() => void) | null }>).blockNavigationKeys
-    if (storage) storage.toggleBlockSettings = () => panel.current.onToggleBlockSettings?.()
+    const storage = (editor.storage as unknown as Record<string, { toggleBlockSettings: (() => void) | null; openBlockSettings: (() => void) | null }>).blockNavigationKeys
+    if (storage) {
+      storage.toggleBlockSettings = () => panel.current.onToggleBlockSettings?.()
+      storage.openBlockSettings = () => panel.current.onOpenBlockSettings?.()
+    }
     return () => {
-      if (storage) storage.toggleBlockSettings = null
+      if (storage) {
+        storage.toggleBlockSettings = null
+        storage.openBlockSettings = null
+      }
       panel.current.onEditorReady?.(null)
     }
   }, [editor, readOnly])

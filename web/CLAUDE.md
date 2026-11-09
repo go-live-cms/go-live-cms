@@ -580,6 +580,19 @@ are the most fragile part of the codebase. **Before editing anything under
   The public `src/components/blocks/details/` is the browser's own `<details>` (no script) and the
   default theme styles it. History diffs its summary like a caption and `open` as an attribute.
   Rules: `gl-admin/lib/collaboration/CLAUDE.md` (blockBridge notes, Details).
+- **Gallery (#424):** a Media entry in the catalog (`/gallery`, an empty gallery on the line, the
+  caret in its caption). The node and its commands are `extensions/GalleryBlock.ts`; the view (a grid,
+  **Add images** while the cursor is in it, and with no images the empty state: Upload and Choose from
+  Media for a new one, "This gallery has no images" with Add images and Remove block once it had some
+  or has a caption) is `GalleryView` in `BlockNodeViews.ts`; a tile is the image's own view
+  (`ImageView`: Move earlier, Move later and Remove while selected). Keys: `extensions/GalleryKeyboard.ts`.
+  The settings panel's Block tab is `ui/GallerySettings.tsx` (Columns, then the images one by one, "No
+  alt text" per image; the selected image's row opens Alt text and Caption, a gallery image selecting
+  shows the gallery's panel with that row open). Images come from the shared picker's multi-select
+  (`chooseGalleryImages`, `addMediaToGallery`) or Upload (`uploadGalleryImages`, several at once), one
+  transaction each. The public `src/components/blocks/gallery/` and the default theme's `.gallery`
+  rules (two columns at 640px). History diffs the caption like a caption, columns as an attribute and
+  the images as children. Rules: `gl-admin/lib/collaboration/CLAUDE.md` (blockBridge notes, Gallery).
 - **Inline marks (#418, design `docs/design/block-library.md` 3.3):** Highlight, Superscript and
   Subscript in the selection toolbar (`ui/BubbleMenu.tsx`, after Link; not in a caption), ⌘⇧H,
   ⌘. and ⌘,. The marks are `extensions/InlineMarks.ts` (rules, the concurrent-edit case and the

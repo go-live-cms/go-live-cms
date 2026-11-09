@@ -77,7 +77,7 @@ describe("the catalog", () => {
           "Details",
         ],
       ],
-      ["Media", ["Image", "Video", "Audio", "File"]],
+      ["Media", ["Image", "Gallery", "Video", "Audio", "File"]],
       ["Layout", ["Divider", "Group"]],
       ["Embeds", ["YouTube", "Vimeo", "X", "Embed a link"]],
     ])
@@ -212,6 +212,7 @@ const PM_NODE: Record<string, string> = {
   todo_list: "taskList",
   table: "tableBlock",
   details: "details",
+  gallery: "gallery",
   video: "video",
   audio: "audio",
   file: "file",

@@ -54,6 +54,9 @@ posts.block_doc → publish → post_versions → public site (SSR)
   group in it), its summary a part, not a block: `attrs.summary` runs (bold, italic, link,
   like a caption's) and `attrs.text` their text (absent when empty), `attrs.open: true`
   ("Open by default"; absent: closed). A group may hold a details
+- **gallery** (#424): a container: `children` are `image` blocks (none is fine), each with its
+  own alt, caption and media id; `attrs.columns` 2–4 (`GALLERY_COLUMNS`, always written) and
+  `attrs.caption` (runs like an image's; absent: none), a part, not a block. Top level only
 - **callout** (#419): flow; its paragraphs in `pm` (node `callout`, `paragraph+`), and
   `attrs.tone` `info`/`success`/`warning`/`danger` (`CALLOUT_TONES`, always written; absent or
   unknown reads as info), never in `pm`

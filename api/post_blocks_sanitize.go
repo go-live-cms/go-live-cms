@@ -79,6 +79,8 @@ func sanitizeBlock(block map[string]interface{}) {
 		sanitizeGroupAttrs(attrs)
 	case "details":
 		sanitizeDetailsAttrs(attrs)
+	case "gallery":
+		sanitizeGalleryAttrs(attrs)
 	case "callout":
 		sanitizeCalloutAttrs(attrs)
 	case "pull_quote":

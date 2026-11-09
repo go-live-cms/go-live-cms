@@ -1354,6 +1354,11 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   allowlist (`summary` reduced like a caption by `sanitizeCaptionRuns`, `text` a string, `open`
   only `true`). An image in a details is in `post_media` (`walkBlocks`). Four cases in
   `nestingVectors.json`.
+- **Gallery (#424, `post_blocks_gallery_test.go`):** a container (`blockContainers`: `image` only,
+  0+; a group doesn't accept it). Its caption is an attr, not a child: `sanitizeGalleryAttrs` is an
+  allowlist (`columns` a number clamped to 2–4, anything else deleted; `caption` reduced like an
+  image's by `sanitizeCaption`). Its images are image blocks, so they get the image rules and are in
+  `post_media` through `walkBlocks` ("Used in"). Six cases in `nestingVectors.json`.
 - **Marks are an allowlist (#418, `post_blocks_marks_test.go`):** `sanitizeMarks` keeps only
   `allowedMarkTypes` (bold, code, italic, strike, underline, link, highlight, superscript,
   subscript: exactly the editor schema's marks, checked by the web's

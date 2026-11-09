@@ -983,6 +983,7 @@ These are always available and don't need registration:
 | `video`        | A video from Media with the browser's player (`figure.video-block > video`), never autoplaying |
 | `audio`        | An audio file with the browser's player (`figure.audio-block > audio`) |
 | `file`         | A download row (`div.file-block`: `.file-icon`, `.file-text` with the link and `.file-meta` "PDF · 240 KB", `a.btn.file-download`) |
+| `gallery`      | Images in a grid (`figure.gallery-block > ul.gallery`, `--cols` the column count), each with its own alt and caption (below) |
 | `embed`        | A placeholder for YouTube, Vimeo, X, CodePen, SoundCloud or Spotify that loads nothing until a reader clicks (below) |
 
 **Every theme styles the three #419 blocks** and defines `.sr-only` (the callout says its
@@ -1025,6 +1026,21 @@ Make `.table-scroll` scroll sideways (`overflow-x: auto`) and give the `<table>`
 page; the box is focusable, so show its focus ring (the arrow keys scroll it). Without a
 caption the region is named "Table" (`aria-label`). Cells hold paragraphs only, rendered
 inline with `<br>` between them. The default theme's rules are in `styles/theme.css`.
+
+**Gallery markup (#424).** A theme lays out the grid; a block with no image left to show renders nothing:
+
+```html
+<figure class="gallery-block" id="b-<id>">
+  <ul class="gallery" style="--cols: 3">       <!-- 2, 3 or 4 -->
+    <li><img …></li>                           <!-- an image block: <figure><img><figcaption> when it has a caption -->
+  </ul>
+  <figcaption>…</figcaption>                   <!-- only with a caption -->
+</figure>
+```
+
+Use `repeat(var(--cols, 3), minmax(0, 1fr))` for the columns and drop to two on a phone (the images'
+`sizes` say `50vw` below 640px). The default theme crops tiles square (`aspect-ratio: 1 / 1`, the
+image's own focal point keeps its subject in frame); its rules are in `styles/theme.css`.
 
 **Inline marks (#418).** Post text may carry `<mark>` (a highlight: one colour, the theme's;
 the markup never has a colour of its own), `<sup>` and `<sub>`. Style `mark` with a fill your

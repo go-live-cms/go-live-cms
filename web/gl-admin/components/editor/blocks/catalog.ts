@@ -102,6 +102,8 @@ export const ICONS = {
   video: MEDIA_BLOCK_ICONS.video,
   audio: MEDIA_BLOCK_ICONS.audio,
   file: MEDIA_BLOCK_ICONS.file,
+  // #424, the canvas's Gallery tile.
+  gallery: MEDIA_BLOCK_ICONS.gallery,
 } as const
 
 const chain = (editor: Editor, range: InsertRange) => editor.chain().focus().deleteRange(range)
@@ -280,6 +282,17 @@ export const CORE_BLOCKS: readonly CatalogEntry[] = [
     keywords: ["img", "picture", "photo"],
     icon: { path: ICONS.image },
     insert: (editor, range) => createImagePlaceholder(editor, range),
+  },
+  // #424, a container of image blocks: an empty gallery on the line it's typed on, with its
+  // Upload and Choose from Media. Images come from the picker's multi-select.
+  {
+    id: "gallery",
+    type: "gallery",
+    name: "Gallery",
+    group: "media",
+    keywords: ["images", "photos", "grid", "album"],
+    icon: { path: ICONS.gallery },
+    insert: (editor, range) => chain(editor, range).insertGallery().run(),
   },
   // #423: an empty block ("Upload" / "Choose from Media"); the file comes from the shared
   // media picker or an upload (blocks/mediaPicking.ts). The line it's typed on is replaced.

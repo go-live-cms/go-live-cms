@@ -15,6 +15,7 @@ import { mentionMenuManager } from "./mentionMenuManager"
 import { BlockNodeViews } from "../extensions/BlockNodeViews"
 import { TableKeyboard } from "../extensions/TableBlock"
 import { DetailsKeyboard } from "../extensions/DetailsBlock"
+import { GalleryKeyboard } from "../extensions/GalleryKeyboard"
 import { TEXT_PART_NODE_NAMES } from "@gl-admin/lib/blocks-spec/nesting"
 import { BlockActions } from "./blockActions"
 import { BlockGutterKeys } from "./blockGutter"
@@ -84,6 +85,7 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
       schema.todoItem,
       schema.table,
       schema.details,
+      schema.gallery,
       schema.video,
       schema.audio,
       schema.file,
@@ -103,6 +105,8 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
       TableKeyboard,
       // #421: ↵ from the summary into the content, ⌫ never deletes the summary; no schema.
       DetailsKeyboard,
+      // #424: ← → between images, ⌘⇧← → reorder, ↵ to the image's alt text; no schema.
+      GalleryKeyboard,
       // The block menu's Ctrl D / Ctrl Shift P (#356); no schema.
       BlockActions,
       // Blocks at any depth from the keyboard (#417): Esc, ↵, ↑↓, ⌘⇧↑↓, ⌫; no schema.
@@ -129,6 +133,7 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
               return ""
             case "imageCaption":
             case "tableCaption":
+            case "galleryCaption":
               return "Write a caption…"
             case "detailsSummary":
               return "Summary"

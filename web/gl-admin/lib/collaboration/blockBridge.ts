@@ -9,6 +9,7 @@ import {
   normalizeBlockColor,
   normalizeCalloutTone,
   normalizeCite,
+  normalizeGalleryColumns,
   normalizeFileLabel,
   embedStoredAttrs,
   EMBED_BLOCK_VERSION,
@@ -86,7 +87,8 @@ export function pmToBlockDoc(pmDoc: PMNode): BlockDocV1 {
     // schema-invalid PM node (nodeFromJSON doesn't enforce content). It holds no content,
     // so skip it rather than persist a childless list or container block (#213).
     if (isList && node.childCount === 0) return null
-    if (container && childNodes.length === 0) return null
+    // A container that may be empty (a gallery, #424) is kept: "no images" is a real state.
+    if (container && container.min > 0 && childNodes.length === 0) return null
 
     const block = pmNodeToBlock(node, blocks, seenIds)
     if (!block) return null
@@ -292,6 +294,21 @@ function pmNodeToBlock(node: PMNode, allBlocks: Record<BlockID, Block>, seenIds:
         },
         // children are set by the caller
       }
+
+    // #424. Columns are always written; the caption is a part (its runs), left out when empty.
+    case "gallery": {
+      const caption = node.lastChild
+      return {
+        id,
+        type: "gallery",
+        version: 1,
+        attrs: {
+          columns: normalizeGalleryColumns(node.attrs.columns),
+          ...(caption?.type.name === "galleryCaption" && caption.content.size > 0 ? { caption: caption.content.toJSON() as CaptionText[] } : {}),
+        },
+        // children are set by the caller
+      }
+    }
 
     // #419. Like a quote's `cite`, each one's own attr is canonical on the block and
     // left out of its `pm`, so the two can never disagree.
@@ -572,9 +589,16 @@ function mediaIdAttr(value: unknown): { mediaId?: number } {
  * as ProseMirror JSON. Undefined when it has none or it's empty.
  */
 function captionOf(image: PMNode): CaptionText[] | undefined {
-  const caption = image.firstChild
-  if (!caption || caption.type.name !== "imageCaption" || caption.content.size === 0) return undefined
-  return caption.content.toJSON() as CaptionText[]
+  // Normally one child. Two people adding the first caption at once each insert one, and
+  // y-tiptap builds both unchecked (#424): both are kept, one after the other, so neither
+  // person's text is lost from the stored doc.
+  const runs: CaptionText[] = []
+  image.forEach((caption) => {
+    if (caption.type.name !== "imageCaption" || caption.content.size === 0) return
+    if (runs.length > 0) runs.push({ type: "text", text: " " })
+    runs.push(...(caption.content.toJSON() as CaptionText[]))
+  })
+  return runs.length > 0 ? runs : undefined
 }
 
 /**
@@ -1051,6 +1075,19 @@ function blockToPMNode(block: Block, allBlocks: Record<BlockID, Block>, ctx: Con
       }
     }
 
+    // #424: the images, then the caption (always there; empty without runs).
+    case "gallery": {
+      const attrs = block.attrs as { columns?: unknown; caption?: unknown }
+      return {
+        type: "gallery",
+        attrs: { ...baseAttrs, columns: normalizeGalleryColumns(attrs.columns) },
+        content: [
+          ...containerChildrenToPM(block, allBlocks, ctx),
+          { type: "galleryCaption", ...captionContent(captionToPM(attrs.caption, ctx.schema)) },
+        ],
+      }
+    }
+
     case "table":
       return tableBlockToPM(block, baseAttrs, ctx.schema)
 
@@ -1199,9 +1236,10 @@ function containerChildrenToPM(block: Block, allBlocks: Record<BlockID, Block>, 
   ctx.containersInProgress.add(block.id)
   try {
     const nodeType = ctx.schema.nodes[rule.node]
-    // What may follow the container's parts (a details' summary, #421): its blocks.
+    // What may follow the container's parts (a details' summary, #421): its blocks. A
+    // gallery's caption comes after them (#424), so its images start the content.
     let afterParts: ContentMatch | null = nodeType?.contentMatch ?? null
-    for (const part of rule.parts ?? []) afterParts = afterParts?.matchType(ctx.schema.nodes[part]) ?? null
+    if (!rule.partsLast) for (const part of rule.parts ?? []) afterParts = afterParts?.matchType(ctx.schema.nodes[part]) ?? null
     const items: any[] = []
     let afterId: BlockID | null = null
     for (const childId of block.children ?? []) {
@@ -1226,9 +1264,10 @@ function containerChildrenToPM(block: Block, allBlocks: Record<BlockID, Block>, 
       }
       afterId = childId
     }
-    for (let index = items.length; index < rule.min; index++) {
-      const role = index === 0 ? rule.synthesize.role : `${rule.synthesize.role}-${index + 1}`
-      items.push({ type: BLOCK_NODE_NAMES[rule.synthesize.type], attrs: { "data-block-id": synthesizedChildId(block.id, role) } })
+    const filler = rule.synthesize
+    for (let index = items.length; filler && index < rule.min; index++) {
+      const role = index === 0 ? filler.role : `${filler.role}-${index + 1}`
+      items.push({ type: BLOCK_NODE_NAMES[filler.type], attrs: { "data-block-id": synthesizedChildId(block.id, role) } })
     }
     return items
   } finally {

@@ -1424,6 +1424,40 @@ body {
 .prose details > :last-child:not(summary) {
   margin-bottom: 1.25em;
 }
+/* Gallery (#424, "Published · media & embeds"): a grid of square tiles, each cropped at its
+   focal point, --cols wide (the block's Columns), two columns on a phone. */
+.prose .gallery {
+  --cols: 3; /* the block's Columns override it on the element */
+  display: grid;
+  grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.prose .gallery li {
+  margin: 0;
+}
+.prose .gallery figure {
+  margin: 0;
+}
+.prose .gallery img {
+  aspect-ratio: 1 / 1;
+  border-radius: var(--radius-sm);
+}
+.prose .gallery figcaption {
+  margin-top: 0.4em;
+  font-size: var(--size-xs);
+}
+.prose > .block-content > .gallery-block {
+  margin-block: 2em;
+}
+@media (max-width: 640px) {
+  .prose .gallery {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-2);
+  }
+}
 /* Video, audio, file (#423, "Published · media & embeds"): the browser's own players,
    full width of the text column, and a download row with the file's type and size. The
    video's box is black in both palettes (what a player shows before it starts); the rest

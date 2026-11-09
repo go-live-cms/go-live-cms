@@ -475,6 +475,78 @@
           "item-00001": { "id": "item-00001", "type": "list_item", "version": 1, "attrs": { "text": "one" } }
         }
       }
+    },
+    {
+      "name": "a gallery (#424) of image blocks with its caption",
+      "valid": true,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["gallery-01"],
+        "blocks": {
+          "gallery-01": { "id": "gallery-01", "type": "gallery", "version": 1, "attrs": { "columns": 3, "caption": [{ "type": "text", "text": "Six " }, { "type": "text", "text": "covers", "marks": [{ "type": "italic" }] }] }, "children": ["image-0001", "image-0002"] },
+          "image-0001": { "id": "image-0001", "type": "image", "version": 2, "attrs": { "mediaId": 1, "src": "/uploads/a.jpg", "alt": "A roof", "caption": [{ "type": "text", "text": "October" }] } },
+          "image-0002": { "id": "image-0002", "type": "image", "version": 2, "attrs": { "mediaId": 2, "src": "/uploads/b.jpg" } }
+        }
+      }
+    },
+    {
+      "name": "an empty gallery is valid (#424: 0+ images, an editor state)",
+      "valid": true,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["gallery-01"],
+        "blocks": {
+          "gallery-01": { "id": "gallery-01", "type": "gallery", "version": 1, "attrs": { "columns": 2 }, "children": [] }
+        }
+      }
+    },
+    {
+      "name": "a gallery holding a paragraph (images only)",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["gallery-01"],
+        "blocks": {
+          "gallery-01": { "id": "gallery-01", "type": "gallery", "version": 1, "attrs": {}, "children": ["para-00001"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "x" } }
+        }
+      }
+    },
+    {
+      "name": "a gallery holding a video (images only)",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["gallery-01"],
+        "blocks": {
+          "gallery-01": { "id": "gallery-01", "type": "gallery", "version": 1, "attrs": {}, "children": ["video-0001"] },
+          "video-0001": { "id": "video-0001", "type": "video", "version": 1, "attrs": { "mediaId": 1 } }
+        }
+      }
+    },
+    {
+      "name": "a gallery in a group (the table has no such row)",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["group-0001"],
+        "blocks": {
+          "group-0001": { "id": "group-0001", "type": "group", "version": 1, "attrs": {}, "children": ["gallery-01"] },
+          "gallery-01": { "id": "gallery-01", "type": "gallery", "version": 1, "attrs": {}, "children": [] }
+        }
+      }
+    },
+    {
+      "name": "a gallery in a gallery",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["gallery-01"],
+        "blocks": {
+          "gallery-01": { "id": "gallery-01", "type": "gallery", "version": 1, "attrs": {}, "children": ["gallery-02"] },
+          "gallery-02": { "id": "gallery-02", "type": "gallery", "version": 1, "attrs": {}, "children": [] }
+        }
+      }
     }
   ]
 }

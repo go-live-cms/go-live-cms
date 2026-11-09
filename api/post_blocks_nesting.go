@@ -21,12 +21,14 @@ type blockContainer struct {
 	max int
 }
 
-// blockContainers: the containers. Group (#414) is the first, details (#421) the second;
-// columns, cover, … are rows here and in nesting.ts. A details' summary is an attr
-// (`summary` runs), not a child, so its row is only its blocks.
+// blockContainers: the containers. Group (#414) is the first, details (#421) the second,
+// gallery (#424) the third; columns, cover, … are rows here and in nesting.ts. A details'
+// summary and a gallery's caption are attrs (runs), not children, so their rows are only
+// their blocks. A gallery holds images only and may be empty.
 var blockContainers = map[string]blockContainer{
 	"group":   {accepts: []string{"flow", "details"}, min: 1},
 	"details": {accepts: []string{"flow"}, min: 1},
+	"gallery": {accepts: []string{"image"}, min: 0},
 }
 
 // flowBlockTypes are the core types that hold no blocks. Lists count as flow (their
@@ -266,6 +268,40 @@ func sanitizeDetailsAttrs(attrs map[string]interface{}) {
 		}
 	}
 	sanitizeCaptionRuns(attrs, "summary")
+}
+
+// Gallery (#424): 2 to 4 columns (Block Spec `GALLERY_COLUMNS`).
+const (
+	galleryMinColumns = 2
+	galleryMaxColumns = 4
+)
+
+// sanitizeGalleryAttrs keeps only a gallery's own attrs (#424, an allowlist): `columns`
+// clamped to 2–4 as a whole number (anything but a number is deleted, so it reads as the
+// default) and `caption` reduced like an image's (sanitizeCaption: text runs with bold,
+// italic and link only). Its images are their own blocks, sanitized as images.
+func sanitizeGalleryAttrs(attrs map[string]interface{}) {
+	for key, value := range attrs {
+		switch key {
+		case "columns":
+			columns, ok := value.(float64)
+			if !ok {
+				delete(attrs, key)
+				continue
+			}
+			clamped := int(columns)
+			if columns < galleryMinColumns {
+				clamped = galleryMinColumns
+			} else if columns > galleryMaxColumns {
+				clamped = galleryMaxColumns
+			}
+			attrs[key] = float64(clamped)
+		case "caption":
+		default:
+			delete(attrs, key)
+		}
+	}
+	sanitizeCaption(attrs)
 }
 
 // walkBlocks calls visit for each block reachable from blocks_order, in reading order

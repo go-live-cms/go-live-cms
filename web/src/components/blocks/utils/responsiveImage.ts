@@ -40,6 +40,10 @@ export const BLOCK_IMAGE_SIZES = "(max-width: 1000px) 100vw, 1000px"
 
 export const ImageSizesContext = createContext<string>(BLOCK_IMAGE_SIZES)
 
+// True inside a gallery (#424): a tile of the grid, so an image's own width (one moved in
+// from the post body may be wide or full) doesn't apply.
+export const ImageInGalleryContext = createContext<boolean>(false)
+
 export interface ResponsiveImageAttrs {
   src: string
   srcSet?: string

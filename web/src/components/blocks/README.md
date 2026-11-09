@@ -231,6 +231,13 @@ interface BlockComponentProps {
   blocks through `renderBlock`. No script: the browser opens and closes it (a click, ↵ or Space
   on the summary). Nothing renders when none of its blocks does. The default theme styles
   `details`/`summary` (rules, a chevron that turns).
+- **Gallery (#424, `gallery/`):** `figure.gallery-block > ul.gallery[style="--cols:N"] > li`, one
+  per image through `renderBlock` (the ordinary image block: its own alt, caption, focal point,
+  `srcset`), then the caption as the figure's `figcaption`. `sizes` comes from the column count
+  (`gallerySizes`, through `ImageSizesContext`); `ImageInGalleryContext` makes an image ignore its
+  own width. An image whose media was deleted is left out with its caption; a gallery with no image
+  left to show is left out entirely, caption included. The theme lays the grid out
+  (`themes/README.md`).
 - **Table (#420, `table/`):** `figure.table-block > div.table-scroll[role=region][tabindex=0]
   [aria-labelledby=<caption id>] > table`, then `figcaption#b-<id>-caption` (the id comes from
   the block id, so a table in a group has one too; without a caption the region is
