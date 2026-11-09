@@ -168,9 +168,9 @@ can't see the repository root. The API's context is the root, so `.dockerignore`
 - The manifest is checked by one validator in Go, with cases in a shared vectors file read by
   both test suites, the pattern `themeBlockVectors.json` set. A plugin in the repository that
   fails it fails CI.
-- Rejected: declaring blocks in `plugin.json` itself (it would make every attr edit a change to
-  the file the scanner hashes for identity, and block directories already exist for the editor
-  and renderer halves).
+- Rejected: declaring blocks in `plugin.json` itself. Each block already needs a directory for its
+  editor and renderer halves, and the globs find `block.json` beside them. One central list would
+  need a second way to match them up.
 
 ---
 
@@ -257,8 +257,13 @@ intervenes. Its content is safe, but it's not the behaviour the docs describe.
 The fix belongs in the only place that seeds (rule 11), in `loadIntoDoc`, and it fixes themes too:
 
 1. Apply the stored state to a **scratch** `Y.Doc`, not the one Hocuspocus handed over.
-2. If the fragment holds no namespaced node (`theme:` or `plugin:`) the schema lacks, at any
-   depth, apply the state to the real doc and continue as today.
+2. Decide whether to reseed. It's needed in either direction: **(a)** the fragment holds a
+   namespaced node (`theme:` or `plugin:`) the schema lacks, at any depth; or **(b)** `meta.dropped`
+   holds a namespaced block the schema now knows, and a dry-run seed of the derived doc drops fewer
+   blocks than `meta.dropped` has. (b) is what makes a reinstall bring a block back, since a post
+   reseeded at removal has usable state again. The dry run stops a block dropped for another reason
+   (bad content, a newer version) from reseeding on every load. If neither holds, apply the state
+   to the real doc and continue as today.
 3. Otherwise derive a block doc from the scratch fragment with `fragmentToBlockDoc` (with
    `meta.dropped`). **From the state, not `block_doc`**: a post whose last store was `kept-invalid`
    has edits `block_doc` doesn't. A node with no real schema goes through a stand-in, which would
@@ -267,10 +272,16 @@ The fix belongs in the only place that seeds (rule 11), in `loadIntoDoc`, and it
    out of `pm` onto the block.
 4. Seed the real doc from that, under a **new epoch** (rule 12), with outcome `seeded`, reason
    `uninstalled-blocks`. A tab holding the old structs gets `stale-epoch`. The seed is PUT at once
-   as usual.
+   as usual. **`seedFragment` must stop making stand-ins for namespaced types.** A plugin node can
+   sit inside a quote's or list item's `pm`, because it is in the `block` group; a stand-in there
+   would leave it in the fragment, the editor still couldn't bind, and step 2 would reseed on every
+   load. Without one, that parent fails to build and is hidden and kept whole (#213), which costs
+   the quote until a reinstall. `fragmentToBlockDoc` keeps its stand-ins: it needs them to read the
+   state.
 
-Tests: a stored state with a removed plugin's block, top-level and inside a Group, loads with the
-rest editable, stores keep the block, and reinstalling restores it in place.
+Tests: a stored state with a removed plugin's block, top-level, inside a Group and inside a quote,
+loads with the rest editable and reseeds once; stores keep the block; reinstalling restores it in
+place; and a block dropped for another reason doesn't reseed.
 
 ### 4.5 Upgrades
 
@@ -278,8 +289,10 @@ A plugin version is a schema contract. Widening is safe (a new attr with a defau
 `content`), and it changes the fingerprint, so it is an ordinary deploy. Narrowing `content`, or
 removing an attr's values from an `enum`, leaves stored docs that a seed's `check()` hides (#213).
 So a breaking change needs a new block type (`plugin:x/note-2`) or a bumped block `version` whose
-renderer reads both. A rollback is covered by the rule theme blocks already have: a stored version
-newer than the build reads is hidden and kept.
+renderer reads both. The rule that hides a stored version newer than the build reads applies only
+at a seed. A post with stored state keeps editing after a rollback, on the older spec, and its next
+store writes the older version without the attrs that spec doesn't declare. Treat a rollback across
+a block version like a down migration: restore the pre-release backup, or roll forward.
 
 ---
 
@@ -426,20 +439,22 @@ is separated from the event below.
 
 Events are written by **one trigger on `posts`**, not by Go. Publishing has more paths than it
 looks: the Publish button and bulk (`publishPostByID`), the scheduler, scheduled updates, and a
-`post_status` set through `PUT /posts/:id`, which moves no version at all. `000044`'s
-`posts_resolve_review_on_publish` already solved exactly this, and writes its activity row inside
-the publish's transaction, so a new path needs nothing.
+`post_status` set through `PUT /posts/:id` or `POST /posts`, which moves no version at all.
+`000044`'s `posts_resolve_review_on_publish` already solved this for updates, and writes its
+activity row inside the publish's transaction, so a new path needs nothing.
 
 | Event | Trigger condition | Notes |
 |---|---|---|
 | `post.saved` | `INSERT`, or `changed_at` moved | Covers a collab store that wrote `block_doc` (`StorePostCollabTx` bumps it; a state-only store doesn't), `POST /posts`, duplicate, from template, and REST settings saves. **Observe only.** The collab store may be holding the only copy of an edit and it never throws, so a save can never be blocked or changed. Coalesced below, since the store's debounce allows one every 2 to 10 seconds per open document. |
-| `post.published` | `post_status` becomes `published` (not from `trash`), or a new `published_version_id` | `000044`'s condition. The actor is the new version's `created_by`; NULL for a status set through PUT. |
+| `post.published` | `post_status` becomes `published` (not from `trash`), a new `published_version_id`, or an `INSERT` with status `published` | `000044`'s condition, plus the insert it doesn't need. The actor is the new version's `created_by`; NULL for a status set through PUT or POST. |
+| `post.unpublished` | `post_status` leaves `published`, other than to `trash` | So anything that mirrors the site can follow it. |
 | `post.before_publish` | Not an event: a guard (7.7) | |
 | `post.trashed` | `post_status` becomes `trash` | `DELETE /posts/:id` is a move to the trash (#327). |
+| `post.restored` | `post_status` leaves `trash` | The inverse of `post.trashed`. `post.published` excludes it, since a restore puts the old live version back. |
 | `post.deleted` | `DELETE` of the row | Permanent. The row is gone when the hook runs, so the event carries `post_type`, as the activity entry does. |
 
-The issue's "delete" is both of the last two: a plugin that mirrors content to a search index
-wants `post.trashed`, and one that cleans up wants `post.deleted`.
+The issue's "delete" is trashing and deleting both: a plugin that mirrors content to a search index
+wants `post.trashed` and `post.restored`, and one that cleans up wants `post.deleted`.
 
 **No mutating filters.** A hook can't change the content on the way through a save or publish.
 Rule 11 forbids the save half, and on publish the version snapshot would stop matching what
@@ -477,7 +492,7 @@ CREATE TABLE plugin_events (
   fanned_out boolean NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT now()
 );
--- At most one undelivered post.saved per post: saves coalesce.
+-- At most one post.saved per post waiting for fan-out (7.4 covers the wait after it).
 CREATE UNIQUE INDEX plugin_events_one_pending_save ON plugin_events (post_id)
   WHERE event = 'post.saved' AND NOT fanned_out;
 
@@ -487,7 +502,7 @@ CREATE TABLE plugin_hook_runs (
   status          varchar NOT NULL DEFAULT 'pending'
                   CHECK (status IN ('pending', 'running', 'done', 'failed', 'skipped')),
   attempts        int NOT NULL DEFAULT 0,
-  next_attempt_at timestamptz NOT NULL DEFAULT now(),
+  next_attempt_at timestamptz NOT NULL DEFAULT now(),  -- also the lease while running
   last_error      text,                -- capped, no payloads
   PRIMARY KEY (event_id, plugin_id)
 );
@@ -500,12 +515,19 @@ CONFLICT DO NOTHING`, so a site with no subscriber writes no row at all, and no 
 (`PLUGIN_HOOKS_INTERVAL`, default 1s, 0 = off, SIGTERM stops it after the runs in flight):
 
 1. Fan out: for new events, one `plugin_hook_runs` row per plugin enabled and subscribed **now**.
-2. Claim due runs with `FOR UPDATE SKIP LOCKED` and a lease. The row lock is not held across the
-   hook.
+   A `post.saved` is skipped for a plugin that already has a pending `post.saved` run for that post:
+   the hook reads the current post when it runs, so one is enough, and a slow plugin can't build a
+   backlog of saves.
+2. Claim due runs with `FOR UPDATE SKIP LOCKED` and a lease: the claim sets `running` and moves
+   `next_attempt_at` two minutes ahead, as `ClaimDueScheduledPosts` does. A `running` row whose
+   `next_attempt_at` has passed (the process died) can be claimed again. The longest timeout is 30s,
+   so a live run never loses its lease. The row lock is not held across the hook.
 3. Run each outside any transaction, under `runDetached`-style recovery.
 4. Record the result.
 
-`done` runs are pruned after 7 days and `failed` after 30, like `ACTIVITY_RETENTION`.
+While no enabled plugin has a hook, the loop only re-reads `plugins` every 30 seconds. `done` runs
+are pruned after 7 days and `failed` after 30, like `ACTIVITY_RETENTION`, and an event goes once it
+has no runs left.
 
 ### 7.5 Ordering
 
@@ -535,8 +557,10 @@ default can't break a publish:
 
 - It must be declared: `{ "event": "post.before_publish", "on_error": "allow" | "deny" }`. The
   enable dialog lists it: "Can block publishing."
-- It runs **after the collab flush and before the transaction**, in `publishPostByID` and
-  `publishScheduledPost`; for a scheduled update it sees the frozen snapshot. It gets the block doc
+- It runs **before the transaction, on every path that publishes**: `publishPostByID` and
+  `publishScheduledPost` after their collab flush, `applyScheduledUpdate` on the frozen snapshot,
+  and `POST /posts` and `PUT /posts/:id` when the request sets `post_status` to `published`. A guard
+  that only covered the Publish button could be bypassed by that last pair. It gets the block doc
   and post id read-only and returns allow, or deny with a short plain-text reason.
 - Budget 3s each and 5s in total, sequentially, first deny wins.
 - **A denial** answers 409 `plugin_refused` with the reason. In bulk it's a per-post failure in
@@ -662,39 +686,45 @@ Admin uploads a package (#332) or enables a package-installed plugin
   ▼ builder: overlay packages onto its source tree, run the normal pipeline
       themes:manifest → astro build → collab-server/build.mjs → loadable checks
   ▼ builder: write builds:/<set-id>/{web/,collab/server.mjs,manifest.json,fingerprint}, then result.json
-  ▼ API: atomic rename of builds:/current → <set-id>
-  ▼ API reloads, web restarts, collab restarts (last, and only if needed)
+  ▼ API: reloads itself, then moves the web pointer, waits for web, then moves the collab pointer
+  ▼ web restarts, then collab restarts (last, and only if needed)
 ```
 
 - **Builder service.** A new image: `web/Dockerfile`'s build stage (sources plus dev dependencies),
   so the runtime images don't grow. **No network** (`network_mode: none`), no secrets, no database,
   non-root. It only sees the `extensions` volume and `builds`. Requests and results travel as files
-  on the shared volume because it has no network. Packages can't run anything during the build:
-  no install scripts, no `package.json` dependencies (uploads containing either are refused), and
-  because blocks are `block.json`, the manifest step doesn't execute package code. For a theme
-  block still written as `index.ts`, the generator evaluates it, which is in the trusted-code model
-  but is one more reason to require `block.json` in a package.
-- **Web** starts from `server/start.mjs`, which picks `builds:/current/web` if its core commit
-  matches this image, else the baked-in `dist`. The output sits under `/app/builds`, so bare imports
-  still resolve to `/app/node_modules`. Theme assets are served from the build's copy of `themes/`.
+  on the shared volume because it has no network. Uploads with install scripts or `package.json`
+  dependencies are refused. Package code does execute in one place: the loadable checks import each
+  block's modules (and the manifest generator evaluates an `index.ts`, one reason a package must use
+  `block.json`). That is within the trusted-code model, and it's why the builder has no network or
+  secrets.
+- **Pointers, one per process and per core commit:** `builds:/pointers/<commit>/{web,collab}`, each
+  an atomic rename to a set id. The API is the only writer. A process reads only its own commit's
+  pointer (`GOLIVE_IMAGE_TAG`, passed by compose), so a deploy can prepare the new commit's pointers
+  while the old containers keep serving.
+- **Web** starts from `server/start.mjs`, which follows its pointer to `builds:/<set-id>/web`, or
+  the baked-in `dist` when there is none. The output sits under `/app/builds`, so bare imports still
+  resolve to `/app/node_modules`. Theme assets are served from the build's copy of `themes/`.
 - **Collab** gets a read-only `builds` mount and runs that build's `server.mjs` by the same rule.
   It is still exactly one file with no `node_modules`, and `build.mjs`'s single-yjs and leak checks
   ran on it.
-- **API** gets the `extensions` volume, re-runs the theme and plugin scans and swaps the block
-  manifest behind an `atomic.Pointer` when `current` changes. It doesn't restart. Web and collab
-  poll the pointer and exit cleanly on a change, and `restart: unless-stopped` brings them back; the
-  collab server's SIGTERM path stores every document first.
+- **API** gets the `extensions` volume and read-write `builds`. On activation it re-runs the theme
+  and plugin scans and swaps the block manifest behind an `atomic.Pointer`. It doesn't restart. Web
+  and collab poll their own pointer and exit cleanly on a change, and `restart: unless-stopped`
+  brings them back; the collab server's SIGTERM path stores every document first.
 - **Activation order: API, web, then collab.** The API must know a new block's spec before anything
-  can store it. Web must serve the new admin before tabs are told to reload. The collab restart is
-  what causes the reload, so it goes last. **If the build's fingerprint equals the running one**
-  (a theme with no blocks, a renderer change), collab doesn't restart at all, and open tabs never
-  notice.
-- **Failure.** A failed build changes nothing: `current` still points at the old build, and the
-  admin sees the error and the package stays inactive. The last three builds are kept for rollback.
+  can store it. Web must serve the new admin before tabs are told to reload, so the API moves the
+  collab pointer only once web answers with the new set id (an `X-GoLive-Build` header). The collab
+  restart is what causes the reload, so it goes last. A tab opened in the gap has the new schema and
+  is refused by the old collab with the reload prompt, which works once collab is back. **If the
+  build's fingerprint equals the running one** (a theme with no blocks, a renderer change), the
+  collab pointer doesn't move, and open tabs never notice.
+- **Failure.** A failed build changes nothing: the pointers stay on the old build, the admin sees
+  the error and the package stays inactive. The last three builds are kept for rollback.
 - **Core upgrades.** A build is only valid for its core commit, which is the existing rule that all
   bundles come from one commit. `deploy.sh` gains a step before `up`: run the builder for the new
-  tag and the installed set, with the old containers still serving. A deployment with no uploaded
-  packages skips it.
+  tag and the installed set and write that commit's pointers, with the old containers still serving.
+  A deployment with no uploaded packages skips it.
 - **Backups.** The `extensions` volume joins `backups.md` next to `uploads`. `builds` doesn't: it
   can be regenerated.
 - **Limits worth stating.** Packages can't add npm dependencies, so a library must be vendored. One
@@ -749,7 +779,7 @@ theme removes its package and triggers a build. Its blocks then follow section 4
 
 ## 9. Phased plan
 
-Each phase is shippable alone. Phases 1 to 4 are Beta.
+Each phase is shippable alone. Phases 0 to 4 are Beta.
 
 | Phase | Ships | Depends on |
 |---|---|---|
