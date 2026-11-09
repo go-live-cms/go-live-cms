@@ -15,6 +15,8 @@ collab server (`web/collab-server/`) converts between the two. See
   kind each takes (`MEDIA_BLOCK_KINDS`), the upload `accept` lists, the file label's rules, the
   "PDF · 240 KB" line, the icons, and `isMediaMissing` (the API's `media_missing`: a deleted
   media, not a failed lookup).
+- `embeds.ts` (#425): the embed providers: ref patterns, player addresses and their iframe
+  attributes, frame hosts (the CSPs), and the title's rules.
 - `nesting.ts` (#414): **the nesting table** (which types are containers and what each holds),
   the shared block predicate `isBlockNode`, the content expressions, `dedupeBlockRefs`,
   `nestingIssues` (the structural checks `validateBlockDoc` runs) and `blocksInReadingOrder`.
@@ -73,6 +75,11 @@ posts.block_doc → publish → post_versions → public site (SSR)
   item; absent: no file yet) and `attrs.caption` (runs, like an image's). No `src`: the file's URL,
   type and size are the media library's (`media.ts`; the public page reads the API's `media` map,
   so files are served only from `/uploads`)
+- **embed** (#425, `embeds.ts`): flow; `attrs.provider` (one of `EMBED_PROVIDERS`), `attrs.ref` (that
+  provider's id, checked against its pattern; absent: no link yet), `attrs.title` (plain text, at
+  most `EMBED_TITLE_MAX_LENGTH` code points, never HTML; absent: the provider's name) and
+  `attrs.caption` (runs, like an image's). Never HTML from a provider or a pasted URL.
+  `embedVectors.json` is shared with the API
 - **file** (#423): flow; `attrs.mediaId` and `attrs.label`, the link text (plain, by
   `normalizeFileLabel`: trimmed, at most `FILE_LABEL_MAX_LENGTH` code points; absent: the file's
   name)

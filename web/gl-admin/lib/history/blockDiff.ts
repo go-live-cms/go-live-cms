@@ -17,6 +17,7 @@
 import { CALLOUT_TONE_LABELS, normalizeGalleryColumns, type Block, type BlockDocV1 } from "../blocks-spec"
 // The nesting table only: pure, no imports of its own, so the worker stays small.
 import { isContainerType } from "../blocks-spec/nesting"
+import { EMBED_PROVIDER_SPECS, embedTargetOf } from "../blocks-spec/embeds"
 import {
   contentTokens,
   diffTokens,
@@ -245,12 +246,14 @@ const TYPE_LABELS: Record<string, string> = {
   video: "Video",
   audio: "Audio",
   file: "File",
+  // #425
+  embed: "Embed",
 }
 
 /** The media blocks without text of their own (#423): their caption or label is diffed instead. */
-const MEDIA_ONLY = new Set(["image", "video", "audio", "file"])
+const MEDIA_ONLY = new Set(["image", "video", "audio", "file", "embed"])
 /** The blocks whose caption is a word diff (an image's, a table's, a video's, an audio block's). */
-const CAPTIONED = new Set(["image", "table", "video", "audio"])
+const CAPTIONED = new Set(["image", "table", "video", "audio", "embed"])
 
 /** "Heading", "Bulleted list", or a theme block's name ("theme:example/alert" → "Alert"). */
 export function blockTypeLabel(type: string): string {
@@ -328,6 +331,16 @@ function attrChanges(v: Block, w: Block): AttrChange[] {
       const media = (a: Record<string, unknown>) => (typeof a.mediaId === "number" ? `Media #${a.mediaId}` : null)
       add("file", "File", media(va), media(wa))
       if (v.type === "file") add("label", "Link text", display(va.label), display(wa.label))
+      break
+    }
+    // #425: the item's address, built from the block's provider and id, and its title.
+    case "embed": {
+      const link = (a: Record<string, unknown>) => {
+        const target = embedTargetOf(a)
+        return target ? EMBED_PROVIDER_SPECS[target.provider].canonical(target.ref) : null
+      }
+      add("link", "Link", link(va), link(wa))
+      add("title", "Title", display(va.title), display(wa.title))
       break
     }
     case "group": {

@@ -2,10 +2,12 @@ import { z } from "zod"
 import { isThemeBlockType, themeBlockIssues, type ThemeBlockLookup } from "./themeBlocks"
 import { nestingIssues } from "./nesting"
 import { FILE_LABEL_MAX_LENGTH } from "./media"
+import { EMBED_PROVIDERS, isValidEmbedRef, normalizeEmbedTitle, type EmbedProvider } from "./embeds"
 
 export * from "./nesting"
 export * from "./media"
 export * from "./inlineNodes"
+export * from "./embeds"
 
 // Block Spec v1 - Authoritative Types
 export type BlockID = string
@@ -32,6 +34,7 @@ export type KnownBlockType =
   | "video"
   | "audio"
   | "file"
+  | "embed"
 
 /** BlockType allows known types + arbitrary custom types from themes */
 export type BlockType = KnownBlockType | (string & {})
@@ -457,6 +460,20 @@ export type VideoBlock = BaseBlock<
   }
 >
 
+/**
+ * Embed (#425), a flow block: which provider and item, and a plain-text title. A provider
+ * with no ref is an empty block waiting for its link. `embeds.ts`.
+ */
+export type EmbedBlock = BaseBlock<
+  "embed",
+  {
+    provider?: EmbedProvider
+    ref?: string
+    title?: string
+    caption?: CaptionText[]
+  }
+>
+
 export type AudioBlock = BaseBlock<
   "audio",
   {
@@ -752,6 +769,27 @@ export const zFile = zBase.extend({
   }),
 })
 
+// #425. A ref is checked against its own provider's pattern, a title by the rules the
+// bridge writes it with (`embeds.ts`, the same as the API's).
+export const zEmbed = zBase.extend({
+  type: z.literal("embed"),
+  attrs: z
+    .object({
+      provider: z.enum(EMBED_PROVIDERS).optional(),
+      ref: z.string().optional(),
+      title: z
+        .string()
+        .refine((title) => normalizeEmbedTitle(title) === title, "must be plain text, trimmed and within the length limit")
+        .optional(),
+      caption: z.array(zCaptionText).optional(),
+    })
+    .superRefine((attrs, ctx) => {
+      if (attrs.ref !== undefined && !isValidEmbedRef(attrs.provider, attrs.ref)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["ref"], message: "is not valid for its provider" })
+      }
+    }),
+})
+
 /**
  * Catch-all for theme/custom block types not in the known set. Any version: a theme
  * block keeps the version its theme wrote even when that theme isn't installed here.
@@ -785,6 +823,7 @@ const knownBlockSchemas: Record<KnownBlockType, z.ZodTypeAny> = {
   video: zVideo,
   audio: zAudio,
   file: zFile,
+  embed: zEmbed,
 }
 
 // A known type must match its own schema; only other types fall back to the custom

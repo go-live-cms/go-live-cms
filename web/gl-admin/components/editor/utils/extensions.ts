@@ -91,6 +91,9 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
       schema.file,
       // #423: insert, set the file of, and caption the media blocks; no schema.
       schema.mediaCommands,
+      schema.embed,
+      // #425: insert an embed, its caption; no schema.
+      schema.embedCommands,
       schema.mention,
       schema.contentLink,
       schema.dateChip,
@@ -126,6 +129,7 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
             case "video":
             case "audio":
             case "file":
+            case "embed":
               return ""
             case "imageCaption":
             case "tableCaption":

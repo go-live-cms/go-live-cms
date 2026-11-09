@@ -39,7 +39,7 @@ var siteLanguages = []siteLanguage{
 
 // Embed providers an embed block (#352) may load from. The sanitizer has no embed path
 // yet: it drops every iframe/embed node (disallowedNodeTypes).
-var embedProviders = []string{"youtube", "vimeo", "codepen", "spotify", "soundcloud", "loom", "figma", "x"}
+var embedProviders = []string{"youtube", "vimeo", "x", "codepen", "soundcloud", "spotify"}
 
 const maxAllowedEmbeds = 20
 

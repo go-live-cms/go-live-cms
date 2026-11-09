@@ -260,6 +260,15 @@ interface BlockComponentProps {
   `download` = the uploaded file's name. Nothing renders for a block with no file, a media the
   API lists in `media_missing` (deleted: left out with its caption, the image too), or one with
   no entry (the lookup failed; an image then renders from its own `src`).
+- **Embeds (#425, `embed/`, "Published · media & embeds"):** `figure.embed-block > div.embed-frame` (`.is-card`
+  for X, `.is-compact` for SoundCloud and Spotify) with `.embed-provider`, `p.embed-title`, the Load
+  button (`[data-embed-load]`, `.btn.btn-primary`, X's `.btn-secondary`) and `.embed-note` ("Loading it
+  connects to youtube.com"), then `figcaption`. **No third-party request on page load:** no iframe,
+  image or provider address in the markup, only `data-embed-provider` and `data-embed-ref`.
+  `/gl-embeds.js` (from `BlockRenderer`, for a post with an embed) builds the player from its own
+  per-provider templates on click, adds `.is-loaded`, `role="region"` and moves focus in; X loads its
+  widget then. Nothing renders for an empty block, an invalid one, or a provider the site no longer
+  allows (the API empties those).
 - **Mentions, content links, dates (#320, inline nodes in any text, `renderInlineNode` in
   `utils/contentRenderer.tsx`):** a mention is `<span class="gl-mention">Ana Costa</span>` (the
   member's current name from the API, never an id or email, no "@"); a content link is

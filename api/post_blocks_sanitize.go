@@ -95,6 +95,8 @@ func sanitizeBlock(block map[string]interface{}) {
 		sanitizePlayableAttrs(attrs)
 	case "file":
 		sanitizeFileAttrs(attrs)
+	case "embed":
+		sanitizeEmbedAttrs(attrs)
 	}
 
 	// Block colour (#356): a palette token on the core blocks that take one.

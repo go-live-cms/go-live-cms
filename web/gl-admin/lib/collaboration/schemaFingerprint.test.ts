@@ -260,7 +260,7 @@ describe("schemaFingerprint (#416)", () => {
     it("the gallery (#424) changed it: new node types, and a doc that names it", () => {
       // The schema as it was before #424: no gallery nodes, a doc without it.
       const { document: _document, gallery, ...rest } = schemaExtensions({ collaborating: true })
-      const OldDocument = Node.create({ name: "doc", topNode: true, content: "(block | tableBlock | video | audio | file | group | details)+" })
+      const OldDocument = Node.create({ name: "doc", topNode: true, content: "(block | tableBlock | video | audio | file | embed | group | details)+" })
       const before = getSchema([OldDocument, ...Object.values(rest)])
       expect(before.nodes.gallery).toBeUndefined()
       for (const name of ["gallery", "galleryCaption"]) expect(getCoreSchema().nodes[name], name).toBeDefined()
@@ -273,6 +273,20 @@ describe("schemaFingerprint (#416)", () => {
       // The columns attr is in it: a tab whose gallery has none is refused too.
       const columnless = getSchema(Object.values({ ...schemaExtensions({ collaborating: true }), gallery: gallery.extend({ addAttributes: () => ({}) }) }))
       expect(schemaFingerprint(columnless)).not.toBe(core)
+    })
+
+    it("the embed block (#425) changed it: a node type, named by the doc and a group", () => {
+      const { embed, embedCommands: _commands, document: _document, group: _group, details: _details, ...rest } = schemaExtensions({ collaborating: true })
+      const flow = "(block | tableBlock | video | audio | file)"
+      const OldDocument = Node.create({ name: "doc", topNode: true, content: `(block | tableBlock | video | audio | file | group | details)+` })
+      const OldGroup = _group.extend({ content: `(${flow.slice(1, -1)} | details)+` })
+      const OldDetails = _details.extend({ content: `detailsSummary ${flow}+` })
+      const before = getSchema([...Object.values(rest), OldDocument, OldGroup, OldDetails])
+      expect(Object.keys(before.nodes)).not.toContain("embed")
+      const after = getSchema(Object.values(schemaExtensions({ collaborating: true })))
+      expect(schemaFingerprint(before)).not.toBe(schemaFingerprint(after))
+      expect(after.nodes.embed).toBeDefined()
+      expect(embed).toBeDefined()
     })
 
     it("the video, audio and file blocks (#423) changed it: three node types, named by the doc and a group", () => {

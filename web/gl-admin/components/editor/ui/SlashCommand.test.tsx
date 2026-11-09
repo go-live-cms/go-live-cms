@@ -130,7 +130,7 @@ describe("the slash menu", () => {
     makeEditor()
     type("/")
     const groups = Array.from(document.querySelectorAll('[role="listbox"] > [role="group"]')).map((g) => g.getAttribute("aria-label"))
-    expect(groups).toEqual(["Text", "Media", "Layout"])
+    expect(groups).toEqual(["Text", "Media", "Layout", "Embeds"])
     expect(document.querySelector(".editor-insert__footer")!.textContent).toBe("↑↓ to move↵ to insertesc to close")
 
     type("he")
@@ -178,12 +178,19 @@ describe("the slash menu", () => {
     expect(active()!.textContent).toBe("Divider---")
     press("ArrowDown")
     expect(active()!.textContent).toBe("Group")
+    // The embeds (#425), then it wraps.
+    for (const name of ["YouTube", "Vimeo", "X", "Embed a link"]) {
+      press("ArrowDown")
+      expect(active()!.textContent).toBe(name)
+    }
     press("ArrowDown")
     expect(active()!.textContent).toBe("Paragraph")
     press("ArrowUp")
-    expect(active()!.textContent).toBe("Group")
-    press("ArrowUp")
-    expect(active()!.textContent).toBe("Divider---")
+    expect(active()!.textContent).toBe("Embed a link")
+    for (const name of ["X", "Vimeo", "YouTube", "Group", "Divider---"]) {
+      press("ArrowUp")
+      expect(active()!.textContent).toBe(name)
+    }
 
     expect(press("Enter")).toBe(true)
     expect(topTypes()).toEqual(["paragraph", "horizontalRule", "paragraph"])
@@ -283,10 +290,12 @@ describe("the role gate in the menu", () => {
     expect(html.querySelector(".editor-insert__pill")!.textContent).toBe("Admins")
     expect(html.closest('[role="group"]')!.getAttribute("aria-label")).toBe("Advanced")
 
-    for (const role of ["editor", "contributor"]) {
+    // A contributor isn't offered the embeds (#425).
+    const embeds = CORE_BLOCKS.filter((entry) => entry.group === "embeds").length
+    for (const [role, count] of [["editor", CORE_BLOCKS.length], ["contributor", CORE_BLOCKS.length - embeds]] as const) {
       makeEditor("<p>first</p><p></p>", menuEntries({ role }, [...CORE_BLOCKS, customHtml]))
       type("/")
-      expect(options()).toHaveLength(CORE_BLOCKS.length)
+      expect(options()).toHaveLength(count)
       expect(options().some((o) => o.textContent?.includes("Custom HTML"))).toBe(false)
       expect(document.querySelector('[role="group"][aria-label="Advanced"]')).toBeNull()
     }

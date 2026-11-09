@@ -40,6 +40,7 @@ const PM_NODE: Record<string, string> = {
   details: "details",
   gallery: "gallery",
   video: "video",
+  embed: "embed",
   audio: "audio",
   file: "file",
 }

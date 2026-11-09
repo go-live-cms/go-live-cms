@@ -54,10 +54,10 @@ export const ImageCaption = Node.create({
   defining: true,
 
   parseHTML() {
-    // Only inside an image, a video or an audio block (#423, which share it): a pasted
-    // <figcaption> on its own (the paste sanitizer drops media) must stay text, not get
-    // wrapped in an empty image.
-    return [{ tag: "figcaption", context: "image/|video/|audio/" }]
+    // Only inside an image, a video, an audio block or an embed (#423, #425, which share
+    // it): a pasted <figcaption> on its own (the paste sanitizer drops media) must stay
+    // text, not get wrapped in an empty image.
+    return [{ tag: "figcaption", context: "image/|video/|audio/|embed/" }]
   },
 
   renderHTML({ HTMLAttributes }) {

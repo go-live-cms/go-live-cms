@@ -131,6 +131,8 @@ export const BlockIdExtension = Extension.create({
           "video",
           "audio",
           "file",
+          // #425
+          "embed",
           ...CONTAINER_NODE_NAMES,
         ],
         attributes: {

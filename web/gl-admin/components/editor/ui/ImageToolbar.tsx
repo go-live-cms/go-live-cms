@@ -8,7 +8,7 @@ import { findSelectedMediaBlock, MEDIA_NODE_NAMES } from "../extensions/MediaBlo
 import { chooseMediaFor } from "../blocks/mediaPicking"
 
 /** Safely check if editor view is mounted (TipTap v3 throws on .view access) */
-function isViewMounted(editor: TiptapEditor): boolean {
+export function isViewMounted(editor: TiptapEditor): boolean {
   try {
     return !!editor?.view?.dom?.parentElement
   } catch {

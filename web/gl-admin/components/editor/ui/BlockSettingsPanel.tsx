@@ -9,13 +9,14 @@ import {
   type GroupAlign,
   type GroupStyle,
 } from "@gl-admin/lib/blocks-spec"
-import { catalogEntries, type BlockIconSpec } from "../blocks/catalog"
+import { catalogEntries, embedEntryId, type BlockIconSpec } from "../blocks/catalog"
 import { BlockIcon } from "./BlockIcon"
 import Switch from "../../ui/Switch"
 import { DETAILS_OPEN_HELP, DETAILS_OPEN_LABEL } from "../extensions/DetailsBlock"
 import MediaBlockSettings from "./MediaBlockSettings"
 import GallerySettings from "./GallerySettings"
 import { galleryImageCount } from "../extensions/GalleryBlock"
+import EmbedBlockSettings from "./EmbedBlockSettings"
 import {
   ancestorBlocks,
   blockSpecTypeOf,
@@ -50,7 +51,9 @@ export function blockInfo(block: Pick<EditorBlock, "node">): BlockInfo {
   const entry =
     type === "heading"
       ? entries.find((e) => e.id === `heading-${Number(block.node.attrs.level) || 1}`)
-      : entries.find((e) => e.type === type)
+      : type === "embed"
+        ? entries.find((e) => e.id === embedEntryId(block.node.attrs.provider))
+        : entries.find((e) => e.type === type)
   if (entry) return { name: entry.name, icon: entry.icon }
   if (block.node.type.name === "listItem") return { name: "List item", icon: { glyph: "•" } }
   return { name: type, icon: { glyph: "?" } }
@@ -227,6 +230,8 @@ export default function BlockSettingsPanel({ editor }: { editor: TiptapEditor })
           selectedId={selectedImageId}
           onColumns={(columns) => setAttr(ref, "columns", columns)}
         />
+      ) : block.node.type.name === "embed" ? (
+        <EmbedBlockSettings key={ref.id ?? ref.pos} editor={editor} node={block.node} blockRef={ref} />
       ) : (
         <p className="post-settings__hint">This block has no settings here. Its toolbar has its options.</p>
       )}

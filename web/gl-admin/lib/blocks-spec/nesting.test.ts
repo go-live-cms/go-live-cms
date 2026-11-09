@@ -110,12 +110,12 @@ describe("the nesting table", () => {
   })
 
   it("derives the content expressions", () => {
-    expect(containerContent("group")).toBe("(block | tableBlock | video | audio | file | details)+")
+    expect(containerContent("group")).toBe("(block | tableBlock | video | audio | file | embed | details)+")
     // #421: its part first, then flow.
-    expect(containerContent("details")).toBe("detailsSummary (block | tableBlock | video | audio | file)+")
+    expect(containerContent("details")).toBe("detailsSummary (block | tableBlock | video | audio | file | embed)+")
     // #424: image blocks, none is fine, then its caption.
     expect(containerContent("gallery")).toBe("image* galleryCaption")
-    expect(topLevelContent()).toBe("(block | tableBlock | video | audio | file | group | details | gallery)+")
+    expect(topLevelContent()).toBe("(block | tableBlock | video | audio | file | embed | group | details | gallery)+")
   })
 
   it("details (#421): holds flow, sits at the top or in a group, its summary a part (never a block)", () => {

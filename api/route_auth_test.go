@@ -5,11 +5,13 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
 	mockdb "github.com/go-live-cms/go-live-cms/db/mock"
+	db "github.com/go-live-cms/go-live-cms/db/sqlc"
 )
 
 // Until #393 the post read routes were registered without authMiddleware and
@@ -150,6 +152,48 @@ func TestBlockEditRoutesRequireAuth(t *testing.T) {
 	}
 	for key := range blockEditRoutes {
 		require.True(t, registered[key], "blockEditRoutes lists %s, which is no longer a route", key)
+	}
+}
+
+// embedRoutes are the embed routes (#425), every method. Resolving makes the API fetch from
+// a provider, so TestEmbedRoutesRequireRole fails when one is added without being listed
+// here (so its rule gets a look), or answers an anonymous request or a contributor.
+var embedRoutes = map[string]string{
+	"POST /api/v1/embeds/resolve": "requireContentEditor: editors and admins",
+}
+
+func TestEmbedRoutesRequireRole(t *testing.T) {
+	store := mockdb.NewMockStore(gomock.NewController(t))
+	server := newTestServer(t, store)
+	contributor := db.User{ID: 41, Username: "contrib", Role: RoleContributor}
+	store.EXPECT().GetUser(gomock.Any(), contributor.ID).AnyTimes().Return(contributor, nil)
+
+	registered := map[string]bool{}
+	for _, route := range server.router.Routes() {
+		if !strings.Contains(route.Path, "/embeds") {
+			continue
+		}
+		key := route.Method + " " + route.Path
+		registered[key] = true
+		_, listed := embedRoutes[key]
+		require.True(t, listed, "%s is an embed route missing from embedRoutes", key)
+		require.False(t, strings.HasPrefix(route.Path, "/public"), "resolving is never public: %s", key)
+
+		t.Run(key, func(t *testing.T) {
+			body := `{"url":"https://youtu.be/dQw4w9WgXcQ"}`
+			recorder := httptest.NewRecorder()
+			server.router.ServeHTTP(recorder, httptest.NewRequest(route.Method, routeExample(route.Path), strings.NewReader(body)))
+			require.Equal(t, http.StatusUnauthorized, recorder.Code, "%s answers without a token", key)
+
+			request := httptest.NewRequest(route.Method, routeExample(route.Path), strings.NewReader(body))
+			addAuthorization(t, request, server.tokenMaker, authorizationTypeBearer, contributor.ID, contributor.Username, time.Minute)
+			recorder = httptest.NewRecorder()
+			server.router.ServeHTTP(recorder, request)
+			require.Equal(t, http.StatusForbidden, recorder.Code, "%s answers a contributor", key)
+		})
+	}
+	for key := range embedRoutes {
+		require.True(t, registered[key], "embedRoutes lists %s, which is no longer a route", key)
 	}
 }
 

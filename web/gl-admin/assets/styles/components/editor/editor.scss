@@ -328,6 +328,107 @@
     }
   }
 
+  // #425: an embed's link field and its placeholder (the canvas's "Editor · embeds").
+  .editor-embed__field.is-invalid {
+    border-color: var(--danger-text);
+    border-style: solid;
+  }
+
+  .editor-embed__input {
+    background: var(--background);
+    border: 0;
+    border-radius: var(--radius-md);
+    box-shadow: inset 0 0 0 1px var(--control-border);
+    color: var(--text-primary);
+    font: inherit;
+    font-size: var(--type-label);
+    height: 36px;
+    padding: 0 var(--space-3);
+    width: 100%;
+
+    &:focus-visible {
+      outline: 2px solid var(--focus-ring);
+      outline-offset: 1px;
+    }
+
+    &[aria-invalid="true"] {
+      box-shadow: inset 0 0 0 1px var(--danger-text);
+    }
+  }
+
+  .editor-embed__error {
+    color: var(--danger-text);
+  }
+
+  .editor-embed__remove {
+    color: var(--danger-text);
+  }
+
+  .editor-embed__facade {
+    align-items: center;
+    aspect-ratio: 16 / 9;
+    background: var(--background-subtle);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    justify-content: center;
+    padding: var(--space-5);
+    text-align: center;
+
+    &.is-card {
+      align-items: flex-start;
+      aspect-ratio: auto;
+      text-align: left;
+    }
+  }
+
+  .editor-embed__provider {
+    align-items: center;
+    color: var(--text-secondary);
+    display: inline-flex;
+    font-size: var(--type-caption);
+    font-weight: 600;
+    gap: 6px;
+  }
+
+  .editor-embed__title {
+    color: var(--text-primary);
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+
+  .editor-embed__note {
+    color: var(--text-secondary);
+    font-size: var(--type-caption);
+  }
+
+  .editor-embed__player {
+    aspect-ratio: 16 / 9;
+    background: var(--background-subtle);
+    border-radius: 8px;
+    overflow: hidden;
+
+    &.is-card {
+      aspect-ratio: auto;
+      background: transparent;
+      height: 520px;
+    }
+
+    &.is-compact {
+      aspect-ratio: auto;
+      height: 166px;
+    }
+
+    iframe {
+      border: 0;
+      display: block;
+      height: 100%;
+      width: 100%;
+    }
+  }
+
   .editor-media__drop-head {
     align-items: center;
     color: var(--text-primary);

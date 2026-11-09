@@ -292,7 +292,7 @@ function ChangedBlock({ entry, version, working }: { entry: BlockDiffEntry; vers
     }
   }
 
-  if (["image", "table", "video", "audio"].includes(block.type) && !typeChanged) {
+  if (["image", "table", "video", "audio", "embed"].includes(block.type) && !typeChanged) {
     // The image (or table, #420, or video or audio, #423) as it renders, with its caption
     // replaced by the caption's diff; a table's changed cell text under it.
     const attrs = { ...(block.attrs as Record<string, unknown>) }

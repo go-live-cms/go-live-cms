@@ -3,6 +3,7 @@ import path from "node:path"
 import { describe, expect, it } from "vitest"
 import {
   EMBED_PROVIDERS,
+  withEmbedProvider,
   SITE_TAGLINE_MAX,
   URL_STRUCTURES,
   changedFields,
@@ -29,9 +30,27 @@ const saved: SettingsDraft = {
   posts_per_page: 10,
   post_url_structure: "slug",
   editor_markdown_shortcuts: true,
+  editor_allowed_embeds: ["youtube"],
   allow_signup: false,
   front_page_id: null,
 }
+
+describe("allowed embeds (#425)", () => {
+  it("compares the list by value, so a reload isn't a change", () => {
+    expect(changedFields(saved, { ...saved, editor_allowed_embeds: ["youtube"] })).toEqual([])
+    expect(changedFields(saved, { ...saved, editor_allowed_embeds: [] })).toEqual(["allowed embeds"])
+  })
+
+  it("ticks and unticks in the list's order", () => {
+    expect(withEmbedProvider(["spotify"], "youtube", true)).toEqual(["youtube", "spotify"])
+    expect(withEmbedProvider(["youtube", "spotify"], "youtube", false)).toEqual(["spotify"])
+  })
+
+  it("leaves out an id this build doesn't list, which the API would refuse", () => {
+    const stored = { id: 1, created_at: "", changed_at: "", site_address: "", ...saved, editor_allowed_embeds: ["loom", "vimeo", "youtube"] }
+    expect(toDraft(stored as never).editor_allowed_embeds).toEqual(["youtube", "vimeo"])
+  })
+})
 
 describe("changedFields", () => {
   it("is empty while the draft matches what was saved", () => {
@@ -98,7 +117,6 @@ it("toDraft keeps only the edited fields", () => {
       created_at: "",
       changed_at: "",
       site_address: "https://cms.example.com",
-      editor_allowed_embeds: ["youtube"],
       ...saved,
     })
   ).toEqual(saved)
