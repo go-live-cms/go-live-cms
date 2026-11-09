@@ -18,6 +18,9 @@ import { Details } from "../../components/editor/extensions/DetailsBlock"
 import { GlHighlight, GlSubscript, GlSuperscript } from "../../components/editor/extensions/InlineMarks"
 import { AudioBlock, FileBlock, MediaBlockCommands, VideoBlock } from "../../components/editor/extensions/MediaBlocks"
 import { ContentLink, DateChip, Mention } from "../../components/editor/extensions/InlineNodes"
+import { Columns } from "../../components/editor/extensions/ColumnsBlock"
+import { Buttons } from "../../components/editor/extensions/ButtonsBlock"
+import { Spacer } from "../../components/editor/extensions/SpacerBlock"
 
 const lowlight = createLowlight(common)
 
@@ -99,6 +102,11 @@ export function schemaExtensions({ collaborating }: { collaborating: boolean }) 
     // Their commands (insert, set the file, caption): no schema, kept next to the nodes so
     // every editor built from these has them, like the table's.
     mediaCommands: MediaBlockCommands,
+    // #426: columns (with `column`) and, in flow, buttons (with `button`) and the spacer.
+    // Each changes the fingerprint (#416), so a stale tab is refused rather than deleting them.
+    columns: Columns,
+    buttons: Buttons,
+    spacer: Spacer,
     // #320: inline atoms inside text (an @ mention, a link to a post, a date chip). New
     // node types, so they change the fingerprint (#416) like a new block does.
     mention: Mention,

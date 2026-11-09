@@ -579,6 +579,14 @@ are the most fragile part of the codebase. **Before editing anything under
   The public `src/components/blocks/details/` is the browser's own `<details>` (no script) and the
   default theme styles it. History diffs its summary like a caption and `open` as an attribute.
   Rules: `gl-admin/lib/collaboration/CLAUDE.md` (blockBridge notes, Details).
+- **Columns, buttons, spacer (#426, design `docs/design/block-library.md` 2.2, 4):** Layout
+  entries in the catalog (`/columns`, whose insert opens `ui/ColumnsPicker.ts`: four layouts, Esc
+  inserts nothing; `/buttons`; `/spacer`). Nodes in `extensions/ColumnsBlock.ts`, `ButtonsBlock.ts`,
+  `SpacerBlock.ts`, views in `extensions/LayoutBlockViews.ts` (toolbars, the Link field, the spacer's
+  handle: ↑ ↓ one step, or drag), the Block tab in `ui/LayoutBlockSettings.tsx`. Rules, and what a
+  removed column's blocks do: `gl-admin/lib/collaboration/CLAUDE.md` (blockBridge notes, Layout
+  blocks). Public markup: `src/components/blocks/README.md`, the default theme's rules in
+  `themes/default/styles/theme.css` (`themes/default/layoutBlocks.test.ts`).
 - **Inline marks (#418, design `docs/design/block-library.md` 3.3):** Highlight, Superscript and
   Subscript in the selection toolbar (`ui/BubbleMenu.tsx`, after Link; not in a caption), ⌘⇧H,
   ⌘. and ⌘,. The marks are `extensions/InlineMarks.ts` (rules, the concurrent-edit case and the

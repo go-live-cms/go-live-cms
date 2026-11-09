@@ -93,6 +93,14 @@ func sanitizeBlock(block map[string]interface{}) {
 		sanitizePlayableAttrs(attrs)
 	case "file":
 		sanitizeFileAttrs(attrs)
+	case "columns":
+		sanitizeColumnsAttrs(attrs)
+	case "column":
+		keepOnlyAttrs(attrs)
+	case "buttons":
+		sanitizeButtonsAttrs(attrs)
+	case "spacer":
+		sanitizeSpacerAttrs(attrs)
 	}
 
 	// Block colour (#356): a palette token on the core blocks that take one.
@@ -455,6 +463,11 @@ func sanitizePMNode(node map[string]interface{}) {
 		if colorablePMTypes[stringOf(node["type"])] {
 			sanitizeBlockColor(nattrs)
 		}
+	}
+
+	// A button's href is a node attr (#426), which the link-mark check below never sees.
+	if stringOf(node["type"]) == "button" {
+		sanitizeButtonNode(node)
 	}
 
 	if raw, present := node["marks"]; present {

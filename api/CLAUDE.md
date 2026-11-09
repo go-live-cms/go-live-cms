@@ -1314,6 +1314,14 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   allowlist (`summary` reduced like a caption by `sanitizeCaptionRuns`, `text` a string, `open`
   only `true`). An image in a details is in `post_media` (`walkBlocks`). Four cases in
   `nestingVectors.json`.
+- **Columns, buttons, spacer (#426, `post_blocks_layout.go`, `post_blocks_layout_test.go`):** two
+  rows of `blockContainers` (`columns` 2–4 of `column`, in a group or at the top; `column` flow and
+  details, `nestedOnly`: never in `blocks_order`) and two flow types. Each an allowlist:
+  `sanitizeColumnsAttrs` (`layout`, `align`), `sanitizeSpacerAttrs` (`size`, a theme step, never
+  pixels), `sanitizeButtonsAttrs` (`pm` a `buttons` node of `button` nodes only, `text`, `align`). **A
+  button's `href` is a node attr, which the link-mark check never saw:** `sanitizeButtonNode` keeps
+  only an `isSafeURL(href, safeHrefSchemes)` one and runs from `sanitizePMNode` too, so a `button` in
+  any block's pm is covered. `buttonHrefVectors.json` is the web's too.
 - **Marks are an allowlist (#418, `post_blocks_marks_test.go`):** `sanitizeMarks` keeps only
   `allowedMarkTypes` (bold, code, italic, strike, underline, link, highlight, superscript,
   subscript: exactly the editor schema's marks, checked by the web's

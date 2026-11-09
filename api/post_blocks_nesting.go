@@ -19,14 +19,20 @@ type blockContainer struct {
 	min     int
 	// max 0 = no limit.
 	max int
+	// nestedOnly: never in blocks_order, only inside its parent (a column).
+	nestedOnly bool
 }
 
-// blockContainers: the containers. Group (#414) is the first, details (#421) the second;
-// columns, cover, … are rows here and in nesting.ts. A details' summary is an attr
-// (`summary` runs), not a child, so its row is only its blocks.
+// blockContainers: the containers. Group (#414) is the first, details (#421) the second,
+// columns and column (#426) the next; cover, … are rows here and in nesting.ts. A details'
+// summary is an attr (`summary` runs), not a child, so its row is only its blocks. No group
+// in a column: the canvas draws a group holding columns, never the reverse, and the table
+// stays acyclic.
 var blockContainers = map[string]blockContainer{
-	"group":   {accepts: []string{"flow", "details"}, min: 1},
+	"group":   {accepts: []string{"flow", "details", "columns"}, min: 1},
 	"details": {accepts: []string{"flow"}, min: 1},
+	"columns": {accepts: []string{"column"}, min: 2, max: 4},
+	"column":  {accepts: []string{"flow", "details"}, min: 1, nestedOnly: true},
 }
 
 // flowBlockTypes are the core types that hold no blocks. Lists count as flow (their
@@ -39,6 +45,8 @@ var flowBlockTypes = map[string]bool{
 	"table": true,
 	// #423
 	"video": true, "audio": true, "file": true,
+	// #426: a row of buttons keeps its buttons in its pm.
+	"buttons": true, "spacer": true,
 }
 
 // listBlockTypes have their items as children (Block Spec `LIST_ITEMS`): list_item for
@@ -117,8 +125,9 @@ func (doc *BlockDocV1) deduplicateBlocks() {
 //  1. every id in blocks_order or any children is a block in blocks;
 //  2. each block is referenced at most once across blocks_order and every children;
 //  3. no cycles;
-//  4. a container's children are of the types and in the count the table allows, and a
-//     core block that is neither a container nor a list has no children.
+//  4. a container's children are of the types and in the count the table allows, a core
+//     block that is neither a container nor a list has no children, and a container that
+//     only exists inside its parent (a column) isn't in blocks_order.
 //
 // An unreferenced block is not an error. children that isn't an array of strings is.
 // Theme and unknown types may have children; rules 1–3 apply to them too.
@@ -151,6 +160,9 @@ func (doc *BlockDocV1) checkBlockNesting() error {
 	for _, id := range doc.BlocksOrder {
 		if err := reference(id, ""); err != nil {
 			return err
+		}
+		if blockContainers[typeOf(id)].nestedOnly {
+			return fmt.Errorf("block %q: a %s can't be at the top level", truncateID(id), typeOf(id))
 		}
 	}
 

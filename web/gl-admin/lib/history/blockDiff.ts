@@ -17,6 +17,8 @@
 import { CALLOUT_TONE_LABELS, type Block, type BlockDocV1 } from "../blocks-spec"
 // The nesting table only: pure, no imports of its own, so the worker stays small.
 import { isContainerType } from "../blocks-spec/nesting"
+// Pure too.
+import { COLUMNS_LAYOUT_LABELS, isColumnsLayout, spacerPx, type ColumnsLayout } from "../blocks-spec/layoutBlocks"
 import {
   contentTokens,
   diffTokens,
@@ -244,6 +246,11 @@ const TYPE_LABELS: Record<string, string> = {
   video: "Video",
   audio: "Audio",
   file: "File",
+  // #426
+  columns: "Columns",
+  column: "Column",
+  buttons: "Buttons",
+  spacer: "Spacer",
 }
 
 /** The media blocks without text of their own (#423): their caption or label is diffed instead. */
@@ -281,6 +288,19 @@ function fileName(src: unknown): string | null {
     // A stray "%" (not an escape): the name as stored, never a failed comparison.
     return name || src
   }
+}
+
+/** A buttons block's links and styles (#426), one per button: "Read the guide → /guide (primary)". */
+function buttonLinks(block: Block): string | null {
+  const buttons = pmOf(block)?.content
+  if (!Array.isArray(buttons) || buttons.length === 0) return null
+  return buttons
+    .map((button) => {
+      const attrs = (button.attrs ?? {}) as { href?: unknown; variant?: unknown }
+      const label = (button.content ?? []).map((run) => run.text ?? "").join("")
+      return `${label || "(no text)"} → ${typeof attrs.href === "string" ? attrs.href : "(no link)"} (${attrs.variant === "secondary" ? "secondary" : "primary"})`
+    })
+    .join(", ")
 }
 
 /** The attributes of two blocks of the same type that differ. */
@@ -358,6 +378,26 @@ function attrChanges(v: Block, w: Block): AttrChange[] {
       add("headerRow", "Header row", header(va), header(wa))
       break
     }
+    // #426: the labels are the text (word diff), each button's link and style attributes.
+    case "columns": {
+      const layout = (a: Record<string, unknown>) => COLUMNS_LAYOUT_LABELS[(isColumnsLayout(a.layout) ? a.layout : "equal") as ColumnsLayout]
+      const width = (a: Record<string, unknown>) => GROUP_WIDTH_LABELS[String(a.align ?? "content")] ?? GROUP_WIDTH_LABELS.content
+      add("layout", "Layout", layout(va), layout(wa))
+      add("align", "Width", width(va), width(wa))
+      break
+    }
+    case "buttons": {
+      const align = (a: Record<string, unknown>) => (a.align === "center" ? "Centre" : "Left")
+      add("align", "Alignment", align(va), align(wa))
+      add("buttons", "Links", buttonLinks(v), buttonLinks(w))
+      break
+    }
+    case "spacer": {
+      const height = (a: Record<string, unknown>) => `${spacerPx(a.size)} px`
+      add("size", "Height", height(va), height(wa))
+      break
+    }
+    case "column":
     case "divider":
     case "list_item":
     case "todo_list":

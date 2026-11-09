@@ -166,7 +166,8 @@ happening in practice (2.5): it never produces a doc that breaks these rules.
   `cover`, `mediaText`, `details`, `gallery`, `footnotes`, `footnote`); Block Spec types
   are snake_case. The mapping lives next to the nesting table.
 - Content expressions are generated from the table: `group` → `(flow | details | columns
-  | mediaText)+`, `columns` → `column{2,4}`, `column` → `(flow | details)+`, and so on.
+  | mediaText)+`, `columns` → `column+`, `column` → `(flow | details)+`, and so on. (The
+  table says 2–4 columns; as built, #426, the expression doesn't: `countNotInSchema` below.)
   As built (#414), `flow` is TipTap's existing `block` group: **no container is in it**, so
   `block` holds exactly the nodes that hold no blocks (core flow nodes, theme blocks,
   stand-ins), and a quote, a list item or a theme block (which name `block`) can never hold a
@@ -532,10 +533,10 @@ tests at each step including the collab round trip.
 | File | flow | `mediaId`, `label` | A download link with type and size. Built in #423: an atom; `label` is a node attr typed in the block (absent: the media's name); both links `download` under the uploaded name. |
 | Gallery | container of `image` | `columns` (2–4), `caption` | Each image is an image block (alt, caption, reorder with ⌘⇧←/→). |
 | Embed | flow | `provider`, `ref`, `title`, `caption` | Section 5. |
-| Columns / column | container | 2.2 | Stack in order on phones. |
+| Columns / column | container | 2.2 | Stack in order on phones. Built in #426. **The 2–4 limit isn't in the content expression** (`column+`, `countNotInSchema`): y-tiptap deletes an element whose children fail the content check, so two people adding a fourth column at once would have deleted the whole row and the group around it (found by a relay test). The limit holds in the table's checks instead: `nestingIssues` and the Go checks, every local change (`blockTree.ts`), and the collab server repairs a merged count before a store (`repairColumnsFragment`). A column's last block leaves an empty line (`fillWhenEmptied`). No group in a column (section 7): the canvas draws a group holding columns only. Removing a column moves its blocks to the last column that stays. |
 | Group | container | `style`, `align` | |
-| Buttons | flow | `align` (`left`/`center`); buttons as child nodes (`button`: `href`, `variant`, label text) | Not a container in Block Spec: the buttons are parts, kept in `pm`. Their `href` is a node attr, which `sanitizePMNode` doesn't check today (it checks link marks only), so the Go side adds an `isSafeURL(href, safeHrefSchemes)` check on `button` nodes. |
-| Spacer | flow | `size` (a theme spacing step, not px) | |
+| Buttons | flow | `align` (`left`/`center`); buttons as child nodes (`button`: `href`, `variant`, label text) | Not a container in Block Spec: the buttons are parts, kept in `pm`. Their `href` is a node attr, which `sanitizePMNode` doesn't check today (it checks link marks only), so the Go side adds an `isSafeURL(href, safeHrefSchemes)` check on `button` nodes. Built in #426: outside the `block` group like the table; `buttonHrefVectors.json` pins the editor's check to Go's; the public page leaves out a button with no link. |
+| Spacer | flow | `size` (a theme spacing step, not px) | Built in #426: steps `5`, `7`, `8`, `9` of the theme's `--space-*` (24, 48, 64, 96 px in the default theme). |
 | Cover | container | 2.2 | Overlay 0–80 in steps of 5. |
 | Media & text | container | 2.2 | Media above text on phones. |
 | Custom HTML | flow | `snippetId` | Section 5. |
@@ -625,8 +626,9 @@ the menus exist; everything that holds blocks waits for #414 and #417.
 
 ## 7. Open questions
 
-- Should a group be allowed inside a column (cards in columns)? The table forbids it to
-  stay acyclic (2.2). Decide before Columns (13) if the default theme needs it.
+- Should a group be allowed inside a column (cards in columns)? Decided in #426: no, the
+  table stays acyclic (2.2). The canvas draws a group holding columns ("Others in nested
+  layouts"), never the reverse.
 - Should lists nested in a list item be flattened into child blocks too (2.1)? Not needed
   for #352; it would let a nested item carry a comment (#192).
 - Footnote text editing: inline in the Footnotes list only (the canvas), or also from

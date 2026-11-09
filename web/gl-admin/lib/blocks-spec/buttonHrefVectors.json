@@ -1,0 +1,36 @@
+{
+  "comment": "Button hrefs (#426). Read by blocks-spec/layoutBlocks.test.ts (normalizeButtonHref) and api/post_blocks_layout_test.go (isSafeURL with safeHrefSchemes), so the editor and the API refuse the same things.",
+  "allowed": [
+    "/changelog",
+    "/a/b?c=d#e",
+    "#top",
+    "?q=1",
+    "../up",
+    "page.html",
+    "https://example.com/a?b=c",
+    "http://example.com",
+    "HTTPS://EXAMPLE.COM/path",
+    "mailto:ana@example.com",
+    "tel:+15551234",
+    "  /trimmed  "
+  ],
+  "refused": [
+    "javascript:alert(1)",
+    "JaVaScRiPt:alert(1)",
+    "  javascript:alert(1)",
+    "java\tscript:alert(1)",
+    "java\nscript:alert(1)",
+    "java\rscript:alert(1)",
+    "\u0001javascript:alert(1)",
+    "javascript\u0000:alert(1)",
+    "data:text/html,<script>alert(1)</script>",
+    "vbscript:msgbox(1)",
+    "file:///etc/passwd",
+    "ftp://example.com",
+    "blob:https://example.com/1",
+    "about:blank",
+    "foo:bar",
+    "1foo:bar",
+    "/a%zz"
+  ]
+}

@@ -4,9 +4,14 @@ import DOMPurify from "dompurify"
 import {
   clampTableSpan,
   CONTAINER_NODE_NAMES,
+  isButtonsAlign,
+  isButtonVariant,
   isCalloutTone,
+  isColumnsLayout,
   isGroupAlign,
   isGroupStyle,
+  isSpacerSize,
+  normalizeButtonHref,
   normalizeBlockColor,
   normalizeCite,
   normalizeChipDate,
@@ -77,8 +82,12 @@ const BLOCK_COLOR_TAGS = new Set(["P", "H1", "H2", "H3", "H4", "H5", "H6", "BLOC
 // Details (#421): `<div data-type="details" data-open="true">` with its summary
 // `<div data-type="details-summary">`, from the editor or from a page's `<details open>` and
 // `<summary>` (normalizeClipboardMarkup), which DetailsBlock.ts parses.
-const CONTAINER_DIV_TYPES = new Set(["group", "details", "details-summary"])
+// Columns, buttons and the spacer (#426), from the editor's own clipboard (`ColumnsBlock.ts`,
+// `ButtonsBlock.ts`, `SpacerBlock.ts`). `data-href` is a link: only a safe one survives.
+const CONTAINER_DIV_TYPES = new Set(["group", "details", "details-summary", "columns", "column", "buttons", "button", "spacer"])
 const isGroupDiv = (node: Element) => node.nodeName === "DIV" && node.getAttribute("data-type") === "group"
+const isColumnsDiv = (node: Element) => isTyped(node, "DIV", "columns")
+const isButtonsDiv = (node: Element) => isTyped(node, "DIV", "buttons")
 
 // The #320 inline nodes, from the editor's own clipboard (InlineNodes.ts): a `<span>` is kept
 // only with one of these types and a valid id or date (every other span is unwrapped, as
@@ -132,6 +141,7 @@ function getPurifier() {
     ALLOWED_ATTR: [
       "href", "class", "data-pm-slice", "data-block-color", "data-type", "data-style", "data-align",
       "data-tone", "data-cite", "data-checked", "colspan", "rowspan", "data-open",
+      "data-layout", "data-href", "data-variant", "data-size",
       "data-user-id", "data-post-id", "data-label", "data-date", "data-time", "data-reminder",
     ],
     ALLOW_DATA_ATTR: false,
@@ -167,7 +177,18 @@ function getPurifier() {
     } else if (data.attrName === "data-style") {
       if (!isGroupDiv(node) || !isGroupStyle(data.attrValue)) data.keepAttr = false
     } else if (data.attrName === "data-align") {
-      if (!isGroupDiv(node) || !isGroupAlign(data.attrValue)) data.keepAttr = false
+      const valid = isButtonsDiv(node) ? isButtonsAlign(data.attrValue) : (isGroupDiv(node) || isColumnsDiv(node)) && isGroupAlign(data.attrValue)
+      if (!valid) data.keepAttr = false
+    } else if (data.attrName === "data-layout") {
+      if (!isColumnsDiv(node) || !isColumnsLayout(data.attrValue)) data.keepAttr = false
+    } else if (data.attrName === "data-href") {
+      const href = isTyped(node, "DIV", "button") ? normalizeButtonHref(data.attrValue) : null
+      if (href === null) data.keepAttr = false
+      else data.attrValue = href
+    } else if (data.attrName === "data-variant") {
+      if (!isTyped(node, "DIV", "button") || !isButtonVariant(data.attrValue)) data.keepAttr = false
+    } else if (data.attrName === "data-size") {
+      if (!isTyped(node, "DIV", "spacer") || !isSpacerSize(data.attrValue)) data.keepAttr = false
     } else if (data.attrName === "data-open") {
       if (!isTyped(node, "DIV", "details") || data.attrValue !== "true") data.keepAttr = false
     } else if (data.attrName === "colspan" || data.attrName === "rowspan") {

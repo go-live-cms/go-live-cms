@@ -104,3 +104,71 @@ describe("blockDiff with a details (#421)", () => {
     expect(html).toMatch(/version-diff__container" data-type="details"><p class="version-diff__summary">/)
   })
 })
+
+describe("blockDiff with the layout blocks (#426)", () => {
+  const COLS = "blk-columns-0001"
+  const C1 = "blk-column-00001"
+  const C2 = "blk-column-00002"
+  const BTN = "blk-buttons-0001"
+  const SPC = "blk-spacer-00001"
+  const layout = (o: { layout?: string; align?: string; href?: string; label?: string; variant?: string; size?: string; buttonsAlign?: string; texts?: [string, string] } = {}): BlockDocV1 =>
+    ({
+      doc_version: 1,
+      blocks_order: [COLS, BTN, SPC],
+      blocks: {
+        [COLS]: { id: COLS, type: "columns", version: 1, attrs: { ...(o.layout ? { layout: o.layout } : {}), ...(o.align ? { align: o.align } : {}) }, children: [C1, C2] },
+        [C1]: { id: C1, type: "column", version: 1, attrs: {}, children: [A] },
+        [C2]: { id: C2, type: "column", version: 1, attrs: {}, children: [B] },
+        [A]: { id: A, type: "paragraph", version: 1, attrs: { text: o.texts?.[0] ?? "one" } },
+        [B]: { id: B, type: "paragraph", version: 1, attrs: { text: o.texts?.[1] ?? "two" } },
+        [BTN]: {
+          id: BTN,
+          type: "buttons",
+          version: 1,
+          attrs: {
+            ...(o.buttonsAlign ? { align: o.buttonsAlign } : {}),
+            text: o.label ?? "Read",
+            pm: { type: "buttons", content: [{ type: "button", attrs: { href: o.href ?? "/a", ...(o.variant ? { variant: o.variant } : {}) }, content: [{ type: "text", text: o.label ?? "Read" }] }] },
+          },
+        },
+        [SPC]: { id: SPC, type: "spacer", version: 1, attrs: { size: o.size ?? "7" } },
+      },
+    }) as unknown as BlockDocV1
+  const entry = (diff: ReturnType<typeof diffBlockDocs>, id: string) => diff.entries.find((e) => e.id === id)!
+  const attr = (e: { attrs: { key: string; version: string | null; working: string | null }[] }, key: string) => e.attrs.find((a) => a.key === key)
+
+  it("identical docs are the same", () => {
+    expect(diffBlockDocs(layout(), layout()).summary.changed).toBe(0)
+  })
+
+  it("a column's children are matched by id, and an edit shows on that block", () => {
+    const columns = entry(diffBlockDocs(layout(), layout({ texts: ["one", "two!"] })), COLS)
+    expect(columns.status).toBe("changed")
+    expect(columns.children!.map((c) => c.id)).toEqual([C1, C2])
+    expect(columns.children![1].children![0].status).toBe("changed")
+  })
+
+  it("names the layout and width as changes", () => {
+    const columns = entry(diffBlockDocs(layout(), layout({ layout: "33-67", align: "wide" })), COLS)
+    expect(attr(columns, "layout")).toMatchObject({ version: "Equal", working: "33 / 67" })
+    expect(attr(columns, "align")).toMatchObject({ version: "Content", working: "Wide" })
+  })
+
+  it("a button's link and style are changes, its label a word diff", () => {
+    const changed = entry(diffBlockDocs(layout(), layout({ href: "/b", variant: "secondary" })), BTN)
+    expect(attr(changed, "buttons")).toMatchObject({ version: "Read → /a (primary)", working: "Read → /b (secondary)" })
+    expect(entry(diffBlockDocs(layout(), layout({ buttonsAlign: "center" })), BTN).attrs[0]).toMatchObject({ key: "align", version: "Left", working: "Centre" })
+    expect(entry(diffBlockDocs(layout(), layout({ label: "Read more" })), BTN).text!.length).toBeGreaterThan(0)
+  })
+
+  it("a spacer's height is in px", () => {
+    expect(attr(entry(diffBlockDocs(layout(), layout({ size: "9" })), SPC), "size")).toMatchObject({ version: "48 px", working: "96 px" })
+  })
+
+  it("VersionDiff renders a changed columns block as a container", () => {
+    const version = layout()
+    const working = layout({ texts: ["one", "two!"] })
+    const html = renderToStaticMarkup(<VersionDiff version={version} working={working} diff={diffBlockDocs(version, working)} />)
+    expect(html).toContain('data-type="columns"')
+  })
+})

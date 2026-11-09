@@ -102,10 +102,13 @@ describe("the nesting table", () => {
   })
 
   it("derives the content expressions", () => {
-    expect(containerContent("group")).toBe("(block | tableBlock | video | audio | file | details)+")
+    expect(containerContent("group")).toBe("(block | tableBlock | video | audio | file | buttons | spacer | details | columns)+")
     // #421: its part first, then flow.
-    expect(containerContent("details")).toBe("detailsSummary (block | tableBlock | video | audio | file)+")
-    expect(topLevelContent()).toBe("(block | tableBlock | video | audio | file | group | details)+")
+    expect(containerContent("details")).toBe("detailsSummary (block | tableBlock | video | audio | file | buttons | spacer)+")
+    // #426: the 2–4 limit is the table's, not the schema's (`countNotInSchema`), each column holding flow and details.
+    expect(containerContent("columns")).toBe("column+")
+    expect(containerContent("column")).toBe("(block | tableBlock | video | audio | file | buttons | spacer | details)+")
+    expect(topLevelContent()).toBe("(block | tableBlock | video | audio | file | buttons | spacer | group | details | columns)+")
   })
 
   it("details (#421): holds flow, sits at the top or in a group, its summary a part (never a block)", () => {
@@ -121,7 +124,7 @@ describe("the nesting table", () => {
     expect(isBlockNode("paragraph", "details")).toBe(true)
     expect(isBlockNode("detailsSummary", "details")).toBe(false)
     expect(CONTAINER_PART_NODE_NAMES.has("detailsSummary")).toBe(true)
-    expect(TEXT_PART_NODE_NAMES).toEqual(new Set(["imageCaption", "tableCaption", "detailsSummary"]))
+    expect(TEXT_PART_NODE_NAMES).toEqual(new Set(["imageCaption", "tableCaption", "button", "detailsSummary"]))
   })
 
   it("a group holds flow: core flow types, theme blocks and unknown types, never a container or a list item", () => {

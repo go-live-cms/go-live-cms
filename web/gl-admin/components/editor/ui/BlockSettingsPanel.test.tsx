@@ -42,6 +42,78 @@ const crumbs = () => Array.from(container.querySelectorAll(".block-settings__cru
 const radio = (label: string) =>
   Array.from(container.querySelectorAll<HTMLButtonElement>('[role="radio"]')).find((b) => b.textContent === label)!
 
+describe("the Block tab for the layout blocks (#426)", () => {
+  const COLS = "blk-0426-columns-00001"
+  const select = () => act(() => editor.view.dispatch(editor.state.tr.setSelection(NodeSelection.create(editor.state.doc, 0))))
+  const remount = (content: string) => {
+    act(() => root.unmount())
+    editor.destroy()
+    editor = new Editor({ element: document.createElement("div"), extensions: Object.values(schemaExtensions({ collaborating: false })), content })
+    root = createRoot(container)
+    act(() => root.render(<BlockSettingsPanel editor={editor} />))
+    select()
+  }
+  const columnsHtml = (count: number) =>
+    `<div data-type="columns" data-block-id="${COLS}">${Array.from({ length: count }, (_, i) => `<div data-type="column"><p>c${i}</p></div>`).join("")}</div>`
+
+  it("columns: count, layout with two, width; a removed column's blocks move", () => {
+    remount(columnsHtml(3))
+    expect(name()).toBe("Columns")
+    expect(radio("3").getAttribute("aria-checked")).toBe("true")
+    expect(container.textContent).toContain("A removed column's blocks move to the last column.")
+    expect(radio("33 / 67")).toBeUndefined()
+    act(() => radio("2").click())
+    expect(editor.state.doc.firstChild!.childCount).toBe(2)
+    expect(editor.state.doc.firstChild!.textContent).toBe("c0c1c2")
+    expect(radio("50 / 50").getAttribute("aria-checked")).toBe("true")
+    act(() => radio("33 / 67").click())
+    expect(editor.state.doc.firstChild!.attrs.layout).toBe("33-67")
+    act(() => radio("Wide").click())
+    expect(editor.state.doc.firstChild!.attrs.align).toBe("wide")
+  })
+
+  it("buttons: the link field checks what's typed, style and row alignment", () => {
+    remount('<div data-type="buttons" data-block-id="blk-0426-buttons-00001"><div data-type="button" data-href="/guide">Read</div><div data-type="button" data-variant="secondary">Log</div></div>')
+    expect(name()).toBe("Buttons")
+    expect(container.textContent).toContain("In a row of 2 buttons.")
+    const input = container.querySelector<HTMLInputElement>("#block-settings-button-link")!
+    expect(input.value).toBe("/guide")
+    const type = (value: string) => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!
+      setter.call(input, value)
+      act(() => input.dispatchEvent(new Event("input", { bubbles: true })))
+      act(() => input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })))
+    }
+    type("javascript:alert(1)")
+    expect(container.querySelector('[role="alert"]')!.textContent).toContain("web address")
+    expect(input.getAttribute("aria-invalid")).toBe("true")
+    expect(editor.state.doc.firstChild!.child(0).attrs.href).toBe("/guide")
+    type("https://example.com/x")
+    expect(container.querySelector('[role="alert"]')).toBeNull()
+    expect(editor.state.doc.firstChild!.child(0).attrs.href).toBe("https://example.com/x")
+    act(() => radio("Secondary").click())
+    expect(editor.state.doc.firstChild!.child(0).attrs.variant).toBe("secondary")
+    act(() => radio("Centre").click())
+    expect(editor.state.doc.firstChild!.attrs.align).toBe("center")
+  })
+
+  it("spacer: the theme's steps, in px", () => {
+    remount('<div data-type="spacer" data-size="7" data-block-id="blk-0426-spacer-00001"></div><p>after</p>')
+    expect(name()).toBe("Spacer")
+    expect(radio("48").getAttribute("aria-checked")).toBe("true")
+    act(() => radio("96").click())
+    expect(editor.state.doc.firstChild!.attrs.size).toBe("9")
+  })
+
+  it("a column is named in the path", () => {
+    remount(columnsHtml(2))
+    act(() => {
+      editor.commands.setTextSelection(4)
+    })
+    expect(crumbs()).toEqual(["Columns", "Column"])
+  })
+})
+
 describe("the Block tab (#417)", () => {
   it("shows the block the caret is in, inside its group, and selects the group from the path", () => {
     act(() => {

@@ -178,12 +178,19 @@ describe("the slash menu", () => {
     expect(active()!.textContent).toBe("Divider---")
     press("ArrowDown")
     expect(active()!.textContent).toBe("Group")
+    // Columns, Buttons and Spacer (#426), then it wraps.
+    for (const name of ["Columns", "Buttons", "Spacer"]) {
+      press("ArrowDown")
+      expect(active()!.textContent).toBe(name)
+    }
     press("ArrowDown")
     expect(active()!.textContent).toBe("Paragraph")
     press("ArrowUp")
-    expect(active()!.textContent).toBe("Group")
-    press("ArrowUp")
-    expect(active()!.textContent).toBe("Divider---")
+    expect(active()!.textContent).toBe("Spacer")
+    for (const name of ["Buttons", "Columns", "Group", "Divider---"]) {
+      press("ArrowUp")
+      expect(active()!.textContent).toBe(name)
+    }
 
     expect(press("Enter")).toBe(true)
     expect(topTypes()).toEqual(["paragraph", "horizontalRule", "paragraph"])

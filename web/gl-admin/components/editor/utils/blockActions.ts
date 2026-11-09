@@ -6,6 +6,7 @@ import {
   deleteBlockTr,
   editorBlockAtSelection,
   holderAccepts,
+  holderHasRoom,
   planBlockMove,
   refOfBlock,
   resolveEditorBlock,
@@ -104,7 +105,7 @@ export function duplicateBlock(editor: Editor, ref: BlockRef): number | null {
   if (!block) return null
   const copy = state.schema.nodeFromJSON(withoutBlockIds(block.node.toJSON()))
   // A container that is full (the table's maximum) takes no copy.
-  if (!block.holder.canReplaceWith(block.index + 1, block.index + 1, copy.type)) return null
+  if (!holderHasRoom(block.holder) || !block.holder.canReplaceWith(block.index + 1, block.index + 1, copy.type)) return null
   const at = block.pos + block.node.nodeSize
   const tr = placeCursorIn(state.tr.insert(at, copy), at)
   editor.view.dispatch(tr)

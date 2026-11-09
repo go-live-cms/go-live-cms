@@ -15,6 +15,7 @@ import { mentionMenuManager } from "./mentionMenuManager"
 import { BlockNodeViews } from "../extensions/BlockNodeViews"
 import { TableKeyboard } from "../extensions/TableBlock"
 import { DetailsKeyboard } from "../extensions/DetailsBlock"
+import { ButtonsKeyboard } from "../extensions/ButtonsBlock"
 import { TEXT_PART_NODE_NAMES } from "@gl-admin/lib/blocks-spec/nesting"
 import { BlockActions } from "./blockActions"
 import { BlockGutterKeys } from "./blockGutter"
@@ -89,6 +90,10 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
       schema.file,
       // #423: insert, set the file of, and caption the media blocks; no schema.
       schema.mediaCommands,
+      // #426
+      schema.columns,
+      schema.buttons,
+      schema.spacer,
       schema.mention,
       schema.contentLink,
       schema.dateChip,
@@ -100,6 +105,8 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
       TableKeyboard,
       // #421: ↵ from the summary into the content, ⌫ never deletes the summary; no schema.
       DetailsKeyboard,
+      // #426: ↵ leaves a button for the line under it, ⌫ never joins two; no schema.
+      ButtonsKeyboard,
       // The block menu's Ctrl D / Ctrl Shift P (#356); no schema.
       BlockActions,
       // Blocks at any depth from the keyboard (#417): Esc, ↵, ↑↓, ⌘⇧↑↓, ⌫; no schema.
@@ -128,6 +135,10 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
               return "Write a caption…"
             case "detailsSummary":
               return "Summary"
+            case "button":
+              return "Button text"
+            case "spacer":
+              return ""
             case "pullQuote":
               return "Pull quote"
             case "heading":

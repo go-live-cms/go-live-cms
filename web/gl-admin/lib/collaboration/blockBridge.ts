@@ -10,6 +10,13 @@ import {
   normalizeCalloutTone,
   normalizeCite,
   normalizeFileLabel,
+  columnsLayoutFor,
+  isButtonsAlign,
+  isButtonVariant,
+  isColumnsLayout,
+  normalizeButtonHref,
+  normalizeButtonLabel,
+  normalizeSpacerSize,
   AUDIO_BLOCK_VERSION,
   FILE_BLOCK_VERSION,
   VIDEO_BLOCK_VERSION,
@@ -365,6 +372,31 @@ function pmNodeToBlock(node: PMNode, allBlocks: Record<BlockID, Block>, seenIds:
       }
     }
 
+    // #426. The layout is `equal` unless there are exactly two columns (a concurrent add can
+    // leave a two-column split on three), and defaults are left out, like a group's.
+    case "columns": {
+      const layout = columnsLayoutFor(node.attrs.layout, node.childCount)
+      return {
+        id,
+        type: "columns",
+        version: 1,
+        attrs: {
+          ...(layout !== "equal" ? { layout } : {}),
+          ...(isGroupAlign(node.attrs.align) && node.attrs.align !== "content" ? { align: node.attrs.align } : {}),
+        },
+        // children are set by the caller
+      }
+    }
+
+    case "column":
+      return { id, type: "column", version: 1, attrs: {} }
+
+    case "buttons":
+      return buttonsNodeToBlock(node, id)
+
+    case "spacer":
+      return { id, type: "spacer", version: 1, attrs: { size: normalizeSpacerSize(node.attrs.size) } }
+
     default:
       // Custom/theme block - preserve full PM data for round-trip fidelity
       return {
@@ -674,6 +706,70 @@ function tableBlockToPM(block: Block, baseAttrs: Record<string, unknown>, schema
 }
 
 const captionContent = (runs: any[]) => (runs.length > 0 ? { content: runs } : {})
+
+/**
+ * A buttons block (#426) for Block Spec: `attrs.pm` a `buttons` node of `button` nodes (not
+ * blocks: parts, kept in `pm`), each with only a safe `href` (`normalizeButtonHref`: a peer's
+ * bad update costs the link, never the store), its `variant` when not primary, and its label
+ * as one text run; `attrs.text` the labels (what search reads). Marks and anything else a
+ * bad write put there are left out.
+ */
+function buttonsNodeToBlock(node: PMNode, id: BlockID): Block {
+  const buttons: any[] = []
+  const labels: string[] = []
+  node.forEach((child) => {
+    if (child.type.name !== "button") return
+    const href = normalizeButtonHref(child.attrs.href)
+    const label = normalizeButtonLabel(child.textContent)
+    if (label) labels.push(label)
+    const attrs = { ...(href ? { href } : {}), ...(child.attrs.variant === "secondary" ? { variant: "secondary" } : {}) }
+    buttons.push({
+      type: "button",
+      ...(Object.keys(attrs).length > 0 ? { attrs } : {}),
+      ...(label ? { content: [{ type: "text", text: label }] } : {}),
+    })
+  })
+  return {
+    id,
+    type: "buttons",
+    version: 1,
+    attrs: {
+      pm: { type: "buttons", content: buttons },
+      text: labels.join(" ") || undefined,
+      ...(node.attrs.align === "center" ? { align: "center" as const } : {}),
+    },
+  }
+}
+
+/**
+ * A stored buttons block as `buttons` JSON (#426): its `button` nodes from `attrs.pm`, each
+ * with a safe `href` or none, a known `variant` and its label as plain text (a stored pm's
+ * other attrs and marks are ignored). None left: one empty button, what the menus insert.
+ */
+function buttonsBlockToPM(block: Block, baseAttrs: Record<string, unknown>): any {
+  const attrs = block.attrs as { pm?: { content?: unknown }; align?: unknown }
+  const stored = Array.isArray(attrs.pm?.content) ? (attrs.pm.content as any[]) : []
+  const buttons = stored
+    .filter((child) => child?.type === "button")
+    .map((child) => {
+      const label = normalizeButtonLabel(
+        Array.isArray(child.content) ? child.content.map((run: any) => (run?.type === "text" && typeof run.text === "string" ? run.text : "")).join("") : "",
+      )
+      return {
+        type: "button",
+        attrs: {
+          href: normalizeButtonHref(child.attrs?.href),
+          ...(isButtonVariant(child.attrs?.variant) ? { variant: child.attrs.variant } : {}),
+        },
+        ...(label ? { content: [{ type: "text", text: label }] } : {}),
+      }
+    })
+  return {
+    type: "buttons",
+    attrs: { ...baseAttrs, ...(isButtonsAlign(attrs.align) ? { align: attrs.align } : {}) },
+    content: buttons.length > 0 ? buttons : [{ type: "button" }],
+  }
+}
 
 /**
  * Calls `visit` for `rootId` and each block under it (list and container children, any depth) in
@@ -1040,6 +1136,29 @@ function blockToPMNode(block: Block, allBlocks: Record<BlockID, Block>, ctx: Con
     case "table":
       return tableBlockToPM(block, baseAttrs, ctx.schema)
 
+    // #426. Left to the schema's defaults unless valid, like a group's.
+    case "columns": {
+      const attrs = block.attrs as { layout?: unknown; align?: unknown }
+      return {
+        type: "columns",
+        attrs: {
+          ...baseAttrs,
+          ...(isColumnsLayout(attrs.layout) ? { layout: attrs.layout } : {}),
+          ...(isGroupAlign(attrs.align) ? { align: attrs.align } : {}),
+        },
+        content: containerChildrenToPM(block, allBlocks, ctx),
+      }
+    }
+
+    case "column":
+      return { type: "column", attrs: baseAttrs, content: containerChildrenToPM(block, allBlocks, ctx) }
+
+    case "buttons":
+      return buttonsBlockToPM(block, baseAttrs)
+
+    case "spacer":
+      return { type: "spacer", attrs: { ...baseAttrs, size: normalizeSpacerSize((block.attrs as { size?: unknown }).size) } }
+
     // #423. Only a valid media id and label make it into the node; the caption like an
     // image's (no child without one).
     case "video":
@@ -1203,13 +1322,26 @@ function containerChildrenToPM(block: Block, allBlocks: Record<BlockID, Block>, 
       }
       afterId = childId
     }
-    for (let index = items.length; index < rule.min; index++) {
-      const role = index === 0 ? rule.synthesize.role : `${rule.synthesize.role}-${index + 1}`
-      items.push({ type: BLOCK_NODE_NAMES[rule.synthesize.type], attrs: { "data-block-id": synthesizedChildId(block.id, role) } })
-    }
+    for (let index = items.length; index < rule.min; index++) items.push(synthesizedChild(rule, block.id, index))
     return items
   } finally {
     ctx.containersInProgress.delete(block.id)
+  }
+}
+
+/**
+ * The child synthesized at `index` of a container left with too few (design 2.5): an empty
+ * paragraph, or for a columns block an empty column holding one. Deterministic ids at every
+ * level, so the same doc builds the same nodes on every load.
+ */
+function synthesizedChild(rule: ContainerRule, containerId: BlockID, index: number): any {
+  const role = index === 0 ? rule.synthesize.role : `${rule.synthesize.role}-${index + 1}`
+  const id = synthesizedChildId(containerId, role)
+  const inner = containerRule(rule.synthesize.type)
+  return {
+    type: BLOCK_NODE_NAMES[rule.synthesize.type],
+    attrs: { "data-block-id": id },
+    ...(inner ? { content: Array.from({ length: inner.min }, (_, i) => synthesizedChild(inner, id, i)) } : {}),
   }
 }
 

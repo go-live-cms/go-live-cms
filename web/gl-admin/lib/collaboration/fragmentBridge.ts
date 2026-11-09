@@ -1,7 +1,7 @@
 import * as Y from "yjs"
 import { prosemirrorToYXmlFragment, yXmlFragmentToProsemirrorJSON } from "@tiptap/y-tiptap"
 import type { Node as PMNode, Schema } from "prosemirror-model"
-import { containerOfNode, isBlockNode, type Block, type BlockDocV1, type BlockID } from "../blocks-spec"
+import { containerOfNode, containerRule, isBlockNode, type Block, type BlockDocV1, type BlockID, type ContainerRule } from "../blocks-spec"
 import {
   blockDocToPMWithReport,
   pmToBlockDoc,
@@ -152,6 +152,64 @@ export function fragmentToBlockDoc(
     doc = restoreDroppedBlocks(doc, { doc_version: 1, blocks_order: [], blocks: dropped.blocks }, dropped.entries)
   }
   return doc
+}
+
+/**
+ * Put every `columns` element of the live doc back in the shape the schema needs (#426): at
+ * least 2 and at most 4 columns, each holding a block. One transaction; returns how many
+ * elements it changed (0 means no Yjs update).
+ *
+ * Why it exists: the count is a limit over a whole element, and Yjs merges concurrent
+ * inserts and deletes without knowing it. Two people adding a fourth column at once leave
+ * five; one setting the count to two while another deletes a column can leave one. The
+ * schema allows that on purpose (`column+`, `countNotInSchema`: y-tiptap deletes an element
+ * whose children fail the content check, which here would be the whole row), so the editors
+ * show it and go on working, but the store would be refused (`nestingIssues`). A client can't
+ * fix it (rule 7: no document changes in response to a sync), so the server does, before
+ * the store, as it stamps ids.
+ *
+ * Nothing is lost: a column over the limit gives its blocks to the fourth column, in order
+ * (copies, with their ids, of the elements it deletes). A column added here is empty.
+ */
+export function repairColumnsFragment(fragment: Y.XmlFragment, newParagraph: () => Y.XmlElement = () => new Y.XmlElement("paragraph")): number {
+  const rule = containerRule("columns") as ContainerRule
+  const broken: Y.XmlElement[] = []
+  const isBroken = (element: Y.XmlElement) => {
+    const columns = element.toArray().filter((child): child is Y.XmlElement => child instanceof Y.XmlElement && child.nodeName === "column")
+    return columns.length < rule.min || columns.length > rule.max! || columns.some((column) => column.length === 0)
+  }
+  const walk = (parent: Y.XmlFragment | Y.XmlElement) => {
+    for (const child of parent.toArray()) {
+      if (!(child instanceof Y.XmlElement)) continue
+      if (child.nodeName === "columns" && isBroken(child)) broken.push(child)
+      walk(child)
+    }
+  }
+  walk(fragment)
+  if (broken.length === 0) return 0
+
+  const emptyColumn = () => {
+    const column = new Y.XmlElement("column")
+    column.insert(0, [newParagraph()])
+    return column
+  }
+  const repair = (element: Y.XmlElement) => {
+    const columnAt = () => element.toArray().filter((child): child is Y.XmlElement => child instanceof Y.XmlElement && child.nodeName === "column")
+    for (const column of columnAt()) if (column.length === 0) column.insert(0, [newParagraph()])
+    while (columnAt().length < rule.min) element.insert(element.length, [emptyColumn()])
+    const columns = columnAt()
+    if (columns.length > rule.max!) {
+      const last = columns[rule.max! - 1]
+      for (const extra of columns.slice(rule.max!)) {
+        last.insert(last.length, extra.toArray().map((child) => (child as Y.XmlElement).clone()))
+        element.delete(element.toArray().indexOf(extra), 1)
+      }
+    }
+  }
+  const write = () => broken.forEach(repair)
+  if (fragment.doc) fragment.doc.transact(write)
+  else write()
+  return broken.length
 }
 
 /**

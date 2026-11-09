@@ -1203,6 +1203,65 @@ body {
   color: var(--color-text-muted);
 }
 
+/* Columns (#426, "Published · layout"): a grid that stacks in order on phones. Like a
+   group, a column resets the prose rhythm for its own blocks. */
+.columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-6) var(--space-7);
+}
+.columns.is-3-columns {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.columns.is-4-columns {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.columns.is-33-67 {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+}
+.columns.is-67-33 {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+}
+.prose .column > * {
+  margin: 0;
+}
+.prose .column > * + * {
+  margin-top: 0.8em;
+}
+/* A row of columns in a group fills the group: the width classes are for the page. */
+.prose .group .columns:is(.alignwide, .alignfull) {
+  width: auto;
+  margin-left: 0;
+  transform: none;
+}
+.prose .group > .columns {
+  max-width: none;
+}
+@media (max-width: 640px) {
+  .columns,
+  .columns.is-3-columns,
+  .columns.is-4-columns,
+  .columns.is-33-67,
+  .columns.is-67-33 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Buttons (#426): the theme's own buttons in a row that wraps; full width on a small phone. */
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+.buttons.is-center {
+  justify-content: center;
+}
+@media (max-width: 480px) {
+  .buttons .btn {
+    flex: 1 1 100%;
+  }
+}
+
 /* Pull quote (#419, "Published · text"): one line set large and centred under the
    accent rule, the citation below. Not a quote's italic or its quote mark. */
 .prose .pullquote {

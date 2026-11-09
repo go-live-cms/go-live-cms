@@ -1001,6 +1001,34 @@
     gap: 2px;
   }
 
+  // A button's Link field (#426).
+  &__input {
+    background: var(--background);
+    border: 1px solid var(--control-border);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font: inherit;
+    min-height: 32px;
+    padding: 0 var(--space-2);
+    width: 100%;
+
+    &[aria-invalid="true"] {
+      border-color: var(--danger-text);
+    }
+
+    &:focus-visible {
+      border-color: var(--focus-ring);
+      outline: 2px solid var(--focus-ring);
+      outline-offset: -1px;
+    }
+  }
+
+  &__error {
+    color: var(--danger-text);
+    font-size: var(--type-footnote);
+    margin: 0;
+  }
+
   // A media block's file (#423): thumbnail or icon, name and size, Replace.
   &__media {
     display: flex;

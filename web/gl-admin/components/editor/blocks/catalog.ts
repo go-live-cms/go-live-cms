@@ -3,6 +3,7 @@ import { installedThemeBlockEditors } from "@gl-admin/lib/theme-blocks/editorBlo
 import { holderAcceptsType } from "../utils/blockTree"
 import { createImagePlaceholder } from "./mediaBlocks"
 import { openTableSizePicker } from "../ui/TableSizePicker"
+import { COLUMNS_ICON, openColumnsPicker } from "../ui/ColumnsPicker"
 import { TABLE_ICON } from "../extensions/TableBlock"
 import { MEDIA_BLOCK_ICONS } from "@gl-admin/lib/blocks-spec"
 
@@ -98,6 +99,10 @@ export const ICONS = {
   video: MEDIA_BLOCK_ICONS.video,
   audio: MEDIA_BLOCK_ICONS.audio,
   file: MEDIA_BLOCK_ICONS.file,
+  // #426 ("Editor · columns, group, buttons, spacer")
+  columns: COLUMNS_ICON,
+  buttons: "M3 8h18v8H3zM8 12h8",
+  spacer: "M12 4v16M8 8l4-4 4 4M8 16l4 4 4-4",
 } as const
 
 const chain = (editor: Editor, range: InsertRange) => editor.chain().focus().deleteRange(range)
@@ -304,6 +309,40 @@ export const CORE_BLOCKS: readonly CatalogEntry[] = [
     keywords: ["section", "container", "box", "tint"],
     icon: { path: ICONS.group },
     insert: (editor, range) => chain(editor, range).setGroup().run(),
+  },
+  // #426. The layout picker first; the columns replace the line (now empty) when one is
+  // picked, and nothing is inserted if it's closed, like the table's size picker.
+  {
+    id: "columns",
+    type: "columns",
+    name: "Columns",
+    group: "layout",
+    keywords: ["grid", "side by side", "row"],
+    icon: { path: ICONS.columns },
+    insert: (editor, range) => {
+      // No `.focus()`: TipTap focuses the editor a frame later, which would take focus
+      // from the picker.
+      editor.chain().deleteRange(range).run()
+      openColumnsPicker(editor)
+    },
+  },
+  {
+    id: "buttons",
+    type: "buttons",
+    name: "Buttons",
+    group: "layout",
+    keywords: ["button", "cta", "call to action"],
+    icon: { path: ICONS.buttons },
+    insert: (editor, range) => chain(editor, range).insertButtons().run(),
+  },
+  {
+    id: "spacer",
+    type: "spacer",
+    name: "Spacer",
+    group: "layout",
+    keywords: ["space", "gap", "margin", "empty"],
+    icon: { path: ICONS.spacer },
+    insert: (editor, range) => chain(editor, range).insertSpacer().run(),
   },
 ]
 
