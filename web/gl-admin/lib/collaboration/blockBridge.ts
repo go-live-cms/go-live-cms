@@ -575,9 +575,16 @@ function mediaIdAttr(value: unknown): { mediaId?: number } {
  * as ProseMirror JSON. Undefined when it has none or it's empty.
  */
 function captionOf(image: PMNode): CaptionText[] | undefined {
-  const caption = image.firstChild
-  if (!caption || caption.type.name !== "imageCaption" || caption.content.size === 0) return undefined
-  return caption.content.toJSON() as CaptionText[]
+  // Normally one child. Two people adding the first caption at once each insert one, and
+  // y-tiptap builds both unchecked (#424): both are kept, one after the other, so neither
+  // person's text is lost from the stored doc.
+  const runs: CaptionText[] = []
+  image.forEach((caption) => {
+    if (caption.type.name !== "imageCaption" || caption.content.size === 0) return
+    if (runs.length > 0) runs.push({ type: "text", text: " " })
+    runs.push(...(caption.content.toJSON() as CaptionText[]))
+  })
+  return runs.length > 0 ? runs : undefined
 }
 
 /**

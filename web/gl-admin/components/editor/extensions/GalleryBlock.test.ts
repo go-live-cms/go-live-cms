@@ -13,7 +13,7 @@ import { GalleryKeyboard } from "./GalleryKeyboard"
 import { BlockNavigationKeys, BlockSelectionKeys } from "./BlockNavigation"
 import { GALLERY_EMPTY_FRESH, GALLERY_EMPTY_TEXT, GALLERY_EMPTY_TITLE } from "./GalleryBlock"
 import { PasteSanitizer, sanitizePastedHTML } from "./PasteSanitizer"
-import { addMediaToGallery, chooseGalleryImages, registerMediaPickerHost, type MediaPickRequest } from "../blocks/mediaPicking"
+import { addMediaToGallery, chooseGalleryImages, registerMediaPickerHost, uploadGalleryImages, type MediaPickRequest } from "../blocks/mediaPicking"
 import { CORE_BLOCKS, menuEntries, slotAcceptsAt } from "../blocks/catalog"
 import { duplicateBlock } from "../utils/blockActions"
 import { editorBlockAtSelection, removalRange, selectedBlock } from "../utils/blockTree"
@@ -202,6 +202,14 @@ describe("insert and add images (#424)", () => {
     expect(applied).toEqual([4, 5, 6])
   })
 
+  it("its own Upload refuses a file that isn't an image before uploading anything", async () => {
+    const e = makeEditor(doc([]))
+    const files = [new File(["x"], "a.jpg", { type: "image/jpeg" }), new File(["x"], "b.pdf", { type: "application/pdf" })]
+    await expect(uploadGalleryImages(e, posOf(e, G), files)).rejects.toThrow("b.pdf isn't an image")
+    expect(api.createMedia).not.toHaveBeenCalled()
+    expect(order(e)).toEqual([])
+  })
+
   it("adds nothing when the gallery is gone or the choice is empty", () => {
     const e = makeEditor(doc([]))
     expect(addMediaToGallery(e, { id: "no-such-gallery-00", pos: 0 }, [media(4)])).toBe(false)
@@ -267,6 +275,19 @@ describe("reorder and remove (#424)", () => {
     selectImage(e, B)
     expect(key(e, "Backspace")).toBe(true)
     expect(order(e)).toEqual([A, C])
+  })
+
+  it("removing an image selects the one that took its place, else the one before, so the keys keep working", () => {
+    const e = makeEditor(three())
+    selectImage(e, A)
+    expect(key(e, "Backspace")).toBe(true)
+    expect(selectedId(e)).toBe(B)
+    selectImage(e, C)
+    expect(removeGalleryImage(e, { id: C, pos: 0 })).toBe(true)
+    expect(selectedId(e)).toBe(B)
+    expect(key(e, "Backspace")).toBe(true)
+    expect(order(e)).toEqual([])
+    expect(e.state.selection.$from.parent.type.name).toBe("galleryCaption")
   })
 
   it("a duplicated gallery gets fresh ids for itself and every image", () => {
@@ -467,5 +488,16 @@ describe("paste (#424)", () => {
     expect(html).not.toContain('<p data-columns')
     expect(html).not.toContain("<img")
     expect(html).toContain('data-type="gallery-caption"')
+  })
+
+  it("an image's caption goes with its image, so the gallery's own caption survives the paste", () => {
+    const html = sanitizePastedHTML('<div data-type="gallery" data-columns="3"><figure><img src="/a.jpg"><figcaption>October</figcaption></figure><div data-type="gallery-caption">Six covers</div></div>')
+    expect(html).not.toContain("October")
+    const e = makeEditor({ type: "doc", content: [{ type: "paragraph" }] })
+    e.commands.insertContent(html)
+    const gallery = e.state.doc.child(0)
+    expect(gallery.type.name).toBe("gallery")
+    expect(gallery.attrs.columns).toBe(3)
+    expect(gallery.lastChild?.textContent).toBe("Six covers")
   })
 })

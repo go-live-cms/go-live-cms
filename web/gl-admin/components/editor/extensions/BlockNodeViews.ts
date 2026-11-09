@@ -15,6 +15,7 @@ import {
   isGroupAlign,
   isGroupStyle,
   isImageAlign,
+  MEDIA_BLOCK_ICONS,
   MEDIA_KIND_ACCEPT,
   normalizeGalleryColumns,
   type GroupAlign,
@@ -662,7 +663,7 @@ class DetailsView implements NodeView {
   }
 }
 
-const GALLERY_ICON = "M3 3h8v8H3zM13 3h8v8h-8zM3 13h8v8H3zM13 13h8v8h-8z"
+const GALLERY_ICON = MEDIA_BLOCK_ICONS.gallery
 const PLUS_ICON = "M12 5v14M5 12h14"
 
 /**

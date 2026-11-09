@@ -71,6 +71,21 @@ describe("gallery through the bridge (#424)", () => {
     expect(() => validateBlockDoc(out)).not.toThrow()
   })
 
+  it("two captions from a race on a captionless image are both stored, in order", () => {
+    const { node } = blockDocToPMWithReport(galleryDoc(), schema)
+    const json = node.toJSON()
+    json.content[0].content[1].content = [
+      { type: "imageCaption", content: [{ type: "text", text: "From Ana" }] },
+      { type: "imageCaption", content: [{ type: "text", text: "From Kenji" }] },
+    ]
+    const out = pmToBlockDoc(schema.nodeFromJSON(json))
+    expect((out.blocks[I2].attrs as any).caption).toEqual([
+      { type: "text", text: "From Ana" },
+      { type: "text", text: " " },
+      { type: "text", text: "From Kenji" },
+    ])
+  })
+
   it("an empty gallery is kept, with nothing synthesized or dropped, its caption included", () => {
     const withCaption = emptyGallery({ columns: 3, caption: [{ type: "text", text: "Nothing yet" }] })
     const { node: doc, dropped } = blockDocToPMWithReport(withCaption, schema)

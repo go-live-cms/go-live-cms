@@ -1,7 +1,7 @@
 import type { Editor } from "@tiptap/core"
 import { Fragment, type Node as PMNode } from "@tiptap/pm/model"
 import { NodeSelection, type EditorState, type Transaction } from "@tiptap/pm/state"
-import { deleteBlockTr, planBlockMove, resolveEditorBlock, siblingTarget, type BlockRef, type EditorBlock } from "./blockTree"
+import { deleteBlockTr, keepBlockSelected, planBlockMove, resolveEditorBlock, siblingTarget, type BlockRef, type EditorBlock } from "./blockTree"
 import { applyBlockMove } from "./blockMoveSync"
 
 // What the gallery's keys, its image tiles and the settings panel do to one image (#424).
@@ -46,18 +46,13 @@ export function selectGalleryImage(editor: Editor, ref: BlockRef): boolean {
   return true
 }
 
-function keepSelected(state: EditorState, pos: number, tr: Transaction): Transaction {
-  if (state.selection instanceof NodeSelection && state.selection.from === pos) tr.setSelection(NodeSelection.create(tr.doc, pos))
-  return tr
-}
-
 /** The image's alt text, as typed (one attribute, last writer wins). */
 export function setGalleryImageAlt(editor: Editor, ref: BlockRef, alt: string): boolean {
   if (!editor.isEditable) return false
   const block = galleryImageBlock(editor.state.doc, ref)
   if (!block || (block.node.attrs.alt ?? "") === alt) return false
   const { state } = editor
-  editor.view.dispatch(keepSelected(state, block.pos, state.tr.setNodeMarkup(block.pos, undefined, { ...block.node.attrs, alt })))
+  editor.view.dispatch(keepBlockSelected(state, block.pos, state.tr.setNodeMarkup(block.pos, undefined, { ...block.node.attrs, alt })))
   return true
 }
 
@@ -107,7 +102,7 @@ export function imageCaptionTr(state: EditorState, block: EditorBlock, text: str
       tr.replaceWith(from, to, state.schema.text(inserted, marks))
     }
   }
-  return keepSelected(state, block.pos, tr)
+  return keepBlockSelected(state, block.pos, tr)
 }
 
 /** The image's caption, as typed in the panel. */

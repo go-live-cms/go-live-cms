@@ -295,6 +295,10 @@ function normalizeClipboardMarkup(root: HTMLElement) {
     if (root.contains(cell)) flattenCell(cell as HTMLElement)
   }
 
+  // A gallery's images are dropped with every other pasted image (#424), and an image's
+  // caption goes with it: left behind, its text would close the gallery, which holds no text.
+  for (const figure of Array.from(root.querySelectorAll('div[data-type="gallery"] > figure'))) figure.remove()
+
   // A details (#421) becomes the editor's own markup: its first <summary> child the summary,
   // `open` as data-open. Any other <summary> is a plain div below.
   for (const details of Array.from(root.querySelectorAll("details"))) {

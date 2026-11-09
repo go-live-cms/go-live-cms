@@ -99,7 +99,7 @@ export const ICONS = {
   audio: MEDIA_BLOCK_ICONS.audio,
   file: MEDIA_BLOCK_ICONS.file,
   // #424, the canvas's Gallery tile.
-  gallery: "M3 3h8v8H3zM13 3h8v8h-8zM3 13h8v8H3zM13 13h8v8h-8z",
+  gallery: MEDIA_BLOCK_ICONS.gallery,
 } as const
 
 const chain = (editor: Editor, range: InsertRange) => editor.chain().focus().deleteRange(range)

@@ -1615,7 +1615,7 @@
   position: absolute;
 
   // Between two tiles of a gallery (#424) it stands upright; `height` comes from the plugin.
-  &[style*="width: 2px"] {
+  &.is-upright {
     margin-left: -1px;
     margin-top: 0;
   }
@@ -1632,6 +1632,11 @@
   display: flex;
   gap: 2px;
   margin-right: 6px;
+
+  // No + on a gallery's image (#424): only images go in a gallery, through Add images.
+  &__add.is-hidden {
+    display: none;
+  }
 
   &__add {
     background: transparent;

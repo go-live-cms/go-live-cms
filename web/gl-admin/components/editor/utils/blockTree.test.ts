@@ -227,6 +227,15 @@ describe("the pointer (#417, gutterPlugin.ts)", () => {
     const afterLast = dropTargetAt(doc2, at(I1), rect, 310, 50)!
     expect(afterLast).toMatchObject({ holderPos: at(G).pos, index: 3 })
     expect(dropLine(doc2, afterLast, rect)).toEqual({ y: 0, left: 320, right: 320, height: 100 })
+    // A block that can't go among the tiles lands above or below the gallery, by height.
+    const para = doc(
+      p(A, "alpha"),
+      { type: "gallery", attrs: { "data-block-id": G }, content: [{ type: "image", attrs: { "data-block-id": I1, src: "/a.jpg" } }, { type: "galleryCaption" }] },
+    )
+    const paraRect = (pos: number) =>
+      ({ [A]: { top: 200, bottom: 230, left: 0, right: 330 }, [G]: tiles[G], [I1]: tiles[I1] } as Record<string, Rect>)[String(para.nodeAt(pos)?.attrs["data-block-id"])] ?? null
+    // Right half of the tile, top half: before the gallery (by x it would have been after it).
+    expect(dropTargetAt(para, block(para, A), paraRect, 90, 10)).toMatchObject({ holderPos: -1, index: 1 })
     // Under the images (its caption) the gallery is what the pointer is on.
     expect(pickBlock(doc2, rect, 100, 130)?.block.node.attrs["data-block-id"]).toBe(G)
     expect(pickBlock(doc2, rect, 150, 50)?.block.node.attrs["data-block-id"]).toBe(I2)

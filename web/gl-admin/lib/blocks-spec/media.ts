@@ -26,6 +26,7 @@ export const MEDIA_BLOCK_ICONS = {
   video: "M3 5h13v14H3zM16 10l5-3v10l-5-3",
   audio: "M9 18V5l12-2v13M9 18a3 3 0 1 1-6 0a3 3 0 1 1 6 0M21 16a3 3 0 1 1-6 0a3 3 0 1 1 6 0",
   file: "M14 3H6v18h12V7zM14 3v4h4",
+  gallery: "M3 3h8v8H3zM13 3h8v8h-8zM3 13h8v8H3zM13 13h8v8h-8z",
   missing: "M3 3h18v18H3zM21 15l-5-5-4 4M3 3l18 18",
 } as const
 

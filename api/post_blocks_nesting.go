@@ -283,7 +283,7 @@ func sanitizeGalleryAttrs(attrs map[string]interface{}) {
 		switch key {
 		case "columns":
 			columns, ok := value.(float64)
-			if !ok || columns != columns { // NaN can't come from JSON, but a Go caller could
+			if !ok {
 				delete(attrs, key)
 				continue
 			}

@@ -1,7 +1,7 @@
 import type { Editor } from "@tiptap/core"
 import type { Node as PMNode } from "@tiptap/pm/model"
 import { getMediaURL } from "@gl-admin/lib/api"
-import { MEDIA_BLOCK_KINDS, type MediaPickerKind } from "@gl-admin/lib/blocks-spec"
+import { MEDIA_BLOCK_KINDS, mimeMatchesKind, type MediaPickerKind } from "@gl-admin/lib/blocks-spec"
 import { knownMedia, rememberMedia, uploadMediaFile } from "@gl-admin/lib/mediaLookup"
 import type { Media } from "@gl-admin/lib/api/types"
 import { blockSpecTypeOf, refOfBlock, resolveEditorBlock, type BlockRef } from "../utils/blockTree"
@@ -140,6 +140,9 @@ export function chooseGalleryImages(editor: Editor, pos: number): boolean {
 export async function uploadGalleryImages(editor: Editor, pos: number, files: File[]): Promise<Media[]> {
   const node = editor.state.doc.nodeAt(pos)
   if (!node || node.type.name !== "gallery") throw new Error("This block can't hold images")
+  // The file dialog's filter is only a hint ("All files"), as in the picker's Upload.
+  const wrong = files.find((file) => file.type && !mimeMatchesKind(file.type, "image"))
+  if (wrong) throw new Error(`${wrong.name} isn't an image`)
   const ref = refOfBlock({ node, pos })
   const uploaded: Media[] = []
   try {

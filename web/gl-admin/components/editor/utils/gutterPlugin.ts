@@ -98,7 +98,9 @@ export function dropTargetAt(
 ): DropTarget | null {
   const hit = pickBlock(doc, rectOf, x, y)
   if (!hit) return null
-  const before = inGrid(hit.block) ? x < (hit.rect.left + hit.rect.right) / 2 : y < (hit.rect.top + hit.rect.bottom) / 2
+  // Only an image can land among the tiles: anything else goes above or below the gallery.
+  const sideways = inGrid(hit.block) && dragged.node.type.name === "image"
+  const before = sideways ? x < (hit.rect.left + hit.rect.right) / 2 : y < (hit.rect.top + hit.rect.bottom) / 2
   return dropTargetFor(doc, dragged, hit.block, before ? "before" : "after")
 }
 
@@ -330,6 +332,7 @@ export function createGutterPlugin(options: GutterPluginOptions) {
               width: at.height === undefined ? `${at.right - at.left}px` : "2px",
               height: at.height === undefined ? "" : `${at.height}px`,
             })
+            line.classList.toggle("is-upright", at.height !== undefined)
           } else line.hidden = true
           return true
         },

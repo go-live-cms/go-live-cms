@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react"
 import type { Editor as TiptapEditor } from "@tiptap/core"
-import { NodeSelection, type EditorState, type Transaction } from "prosemirror-state"
+import { NodeSelection } from "prosemirror-state"
 import {
   GROUP_ALIGNS,
   GROUP_STYLES,
@@ -20,6 +20,7 @@ import {
   ancestorBlocks,
   blockSpecTypeOf,
   editorBlockAtSelection,
+  keepBlockSelected,
   refOfBlock,
   resolveEditorBlock,
   type BlockRef,
@@ -53,15 +54,6 @@ export function blockInfo(block: Pick<EditorBlock, "node">): BlockInfo {
   if (entry) return { name: entry.name, icon: entry.icon }
   if (block.node.type.name === "listItem") return { name: "List item", icon: { glyph: "•" } }
   return { name: type, icon: { glyph: "?" } }
-}
-
-/**
- * A selected block stays selected through a change of its own attributes: ProseMirror maps
- * a NodeSelection through `setNodeMarkup` to a caret inside it.
- */
-export function keepBlockSelected(state: EditorState, pos: number, tr: Transaction): Transaction {
-  if (state.selection instanceof NodeSelection && state.selection.from === pos) tr.setSelection(NodeSelection.create(tr.doc, pos))
-  return tr
 }
 
 type Snapshot = { block: EditorBlock; path: EditorBlock[] } | null
