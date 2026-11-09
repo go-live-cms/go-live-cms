@@ -677,6 +677,20 @@ are the most fragile part of the codebase. **Before editing anything under
   History's preview fills the `media` map from the same lookups (`lib/docMedia.ts`). The admin CSP
   has `media-src` for the players. Rules: `gl-admin/lib/collaboration/CLAUDE.md` (blockBridge
   notes, Media blocks).
+- **Command palette (#41; the canvas's "Search · command palette"):** the sidebar's Search
+  button or Ctrl/⌘ K (`components/command-palette/CommandPalette.tsx`, mounted in `AppLayout`,
+  opened through `openCommandPalette`). In the block editor (`isEditorFocused`: focus inside
+  `.ProseMirror`) Ctrl K stays the link dialog, and `Editor`'s own listener only acts there; it
+  doesn't open over another `aria-modal` dialog either (that dialog's Tab trap would take focus).
+  One call, `GET /search?q=` (`lib/api/commandPalette.ts`, `api/command_palette.go`), debounced
+  150 ms; every change aborts the request before it (`apiCall`'s `signal`) and an answer for
+  other text is never shown. Rules, what each result opens and the group order are
+  `lib/commandPalette.ts` (tested): jump actions first (they need no answer, so the highlighted
+  row doesn't move when results arrive), then Posts, Pages, Media, Terms, Users. Settings and
+  Users are admins' only; a role without content access gets no search. Rows and keys are the
+  slash menu's (the field is the combobox, `aria-activedescendant`, ↑↓ wrap across groups), but
+  it's a modal: Tab stays inside, Esc returns focus to where it was. A term opens as
+  `/taxonomies?type=&term=`, which opens its panel for editors and admins.
 - The admin Content list route `/content/:typeName` keys its component by `typeName`
   (`ContentByType` in `app.tsx`) so switching post types remounts + refetches.
 

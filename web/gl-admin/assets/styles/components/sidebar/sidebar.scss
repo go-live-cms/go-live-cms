@@ -68,6 +68,37 @@ $mobile: 768px; // MOBILE_QUERY in Sidebar.tsx
     gap: var(--space-4);
   }
 
+  &__top {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  // The Search · Ctrl K button (#41): a link's look, as a button.
+  &__search {
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
+    width: 100%;
+
+    .gl-sidebar__label {
+      flex: 1;
+    }
+  }
+
+  &__kbd {
+    background: var(--background);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: var(--type-caption);
+    line-height: var(--type-caption-lh);
+    padding: 0 5px;
+  }
+
   &__section {
     display: flex;
     flex-direction: column;

@@ -1,7 +1,7 @@
 import { act, type ReactElement } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest"
 
 // The app shell's sidebar (#339): role-filtered links, and at phone width the
 // off-canvas drawer, which traps focus, closes on Escape, the scrim or a link, and
@@ -32,6 +32,7 @@ vi.mock("@gl-admin/lib/api/taxonomies", () => ({
   getTaxonomyTypes: () => Promise.resolve({ data: [{ name: "category", label: "Categories" }] }),
 }))
 
+import { onCommandPaletteOpen } from "@gl-admin/lib/commandPalette"
 import Sidebar from "./Sidebar"
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -99,6 +100,45 @@ async function click(el: Element) {
 const toggle = () => document.querySelector<HTMLButtonElement>('[aria-label="Open menu"]')!
 const drawer = () => document.querySelector<HTMLElement>('[role="dialog"]')
 const linkLabels = () => Array.from(document.querySelectorAll(".gl-sidebar__nav a")).map((a) => a.textContent)
+const searchButton = () => document.querySelector<HTMLButtonElement>(".gl-sidebar__search")!
+
+describe("Search · Ctrl K (#41)", () => {
+  let opened: Mock<() => void>
+  let stop: () => void
+
+  beforeEach(() => {
+    opened = vi.fn<() => void>()
+    stop = onCommandPaletteOpen(opened)
+  })
+  afterEach(() => stop())
+
+  it("opens the palette from the desktop sidebar and shows the shortcut", async () => {
+    phone = false
+    await render(<Sidebar />)
+    expect(searchButton().textContent).toContain("Search")
+    expect(searchButton().querySelector("kbd")?.textContent).toBe("Ctrl K")
+    await click(searchButton())
+    expect(opened).toHaveBeenCalledTimes(1)
+  })
+
+  it("on a phone closes the drawer first, so focus is back on the menu button", async () => {
+    await render(<Sidebar />)
+    toggle().focus()
+    await click(toggle())
+    expect(drawer()).not.toBeNull()
+
+    let whenOpened: { drawer: Element | null; focus: Element | null } | undefined
+    opened.mockImplementation(() => {
+      whenOpened = { drawer: drawer(), focus: document.activeElement }
+    })
+    await click(searchButton())
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(opened).toHaveBeenCalledTimes(1)
+    expect(whenOpened).toEqual({ drawer: null, focus: toggle() })
+  })
+})
 
 describe("phone drawer", () => {
   it("opens from the menu button with focus inside, and closes on Escape back to the button", async () => {

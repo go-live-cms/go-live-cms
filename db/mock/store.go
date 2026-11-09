@@ -5091,6 +5091,21 @@ func (mr *MockStoreMockRecorder) ScheduleUpdateTx(arg0, arg1 interface{}) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ScheduleUpdateTx", reflect.TypeOf((*MockStore)(nil).ScheduleUpdateTx), arg0, arg1)
 }
 
+// SearchCommandPalettePosts mocks base method.
+func (m *MockStore) SearchCommandPalettePosts(arg0 context.Context, arg1 db.SearchCommandPalettePostsParams) ([]db.SearchCommandPalettePostsRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SearchCommandPalettePosts", arg0, arg1)
+	ret0, _ := ret[0].([]db.SearchCommandPalettePostsRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SearchCommandPalettePosts indicates an expected call of SearchCommandPalettePosts.
+func (mr *MockStoreMockRecorder) SearchCommandPalettePosts(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SearchCommandPalettePosts", reflect.TypeOf((*MockStore)(nil).SearchCommandPalettePosts), arg0, arg1)
+}
+
 // SearchMediaByName mocks base method.
 func (m *MockStore) SearchMediaByName(arg0 context.Context, arg1 db.SearchMediaByNameParams) ([]db.SearchMediaByNameRow, error) {
 	m.ctrl.T.Helper()
@@ -5149,6 +5164,21 @@ func (m *MockStore) SearchTaxonomyTerms(arg0 context.Context, arg1 db.SearchTaxo
 func (mr *MockStoreMockRecorder) SearchTaxonomyTerms(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SearchTaxonomyTerms", reflect.TypeOf((*MockStore)(nil).SearchTaxonomyTerms), arg0, arg1)
+}
+
+// SearchTermsAcrossTaxonomies mocks base method.
+func (m *MockStore) SearchTermsAcrossTaxonomies(arg0 context.Context, arg1 db.SearchTermsAcrossTaxonomiesParams) ([]db.SearchTermsAcrossTaxonomiesRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SearchTermsAcrossTaxonomies", arg0, arg1)
+	ret0, _ := ret[0].([]db.SearchTermsAcrossTaxonomiesRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SearchTermsAcrossTaxonomies indicates an expected call of SearchTermsAcrossTaxonomies.
+func (mr *MockStoreMockRecorder) SearchTermsAcrossTaxonomies(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SearchTermsAcrossTaxonomies", reflect.TypeOf((*MockStore)(nil).SearchTermsAcrossTaxonomies), arg0, arg1)
 }
 
 // SetMediaVariants mocks base method.

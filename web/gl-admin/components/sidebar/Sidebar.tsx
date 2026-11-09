@@ -5,12 +5,13 @@ import { IconButton } from "@gl-admin/components/ui/Button"
 import Drawer from "@gl-admin/components/ui/Drawer"
 import Avatar from "@gl-admin/components/ui/Avatar"
 import Menu, { MenuItem, MenuSeparator } from "@gl-admin/components/ui/Menu"
-import { ChevronRightIcon, MenuIcon, MoreIcon, PlusIcon } from "@gl-admin/components/ui/icons"
+import { ChevronRightIcon, MenuIcon, MoreIcon, PlusIcon, SearchIcon } from "@gl-admin/components/ui/icons"
 import GLIcon from "@gl-admin/assets/gl-logo.svg?raw"
 import { POST_TYPES_CHANGED, getPostTypes } from "@gl-admin/lib/api/postTypes"
 import { getTaxonomyTypes } from "@gl-admin/lib/api/taxonomies"
 import type { PostType, TaxonomyType } from "@gl-admin/lib/api/types"
 import { authManager } from "@gl-admin/lib/auth"
+import { COMMAND_PALETTE_SHORTCUT, openCommandPalette } from "@gl-admin/lib/commandPalette"
 import { useAuthUser } from "@gl-admin/lib/hooks/useAuthUser"
 import { useCurrentRole } from "@gl-admin/lib/hooks/useCurrentRole"
 import { useMediaQuery } from "@gl-admin/lib/hooks/useMediaQuery"
@@ -138,13 +139,23 @@ function UserMenu() {
 type SidebarNavProps = {
   sections: NavSection[]
   current: string | null
+  onSearch?: () => void
 }
 
 // The sidebar's content, shared by the desktop column and the phone drawer.
-export function SidebarNav({ sections, current }: SidebarNavProps) {
+export function SidebarNav({ sections, current, onSearch = openCommandPalette }: SidebarNavProps) {
   return (
     <div className="gl-sidebar">
-      <Brand />
+      <div className="gl-sidebar__top">
+        <Brand />
+        <button type="button" className="gl-sidebar__link gl-sidebar__search" aria-haspopup="dialog" onClick={onSearch}>
+          <SearchIcon size={16} />
+          <span className="gl-sidebar__label">Search</span>
+          <kbd className="gl-sidebar__kbd" aria-hidden="true">
+            {COMMAND_PALETTE_SHORTCUT}
+          </kbd>
+        </button>
+      </div>
       <nav className="gl-sidebar__nav" aria-label="Admin">
         {sections.map((section) => (
           <div key={section.key} className="gl-sidebar__section">
@@ -215,7 +226,15 @@ export default function Sidebar() {
     if ((e.target as Element).closest("a[href]")) setDrawerOpen(false)
   }
 
-  const nav = <SidebarNav sections={sections} current={current} />
+  // On a phone the drawer goes first and gives focus back to the menu button, so that's
+  // where the palette returns it, and its focus trap isn't still running underneath.
+  const onSearch = isMobile
+    ? () => {
+        setDrawerOpen(false)
+        setTimeout(openCommandPalette, 0)
+      }
+    : openCommandPalette
+  const nav = <SidebarNav sections={sections} current={current} onSearch={onSearch} />
 
   return (
     <>

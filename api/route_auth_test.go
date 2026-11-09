@@ -153,6 +153,39 @@ func TestBlockEditRoutesRequireAuth(t *testing.T) {
 	}
 }
 
+// commandPaletteRoutes is the admin command palette's route (#41). TestGETRoutesRequireAuth
+// already walks it; this also says what it answers and to whom, fails when another search
+// route is added without being listed (so its rule gets a look), and keeps it out of
+// /public.
+var commandPaletteRoutes = map[string]string{
+	"GET /api/v1/search": "content roles; posts through postsViewerID, users for admins only",
+}
+
+func TestCommandPaletteRoutesRequireAuth(t *testing.T) {
+	store := mockdb.NewMockStore(gomock.NewController(t))
+	server := newTestServer(t, store)
+
+	registered := map[string]bool{}
+	for _, route := range server.router.Routes() {
+		if route.Path != "/api/v1/search" {
+			continue
+		}
+		key := route.Method + " " + route.Path
+		registered[key] = true
+		_, listed := commandPaletteRoutes[key]
+		require.True(t, listed, "%s is a command palette route missing from commandPaletteRoutes", key)
+
+		t.Run(key, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			server.router.ServeHTTP(recorder, httptest.NewRequest(route.Method, routeExample(route.Path)+"?q=draft", nil))
+			require.Equal(t, http.StatusUnauthorized, recorder.Code, "%s answers without a token", key)
+		})
+	}
+	for key := range commandPaletteRoutes {
+		require.True(t, registered[key], "commandPaletteRoutes lists %s, which is no longer a route", key)
+	}
+}
+
 // routeExample fills a route template's parameters: /posts/:id/meta becomes
 // /posts/1/meta.
 func routeExample(path string) string {

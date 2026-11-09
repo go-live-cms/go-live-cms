@@ -170,6 +170,18 @@ WHERE ttype.name = $1
 ORDER BY tt.name
 LIMIT @limit_count OFFSET @offset_count;
 
+-- name: SearchTermsAcrossTaxonomies :many
+-- The admin command palette (#41): terms of every taxonomy the admin shows (the
+-- Taxonomies page lists show_ui types only) whose name or slug matches @pattern (an ILIKE
+-- pattern the API escapes), by name.
+SELECT tt.id, tt.name, tt.slug, ttype.name AS taxonomy_type, ttype.label AS taxonomy_label
+FROM taxonomy_terms tt
+JOIN taxonomy_types ttype ON tt.taxonomy_type_id = ttype.id
+WHERE ttype.show_ui
+    AND (tt.name ILIKE sqlc.arg(pattern)::text OR tt.slug ILIKE sqlc.arg(pattern)::text)
+ORDER BY tt.name, tt.id
+LIMIT sqlc.arg(limit_count)::int;
+
 -- name: GetPopularTaxonomyTerms :many
 SELECT 
     tt.*,
