@@ -97,9 +97,9 @@ describe("schemaWithStandIns", () => {
   })
 
   it("adds a leaf stand-in for a theme node seen without content", () => {
-    const schema = schemaWithStandIns(base, [{ type: "embed", attrs: { url: "https://x.test" } }])
-    expect(schema.nodes.embed.isLeaf).toBe(true)
-    expect(schema.nodeFromJSON({ type: "embed", attrs: { url: "https://x.test" } }).attrs.url).toBe("https://x.test")
+    const schema = schemaWithStandIns(base, [{ type: "sidecard", attrs: { url: "https://x.test" } }])
+    expect(schema.nodes.sidecard.isLeaf).toBe(true)
+    expect(schema.nodeFromJSON({ type: "sidecard", attrs: { url: "https://x.test" } }).attrs.url).toBe("https://x.test")
   })
 
   it("makes a theme node found inside text an inline stand-in", () => {

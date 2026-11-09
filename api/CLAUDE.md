@@ -668,6 +668,28 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   an active one of theirs (else 409 `session_not_active`), then `BlockOtherSessionsForUser`. Other
   devices' access tokens live out `ACCESS_TOKEN_DURATION`, as after a logout.
 
+## Embeds (#425, `embeds.go`, `embeds_resolve.go`)
+
+- Block `embed` v1: `provider`, `ref`, `title`, `caption`, an allowlist (`sanitizeEmbedAttrs`). `ref` is
+  checked against its provider's pattern, a title is plain text (`normalizeEmbedTitle`: one holding
+  a tag is dropped, `a < b` isn't). `embedVectors.json` (web) is shared with `embeds_test.go`.
+- **`POST /embeds/resolve {url}` (`requireContentEditor`) is the API's only outbound request made
+  on a user's behalf, so treat every line of it as SSRF surface.** The pasted URL only ever yields a
+  ref; what is fetched is `embedProviderTable[id].oEmbed`, a literal per provider, asked about the
+  URL rebuilt from the ref. HTTPS only, `embedFetchTimeout` 3s for the whole exchange,
+  `embedMaxAnswerBytes` 64 KB, no redirect to another host or to HTTP (`refuseOtherHostRedirects`,
+  ≤3 on the same host), no proxy from the environment, no cookies, and the dialer refuses internal
+  addresses after DNS (`refuseNonPublicEmbedAddress`). Only `title` / `author_name` are decoded; X
+  has no title, so it is "Post by <author>". A URL matching no allowed provider is 400
+  `embed_not_allowed`, nothing fetched; a title that can't be read is still a 200 with `title: ""`
+  (logged as `embed_title_failed` with a fixed reason, never the URL). A new provider is a row in
+  the table, `embedProviders`, and `blocks-spec/embeds.ts`; a new route goes in `embedRoutes`
+  (`route_auth_test.go`).
+- **A provider taken off Allowed embeds** (`editor_allowed_embeds`): `hideDisallowedEmbeds` empties
+  those blocks' attrs in every `/public` doc (`publicizeBlockDocs`), so nothing about them reaches
+  a reader. Stored docs and versions aren't touched: allowing it again brings them back. Only a doc
+  with an embed costs the settings lookup; if the lookup fails every embed is hidden.
+
 ## Categories, merges and redirects (#331, #146, `000047`)
 
 - **One category per post** (taxonomy `category`, `db.CategoryTaxonomy`): `PUT
@@ -787,7 +809,7 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   (BCP-47 from `siteLanguages`), `site_timezone` (IANA, `time.LoadLocation`; `time/tzdata` is
   embedded so the image needs no zoneinfo; `Local`/`""` refused), `date_format`
   (`month_day_year`|`day_month_year`|`iso`), `editor_markdown_shortcuts` and
-  `editor_allowed_embeds` (`embedProviders`, ≤20, deduped; absent keeps, `[]` clears) (`000025`).
+  `editor_allowed_embeds` (`embedProviders`, the sites embeds may come from, #425; ≤20, deduped; absent keeps, `[]` clears) (`000025`).
   Lists and validator tags (`site_language`, `time_zone`, `embed_provider`, `single_line`) live
   in `settings_utils.go`; the web copies are checked against it by its tests.
 - GET `/settings` also returns `site_address` (`PUBLIC_BASE_URL`, read-only, `""` if unusable):

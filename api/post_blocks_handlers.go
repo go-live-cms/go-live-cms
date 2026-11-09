@@ -275,7 +275,7 @@ func (server *Server) getPublicPostBlocks(c *gin.Context) {
 		return
 	}
 	server.attachBlockMedia(c.Request.Context(), docMap)
-	// Mentions and content links (#320): names and current URLs, never ids.
-	server.publicizeInlineNodes(c.Request.Context(), docMap)
+	// Embeds the site no longer allows (#425) and inline nodes (#320: names and current URLs, never ids).
+	server.publicizeBlockDocs(c.Request.Context(), docMap)
 	c.JSON(http.StatusOK, gin.H{"doc": docMap})
 }

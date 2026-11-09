@@ -1,0 +1,141 @@
+{
+  "_comment": "Shared by api/embeds_test.go and blocks-spec/embeds.test.ts (#425): which links each provider accepts, which refs are valid, and what a title becomes. The API matches URLs; both sides check refs and titles.",
+  "providers": ["youtube", "vimeo", "x", "codepen", "soundcloud", "spotify"],
+  "urls": {
+    "accept": [
+      { "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ", "provider": "youtube", "ref": "dQw4w9WgXcQ" },
+      { "url": "http://youtube.com/watch?v=dQw4w9WgXcQ&t=42s", "provider": "youtube", "ref": "dQw4w9WgXcQ" },
+      { "url": "https://m.youtube.com/watch?list=PL1&v=dQw4w9WgXcQ", "provider": "youtube", "ref": "dQw4w9WgXcQ" },
+      { "url": "https://music.youtube.com/watch?v=dQw4w9WgXcQ", "provider": "youtube", "ref": "dQw4w9WgXcQ" },
+      { "url": "https://youtu.be/dQw4w9WgXcQ?si=abc", "provider": "youtube", "ref": "dQw4w9WgXcQ" },
+      { "url": "https://www.youtube.com/embed/dQw4w9WgXcQ", "provider": "youtube", "ref": "dQw4w9WgXcQ" },
+      { "url": "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ", "provider": "youtube", "ref": "dQw4w9WgXcQ" },
+      { "url": "https://www.youtube.com/shorts/dQw4w9WgXcQ", "provider": "youtube", "ref": "dQw4w9WgXcQ" },
+      { "url": "https://www.youtube.com/live/dQw4w9WgXcQ?feature=share", "provider": "youtube", "ref": "dQw4w9WgXcQ" },
+      { "url": "  https://WWW.YouTube.com/watch?v=dQw4w9WgXcQ  ", "provider": "youtube", "ref": "dQw4w9WgXcQ" },
+      { "url": "https://vimeo.com/76979871", "provider": "vimeo", "ref": "76979871" },
+      { "url": "https://www.vimeo.com/76979871/", "provider": "vimeo", "ref": "76979871" },
+      { "url": "https://vimeo.com/76979871/8272103f6e", "provider": "vimeo", "ref": "76979871/8272103f6e" },
+      { "url": "https://vimeo.com/channels/staffpicks/76979871", "provider": "vimeo", "ref": "76979871" },
+      { "url": "https://vimeo.com/groups/shortfilms/videos/76979871", "provider": "vimeo", "ref": "76979871" },
+      { "url": "https://player.vimeo.com/video/76979871", "provider": "vimeo", "ref": "76979871" },
+      { "url": "https://player.vimeo.com/video/76979871?h=8272103f6e&badge=0", "provider": "vimeo", "ref": "76979871/8272103f6e" },
+      { "url": "https://x.com/jack/status/20", "provider": "x", "ref": "20" },
+      { "url": "https://www.x.com/jack/status/20?s=20", "provider": "x", "ref": "20" },
+      { "url": "https://twitter.com/jack/status/20", "provider": "x", "ref": "20" },
+      { "url": "https://mobile.twitter.com/jack/statuses/20", "provider": "x", "ref": "20" },
+      { "url": "https://x.com/i/status/20", "provider": "x", "ref": "20" },
+      { "url": "https://x.com/i/web/status/20", "provider": "x", "ref": "20" },
+      { "url": "https://x.com/jack/status/20/photo/1", "provider": "x", "ref": "20" },
+      { "url": "https://codepen.io/chriscoyier/pen/gfdDu", "provider": "codepen", "ref": "chriscoyier/gfdDu" },
+      { "url": "https://codepen.io/chriscoyier/full/gfdDu", "provider": "codepen", "ref": "chriscoyier/gfdDu" },
+      { "url": "https://codepen.io/chriscoyier/embed/gfdDu?default-tab=result", "provider": "codepen", "ref": "chriscoyier/gfdDu" },
+      { "url": "https://soundcloud.com/forss/flickermood", "provider": "soundcloud", "ref": "forss/flickermood" },
+      { "url": "https://m.soundcloud.com/forss/flickermood/", "provider": "soundcloud", "ref": "forss/flickermood" },
+      { "url": "https://soundcloud.com/forss/sets/soulhack", "provider": "soundcloud", "ref": "forss/sets/soulhack" },
+      { "url": "https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT", "provider": "spotify", "ref": "track/4cOdK2wGLETKBW3PvgPWqT" },
+      { "url": "https://open.spotify.com/intl-pt/track/4cOdK2wGLETKBW3PvgPWqT?si=x", "provider": "spotify", "ref": "track/4cOdK2wGLETKBW3PvgPWqT" },
+      { "url": "https://open.spotify.com/embed/playlist/37i9dQZF1DXcBWIGoYBM5M", "provider": "spotify", "ref": "playlist/37i9dQZF1DXcBWIGoYBM5M" },
+      { "url": "https://open.spotify.com/episode/4rOoJ6Egrf8K2IrywzwOMk", "provider": "spotify", "ref": "episode/4rOoJ6Egrf8K2IrywzwOMk" }
+    ],
+    "reject": [
+      "https://www.tiktok.com/@someone/video/7000000000000000000",
+      "https://www.youtube.com.evil.example/watch?v=dQw4w9WgXcQ",
+      "https://youtube.com.evil.example/watch?v=dQw4w9WgXcQ",
+      "https://evil.example/youtube.com/watch?v=dQw4w9WgXcQ",
+      "https://notyoutube.com/watch?v=dQw4w9WgXcQ",
+      "https://www.y0utube.com/watch?v=dQw4w9WgXcQ",
+      "https://youtu.be.evil.example/dQw4w9WgXcQ",
+      "https://youtube.com@evil.example/watch?v=dQw4w9WgXcQ",
+      "https://evil.example@youtube.com/watch?v=dQw4w9WgXcQ",
+      "https://evil.example\\@youtube.com/watch?v=dQw4w9WgXcQ",
+      "https://youtube.com:8443/watch?v=dQw4w9WgXcQ",
+      "https://youtube.com./watch?v=dQw4w9WgXcQ",
+      "ftp://youtube.com/watch?v=dQw4w9WgXcQ",
+      "javascript:alert(1)//youtube.com/watch?v=dQw4w9WgXcQ",
+      "//youtube.com/watch?v=dQw4w9WgXcQ",
+      "https://www.youtube.com/",
+      "https://www.youtube.com/watch",
+      "https://www.youtube.com/watch?v=short",
+      "https://www.youtube.com/watch?v=dQw4w9WgXcQ/../../x",
+      "https://www.youtube.com/feed/subscriptions",
+      "https://www.youtube.com/dQw4w9WgXcQ",
+      "https://youtu.be/",
+      "https://youtu.be/dQw4w9WgXcQ/more",
+      "https://vimeo.com.evil.example/76979871",
+      "https://evilvimeo.com/76979871",
+      "https://vimeo.com/",
+      "https://vimeo.com/staff",
+      "https://vimeo.com/76979871/notahash!",
+      "https://player.vimeo.com/76979871",
+      "https://x.com.evil.example/jack/status/20",
+      "https://nottwitter.com/jack/status/20",
+      "https://x.com/jack",
+      "https://x.com/jack/status/abc",
+      "https://x.com/jack/status/20/../../evil",
+      "https://codepen.io.evil.example/chriscoyier/pen/gfdDu",
+      "https://evilcodepen.io/chriscoyier/pen/gfdDu",
+      "https://codepen.io/chriscoyier",
+      "https://codepen.io/chriscoyier/pen/",
+      "https://soundcloud.com.evil.example/forss/flickermood",
+      "https://notsoundcloud.com/forss/flickermood",
+      "https://soundcloud.com/forss",
+      "https://soundcloud.com/forss/flickermood/extra",
+      "https://spotify.com/track/4cOdK2wGLETKBW3PvgPWqT",
+      "https://open.spotify.com.evil.example/track/4cOdK2wGLETKBW3PvgPWqT",
+      "https://open.spotify.com/track/short",
+      "https://open.spotify.com/user/4cOdK2wGLETKBW3PvgPWqT",
+      "https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT/more",
+      "not a url",
+      ""
+    ]
+  },
+  "refs": {
+    "youtube": {
+      "valid": ["dQw4w9WgXcQ", "a-b_c-d_e-f"],
+      "invalid": ["", "short", "dQw4w9WgXcQ1", "dQw4w9WgXc/", "dQw4w9WgX\"Q", "../../etc/p", "<script>xx>"]
+    },
+    "vimeo": {
+      "valid": ["76979871", "1", "76979871/8272103f6e"],
+      "invalid": ["", "abc", "76979871/", "76979871/XYZ", "76979871/8272103f6e/x", "1234567890123", "../76979871"]
+    },
+    "x": {
+      "valid": ["20", "1234567890123456789"],
+      "invalid": ["", "abc", "20/photo", "12345678901234567890123456", "-1"]
+    },
+    "codepen": {
+      "valid": ["chriscoyier/gfdDu", "a_b-c/X1"],
+      "invalid": ["", "chriscoyier", "chriscoyier/", "/gfdDu", "chris coyier/gfdDu", "chriscoyier/gfd-Du", "../gfdDu", "a/b/c"]
+    },
+    "soundcloud": {
+      "valid": ["forss/flickermood", "forss/sets/soulhack", "a_b-c/d_e-f"],
+      "invalid": ["", "forss", "forss/", "forss/a/b", "FORSS/flickermood", "../flickermood", "forss/flicker.mood"]
+    },
+    "spotify": {
+      "valid": ["track/4cOdK2wGLETKBW3PvgPWqT", "show/4rOoJ6Egrf8K2IrywzwOMk", "album/4rOoJ6Egrf8K2IrywzwOMk"],
+      "invalid": ["", "track", "track/short", "user/4cOdK2wGLETKBW3PvgPWqT", "track/4cOdK2wGLETKBW3PvgPWqT/x", "track/4cOdK2wGLETKBW3PvgPW-T"]
+    }
+  },
+  "canonical": [
+    { "provider": "youtube", "ref": "dQw4w9WgXcQ", "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ" },
+    { "provider": "vimeo", "ref": "76979871/8272103f6e", "url": "https://vimeo.com/76979871/8272103f6e" },
+    { "provider": "x", "ref": "20", "url": "https://x.com/i/status/20" },
+    { "provider": "codepen", "ref": "chriscoyier/gfdDu", "url": "https://codepen.io/chriscoyier/pen/gfdDu" },
+    { "provider": "soundcloud", "ref": "forss/sets/soulhack", "url": "https://soundcloud.com/forss/sets/soulhack" },
+    { "provider": "spotify", "ref": "track/4cOdK2wGLETKBW3PvgPWqT", "url": "https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT" }
+  ],
+  "titles": [
+    { "in": "Two editors, one draft", "out": "Two editors, one draft" },
+    { "in": "  Spaced\tout\u0007 ", "out": "Spaced out" },
+    { "in": "a < b, and I <3 this", "out": "a < b, and I <3 this" },
+    { "in": "Tom & Jerry", "out": "Tom & Jerry" },
+    { "in": "<b>Bold</b> title", "out": null },
+    { "in": "before<script>alert(1)</script>", "out": null },
+    { "in": "<img src=x onerror=alert(1)>", "out": null },
+    { "in": "</div>", "out": null },
+    { "in": "<!-- comment -->", "out": null },
+    { "in": "<?php echo 1 ?>", "out": null },
+    { "in": "   ", "out": null },
+    { "in": "", "out": null }
+  ]
+}

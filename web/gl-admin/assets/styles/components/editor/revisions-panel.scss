@@ -186,6 +186,11 @@
   }
 }
 
+// A version's preview shows what it says; it doesn't load an embed's player (#425).
+.revisions-preview [data-embed-load] {
+  display: none;
+}
+
 .revisions-preview {
   // The admin colours every element (`* { color: var(--text-primary) }`), so nothing
   // inherits. Inside the preview colour must inherit: a theme block's inline colour

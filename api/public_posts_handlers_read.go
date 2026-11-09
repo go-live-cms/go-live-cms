@@ -144,8 +144,8 @@ func (server *Server) publicPostView(ctx context.Context, post db.Post) (publicP
 	// So does a page's template (#336).
 	resp.PageTemplate = publishedPageTemplate(settings, post.PageTemplate)
 	server.attachBlockMedia(ctx, resp.PublishedBlocks)
-	// Mentions and content links (#320): names and current URLs, never ids.
-	server.publicizeInlineNodes(ctx, resp.PublishedBlocks)
+	// Embeds the site no longer allows (#425) and inline nodes (#320: names and current URLs, never ids).
+	server.publicizeBlockDocs(ctx, resp.PublishedBlocks)
 	view := publicPostView{Post: resp, TaxonomyTerms: []TaxonomyTermResponse{}}
 
 	if published {

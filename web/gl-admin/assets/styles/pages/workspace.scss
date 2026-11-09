@@ -384,6 +384,23 @@
     }
   }
 
+  // Allowed embeds (#425): the sites, one checkbox each, under the Editor card.
+  &__embeds {
+    border: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin: var(--space-4) 0 0;
+    padding: 0;
+  }
+
+  &__embeds-list {
+    display: grid;
+    gap: var(--space-2);
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    margin-top: var(--space-1);
+  }
+
   // The editor settings, one row each, in a bordered box (the board's Editor section).
   &__card {
     border: 1px solid var(--border-color);

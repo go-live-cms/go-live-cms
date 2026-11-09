@@ -1,5 +1,5 @@
 import React from "react"
-import { blockAnchorId, type BlockDocV1, type Block } from "@gl-admin/lib/blocks-spec"
+import { blockAnchorId, blocksInReadingOrder, embedTargetOf, type BlockDocV1, type Block } from "@gl-admin/lib/blocks-spec"
 import { blockRegistry } from "./blocks/registry"
 import { isThemeBlockType } from "@gl-admin/lib/blocks-spec/themeBlocks"
 import { renderContent, getBlockContent, isBlankParagraph } from "./blocks/utils/contentRenderer"
@@ -9,6 +9,9 @@ import { HeadingIdsContext, headingAnchors, type HeadingAnchor } from "./blocks/
 import { log } from "../lib/log"
 
 const unknownTypesLogged = new Set<string>()
+
+/** public/gl-embeds.js: builds an embed's player when a reader clicks Load (#425). */
+export const EMBED_LOADER_SRC = "/gl-embeds.js"
 
 interface BlockRendererProps {
   doc: BlockDocV1
@@ -41,10 +44,18 @@ export default function BlockRenderer({ doc, imageSizes = BLOCK_IMAGE_SIZES, hea
     uniqueBlockIds.pop()
   }
 
+  // The script that builds an embed's player on click (#425), for a post that has one. It
+  // is ours, on this site: nothing is asked of a provider until a reader clicks.
+  const hasEmbed = blocksInReadingOrder(doc).some((id) => {
+    const block = doc.blocks[id] as Block | undefined
+    return block?.type === "embed" && embedTargetOf(block.attrs) !== null
+  })
+
   return (
     <ImageSizesContext.Provider value={imageSizes}>
       <HeadingIdsContext.Provider value={headingIds}>
         <div className="block-content">{uniqueBlockIds.map((blockId) => renderBlock(blockId))}</div>
+        {hasEmbed && <script src={EMBED_LOADER_SRC} defer />}
       </HeadingIdsContext.Provider>
     </ImageSizesContext.Provider>
   )

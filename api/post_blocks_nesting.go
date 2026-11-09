@@ -39,6 +39,8 @@ var flowBlockTypes = map[string]bool{
 	"table": true,
 	// #423
 	"video": true, "audio": true, "file": true,
+	// #425
+	"embed": true,
 }
 
 // listBlockTypes have their items as children (Block Spec `LIST_ITEMS`): list_item for

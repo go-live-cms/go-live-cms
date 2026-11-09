@@ -22,6 +22,7 @@ import LinkModal from "./ui/LinkModal"
 import BubbleMenu from "./ui/BubbleMenu"
 import BlockTypeToolbar from "./ui/BlockTypeToolbar"
 import ImageToolbar from "./ui/ImageToolbar"
+import EmbedToolbar from "./ui/EmbedToolbar"
 import DragHandle from "./ui/DragHandle"
 import BlockComments from "./ui/BlockComments"
 import type { BlockRef } from "./utils/blockActions"
@@ -464,6 +465,7 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
       {!readOnly && <BubbleMenu editor={editor} openLinkModal={openLinkModalWithEditor} />}
       {!readOnly && <BlockTypeToolbar editor={editor} />}
       {!readOnly && <ImageToolbar editor={editor} />}
+      {!readOnly && <EmbedToolbar editor={editor} />}
       {!readOnly && (
         <BlockEditsContext.Provider value={blockEdits}>
           <DragHandle editor={editor} postUrl={postUrl} onComment={commentsLive ? onComment : undefined} />
