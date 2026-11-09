@@ -10,6 +10,8 @@ import {
   normalizeCalloutTone,
   normalizeCite,
   normalizeFileLabel,
+  embedStoredAttrs,
+  EMBED_BLOCK_VERSION,
   AUDIO_BLOCK_VERSION,
   FILE_BLOCK_VERSION,
   VIDEO_BLOCK_VERSION,
@@ -362,6 +364,18 @@ function pmNodeToBlock(node: PMNode, allBlocks: Record<BlockID, Block>, seenIds:
         type: "file",
         version: FILE_BLOCK_VERSION,
         attrs: { ...mediaIdAttr(node.attrs.mediaId), ...(label ? { label } : {}) },
+      }
+    }
+
+    // #425. The provider, its ref and the title by their own rules; a caption like an
+    // image's. An empty block keeps only the provider its menu entry stood for.
+    case "embed": {
+      const caption = captionOf(node)
+      return {
+        id,
+        type: "embed",
+        version: EMBED_BLOCK_VERSION,
+        attrs: { ...embedStoredAttrs(node.attrs), ...(caption ? { caption } : {}) },
       }
     }
 
@@ -1056,6 +1070,15 @@ function blockToPMNode(block: Block, allBlocks: Record<BlockID, Block>, ctx: Con
       const attrs = block.attrs as { mediaId?: unknown; label?: unknown }
       const label = normalizeFileLabel(attrs.label)
       return { type: "file", attrs: { ...baseAttrs, ...mediaIdAttr(attrs.mediaId), ...(label ? { label } : {}) } }
+    }
+
+    case "embed": {
+      const caption = captionToPM((block.attrs as { caption?: unknown }).caption, ctx.schema)
+      return {
+        type: "embed",
+        attrs: { ...baseAttrs, ...embedStoredAttrs(block.attrs) },
+        ...(caption.length > 0 ? { content: [{ type: "imageCaption", content: caption }] } : {}),
+      }
     }
 
     case "list_item":

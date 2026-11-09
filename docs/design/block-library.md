@@ -531,7 +531,7 @@ tests at each step including the collab round trip.
 | Video, audio | flow | `mediaId`, `caption` | Native players. Built in #423: outside the `block` group like the table, the caption is the image's caption node, no `src` (the public page takes the URL from the API's `media` map, only under `/uploads`), `preload="none"`, no autoplay. |
 | File | flow | `mediaId`, `label` | A download link with type and size. Built in #423: an atom; `label` is a node attr typed in the block (absent: the media's name); both links `download` under the uploaded name. |
 | Gallery | container of `image` | `columns` (2–4), `caption` | Each image is an image block (alt, caption, reorder with ⌘⇧←/→). |
-| Embed | flow | `provider`, `ref`, `title`, `caption` | Section 5. |
+| Embed | flow | `provider`, `ref`, `title`, `caption` | Section 5. Built in #425: outside the `block` group like video; X's card is a plain iframe of the post in the editor, whose CSP keeps `script-src` closed. |
 | Columns / column | container | 2.2 | Stack in order on phones. |
 | Group | container | `style`, `align` | |
 | Buttons | flow | `align` (`left`/`center`); buttons as child nodes (`button`: `href`, `variant`, label text) | Not a container in Block Spec: the buttons are parts, kept in `pm`. Their `href` is a node attr, which `sanitizePMNode` doesn't check today (it checks link marks only), so the Go side adds an `isSafeURL(href, safeHrefSchemes)` check on `button` nodes. |
@@ -547,7 +547,7 @@ tests at each step including the collab round trip.
 Each is confirmed (or changed) as the first acceptance item of its sub-issue.
 
 **Embeds load nothing until the reader clicks** ("Editor · embeds, custom HTML",
-"Published · media & embeds"):
+"Published · media & embeds"), confirmed in #425 and built as written:
 
 - The editor posts the pasted URL to a new API route, `POST /embeds/resolve`, which
   matches it against the allowed providers (the stored `editor_allowed_embeds` setting,

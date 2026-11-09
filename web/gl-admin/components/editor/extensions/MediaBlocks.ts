@@ -77,7 +77,7 @@ export function toggleCaptionOf(tr: Transaction, state: EditorState, pos: number
 }
 
 /** The caption child (the image's, `imageCaption`) a video or audio figure parses into. */
-function captionOnly(element: HTMLElement) {
+export function captionOnly(element: HTMLElement) {
   const wrapper = element.ownerDocument.createElement("div")
   const caption = element.querySelector(":scope > figcaption, :scope > div > figcaption")
   if (caption) wrapper.appendChild(caption.cloneNode(true))

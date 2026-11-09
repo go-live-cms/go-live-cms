@@ -248,7 +248,7 @@ kept so references in code stay valid.
 - Every block node type needs the **`data-block-id`** attr (added globally by
   `BlockIdExtension` to paragraph/heading/blockquote/codeBlock/horizontalRule/image/
   bullet_list/ordered_list/listItem, callout/pullQuote/taskList/taskItem (#419), tableBlock (#420),
-  video/audio/file (#423) and every container, `CONTAINER_NODE_NAMES`). Custom/theme nodes must declare it too or
+  video/audio/file (#423), embed (#425) and every container, `CONTAINER_NODE_NAMES`). Custom/theme nodes must declare it too or
   `schema.nodeFromJSON` throws "Unsupported attribute".
 - **Callout, pull quote, to-do list (#419, three flow blocks).** Schema in `schemaExtensions`
   (`components/editor/extensions/Callout.ts`, `PullQuote.ts`, `TodoList.ts`: TipTap's TaskList/
@@ -435,6 +435,20 @@ kept so references in code stay valid.
   `MediaBlocks.collab.test.ts` (two users, the stored doc, a restart), the public
   `src/components/blocks/mediaBlocks.test.tsx`, Go `post_blocks_media_blocks_test.go` and two cases
   in `nestingVectors.json`.
+- **Embed (#425, `components/editor/extensions/EmbedBlock.ts`): a flow block, not in the `block`
+  group** (`STANDALONE_FLOW_NODE_NAMES`, like the media blocks). Block Spec `embed` v1: `provider`, `ref`
+  and `title`, node attrs, last writer wins (`embedStoredAttrs` on the way in and out: a known
+  provider, a ref valid for it, a title that is plain text), and the image's caption node as its
+  optional child. A provider with no ref is an empty block; the menu entry it came from set the
+  provider. **Never in the doc:** HTML from a provider, a pasted URL, or whether someone opened the
+  player (`loaded` is the view's own state, so no peer loads anything). The link is resolved by `POST
+  /embeds/resolve` and applied in one transaction, the block found again by id (`embedLinks.ts`).
+  Views (`EmbedBlockViews.ts`) have no appendTransaction (rule 7). **Stale clients:** a bundle from
+  before #425 has no `embed` node (and a narrower doc and group); the fingerprint guard (#416) refuses
+  it (`schemaFingerprint.test.ts`). Tests: `blockBridge.embed.test.ts`, `EmbedBlock.test.ts`,
+  `EmbedBlock.collab.test.ts`, `blocks-spec/embeds.test.ts`, the public
+  `src/components/blocks/embed/EmbedBlock.test.tsx`, Go `embeds_test.go` and two cases in
+  `nestingVectors.json`.
 - **Inline nodes (#320, `components/editor/extensions/InlineNodes.ts`, rules in
   `blocks-spec/inlineNodes.ts`): `mention` {userId, label}, `contentLink` {postId, label},
   `dateChip` {date, time, reminder}.** Inline **atoms** in the `inline` group, so they live in a

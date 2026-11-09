@@ -10,6 +10,7 @@ import RadioGroup from "@gl-admin/components/ui/RadioGroup"
 import { Select } from "@gl-admin/components/ui/Select"
 import Combobox from "@gl-admin/components/ui/Combobox"
 import Switch from "@gl-admin/components/ui/Switch"
+import Checkbox from "@gl-admin/components/ui/Checkbox"
 import Skeleton from "@gl-admin/components/ui/Skeleton"
 import Button from "@gl-admin/components/ui/Button"
 import EmptyState from "@gl-admin/components/ui/EmptyState"
@@ -19,6 +20,7 @@ import RedirectsSection from "@gl-admin/components/settings/RedirectsSection"
 import { CheckIcon, ExternalIcon, WarningIcon } from "@gl-admin/components/ui/icons"
 import { errorMessage } from "@gl-admin/lib/api/errors"
 import {
+  EMBED_PROVIDERS,
   LANGUAGE_OPTIONS,
   POSTS_PER_PAGE_MAX,
   SITE_TAGLINE_MAX,
@@ -31,6 +33,7 @@ import {
   toUpdateRequest,
   unsavedMessage,
   validateDraft,
+  withEmbedProvider,
   type SettingsDraft,
 } from "@gl-admin/lib/settingsForm"
 import "@gl-admin/assets/styles/pages/workspace.scss"
@@ -45,8 +48,7 @@ import "@gl-admin/assets/styles/pages/workspace.scss"
 // URLs & redirects (#331, RedirectsSection) sits outside the settings form: it saves each
 // redirect at once, never through the unsaved-changes bar.
 //
-// Hidden until their issues land: "Allowed embeds" (#352: there's no embed block yet;
-// the API stores and checks the list), and the Media (#325) and Email sections.
+// Hidden until their issues land: the Media (#325) and Email sections.
 
 // The domain is deploy config, not a setting: "Change domain" opens the runbook.
 const CHANGE_DOMAIN_URL = "https://github.com/go-live-cms/go-live-cms/blob/main/docs/operations/deploy.md#change-the-domain"
@@ -377,6 +379,26 @@ const SettingsPage: React.FC = () => {
                     onChange={(checked) => update({ editor_markdown_shortcuts: checked })}
                   />
                 </div>
+                <fieldset className="gl-settings__embeds">
+                  <legend className="gl-settings__label">Allowed embeds</legend>
+                  <span className="gl-workspace-field__hint">
+                    The sites people can embed from. Readers load an embed only when they click it. Taking a site off the list hides its
+                    embeds from the public site, and they come back if you allow it again.
+                  </span>
+                  <div className="gl-settings__embeds-list">
+                    {EMBED_PROVIDERS.map((provider) => (
+                      <Checkbox
+                        key={provider.id}
+                        name="editor_allowed_embeds"
+                        label={provider.label}
+                        checked={draft.editor_allowed_embeds.includes(provider.id)}
+                        onChange={(checked) =>
+                          update({ editor_allowed_embeds: withEmbedProvider(draft.editor_allowed_embeds, provider.id, checked) })
+                        }
+                      />
+                    ))}
+                  </div>
+                </fieldset>
               </section>
 
               <hr className="gl-workspace__rule" />

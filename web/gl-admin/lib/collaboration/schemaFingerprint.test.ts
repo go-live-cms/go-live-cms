@@ -257,6 +257,20 @@ describe("schemaFingerprint (#416)", () => {
       expect(schemaFingerprint(openless)).not.toBe(core)
     })
 
+    it("the embed block (#425) changed it: a node type, named by the doc and a group", () => {
+      const { embed, embedCommands: _commands, document: _document, group: _group, details: _details, ...rest } = schemaExtensions({ collaborating: true })
+      const flow = "(block | tableBlock | video | audio | file)"
+      const OldDocument = Node.create({ name: "doc", topNode: true, content: `(block | tableBlock | video | audio | file | group | details)+` })
+      const OldGroup = _group.extend({ content: `(${flow.slice(1, -1)} | details)+` })
+      const OldDetails = _details.extend({ content: `detailsSummary ${flow}+` })
+      const before = getSchema([...Object.values(rest), OldDocument, OldGroup, OldDetails])
+      expect(Object.keys(before.nodes)).not.toContain("embed")
+      const after = getSchema(Object.values(schemaExtensions({ collaborating: true })))
+      expect(schemaFingerprint(before)).not.toBe(schemaFingerprint(after))
+      expect(after.nodes.embed).toBeDefined()
+      expect(embed).toBeDefined()
+    })
+
     it("the video, audio and file blocks (#423) changed it: three node types, named by the doc and a group", () => {
       // The schema as it was before #423 (and #421): no media nodes, no details, and the doc and the group name
       // only the table next to `block`.

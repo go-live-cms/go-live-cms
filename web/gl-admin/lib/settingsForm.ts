@@ -1,5 +1,6 @@
 import type { PostUrlStructure, Settings } from "@gl-admin/lib/api/settings"
 import { DATE_FORMATS, SITE_LANGUAGES, formatSiteDate, type DateFormat } from "@/lib/siteDates"
+import { EMBED_PROVIDER_SPECS, EMBED_PROVIDERS as EMBED_PROVIDER_IDS, knownEmbedProviders } from "@gl-admin/lib/blocks-spec"
 
 // The Settings form (#343, #330): what the page edits, which fields differ from the
 // saved settings, and what the unsaved-changes bar says about them. The value lists
@@ -16,6 +17,7 @@ export type SettingsDraft = Pick<
   | "posts_per_page"
   | "post_url_structure"
   | "editor_markdown_shortcuts"
+  | "editor_allowed_embeds"
   | "allow_signup"
   | "front_page_id"
 >
@@ -31,6 +33,7 @@ const FIELDS: { key: keyof SettingsDraft; label: string }[] = [
   { key: "posts_per_page", label: "posts per page" },
   { key: "post_url_structure", label: "post URL structure" },
   { key: "editor_markdown_shortcuts", label: "Markdown shortcuts" },
+  { key: "editor_allowed_embeds", label: "allowed embeds" },
   { key: "allow_signup", label: "sign-up setting" },
 ]
 
@@ -40,18 +43,9 @@ export const POSTS_PER_PAGE_MAX = 100
 export const SITE_TITLE_MAX = 200
 export const SITE_TAGLINE_MAX = 160
 
-// The embed providers the API accepts in editor_allowed_embeds. The control stays hidden
-// until the embed block (#352) exists.
-export const EMBED_PROVIDERS = [
-  { id: "youtube", label: "YouTube" },
-  { id: "vimeo", label: "Vimeo" },
-  { id: "codepen", label: "CodePen" },
-  { id: "spotify", label: "Spotify" },
-  { id: "soundcloud", label: "SoundCloud" },
-  { id: "loom", label: "Loom" },
-  { id: "figma", label: "Figma" },
-  { id: "x", label: "X (Twitter)" },
-] as const
+// The embed providers the API accepts in editor_allowed_embeds (#425), as the Editor section
+// lists them.
+export const EMBED_PROVIDERS = EMBED_PROVIDER_IDS.map((id) => ({ id, label: EMBED_PROVIDER_SPECS[id].name }))
 
 // The post URL structures, in the order the radio cards show them. "category" (#331)
 // applies to posts of type `post`; other types keep /{type}/{slug}.
@@ -73,6 +67,9 @@ export function toDraft(settings: Settings): SettingsDraft {
     posts_per_page: settings.posts_per_page,
     post_url_structure: settings.post_url_structure,
     editor_markdown_shortcuts: settings.editor_markdown_shortcuts ?? true,
+    // Only the ones this build lists, in its order: an id from an older build couldn't be
+    // unticked, and the API would refuse the whole save for it.
+    editor_allowed_embeds: knownEmbedProviders(settings.editor_allowed_embeds),
     allow_signup: settings.allow_signup ?? false,
     front_page_id: settings.front_page_id ?? null,
   }
@@ -81,7 +78,17 @@ export function toDraft(settings: Settings): SettingsDraft {
 // Labels of the fields that differ, in form order.
 export function changedFields(saved: SettingsDraft | null, draft: SettingsDraft): string[] {
   if (!saved) return []
-  return FIELDS.filter(({ key }) => saved[key] !== draft[key]).map(({ label }) => label)
+  return FIELDS.filter(({ key }) => !sameValue(saved[key], draft[key])).map(({ label }) => label)
+}
+
+// Allowed embeds is a list, in `EMBED_PROVIDERS`' order on both sides; the rest are scalars.
+function sameValue(a: unknown, b: unknown): boolean {
+  return Array.isArray(a) && Array.isArray(b) ? a.length === b.length && a.every((value, i) => value === b[i]) : a === b
+}
+
+/** `draft` with one provider ticked or unticked, in the list's order. */
+export function withEmbedProvider(selected: readonly string[], id: string, on: boolean): string[] {
+  return EMBED_PROVIDER_IDS.filter((provider) => (provider === id ? on : selected.includes(provider)))
 }
 
 // "You changed the site title", "… the site title and posts per page", "… 3 settings".
