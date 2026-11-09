@@ -619,6 +619,61 @@ func (q *Queries) ReassignPublishedBylines(ctx context.Context, arg ReassignPubl
 	return err
 }
 
+const searchCommandPaletteUsers = `-- name: SearchCommandPaletteUsers :many
+SELECT u.id, u.username, u.full_name, u.avatar_url, u.role
+FROM users u
+WHERE u.full_name ILIKE $1::text OR u.username ILIKE $1::text
+ORDER BY (u.full_name ILIKE $2::text OR u.username ILIKE $2::text) DESC, lower(u.full_name), u.id
+LIMIT $3::int
+`
+
+type SearchCommandPaletteUsersParams struct {
+	Pattern       string `json:"pattern"`
+	PrefixPattern string `json:"prefix_pattern"`
+	LimitCount    int32  `json:"limit_count"`
+}
+
+type SearchCommandPaletteUsersRow struct {
+	ID        int64  `json:"id"`
+	Username  string `json:"username"`
+	FullName  string `json:"full_name"`
+	AvatarUrl string `json:"avatar_url"`
+	Role      string `json:"role"`
+}
+
+// The admin command palette (#41): members whose name or username contains the text
+// (@pattern, @prefix_pattern: ILIKE patterns the API escapes), those that start with it
+// first. Not the email: the row doesn't show one, so a hit on "co" (every .com address)
+// would list people for no visible reason.
+func (q *Queries) SearchCommandPaletteUsers(ctx context.Context, arg SearchCommandPaletteUsersParams) ([]SearchCommandPaletteUsersRow, error) {
+	rows, err := q.db.QueryContext(ctx, searchCommandPaletteUsers, arg.Pattern, arg.PrefixPattern, arg.LimitCount)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SearchCommandPaletteUsersRow{}
+	for rows.Next() {
+		var i SearchCommandPaletteUsersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Username,
+			&i.FullName,
+			&i.AvatarUrl,
+			&i.Role,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setUserAvatar = `-- name: SetUserAvatar :one
 UPDATE users u
 SET avatar_url = $1

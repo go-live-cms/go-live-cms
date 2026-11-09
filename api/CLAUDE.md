@@ -785,6 +785,24 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   first); `highlightHTML` escapes everything and turns only those into `<mark>`. Never
   return ts_headline output any other way.
 
+## Command palette (#41, `command_palette.go`)
+
+- `GET /search?q=` (content roles): at most 5 posts, pages, media and terms, plus users for
+  admins only (the key is left out otherwise, and the query isn't run). One route because the
+  per-type ones would mean five or more rate-limited calls per pause in typing (terms are per
+  taxonomy, `/users` is admin-only) and the client would need a copy of who gets what.
+- Posts and pages: `SearchCommandPalettePosts` (title or slug, titles starting with the text
+  first, then latest edited; `postsViewerID`, never the trash; only types post and page).
+  Deliberately not `SearchPostsWithMeta`: its ranking took 1-7 s at 30,000 posts; this route
+  answers in about 200 ms at 30,000 posts plus 30,000 media, so it has no index. Terms:
+  `SearchTermsAcrossTaxonomies` (`show_ui` taxonomies only). Users:
+  `SearchCommandPaletteUsers` (name or username, not the email, which the row doesn't show,
+  so "co" doesn't list every .com address). `q` is cut by
+  `normalizeSearchQuery`, LIKE wildcards escaped.
+- The palette cancels stale requests, so a search the client aborted answers **499**
+  (`statusClientClosedRequest`), not a 500 that would reach the metrics and error reporter.
+  Listed in `route_auth_test.go` (`commandPaletteRoutes`).
+
 ## Site settings (#330)
 
 - `settings` (singleton) gained `site_tagline` (≤160, one line, trimmed), `site_language`

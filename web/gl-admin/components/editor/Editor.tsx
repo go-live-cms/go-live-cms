@@ -376,19 +376,6 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
     openLinkModal(editor, setUrl, setIsLinkModalOpen)
   }, [editor])
 
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (!((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k")) return
-      if (!editor || readOnly) return
-      const selection = editor.state.selection
-      if (selection.empty || selection.from === selection.to) return
-      e.preventDefault()
-      openLinkModalWithEditor()
-    }
-    window.addEventListener("keydown", onKeyDown)
-    return () => window.removeEventListener("keydown", onKeyDown)
-  }, [editor, readOnly, openLinkModalWithEditor])
-
   // Block comments (#192): refetch on the server's nudge, after every (re)sync (a nudge may
   // have been missed while disconnected) and on an access change; the blocks the editor
   // can't show (#213).

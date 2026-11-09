@@ -464,6 +464,7 @@ func (server *Server) setupRoutes() error {
 
 	// The editor's @ menu (#320, mentions.go)
 	server.registerMentionRoutes(v1)
+	server.registerCommandPaletteRoutes(v1)
 
 	// Embeds: which provider a pasted link belongs to, and its title (#425, embeds_resolve.go)
 	server.registerEmbedRoutes(v1)

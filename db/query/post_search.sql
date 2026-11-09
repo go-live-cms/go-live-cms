@@ -139,6 +139,28 @@ ORDER BY ts_rank(ps.document, websearch_to_tsquery(golive_search_config(), @quer
 LIMIT @limit_count
 OFFSET @offset_count;
 
+-- name: SearchCommandPalettePosts :many
+-- The admin command palette (#41): the first @limit_per_type posts and pages the viewer may
+-- read whose title or slug contains the text (@pattern, @prefix_pattern: ILIKE patterns the
+-- API escapes), titles that start with it first, then the latest edited. Never the trash.
+-- It runs on every pause in typing, so no ranking or tsvector: SearchPostsWithMeta took
+-- seconds at 30,000 posts, and this is one scan.
+SELECT hits.id, hits.title, hits.post_type, hits.post_status
+FROM (
+    SELECT p.id, p.title, p.post_type, p.post_status,
+           row_number() OVER (
+               PARTITION BY p.post_type
+               ORDER BY (p.title ILIKE @prefix_pattern::text) DESC, GREATEST(p.changed_at, p.created_at) DESC, p.id DESC
+           ) AS position
+    FROM posts p
+    WHERE p.post_type IN ('post', 'page')
+      AND p.post_status <> 'trash'
+      AND (@viewer_id::bigint = 0 OR p.user_id = @viewer_id OR p.post_status = 'published')
+      AND (p.title ILIKE @pattern::text OR p.slug ILIKE @pattern::text)
+) hits
+WHERE hits.position <= @limit_per_type::int
+ORDER BY hits.post_type, hits.position;
+
 -- name: CountSearchPosts :one
 -- SearchPostsWithMeta's total, with the same filters.
 SELECT COUNT(*) AS total

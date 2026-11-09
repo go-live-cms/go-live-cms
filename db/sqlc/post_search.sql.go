@@ -121,6 +121,76 @@ func (q *Queries) CountSearchPosts(ctx context.Context, arg CountSearchPostsPara
 	return total, err
 }
 
+const searchCommandPalettePosts = `-- name: SearchCommandPalettePosts :many
+SELECT hits.id, hits.title, hits.post_type, hits.post_status
+FROM (
+    SELECT p.id, p.title, p.post_type, p.post_status,
+           row_number() OVER (
+               PARTITION BY p.post_type
+               ORDER BY (p.title ILIKE $1::text) DESC, GREATEST(p.changed_at, p.created_at) DESC, p.id DESC
+           ) AS position
+    FROM posts p
+    WHERE p.post_type IN ('post', 'page')
+      AND p.post_status <> 'trash'
+      AND ($2::bigint = 0 OR p.user_id = $2 OR p.post_status = 'published')
+      AND (p.title ILIKE $3::text OR p.slug ILIKE $3::text)
+) hits
+WHERE hits.position <= $4::int
+ORDER BY hits.post_type, hits.position
+`
+
+type SearchCommandPalettePostsParams struct {
+	PrefixPattern string `json:"prefix_pattern"`
+	ViewerID      int64  `json:"viewer_id"`
+	Pattern       string `json:"pattern"`
+	LimitPerType  int32  `json:"limit_per_type"`
+}
+
+type SearchCommandPalettePostsRow struct {
+	ID         int64  `json:"id"`
+	Title      string `json:"title"`
+	PostType   string `json:"post_type"`
+	PostStatus string `json:"post_status"`
+}
+
+// The admin command palette (#41): the first @limit_per_type posts and pages the viewer may
+// read whose title or slug contains the text (@pattern, @prefix_pattern: ILIKE patterns the
+// API escapes), titles that start with it first, then the latest edited. Never the trash.
+// It runs on every pause in typing, so no ranking or tsvector: SearchPostsWithMeta took
+// seconds at 30,000 posts, and this is one scan.
+func (q *Queries) SearchCommandPalettePosts(ctx context.Context, arg SearchCommandPalettePostsParams) ([]SearchCommandPalettePostsRow, error) {
+	rows, err := q.db.QueryContext(ctx, searchCommandPalettePosts,
+		arg.PrefixPattern,
+		arg.ViewerID,
+		arg.Pattern,
+		arg.LimitPerType,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SearchCommandPalettePostsRow{}
+	for rows.Next() {
+		var i SearchCommandPalettePostsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.PostType,
+			&i.PostStatus,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const searchPostsWithMeta = `-- name: SearchPostsWithMeta :many
 SELECT
     p.id, p.title, p.description, p.user_id, p.username, p.url,

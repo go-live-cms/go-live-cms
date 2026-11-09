@@ -79,6 +79,12 @@ const PATHS: Record<NavIconName, ReactNode> = {
       <circle cx="17" cy="18" r="2" />
     </>
   ),
+  tag: (
+    <>
+      <path d="M20.6 13.4 12 22l-9-9V3h10l7.6 7.6a2 2 0 0 1 0 2.8z" />
+      <path d="M7.5 7.5h.01" />
+    </>
+  ),
 }
 
 export default function NavIcon({ name, size = 16 }: { name: NavIconName; size?: number }) {

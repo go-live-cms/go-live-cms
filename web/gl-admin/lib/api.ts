@@ -24,6 +24,8 @@ interface ApiOptions {
   token?: string
   method?: string
   body?: any
+  // Cancels the request: a superseded search (the command palette), for one.
+  signal?: AbortSignal
 }
 
 export function getMediaURL(mediaPath: string): string {
@@ -41,7 +43,7 @@ export function getMediaURL(mediaPath: string): string {
 export { ApiError } from "./api/errors"
 
 export async function apiCall(endpoint: string, options: ApiOptions = {}, isRetry = false): Promise<any> {
-  const { token, method = "GET", body } = options
+  const { token, method = "GET", body, signal } = options
 
   // Import authManager dynamically to avoid circular dependency
   const { authManager } = await import("./auth")
@@ -53,6 +55,7 @@ export async function apiCall(endpoint: string, options: ApiOptions = {}, isRetr
   const config: RequestInit = {
     method,
     credentials: "include",
+    signal,
     headers: {
       "Content-Type": "application/json",
       ...(authToken && { Authorization: `Bearer ${authToken}` }),

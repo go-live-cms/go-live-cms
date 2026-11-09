@@ -753,6 +753,17 @@ type Querier interface {
 	// new time starts over: no attempts, no failure and no claim, so a publish still
 	// in flight for the old time is fenced off.
 	SchedulePost(ctx context.Context, arg SchedulePostParams) (Post, error)
+	// The admin command palette (#41): the first @limit_per_type posts and pages the viewer may
+	// read whose title or slug contains the text (@pattern, @prefix_pattern: ILIKE patterns the
+	// API escapes), titles that start with it first, then the latest edited. Never the trash.
+	// It runs on every pause in typing, so no ranking or tsvector: SearchPostsWithMeta took
+	// seconds at 30,000 posts, and this is one scan.
+	SearchCommandPalettePosts(ctx context.Context, arg SearchCommandPalettePostsParams) ([]SearchCommandPalettePostsRow, error)
+	// The admin command palette (#41): members whose name or username contains the text
+	// (@pattern, @prefix_pattern: ILIKE patterns the API escapes), those that start with it
+	// first. Not the email: the row doesn't show one, so a hit on "co" (every .com address)
+	// would list people for no visible reason.
+	SearchCommandPaletteUsers(ctx context.Context, arg SearchCommandPaletteUsersParams) ([]SearchCommandPaletteUsersRow, error)
 	SearchMediaByName(ctx context.Context, arg SearchMediaByNameParams) ([]SearchMediaByNameRow, error)
 	// The admin posts list's search: the list's filters (type, status, owner) plus
 	// the search, ranked. Same columns as ListPostsWithMeta, so the handler shapes
@@ -781,6 +792,10 @@ type Querier interface {
 	SearchPublicPosts(ctx context.Context, arg SearchPublicPostsParams) ([]SearchPublicPostsRow, error)
 	// Search and filtering
 	SearchTaxonomyTerms(ctx context.Context, arg SearchTaxonomyTermsParams) ([]SearchTaxonomyTermsRow, error)
+	// The admin command palette (#41): terms of every taxonomy the admin shows (the
+	// Taxonomies page lists show_ui types only) whose name or slug matches @pattern (an ILIKE
+	// pattern the API escapes), by name.
+	SearchTermsAcrossTaxonomies(ctx context.Context, arg SearchTermsAcrossTaxonomiesParams) ([]SearchTermsAcrossTaxonomiesRow, error)
 	// Used by the variant backfill. changed_at is left alone: nothing the user
 	// edited changed.
 	SetMediaVariants(ctx context.Context, arg SetMediaVariantsParams) (Medium, error)

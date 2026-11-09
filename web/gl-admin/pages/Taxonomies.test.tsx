@@ -103,6 +103,22 @@ afterEach(() => {
   container.remove()
 })
 
+describe("opened from the command palette (#41)", () => {
+  const editing = () => container.querySelector('.gl-row-link[aria-current="true"]')?.textContent
+
+  it("opens the term's panel for someone who can edit it", async () => {
+    await render("/taxonomies?type=category&term=4")
+    expect(editing()).toBe("Guides")
+  })
+
+  it("only lists the terms for a contributor", async () => {
+    api.role = "contributor"
+    await render("/taxonomies?type=category&term=4")
+    expect(container.querySelector(".gl-row-link")).toBeNull()
+    expect(names()[0].name).toBe("Guides")
+  })
+})
+
 describe("the category tree", () => {
   it("nests children under their parent, indented a level each", async () => {
     await render()
