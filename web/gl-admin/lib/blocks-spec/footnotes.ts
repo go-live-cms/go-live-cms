@@ -57,7 +57,7 @@ interface PMJson {
 
 type AnyBlock = { id?: string; type?: unknown; attrs?: Record<string, unknown>; children?: unknown }
 
-/** Every `footnoteRef` under `pm` (a block's stored ProseMirror JSON), in document order. */
+/** Every `footnoteRef` under `pm` (a block's stored ProseMirror JSON) that the page renders, in document order. */
 export function walkFootnoteRefs(pm: unknown, visit: (node: PMJson) => void): void {
   const node = pm as PMJson | null | undefined
   if (!node || typeof node !== "object") return
@@ -65,6 +65,9 @@ export function walkFootnoteRefs(pm: unknown, visit: (node: PMJson) => void): vo
     visit(node)
     return
   }
+  // The page doesn't render a list nested in another block's pm (`renderContent`): a reference
+  // there would have a number and a back link with no target.
+  if (node.type === "bulletList" || node.type === "orderedList") return
   if (Array.isArray(node.content)) node.content.forEach((child) => walkFootnoteRefs(child, visit))
 }
 
@@ -128,7 +131,7 @@ function footnotesListOf(doc: DocLike): AnyBlock | null {
  * Pure: `useOf` answers by the node object, so rendering in any order, or twice, gives the
  * same anchors.
  */
-export function footnoteIndex(doc: DocLike | null | undefined): FootnoteIndex {
+export function footnoteIndex(doc: DocLike | null | undefined, renders: (block: AnyBlock) => boolean = () => true): FootnoteIndex {
   if (!doc?.blocks) return EMPTY_FOOTNOTE_INDEX
   const list = footnotesListOf(doc)
   if (!list || !Array.isArray(list.children)) return EMPTY_FOOTNOTE_INDEX
@@ -147,7 +150,8 @@ export function footnoteIndex(doc: DocLike | null | undefined): FootnoteIndex {
     if (typeof id !== "string" || seen.has(id) || !has(id)) return
     seen.add(id)
     const block = blocks[id]
-    if (!block || typeof block !== "object" || block.type === FOOTNOTES_TYPE) return
+    // `renders`: a block nothing in this build draws (a removed theme's) has no anchors to link to.
+    if (!block || typeof block !== "object" || block.type === FOOTNOTES_TYPE || !renders(block)) return
     walkFootnoteRefs(block.attrs?.pm, (node) => {
       const target = normalizeFootnoteId(node.attrs?.footnoteId)
       const note = target === null ? undefined : listed.get(target)

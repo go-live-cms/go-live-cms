@@ -130,7 +130,8 @@ export function pmToBlockDoc(pmDoc: PMNode): BlockDocV1 {
 
   return {
     doc_version: 1,
-    blocks_order: blocksOrder,
+    // The editor can briefly hold a block after the list (#422): the stored doc never does.
+    blocks_order: withFootnotesLast(blocksOrder, blocks),
     blocks,
   }
 }

@@ -1,10 +1,9 @@
 import { Extension } from "@tiptap/core"
-import { Fragment, Slice, type Node as PMNode } from "@tiptap/pm/model"
+import { Fragment, Slice, type Node as PMNode, type NodeType } from "@tiptap/pm/model"
 import { NodeSelection, Plugin, PluginKey, type EditorState } from "@tiptap/pm/state"
 import type { Decoration as PMDecoration, DecorationSource, EditorView, NodeView, ViewMutationRecord } from "@tiptap/pm/view"
 import { Decoration, DecorationSet } from "@tiptap/pm/view"
 import { FOOTNOTE_NODE, FOOTNOTE_REF_NODE, FOOTNOTES_NODE, normalizeFootnoteId } from "@gl-admin/lib/blocks-spec"
-import { footnoteUses } from "./FootnotesBlock"
 
 /**
  * The editor's half of footnotes (#422; schema and commands: `FootnotesBlock.ts`). No schema,
@@ -31,45 +30,57 @@ interface NoteSpec {
   footnote: { number: number | null }
 }
 
-/** The numbers: each note's, by the order of the first reference to it. */
-export function footnoteNumbers(doc: PMNode): Map<string, number> {
-  const notes = new Set<string>()
-  // Every list, not just the first: two can exist until the next store (`footnotes.ts`).
-  doc.forEach((node) => {
-    if (node.type.name === FOOTNOTES_NODE) node.forEach((note) => notes.add(note.attrs["data-block-id"]))
-  })
-  const numbers = new Map<string, number>()
-  for (const id of footnoteUses(doc).keys()) {
-    if (notes.has(id) && !numbers.has(id)) numbers.set(id, numbers.size + 1)
-  }
-  return numbers
+type FootnoteScan = {
+  refs: { pos: number; size: number; id: string | null }[]
+  notes: { pos: number; size: number; id: string }[]
+  numbers: Map<string, number>
 }
 
-function footnoteDecorations(doc: PMNode): DecorationSet {
-  const numbers = footnoteNumbers(doc)
-  const decorations: PMDecoration[] = []
+/** One walk: every reference and note, and each note's number, by the order of its first reference. */
+function scanFootnotes(doc: PMNode): FootnoteScan {
+  const refs: FootnoteScan["refs"] = []
+  const notes: FootnoteScan["notes"] = []
   doc.descendants((node, pos) => {
     if (node.type.name === FOOTNOTE_REF_NODE) {
-      const number = numbers.get(normalizeFootnoteId(node.attrs.footnoteId) ?? "")
-      decorations.push(
-        Decoration.node(
-          pos,
-          pos + node.nodeSize,
-          number === undefined
-            ? { "data-footnote-missing": "true", "aria-label": "Footnote missing", title: "This footnote's note was removed" }
-            : { "data-footnote-number": String(number), "aria-label": `Footnote ${number}` },
-        ),
-      )
+      refs.push({ pos, size: node.nodeSize, id: normalizeFootnoteId(node.attrs.footnoteId) })
       return false
     }
+    // Every list, not just the first: two can exist until the next store (`footnotes.ts`).
     if (node.type.name === FOOTNOTE_NODE) {
-      const number = numbers.get(node.attrs["data-block-id"]) ?? null
-      const spec: NoteSpec = { footnote: { number } }
-      decorations.push(Decoration.node(pos, pos + node.nodeSize, {}, spec))
+      notes.push({ pos, size: node.nodeSize, id: node.attrs["data-block-id"] })
       return false
     }
     return true
   })
+  const ids = new Set(notes.map((note) => note.id))
+  const numbers = new Map<string, number>()
+  for (const { id } of refs) {
+    if (id !== null && ids.has(id) && !numbers.has(id)) numbers.set(id, numbers.size + 1)
+  }
+  return { refs, notes, numbers }
+}
+
+/** The numbers: each note's, by the order of the first reference to it. */
+export function footnoteNumbers(doc: PMNode): Map<string, number> {
+  return scanFootnotes(doc).numbers
+}
+
+function footnoteDecorations(doc: PMNode): DecorationSet {
+  const { refs, notes, numbers } = scanFootnotes(doc)
+  const decorations: PMDecoration[] = refs.map(({ pos, size, id }) => {
+    const number = id === null ? undefined : numbers.get(id)
+    return Decoration.node(
+      pos,
+      pos + size,
+      number === undefined
+        ? { "data-footnote-missing": "true", "aria-label": "Footnote missing", title: "This footnote's note was removed" }
+        : { "data-footnote-number": String(number), "aria-label": `Footnote ${number}` },
+    )
+  })
+  for (const { pos, size, id } of notes) {
+    const spec: NoteSpec = { footnote: { number: numbers.get(id) ?? null } }
+    decorations.push(Decoration.node(pos, pos + size, {}, spec))
+  }
   return DecorationSet.create(doc, decorations)
 }
 
@@ -185,6 +196,27 @@ function withKnownReferences(fragment: Fragment, keep: (id: string | null) => bo
   return changed ? Fragment.fromArray(children) : fragment
 }
 
+/** The slice's inline content, flat: only what a note can hold, each block after the first on a new line. */
+function asNoteContent(slice: Slice, note: NodeType): Slice {
+  const inline: PMNode[] = []
+  const breakNode = note.schema.nodes.hardBreak
+  let lines = 0
+  const fits = (node: PMNode) => !!note.contentMatch.matchType(node.type)
+  const visit = (fragment: Fragment) =>
+    fragment.forEach((child) => {
+      if (child.isTextblock) {
+        if (lines++ > 0) inline.push(breakNode.create())
+        child.forEach((node) => {
+          if (fits(node)) inline.push(node)
+        })
+      } else if (child.isInline) {
+        if (fits(child)) inline.push(child)
+      } else visit(child.content)
+    })
+  visit(slice.content)
+  return new Slice(Fragment.fromArray(inline), 0, 0)
+}
+
 /**
  * What a paste keeps (#422). A reference is a pointer: a copy of it, cut and pasted or copied
  * elsewhere in the post, still points at its note, which then has two references and two back
@@ -192,6 +224,10 @@ function withKnownReferences(fragment: Fragment, keep: (id: string | null) => bo
  * stays. The check is against the notes the paste doesn't replace.
  */
 export function keepKnownFootnoteRefs(slice: Slice, state: EditorState): Slice {
+  const { $from, $to } = state.selection
+  // A note is one line of text: what's pasted into it stays in it (lines become hard breaks).
+  // ProseMirror would otherwise put a second paragraph where one fits, after the list.
+  if ($from.parent.type.name === FOOTNOTE_NODE && $to.parent === $from.parent) return asNoteContent(slice, $from.parent.type)
   const known = noteIdsOutsideSelection(state)
   const content = withKnownReferences(slice.content, (id) => id !== null && known.has(id))
   return content === slice.content ? slice : new Slice(content, slice.openStart, slice.openEnd)

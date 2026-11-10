@@ -491,13 +491,8 @@ export function nestingIssues(doc: unknown): NestingIssue[] {
     const type = has(id) ? blocks[id as string].type : undefined
     const rule = containerRule(type)
     if ((rule && !rule.topLevel) || type === "footnote") issues.push({ path: ["blocks_order", index], message: `a ${String(type)} can't be at the top level` })
-    // The footnotes list (#422): one, after every other block.
-    if (rule?.onePerDocLast) {
-      if (index !== order.length - 1) issues.push({ path: ["blocks_order", index], message: `a ${String(type)} must be the last block` })
-      if (order.slice(0, index).some((other) => has(other) && blocks[other as string].type === type)) {
-        issues.push({ path: ["blocks_order", index], message: `a doc has at most one ${String(type)} block` })
-      }
-    }
+    // The footnotes list (#422): being last is also what makes it the only one.
+    if (rule?.onePerDocLast && index !== order.length - 1) issues.push({ path: ["blocks_order", index], message: `a ${String(type)} must be the last block` })
   })
 
   const keys = Object.keys(blocks).sort()

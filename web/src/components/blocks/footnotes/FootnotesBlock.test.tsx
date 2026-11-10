@@ -117,6 +117,22 @@ describe("the published footnotes (#422, the canvas's Published · text)", () =>
     expect(html).toContain('<li id="fn-2">B')
   })
 
+  it("a reference the page doesn't draw gets no number, so no back link dangles", () => {
+    const nested = { type: "listItem", content: [{ type: "paragraph", content: [text("top")] }, { type: "bulletList", content: [{ type: "listItem", content: [{ type: "paragraph", content: [ref("note-00001")] }] }] }] }
+    const list2 = { id: "list-00001", type: "bullet_list", version: 1, attrs: {}, children: ["item-00001"] }
+    const item = { id: "item-00001", type: "list_item", version: 1, attrs: { pm: nested } }
+    const html = render(doc(["list-00001", "notes-0001"], list2, item, list("note-00001"), note("note-00001", "Hidden")))
+    expect(html).not.toContain("fn-back")
+    for (const [, target] of html.matchAll(/href="#([^"]+)"/g)) expect(html).toContain(`id="${target}"`)
+  })
+
+  it("a block of a removed theme holds no number either", () => {
+    const removed = { id: "gone-00001", type: "theme:gone/block", version: 1, attrs: { pm: { type: "theme:gone/block", content: [ref("note-00001")] } } }
+    const html = render(doc(["gone-00001", "para-00001", "notes-0001"], removed, paragraph("para-00001", ref("note-00002")), list("note-00001", "note-00002"), note("note-00001", "A"), note("note-00002", "B")))
+    expect(html).toContain('<li id="fn-1">B')
+    expect(html).not.toContain(">A<")
+  })
+
   it("trims a blank last paragraph before the list too", () => {
     const d = doc(["para-00001", "para-blank1", "notes-0001"], paragraph("para-00001", ref("note-00001")), paragraph("para-blank1"), list("note-00001"), note("note-00001", "N"))
     expect(render(d)).not.toContain('id="b-para-blank1"')

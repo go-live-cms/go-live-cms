@@ -25,6 +25,12 @@ interface BlockRendererProps {
   headings?: HeadingAnchor[]
 }
 
+/** Whether this build draws `block`: its type has a component, and it isn't from a newer build of its theme. */
+function rendersBlock(block: Block): boolean {
+  if (!blockRegistry.getComponent(block.type)) return false
+  return !(isThemeBlockType(block.type) && block.version > (blockRegistry.get(block.type)?.version ?? 1))
+}
+
 /**
  * BlockRenderer - Thin orchestrator for rendering Block Spec v1 documents
  *
@@ -59,7 +65,7 @@ export default function BlockRenderer({ doc, imageSizes = BLOCK_IMAGE_SIZES, hea
   return (
     <ImageSizesContext.Provider value={imageSizes}>
       <HeadingIdsContext.Provider value={headingIds}>
-        <FootnotesContext.Provider value={footnoteIndex(doc)}>
+        <FootnotesContext.Provider value={footnoteIndex(doc, (block) => rendersBlock(block as Block))}>
           <div className="block-content">{uniqueBlockIds.map((blockId) => renderBlock(blockId))}</div>
         </FootnotesContext.Provider>
         {hasEmbed && <script src={EMBED_LOADER_SRC} defer />}
@@ -101,7 +107,7 @@ export function blockRendererFor(
     // A theme block written by a newer build of its theme than this one (e.g. after a
     // rollback, #376): its attrs may mean something this renderer doesn't know, so it
     // renders nothing, like a block of a removed theme. It stays in the stored doc.
-    if (isThemeBlockType(block.type) && block.version > (blockRegistry.get(block.type)?.version ?? 1)) return null
+    if (!rendersBlock(block)) return null
 
     // WordPress-style shared props - every component gets the same interface
     return (

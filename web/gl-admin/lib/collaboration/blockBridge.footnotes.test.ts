@@ -103,7 +103,7 @@ describe("footnotes through the bridge (#422)", () => {
     twoLists.blocks["list-footnote-02"] = { id: "list-footnote-02", type: "footnotes", version: 1, attrs: {}, children: [NOTE2] } as any
     twoLists.blocks[LIST].children = [NOTE]
     twoLists.blocks_order = [P, LIST, "list-footnote-02"]
-    expect(() => validateBlockDoc(twoLists)).toThrow(/last block|at most one/)
+    expect(() => validateBlockDoc(twoLists)).toThrow(/last block/)
 
     const notLast = structuredClone(stored)
     notLast.blocks_order = [LIST, P]

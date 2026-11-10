@@ -158,11 +158,11 @@ export const Footnotes = Node.create({
       removeFootnote:
         (id) =>
         ({ state, tr, dispatch }) => {
-          const list = findFootnotesList(state.doc)
-          const note = list && findNote(list, id)
+          const note = findNote(state.doc, id)
           // Someone may have referred to it since the button was drawn.
-          if (!list || !note || footnoteUses(state.doc).has(id)) return false
+          if (!note || footnoteUses(state.doc).has(id)) return false
           if (dispatch) {
+            const { list } = note
             if (list.node.childCount === 1) tr.delete(list.pos, list.pos + list.node.nodeSize)
             else tr.delete(note.pos, note.pos + note.node.nodeSize)
           }
@@ -172,8 +172,7 @@ export const Footnotes = Node.create({
       goToFootnote:
         (id) =>
         ({ state, tr, dispatch }) => {
-          const list = findFootnotesList(state.doc)
-          const note = list && findNote(list, id)
+          const note = findNote(state.doc, id)
           if (!note) return false
           if (dispatch) tr.setSelection(TextSelection.create(tr.doc, note.pos + 1 + note.node.content.size)).scrollIntoView()
           return true
@@ -224,10 +223,14 @@ export function findFootnotesList(doc: PMNode): FootnotesList | null {
   return found
 }
 
-function findNote(list: FootnotesList, id: string): { node: PMNode; pos: number } | null {
-  let found: { node: PMNode; pos: number } | null = null
-  list.node.forEach((node, offset) => {
-    if (!found && node.attrs[BLOCK_ID] === id) found = { node, pos: list.pos + 1 + offset }
+/** The note `id`, in any list: two can exist until the next store. */
+function findNote(doc: PMNode, id: string): { node: PMNode; pos: number; list: FootnotesList } | null {
+  let found: { node: PMNode; pos: number; list: FootnotesList } | null = null
+  doc.forEach((list, listPos) => {
+    if (found || list.type.name !== FOOTNOTES_NODE) return
+    list.forEach((node, offset) => {
+      if (!found && node.attrs[BLOCK_ID] === id) found = { node, pos: listPos + 1 + offset, list: { node: list, pos: listPos } }
+    })
   })
   return found
 }
@@ -238,7 +241,11 @@ export function footnoteUses(doc: PMNode): Map<string, number[]> {
   doc.descendants((node, pos) => {
     if (node.type.name === FOOTNOTE_REF_NODE) {
       const id = normalizeFootnoteId(node.attrs.footnoteId)
-      if (id !== null) uses.set(id, [...(uses.get(id) ?? []), pos])
+      if (id !== null) {
+        const positions = uses.get(id)
+        if (positions) positions.push(pos)
+        else uses.set(id, [pos])
+      }
       return false
     }
     // A note can't hold one (`FOOTNOTE_CONTENT`), and a peer's bad update isn't a reference.
@@ -255,18 +262,15 @@ export function footnoteUses(doc: PMNode): Map<string, number[]> {
 function notePositionFor(doc: PMNode, list: FootnotesList, at: number): number {
   const uses = footnoteUses(doc)
   let pos = list.pos + 1
-  let offset = 0
   let chosen = pos
-  let stop = false
-  list.node.forEach((note) => {
-    if (stop) return
+  for (let index = 0; index < list.node.childCount; index++) {
+    const note = list.node.child(index)
+    pos += note.nodeSize
     const first = uses.get(note.attrs[BLOCK_ID])?.[0]
-    if (first !== undefined) {
-      if (first > at) stop = true
-      else chosen = pos + offset + note.nodeSize
-    }
-    offset += note.nodeSize
-  })
+    if (first === undefined) continue
+    if (first > at) break
+    chosen = pos
+  }
   return chosen
 }
 

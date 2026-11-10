@@ -12,6 +12,7 @@ import { CORE_BLOCKS, findEntry, slotAcceptsAt } from "../blocks/catalog"
 import { duplicateBlock, refOf, topLevelBlockAt } from "../utils/blockActions"
 import { deleteBlockTr, editorBlockAtSelection, isEditorBlock } from "../utils/blockTree"
 import { insertFromGutter } from "../utils/blockGutter"
+import { MentionMenuExtension, mentionMenuAllowed } from "../ui/MentionMenu"
 
 const editors: Editor[] = []
 
@@ -230,6 +231,18 @@ describe("a reference deleted while its note remains", () => {
     expect(blockTypes(ed)).toEqual(["paragraph", "paragraph"])
   })
 
+  it("finds a note in a second list, as two can exist until the next store", () => {
+    const ed = makeEditor()
+    insertAt(ed, endOf(ed, 0))
+    const { schema } = ed
+    const second = schema.nodes.footnotes.create({ "data-block-id": "list-second-1" }, schema.nodes.footnote.create({ "data-block-id": "note-second-1" }))
+    ed.view.dispatch(ed.state.tr.insert(ed.state.doc.content.size, second))
+    expect(ed.commands.goToFootnote("note-second-1")).toBe(true)
+    expect(ed.state.selection.$from.parent.attrs["data-block-id"]).toBe("note-second-1")
+    expect(ed.commands.removeFootnote("note-second-1")).toBe(true)
+    expect(blockTypes(ed)).toEqual(["paragraph", "paragraph", "footnotes"])
+  })
+
   it("refuses to remove a note something refers to", () => {
     const ed = makeEditor()
     insertAt(ed, endOf(ed, 0))
@@ -341,6 +354,37 @@ describe("what can't be done to the list", () => {
 })
 
 describe("keys", () => {
+  it("an open @ menu in a note takes ↵ first", () => {
+    let pressed = 0
+    const element = document.createElement("div")
+    document.body.appendChild(element)
+    const ed = new Editor({
+      element,
+      extensions: [
+        ...Object.values(schemaExtensions({ collaborating: false })),
+        FootnoteEditing,
+        MentionMenuExtension.configure({
+          suggestion: {
+            allow: mentionMenuAllowed,
+            render: () => ({
+              onKeyDown: () => {
+                pressed++
+                return true
+              },
+            }),
+          },
+        }),
+      ],
+      content: "<p>one</p>",
+    })
+    editors.push(ed)
+    insertAt(ed, endOf(ed, 0))
+    ed.commands.insertContent("@a")
+    press(ed, "Enter")
+    expect(pressed).toBe(1)
+    expect(ed.state.selection.$from.parent.type.name).toBe("footnote")
+  })
+
   it("↵ in a note goes back to right after its reference, without splitting it", () => {
     const ed = makeEditor()
     insertAt(ed, endOf(ed, 0))
@@ -432,8 +476,8 @@ describe("paste", () => {
     insertAt(ed, endOf(ed, 0))
     const html = clipboardOf(ed, 0, ed.state.doc.child(0).nodeSize)
     expect(html).toContain("footnote-ref")
-    ed.view.pasteHTML(html, pasteEvent())
     inSameDoc(ed)
+    ed.view.pasteHTML(html, pasteEvent())
     expect(footnoteUses(ed.state.doc).get(noteIds(ed)[0])).toHaveLength(2)
     expect(refs(ed).map((el) => el.dataset.footnoteNumber)).toEqual(["1", "1"])
   })
@@ -480,6 +524,18 @@ describe("paste", () => {
     ed.view.pasteHTML(html, pasteEvent())
     expect(blockTypes(ed)).not.toContain("footnotes")
     expect(ed.state.doc.textContent).toContain("Text")
+  })
+
+  it("several paragraphs pasted into a note stay in it, as lines: nothing lands after the list", () => {
+    const ed = makeEditor()
+    insertAt(ed, endOf(ed, 1))
+    ed.view.pasteHTML("<p>first <strong>line</strong></p><ul><li>second</li></ul>", pasteEvent())
+    expect(blockTypes(ed)).toEqual(["paragraph", "paragraph", "footnotes"])
+    const note = listNode(ed).child(0)
+    expect(note.textContent).toBe("first linesecond")
+    expect(note.child(1).marks[0].type.name).toBe("bold")
+    expect(note.child(2).type.name).toBe("hardBreak")
+    expect(() => validateBlockDoc(pmToBlockDoc(ed.state.doc))).not.toThrow()
   })
 
   it("keeps the reference's type and id only on a sup", () => {

@@ -170,7 +170,6 @@ func (doc *BlockDocV1) checkBlockNesting() error {
 		return nil
 	}
 
-	seenOnePerDoc := map[string]bool{}
 	for index, id := range doc.BlocksOrder {
 		if err := reference(id, ""); err != nil {
 			return err
@@ -180,14 +179,9 @@ func (doc *BlockDocV1) checkBlockNesting() error {
 		if rule.nestedOnly || blockType == footnoteBlockType {
 			return fmt.Errorf("block %q: a %s can't be at the top level", truncateID(id), blockType)
 		}
-		if rule.onePerDocLast {
-			if index != len(doc.BlocksOrder)-1 {
-				return fmt.Errorf("block %q: a %s must be the last block", truncateID(id), blockType)
-			}
-			if seenOnePerDoc[blockType] {
-				return fmt.Errorf("block %q: a doc has at most one %s block", truncateID(id), blockType)
-			}
-			seenOnePerDoc[blockType] = true
+		// Being last is also what makes it the only one: any other would be before it.
+		if rule.onePerDocLast && index != len(doc.BlocksOrder)-1 {
+			return fmt.Errorf("block %q: a %s must be the last block", truncateID(id), blockType)
 		}
 	}
 
