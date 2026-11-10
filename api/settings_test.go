@@ -38,10 +38,10 @@ func randomSetting() db.Setting {
 
 func randomExtensionSetting() db.ExtensionSetting {
 	return db.ExtensionSetting{
-		Key:           "my-plugin-options",
+		Key:           "theme:my-theme:options",
 		Value:         json.RawMessage(`"enabled"`),
-		ExtensionType: "plugin",
-		ExtensionID:   "my-plugin",
+		ExtensionType: "theme",
+		ExtensionID:   "my-theme",
 		CreatedAt:     time.Now(),
 		ChangedAt:     time.Now(),
 	}
@@ -255,7 +255,7 @@ func TestGetExtensionSettingAPI(t *testing.T) {
 			key:  extSetting.Key,
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
-					GetExtensionSetting(gomock.Any(), extSetting.Key).
+					GetThemeExtensionSetting(gomock.Any(), extSetting.Key).
 					Times(1).
 					Return(extSetting, nil)
 			},
@@ -274,7 +274,7 @@ func TestGetExtensionSettingAPI(t *testing.T) {
 			key:  "nonexistent-key",
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
-					GetExtensionSetting(gomock.Any(), "nonexistent-key").
+					GetThemeExtensionSetting(gomock.Any(), "nonexistent-key").
 					Times(1).
 					Return(db.ExtensionSetting{}, sql.ErrNoRows)
 			},
@@ -287,7 +287,7 @@ func TestGetExtensionSettingAPI(t *testing.T) {
 			key:  extSetting.Key,
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
-					GetExtensionSetting(gomock.Any(), extSetting.Key).
+					GetThemeExtensionSetting(gomock.Any(), extSetting.Key).
 					Times(1).
 					Return(db.ExtensionSetting{}, fmt.Errorf("db error"))
 			},
@@ -335,7 +335,7 @@ func TestListExtensionSettingsAPI(t *testing.T) {
 			query: "",
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
-					ListExtensionSettings(gomock.Any()).
+					ListThemeExtensionSettings(gomock.Any()).
 					Times(1).
 					Return(settings, nil)
 			},
@@ -350,12 +350,12 @@ func TestListExtensionSettingsAPI(t *testing.T) {
 		},
 		{
 			name:  "OK_FilteredByExtension",
-			query: "?extension_type=plugin&extension_id=my-plugin",
+			query: "?extension_type=theme&extension_id=my-theme",
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
 					ListExtensionSettingsByExtension(gomock.Any(), db.ListExtensionSettingsByExtensionParams{
-						ExtensionType: "plugin",
-						ExtensionID:   "my-plugin",
+						ExtensionType: "theme",
+						ExtensionID:   "my-theme",
 					}).
 					Times(1).
 					Return(settings, nil)
@@ -372,11 +372,38 @@ func TestListExtensionSettingsAPI(t *testing.T) {
 			},
 		},
 		{
+			name:  "OK_ExtensionIDAloneMeansATheme",
+			query: "?extension_id=my-plugin",
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					ListExtensionSettingsByExtension(gomock.Any(), db.ListExtensionSettingsByExtensionParams{
+						ExtensionType: "theme",
+						ExtensionID:   "my-plugin",
+					}).
+					Times(1).
+					Return(nil, nil)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusOK, recorder.Code)
+			},
+		},
+		{
+			name:  "PluginTypeIsNeverLookedUp",
+			query: "?extension_type=plugin&extension_id=my-plugin",
+			buildStubs: func(store *mockdb.MockStore) {
+				// No expectations: the store must not be asked.
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusOK, recorder.Code)
+				require.JSONEq(t, `{"extension_settings":[],"count":0}`, recorder.Body.String())
+			},
+		},
+		{
 			name:  "InternalError",
 			query: "",
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
-					ListExtensionSettings(gomock.Any()).
+					ListThemeExtensionSettings(gomock.Any()).
 					Times(1).
 					Return(nil, fmt.Errorf("db error"))
 			},
@@ -422,10 +449,10 @@ func TestUpsertExtensionSettingAPI(t *testing.T) {
 		{
 			name: "OK",
 			body: map[string]interface{}{
-				"key":            "my-plugin-options",
+				"key":            "theme:my-theme:options",
 				"value":          "enabled",
-				"extension_type": "plugin",
-				"extension_id":   "my-plugin",
+				"extension_type": "theme",
+				"extension_id":   "my-theme",
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
 				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, 1, "testuser", time.Minute)
@@ -448,10 +475,10 @@ func TestUpsertExtensionSettingAPI(t *testing.T) {
 		{
 			name: "NoAuthorization",
 			body: map[string]interface{}{
-				"key":            "my-plugin-options",
+				"key":            "theme:my-theme:options",
 				"value":          "enabled",
-				"extension_type": "plugin",
-				"extension_id":   "my-plugin",
+				"extension_type": "theme",
+				"extension_id":   "my-theme",
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
 				// no auth
@@ -468,9 +495,29 @@ func TestUpsertExtensionSettingAPI(t *testing.T) {
 		{
 			name: "InvalidExtensionType",
 			body: map[string]interface{}{
-				"key":            "my-plugin-options",
+				"key":            "theme:my-theme:options",
 				"value":          "enabled",
-				"extension_type": "invalid-type", // must be "plugin" or "theme"
+				"extension_type": "invalid-type", // only "theme" is accepted here
+				"extension_id":   "my-theme",
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, 1, "testuser", time.Minute)
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					UpsertExtensionSetting(gomock.Any(), gomock.Any()).
+					Times(0)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusBadRequest, recorder.Code)
+			},
+		},
+		{
+			name: "PluginType",
+			body: map[string]interface{}{
+				"key":            "plugin:my-plugin:api_key",
+				"value":          "enabled",
+				"extension_type": "plugin",
 				"extension_id":   "my-plugin",
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
@@ -490,8 +537,8 @@ func TestUpsertExtensionSettingAPI(t *testing.T) {
 			body: map[string]interface{}{
 				// missing "key" field
 				"value":          "enabled",
-				"extension_type": "plugin",
-				"extension_id":   "my-plugin",
+				"extension_type": "theme",
+				"extension_id":   "my-theme",
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
 				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, 1, "testuser", time.Minute)
@@ -535,8 +582,31 @@ func TestUpsertExtensionSettingAPI(t *testing.T) {
 	}
 }
 
+func TestValidThemeSettingKey(t *testing.T) {
+	testCases := []struct {
+		name, key, extensionID string
+		want                   bool
+	}{
+		{"its own namespace", "theme:paper:accent", "paper", true},
+		{"a name with colons", "theme:paper:a:b", "paper", true},
+		{"a bare key", "accent", "paper", false},
+		{"the old slug:key shape", "paper:accent", "paper", false},
+		{"another theme's namespace", "theme:atlas:accent", "paper", false},
+		{"a longer slug sharing the prefix", "theme:paper2:accent", "paper", false},
+		{"no name", "theme:paper:", "paper", false},
+		{"a plugin's key", "plugin:paper:accent", "paper", false},
+		{"a slug with a colon", "theme:a:b:accent", "a:b", false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, validThemeSettingKey(tc.key, tc.extensionID))
+		})
+	}
+}
+
 func TestDeleteExtensionSettingAPI(t *testing.T) {
-	key := "my-plugin-options"
+	key := "theme:my-theme:options"
 
 	testCases := []struct {
 		name          string
@@ -553,12 +623,28 @@ func TestDeleteExtensionSettingAPI(t *testing.T) {
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
-					DeleteExtensionSetting(gomock.Any(), key).
+					DeleteThemeExtensionSetting(gomock.Any(), key).
 					Times(1).
-					Return(nil)
+					Return(int64(1), nil)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusOK, recorder.Code)
+			},
+		},
+		{
+			name: "NotAThemeRow",
+			key:  "plugin:my-plugin:api_key",
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, 1, "testuser", time.Minute)
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					DeleteThemeExtensionSetting(gomock.Any(), "plugin:my-plugin:api_key").
+					Times(1).
+					Return(int64(0), nil)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusNotFound, recorder.Code)
 			},
 		},
 		{
@@ -569,7 +655,7 @@ func TestDeleteExtensionSettingAPI(t *testing.T) {
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
-					DeleteExtensionSetting(gomock.Any(), gomock.Any()).
+					DeleteThemeExtensionSetting(gomock.Any(), gomock.Any()).
 					Times(0)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
@@ -584,9 +670,9 @@ func TestDeleteExtensionSettingAPI(t *testing.T) {
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
-					DeleteExtensionSetting(gomock.Any(), key).
+					DeleteThemeExtensionSetting(gomock.Any(), key).
 					Times(1).
-					Return(fmt.Errorf("db error"))
+					Return(int64(0), fmt.Errorf("db error"))
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusInternalServerError, recorder.Code)

@@ -31,12 +31,17 @@ WHERE id = (SELECT s.front_page_id FROM settings s WHERE s.id = 1)
   AND post_status = 'published'
   AND EXISTS (SELECT 1 FROM post_types pt WHERE pt.name = 'page' AND pt.public AND pt.is_active);
 
--- name: GetExtensionSetting :one
-SELECT * FROM extension_settings WHERE key = $1;
+-- The public /extension-settings routes read through these two, so a plugin's
+-- row can't reach them (#451). Plugins get their own admin-only reads.
 
--- name: ListExtensionSettings :many
+-- name: GetThemeExtensionSetting :one
 SELECT * FROM extension_settings
-ORDER BY extension_type, extension_id, key;
+WHERE key = $1 AND extension_type = 'theme';
+
+-- name: ListThemeExtensionSettings :many
+SELECT * FROM extension_settings
+WHERE extension_type = 'theme'
+ORDER BY extension_id, key;
 
 -- name: ListExtensionSettingsByExtension :many
 SELECT * FROM extension_settings
@@ -51,8 +56,9 @@ SET value = EXCLUDED.value,
     changed_at = now()
 RETURNING *;
 
--- name: DeleteExtensionSetting :exec
-DELETE FROM extension_settings WHERE key = $1;
+-- name: DeleteThemeExtensionSetting :execrows
+DELETE FROM extension_settings
+WHERE key = $1 AND extension_type = 'theme';
 
 -- name: DeleteExtensionSettingsByExtension :exec
 DELETE FROM extension_settings 

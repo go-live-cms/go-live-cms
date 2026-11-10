@@ -96,7 +96,7 @@ func (server *Server) updateSettings(c *gin.Context) {
 func (server *Server) getExtensionSetting(c *gin.Context) {
 	key := c.Param("key")
 
-	setting, err := server.store.GetExtensionSetting(c, key)
+	setting, err := server.store.GetThemeExtensionSetting(c, key)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "setting not found"})
@@ -124,7 +124,8 @@ func (server *Server) getExtensionSetting(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// listExtensionSettings handles GET /extension-settings
+// listExtensionSettings handles GET /extension-settings. It is public, so it
+// only ever answers theme rows, whatever the query asks for (#451).
 func (server *Server) listExtensionSettings(c *gin.Context) {
 	extensionType := c.Query("extension_type")
 	extensionID := c.Query("extension_id")
@@ -132,14 +133,16 @@ func (server *Server) listExtensionSettings(c *gin.Context) {
 	var settings []db.ExtensionSetting
 	var err error
 
-	if extensionType != "" && extensionID != "" {
-		params := db.ListExtensionSettingsByExtensionParams{
-			ExtensionType: extensionType,
+	switch {
+	case extensionType != "" && extensionType != extensionTypeTheme:
+		// Nothing else is public: an empty list, not a lookup.
+	case extensionID != "":
+		settings, err = server.store.ListExtensionSettingsByExtension(c, db.ListExtensionSettingsByExtensionParams{
+			ExtensionType: extensionTypeTheme,
 			ExtensionID:   extensionID,
-		}
-		settings, err = server.store.ListExtensionSettingsByExtension(c, params)
-	} else {
-		settings, err = server.store.ListExtensionSettings(c)
+		})
+	default:
+		settings, err = server.store.ListThemeExtensionSettings(c)
 	}
 
 	if err != nil {
@@ -174,6 +177,13 @@ func (server *Server) listExtensionSettings(c *gin.Context) {
 func (server *Server) upsertExtensionSetting(c *gin.Context) {
 	var req ExtensionSettingRequest
 	if !bindJSON(c, &req) {
+		return
+	}
+	if !validThemeSettingKey(req.Key, req.ExtensionID) {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":  "key must be theme:<extension_id>:<name>",
+			"fields": gin.H{"key": "must be theme:<extension_id>:<name>"},
+		})
 		return
 	}
 
@@ -219,9 +229,14 @@ func (server *Server) upsertExtensionSetting(c *gin.Context) {
 func (server *Server) deleteExtensionSetting(c *gin.Context) {
 	key := c.Param("key")
 
-	err := server.store.DeleteExtensionSetting(c, key)
+	deleted, err := server.store.DeleteThemeExtensionSetting(c, key)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete extension setting"})
+		return
+	}
+	if deleted == 0 {
+		// A plugin's row answers like a key that doesn't exist.
+		c.JSON(http.StatusNotFound, gin.H{"error": "setting not found"})
 		return
 	}
 

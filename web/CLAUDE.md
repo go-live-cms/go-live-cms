@@ -102,6 +102,9 @@ are the most fragile part of the codebase. **Before editing anything under
   `functions.ts` through `import.meta.glob` maps (`THEME_CONFIGS`, `THEME_FUNCTIONS`), and
   layouts through globs too, all resolved by Vite when the image is built. A theme added
   later has no entry (logged as "not in this build"). The API image ships `web/themes` too, for its startup scan.
+- **`context.settings` (`src/lib/theme-settings.ts`, #451):** a theme's settings are rows keyed
+  `theme:<slug>:<key>` in `extension_settings`, publicly readable, written with an admin's token.
+  Never copy it for plugins, whose settings may be secret (`docs/design/plugin-system.md` section 6).
 - **Theme blocks are build-time too** (#376): a theme's custom block is a directory
   `themes/<slug>/blocks/<Name>/` with `index.ts` (headless: `defineThemeBlock` from
   `gl-admin/lib/theme-blocks/define.ts`, the Block Spec and TipTap node; no React),

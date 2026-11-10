@@ -5,8 +5,12 @@
  * Each theme stores data in the extension_settings table with:
  * - extension_type: 'theme'
  * - extension_id: theme slug
- * - key: setting key
+ * - key: theme:<slug>:<setting key> (the whole table's primary key, so the slug
+ *   is what keeps two themes' settings apart; the API refuses any other shape)
  * - value: JSONB setting value
+ *
+ * These rows are publicly readable, so a theme must not store secrets here.
+ * Plugins don't share this client: their settings go through admin-only routes.
  */
 
 import type { ThemeSettings } from "./theme-api"
@@ -38,13 +42,20 @@ export class ThemeSettingsImpl implements ThemeSettings {
     return headers
   }
 
+  private storedKey(key: string): string {
+    return `theme:${this.themeSlug}:${key}`
+  }
+
+  private settingUrl(key: string): string {
+    return `${API_BASE_URL}/api/v1/extension-settings/${encodeURIComponent(this.storedKey(key))}`
+  }
+
   /**
    * Get a theme setting value
    */
   async get(key: string): Promise<any> {
     try {
-      const url = `${API_BASE_URL}/api/v1/extension-settings/${this.themeSlug}:${key}`
-      const response = await fetch(url, {
+      const response = await fetch(this.settingUrl(key), {
         method: "GET",
         headers: this.getHeaders(),
       })
@@ -77,7 +88,7 @@ export class ThemeSettingsImpl implements ThemeSettings {
         body: JSON.stringify({
           extension_type: "theme",
           extension_id: this.themeSlug,
-          key: key,
+          key: this.storedKey(key),
           value: value,
         }),
       })
@@ -96,8 +107,7 @@ export class ThemeSettingsImpl implements ThemeSettings {
    */
   async delete(key: string): Promise<void> {
     try {
-      const url = `${API_BASE_URL}/api/v1/extension-settings/${this.themeSlug}:${key}`
-      const response = await fetch(url, {
+      const response = await fetch(this.settingUrl(key), {
         method: "DELETE",
         headers: this.getHeaders(),
       })
@@ -112,11 +122,11 @@ export class ThemeSettingsImpl implements ThemeSettings {
   }
 
   /**
-   * Get all theme settings
+   * Get all theme settings, by the key each was set under
    */
   async getAll(): Promise<Record<string, any>> {
     try {
-      const url = `${API_BASE_URL}/api/v1/extension-settings?extension_type=theme&extension_id=${this.themeSlug}`
+      const url = `${API_BASE_URL}/api/v1/extension-settings?extension_type=theme&extension_id=${encodeURIComponent(this.themeSlug)}`
       const response = await fetch(url, {
         method: "GET",
         headers: this.getHeaders(),
@@ -126,13 +136,13 @@ export class ThemeSettingsImpl implements ThemeSettings {
         throw new Error(`Failed to get settings: ${response.statusText}`)
       }
 
-      const data = await response.json()
+      const data: { extension_settings?: Array<{ key: string; value: any }> } = await response.json()
 
-      // Convert array of settings to key-value object
+      const prefix = this.storedKey("")
       const result: Record<string, any> = {}
-      if (Array.isArray(data)) {
-        for (const setting of data) {
-          result[setting.key] = setting.value
+      for (const setting of data.extension_settings ?? []) {
+        if (setting.key.startsWith(prefix)) {
+          result[setting.key.slice(prefix.length)] = setting.value
         }
       }
 

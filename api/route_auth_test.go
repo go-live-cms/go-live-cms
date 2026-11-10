@@ -27,9 +27,11 @@ var publicGETRoutes = map[string]string{
 	"/api/v1/health":     "liveness, through the web /api proxy",
 	"/uploads/*filepath": "the uploaded files published posts embed",
 
-	"/api/v1/settings":                "site title, tagline, language, time zone, URL structure: the public site's config (#330)",
-	"/api/v1/extension-settings":      "theme options the public theme reads (ThemeSettingsImpl)",
-	"/api/v1/extension-settings/:key": "theme options the public theme reads (ThemeSettingsImpl)",
+	"/api/v1/settings": "site title, tagline, language, time zone, URL structure: the public site's config (#330)",
+	// Theme rows only: the queries behind these two can't return a plugin's row, which
+	// may hold an API key (#451, TestPublicExtensionSettingsServeThemesOnly).
+	"/api/v1/extension-settings":      "theme options the public theme reads (ThemeSettingsImpl); never a plugin's settings",
+	"/api/v1/extension-settings/:key": "theme options the public theme reads (ThemeSettingsImpl); never a plugin's settings",
 
 	"/api/v1/themes":              "the installed themes: the public site picks its layouts from the active one",
 	"/api/v1/themes/active":       "the active theme and its settings, read on every public request",
