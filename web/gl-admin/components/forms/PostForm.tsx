@@ -883,7 +883,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
         }
       } catch (error) {
         console.error("Restoring the version's settings failed:", error)
-        settingsNote = " Its title, excerpt, image and terms couldn't be restored."
+        settingsNote = " Its title, excerpt, image, terms and custom HTML couldn't be restored."
       }
       // The same route put the version's custom HTML back (#428).
       editorRef.current?.refreshHtmlSnippets()

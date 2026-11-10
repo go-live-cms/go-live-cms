@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react"
 import type { Editor as TiptapEditor } from "@tiptap/core"
 import { NodeSelection } from "prosemirror-state"
 import { authManager } from "@gl-admin/lib/auth"
+import { isSiteAdmin } from "@gl-admin/lib/roles"
 import {
   GROUP_ALIGNS,
   GROUP_STYLES,
@@ -47,7 +48,7 @@ const BACKGROUND_LABELS: Record<GroupStyle, string> = { none: "None", tinted: "T
 
 // #428, the canvas's Custom HTML settings, plus what happens to what's written.
 function htmlBlockHint(role: string | null | undefined): string {
-  return role?.toLowerCase() === "admin"
+  return isSiteAdmin(role)
     ? "Only admins can add or edit this block. Editors and contributors see it as a locked preview and can still move it. Scripts, event handlers and frames are removed when it's saved."
     : "View only: only admins can edit custom HTML. Ask an admin to change it."
 }

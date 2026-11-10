@@ -93,7 +93,8 @@ func (server *Server) restorePostVersionSettings(c *gin.Context) {
 		PageTemplate:   settings.PageTemplate,
 		// Custom HTML (#428): the markup this version was published with, read from the
 		// version itself, so nobody can pass any in.
-		HTMLSnippets: customhtml.Markup(version.BlockDoc),
+		HTMLSnippets:      customhtml.Markup(version.BlockDoc),
+		EmptyHTMLSnippets: customhtml.EmptySnippetIDs(version.BlockDoc),
 	}
 	if settings.FeaturedImage != nil {
 		restored.FeaturedImageID = settings.FeaturedImage.ID

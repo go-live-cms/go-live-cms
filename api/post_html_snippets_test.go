@@ -176,6 +176,9 @@ func TestHTMLSnippetsAuthorization(t *testing.T) {
 	t.Run("a body that's missing or too long is refused", func(t *testing.T) {
 		code, _ := f.request(t, &f.admin, http.MethodPost, path, gin.H{})
 		require.Equal(t, http.StatusBadRequest, code)
+		// A struct tag can't name the constant, so both sides of the limit are pinned here.
+		code, _ = f.request(t, &f.admin, http.MethodPost, path, gin.H{"html": strings.Repeat("x", customhtml.MaxHTMLBytes)})
+		require.Equal(t, http.StatusCreated, code)
 		code, _ = f.request(t, &f.admin, http.MethodPost, path, gin.H{"html": strings.Repeat("x", customhtml.MaxHTMLBytes+1)})
 		require.Equal(t, http.StatusBadRequest, code)
 		code, _ = f.request(t, &f.admin, http.MethodPost, path, gin.H{"html": "x", "post_id": 1})
@@ -414,6 +417,18 @@ func TestHTMLPublish(t *testing.T) {
 		require.Equal(t, "<p>Edited after publish</p>", publicHTMLAttrs(t, f.publicDoc(t, post.ID), "html-000000")["html"])
 	})
 
+	t.Run("markup written into a block published empty is a change", func(t *testing.T) {
+		empty := f.saveSnippet(t, post.ID, "")
+		f.writeHTMLDoc(t, post.ID, empty)
+		f.publish(t, post.ID)
+		require.False(t, f.hasChanges(t, post.ID))
+		code, body := f.request(t, &f.admin, http.MethodPut, snippetsPath(post.ID)+"/"+empty, gin.H{"html": "<p>Now it has some</p>"})
+		require.Equal(t, http.StatusOK, code, body)
+		require.True(t, f.hasChanges(t, post.ID))
+		f.writeHTMLDoc(t, post.ID, snippet)
+		f.publish(t, post.ID)
+	})
+
 	t.Run("a snippet's block taken out of the document", func(t *testing.T) {
 		f.writeHTMLDoc(t, post.ID)
 		f.publish(t, post.ID)
@@ -594,6 +609,19 @@ func TestHTMLRestore(t *testing.T) {
 		require.NoError(t, err)
 		restore(t, &f.admin, 1)
 		require.Equal(t, map[string]string{snippet: "<p>Old</p>"}, f.workingRows(t, post.ID))
+	})
+
+	t.Run("a version published empty empties the row, and makes none for an id it never had", func(t *testing.T) {
+		foreign := uuid.NewString()
+		f.writeHTMLDoc(t, post.ID, snippet, foreign)
+		code, body := f.request(t, &f.admin, http.MethodPut, snippetsPath(post.ID)+"/"+snippet, gin.H{"html": ""})
+		require.Equal(t, http.StatusOK, code, body)
+		f.publish(t, post.ID)
+		code, body = f.request(t, &f.admin, http.MethodPut, snippetsPath(post.ID)+"/"+snippet, gin.H{"html": "<p>Written later</p>"})
+		require.Equal(t, http.StatusOK, code, body)
+
+		restore(t, &f.editor, 3)
+		require.Equal(t, map[string]string{snippet: ""}, f.workingRows(t, post.ID))
 	})
 
 	t.Run("a contributor can't restore", func(t *testing.T) {

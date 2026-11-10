@@ -298,7 +298,7 @@ func (store *SQLStore) PublishScheduledUpdateTx(ctx context.Context, arg Publish
 			return fmt.Errorf("insert version: %w", err)
 		}
 		// Custom HTML (#428): sanitized again on publish; the snapshot may be days old.
-		blockDoc, err := customhtml.Resanitize(version.BlockDoc)
+		blockDoc, err := customhtml.Materialize(version.BlockDoc, customhtml.Markup(version.BlockDoc))
 		if err != nil {
 			return fmt.Errorf("sanitize frozen html: %w", err)
 		}
@@ -349,6 +349,10 @@ type RestoredPostSettings struct {
 	// HTMLSnippets is the markup the version was published with, by snippet id (#428):
 	// each goes back into the working row under the same id, edited or deleted since.
 	HTMLSnippets map[string]string
+	// EmptyHTMLSnippets are the version's snippets published with no markup: a row written
+	// since goes back to empty. A row that doesn't exist stays that way, so an id that never
+	// belonged to this post makes none.
+	EmptyHTMLSnippets []string
 }
 
 // RestorePostSettingsTx puts a version's settings back into the post's working
@@ -394,6 +398,12 @@ func (store *SQLStore) RestorePostSettingsTx(ctx context.Context, arg RestorePos
 		for id, html := range arg.Settings.HTMLSnippets {
 			if err := q.RestorePostHTMLSnippet(ctx, RestorePostHTMLSnippetParams{PostID: arg.PostID, SnippetID: id, Html: html}); err != nil {
 				return fmt.Errorf("restore html snippet: %w", err)
+			}
+		}
+		for _, id := range arg.Settings.EmptyHTMLSnippets {
+			_, err := q.UpdatePostHTMLSnippet(ctx, UpdatePostHTMLSnippetParams{PostID: arg.PostID, SnippetID: id, Html: ""})
+			if err != nil && !errors.Is(err, sql.ErrNoRows) {
+				return fmt.Errorf("restore empty html snippet: %w", err)
 			}
 		}
 		var err error

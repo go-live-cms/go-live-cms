@@ -133,7 +133,7 @@ export class PostHtmlSnippetsStore {
     this.pending.delete(flush)
   }
 
-  /** Sends every edit still waiting for its debounce, and waits for them. */
+  /** Sends every edit still waiting for its debounce, and waits; rejects if one can't be saved. */
   async flush(): Promise<void> {
     await Promise.all([...this.pending].map((flush) => flush()))
   }

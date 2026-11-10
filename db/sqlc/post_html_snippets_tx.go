@@ -54,17 +54,20 @@ func materializeHTML(ctx context.Context, q *Queries, postID int64, blockDoc jso
 }
 
 // recordPublishedHTML notes what the site now shows (the version just published), for
-// "Changes not published": each snippet's published_html, NULL for the rest.
+// "Changes not published": each snippet the body uses gets its published_html, "" for a
+// block published empty (markup written into it later is a change), NULL for the rest.
 func recordPublishedHTML(ctx context.Context, q *Queries, postID int64, blockDoc json.RawMessage) error {
 	markup := customhtml.Markup(blockDoc)
-	ids := make([]string, 0, len(markup))
-	for id, html := range markup {
-		ids = append(ids, id)
+	ids := customhtml.SnippetIDs(blockDoc)
+	for _, id := range ids {
 		if err := q.SetPostHTMLSnippetPublished(ctx, SetPostHTMLSnippetPublishedParams{
-			PostID: postID, SnippetID: id, PublishedHtml: sql.NullString{String: html, Valid: true},
+			PostID: postID, SnippetID: id, PublishedHtml: sql.NullString{String: markup[id], Valid: true},
 		}); err != nil {
 			return fmt.Errorf("set published html: %w", err)
 		}
+	}
+	if ids == nil {
+		ids = []string{}
 	}
 	return q.ClearPublishedHTMLSnippetsExcept(ctx, ClearPublishedHTMLSnippetsExceptParams{PostID: postID, SnippetIds: ids})
 }

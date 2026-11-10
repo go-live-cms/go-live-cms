@@ -101,15 +101,18 @@ func TestMarkup(t *testing.T) {
 	require.Equal(t, map[string]string{idA: "<p>a</p>"}, got)
 }
 
-func TestResanitize(t *testing.T) {
-	out, err := Resanitize(htmlDoc(`{"snippetId":"` + idA + `","html":"<p onclick=\"x\">a</p>"}`))
+// A scheduled update's frozen snapshot is sanitized again when it goes live.
+func TestMaterializeOfItsOwnMarkupSanitizesAgain(t *testing.T) {
+	raw := htmlDoc(`{"snippetId":"` + idA + `","html":"<p onclick=\"x\">a</p>"}`)
+	out, err := Materialize(raw, Markup(raw))
 	require.NoError(t, err)
 	require.Equal(t, "<p>a</p>", attrsOf(t, out, "h0")["html"])
+}
 
-	raw := htmlDoc(`{"snippetId":"` + idA + `","html":"<p>a</p>"}`)
-	out, err = Resanitize(raw)
-	require.NoError(t, err)
-	require.Equal(t, string(raw), string(out))
+func TestEmptySnippetIDs(t *testing.T) {
+	raw := htmlDoc(`{"snippetId":"`+idA+`","html":"<p>a</p>"}`, `{"snippetId":"`+idB+`"}`, `{}`)
+	require.Equal(t, []string{idB}, EmptySnippetIDs(raw))
+	require.Empty(t, EmptySnippetIDs(json.RawMessage(`{}`)))
 }
 
 func TestRekey(t *testing.T) {

@@ -113,29 +113,16 @@ func Markup(raw json.RawMessage) map[string]string {
 	return markup
 }
 
-// Resanitize runs Sanitize over the markup a document already holds (a scheduled update's
-// frozen snapshot, published later: the sanitizer may have changed since). A document with
-// no markup comes back unchanged.
-func Resanitize(raw json.RawMessage) (json.RawMessage, error) {
-	doc, blocks, ok := decodeDoc(raw)
-	if !ok {
-		return raw, nil
-	}
-	changed := false
-	eachHTMLBlock(blocks, func(attrs map[string]interface{}) {
-		html, isString := attrs["html"].(string)
-		if !isString {
-			return
+// EmptySnippetIDs lists the snippets a published document uses with no markup.
+func EmptySnippetIDs(raw json.RawMessage) []string {
+	markup := Markup(raw)
+	var empty []string
+	for _, id := range SnippetIDs(raw) {
+		if _, has := markup[id]; !has {
+			empty = append(empty, id)
 		}
-		if clean := Sanitize(html); clean != html {
-			attrs["html"] = clean
-			changed = true
-		}
-	})
-	if !changed {
-		return raw, nil
 	}
-	return json.Marshal(doc)
+	return empty
 }
 
 // Rekey prepares a copy's document (a duplicate, or a post made from a template): every

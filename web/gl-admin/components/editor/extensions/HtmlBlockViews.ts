@@ -5,6 +5,7 @@ import type { EditorView, NodeView } from "@tiptap/pm/view"
 import DOMPurify from "dompurify"
 import { HTML_LOCKED_NOTE } from "@gl-admin/lib/blocks-spec"
 import { authManager } from "@gl-admin/lib/auth"
+import { isSiteAdmin } from "@gl-admin/lib/roles"
 import type { PostHtmlSnippetsStore } from "@gl-admin/lib/htmlSnippetsStore"
 import { HTML_MODE_EVENT, htmlSnippetsOf, onHtmlSnippetsChanged, takeHtmlFieldFocus, type HtmlBlockMode } from "../blocks/htmlSnippets"
 import { snippetIdOf } from "./HtmlBlock"
@@ -32,7 +33,7 @@ const INDENT = "  "
 
 const LOCK_ICON = "M5 11h14v10H5zM8 11V7a4 4 0 0 1 8 0v4"
 
-const isAdmin = () => authManager.getState().user?.role?.toLowerCase() === "admin"
+const isAdmin = () => isSiteAdmin(authManager.getState().user?.role)
 
 export class HtmlBlockView implements NodeView {
   dom: HTMLElement
@@ -123,7 +124,7 @@ export class HtmlBlockView implements NodeView {
 
   private scheduleSave() {
     if (this.timer) clearTimeout(this.timer)
-    this.store?.track(this.commit)
+    this.store?.track(this.flushForPublish)
     this.timer = setTimeout(() => void this.commit(), SAVE_DELAY_MS)
   }
 
@@ -152,10 +153,16 @@ export class HtmlBlockView implements NodeView {
     }
     this.saving = run().finally(() => {
       this.saving = null
-      if (!this.dirty) store.untrack(this.commit)
+      if (!this.dirty) store.untrack(this.flushForPublish)
       this.showFailure()
     })
     return this.saving
+  }
+
+  /** What Publish waits for: refuses when this block's text couldn't be saved. */
+  private flushForPublish = async (): Promise<void> => {
+    await this.commit()
+    if (this.failed) throw new Error("A custom HTML block couldn't be saved, so nothing was published. Try again.")
   }
 
   private showFailure() {
@@ -190,7 +197,7 @@ export class HtmlBlockView implements NodeView {
     const key = JSON.stringify([state, !!store, store?.loaded, store?.failed, snippetId, state === "html" ? "" : markup])
     if (!force && key === this.rendered) {
       // Another admin's save reaches a field nobody is typing in.
-      if (state === "html" && this.field && !this.dirty && document.activeElement !== this.field && this.field.value !== markup) {
+      if (state === "html" && this.field && !this.dirty && !this.saving && document.activeElement !== this.field && this.field.value !== markup) {
         this.field.value = markup
         this.draft = markup
       }
@@ -258,7 +265,8 @@ export class HtmlBlockView implements NodeView {
     field.rows = 6
     // Not before the post's snippets are read: a save would overwrite markup it never saw.
     field.disabled = !ready
-    if (!this.dirty) this.draft = markup
+    // Not over text still on its way to the server: the store has the old markup until then.
+    if (!this.dirty && !this.saving) this.draft = markup
     field.value = this.draft
     field.addEventListener("input", () => {
       this.draft = field.value
@@ -320,14 +328,15 @@ export class HtmlBlockView implements NodeView {
   private preview(markup: string): HTMLElement {
     const preview = document.createElement("div")
     preview.className = "editor-html__preview"
-    // An empty block shows the line that says so, never an empty box.
-    if (markup) preview.innerHTML = DOMPurify.sanitize(markup)
-    else {
-      const empty = document.createElement("p")
-      empty.className = "editor-html__empty"
-      empty.textContent = "No HTML yet."
-      preview.append(empty)
+    if (markup) {
+      preview.innerHTML = DOMPurify.sanitize(markup)
+      return preview
     }
+    // Empty, or not known yet: the line says which, never an empty box.
+    const empty = document.createElement("p")
+    empty.className = "editor-html__empty"
+    empty.textContent = this.store?.failed ? "Couldn't load this block's HTML." : this.store && !this.store.loaded ? "Loading…" : "No HTML yet."
+    preview.append(empty)
     return preview
   }
 
@@ -362,6 +371,6 @@ export class HtmlBlockView implements NodeView {
     this.unsubscribe?.()
     // The block can be moved while a save waits: a new view takes over, the text goes out.
     if (this.dirty) void this.commit()
-    else this.store?.untrack(this.commit)
+    else this.store?.untrack(this.flushForPublish)
   }
 }

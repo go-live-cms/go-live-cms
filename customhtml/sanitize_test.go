@@ -26,7 +26,7 @@ func TestSanitizeRemovesEveryPayload(t *testing.T) {
 func TestSanitizeKeepsNormalMarkup(t *testing.T) {
 	cases := []struct{ name, input, want string }{
 		{"design's example", `<dl class="office-hours"><dt>Office hours</dt><dd>Tuesdays, 15:00 to 16:00 CET</dd></dl>`, `<dl class="office-hours"><dt>Office hours</dt><dd>Tuesdays, 15:00 to 16:00 CET</dd></dl>`},
-		{"link", `<a href="https://example.com/a?b=1">x</a>`, `<a href="https://example.com/a?b=1">x</a>`},
+		{"link", `<a href="https://example.com/a?b=1">x</a>`, `<a href="https://example.com/a?b=1" rel="noreferrer">x</a>`},
 		{"relative link", `<a href="/about">x</a>`, `<a href="/about">x</a>`},
 		{"anchor link", `<a href="#top">x</a>`, `<a href="#top">x</a>`},
 		{"mailto", `<a href="mailto:a@example.com">x</a>`, `<a href="mailto:a@example.com">x</a>`},
@@ -64,6 +64,7 @@ func TestSanitizeLinkTarget(t *testing.T) {
 	out := Sanitize(`<a href="https://example.com" target="_blank" rel="noopener">x</a>`)
 	require.Contains(t, out, `target="_blank"`)
 	require.Contains(t, out, `noopener`)
+	require.Contains(t, Sanitize(`<a href="https://example.com" target="_blank">x</a>`), `noopener`, "added when the admin left it out")
 	require.NotContains(t, Sanitize(`<a href="https://example.com" target="evil">x</a>`), "target")
 }
 
@@ -80,6 +81,10 @@ func TestSafeCSSValue(t *testing.T) {
 		"url(data:text/html,x)":    false,
 		"url(//a.b/c.png)":         true,
 		"attr(data-x)":             false,
+		"calc(100% - (2 * 1rem))":  true,
+		"calc(1rem*(2 + 1))":       true,
+		"expression (alert(1)) x":  false,
+		"-moz-element(#a)":         false,
 		"unknownfunc(1)":           false,
 		"e\\xpression(1)":          false,
 		"a/* c */b":                false,

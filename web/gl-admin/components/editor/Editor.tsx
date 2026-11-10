@@ -301,7 +301,10 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
       offSynced?.()
       document.removeEventListener("visibilitychange", onVisible)
       // A block still waiting to save gets its chance before the store goes.
-      void store.flush().finally(() => store.destroy())
+      void store
+        .flush()
+        .catch(() => {})
+        .finally(() => store.destroy())
       provideHtmlSnippets(editor, null)
       setHtmlSnippets(null)
     }

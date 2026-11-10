@@ -3,6 +3,7 @@ import { BubbleMenu as TipTapBubbleMenu } from "@tiptap/react/menus"
 import type { Editor as TiptapEditor } from "@tiptap/core"
 import { NodeSelection } from "@tiptap/pm/state"
 import { authManager } from "@gl-admin/lib/auth"
+import { isSiteAdmin } from "@gl-admin/lib/roles"
 import { HTML_MODE_EVENT, type HtmlBlockMode } from "../blocks/htmlSnippets"
 import { moveBlockBy } from "../extensions/BlockNavigation"
 import { editorBlockAtSelection } from "../utils/blockTree"
@@ -48,7 +49,7 @@ export default function HtmlToolbar({ editor }: { editor: TiptapEditor }) {
     if (block) moveBlockBy(editor, block, dir)
   }
 
-  const isAdmin = authManager.getState().user?.role?.toLowerCase() === "admin"
+  const isAdmin = isSiteAdmin(authManager.getState().user?.role)
 
   return (
     <TipTapBubbleMenu

@@ -83,7 +83,9 @@ var (
 		"url": true,
 	}
 
-	cssFunctionCall = regexp.MustCompile(`[a-z0-9_-]+\(`)
+	// A name, then `(`, spaces allowed between them (an old browser accepted `expression (`).
+	// A name starts with a letter, `_` or `--`, so `100% - (2 * 1rem)` isn't a call to `-`.
+	cssFunctionCall = regexp.MustCompile(`(?:^|[^a-z0-9_-])((?:-{0,2}[a-z_])[a-z0-9_-]*)\s*\(`)
 	cssURLTarget    = regexp.MustCompile(`url\(['"]?([^'")]*)`)
 
 	sizeValue   = regexp.MustCompile(`^[0-9]{1,5}%?$`)
@@ -114,6 +116,9 @@ func newPolicy() *bluemonday.Policy {
 	p.RequireParseableURLs(true)
 	p.AllowRelativeURLs(true)
 	p.AllowURLSchemes("http", "https", "mailto", "tel")
+	// bluemonday adds rel="noopener" to a target="_blank" link only under one of its link
+	// policies, so an external link also gets noreferrer.
+	p.RequireNoReferrerOnFullyQualifiedLinks(true)
 
 	p.AllowElements(elements...)
 
@@ -164,8 +169,8 @@ func safeCSSValue(value string) bool {
 	if strings.Contains(compact, "javascript:") || strings.Contains(compact, "vbscript:") || strings.Contains(compact, "@import") {
 		return false
 	}
-	for _, call := range cssFunctionCall.FindAllString(compact, -1) {
-		if !cssFunctions[strings.TrimSuffix(call, "(")] {
+	for _, call := range cssFunctionCall.FindAllStringSubmatch(value, -1) {
+		if !cssFunctions[call[1]] {
 			return false
 		}
 	}

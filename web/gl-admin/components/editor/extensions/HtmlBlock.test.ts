@@ -159,6 +159,29 @@ describe("as an admin", () => {
     expect(fake.updateHtmlSnippet).toHaveBeenCalledWith(12, SNIPPET, "<p>Last words</p>")
   })
 
+  it("Publish refuses when the last edit can't be saved", async () => {
+    const { api: fake, store } = await open(docWith(html(), paragraph))
+    fake.updateHtmlSnippet.mockRejectedValue(new Error("down"))
+    type("<p>Last words</p>")
+    await expect(store.flush()).rejects.toThrow("couldn't be saved")
+    fake.updateHtmlSnippet.mockResolvedValue({ id: SNIPPET, html: "<p>Last words</p>" })
+    await expect(store.flush()).resolves.toBeUndefined()
+  })
+
+  it("going back to HTML during a save keeps the text on its way to the server", async () => {
+    const { api: fake } = await open(docWith(html(), paragraph))
+    let answer: (row: { id: string; html: string }) => void = () => {}
+    fake.updateHtmlSnippet.mockImplementationOnce(() => new Promise((resolve) => (answer = resolve)))
+    type("<p>New</p>")
+    radio("Preview").click()
+    radio("HTML").click()
+    expect(field()!.value).toBe("<p>New</p>")
+    answer({ id: SNIPPET, html: "<p>New</p>" })
+    await flush()
+    await flush()
+    expect(field()!.value).toBe("<p>New</p>")
+  })
+
   it("the field is closed until the post's snippets are read", async () => {
     asRole("admin")
     const element = document.createElement("div")
@@ -270,6 +293,21 @@ describe.each(["editor", "contributor"])("as a %s: the locked preview", (role) =
 })
 
 describe("the preview", () => {
+  it("doesn't call a block empty before it knows, or when the read failed", async () => {
+    asRole("editor")
+    const element = document.createElement("div")
+    document.body.appendChild(element)
+    editor = new Editor({ element, extensions: [...Object.values(schemaExtensions({ collaborating: false })), BlockNodeViews], content: docWith(html(), paragraph) })
+    let fail: (error: Error) => void = () => {}
+    const store = new PostHtmlSnippetsStore(12, { ...api(), listHtmlSnippets: () => new Promise((_resolve, reject) => (fail = reject)) })
+    provideHtmlSnippets(editor, store)
+    expect(preview()!.textContent).toBe("Loading…")
+    fail(new Error("down"))
+    await flush()
+    await flush()
+    expect(preview()!.textContent).toBe("Couldn't load this block's HTML.")
+  })
+
   it("cleans the markup again, whatever the API answered", async () => {
     await open(docWith(html(), paragraph), { role: "editor", rows: [{ id: SNIPPET, html: '<img src="x" onerror="alert(1)"><script>alert(2)</script><b>ok</b>' }] })
     expect(preview()!.innerHTML).not.toContain("onerror")
