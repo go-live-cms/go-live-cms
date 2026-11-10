@@ -52,6 +52,8 @@ var flowBlockTypes = map[string]bool{
 	"video": true, "audio": true, "file": true,
 	// #425
 	"embed": true,
+	// #428
+	"html": true,
 	// #426: a row of buttons keeps its buttons in its pm.
 	"buttons": true, "spacer": true,
 }

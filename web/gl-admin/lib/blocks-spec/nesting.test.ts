@@ -110,18 +110,18 @@ describe("the nesting table", () => {
   })
 
   it("derives the content expressions", () => {
-    expect(containerContent("group")).toBe("(block | tableBlock | video | audio | file | embed | buttons | spacer | details | columns | mediaText)+")
+    expect(containerContent("group")).toBe("(block | tableBlock | video | audio | file | embed | html | buttons | spacer | details | columns | mediaText)+")
     // #421: its part first, then flow.
-    expect(containerContent("details")).toBe("detailsSummary (block | tableBlock | video | audio | file | embed | buttons | spacer)+")
+    expect(containerContent("details")).toBe("detailsSummary (block | tableBlock | video | audio | file | embed | html | buttons | spacer)+")
     // #424: image blocks, none is fine, then its caption.
     expect(containerContent("gallery")).toBe("image* galleryCaption")
     // #426: the 2–4 limit is the table's, not the schema's (`countNotInSchema`), each column holding flow and details.
     expect(containerContent("columns")).toBe("column+")
-    expect(containerContent("column")).toBe("(block | tableBlock | video | audio | file | embed | buttons | spacer | details)+")
+    expect(containerContent("column")).toBe("(block | tableBlock | video | audio | file | embed | html | buttons | spacer | details)+")
     // #427: `*`, so a merge that empties one doesn't cost its image (`emptyNotInSchema`); the table still says 1+.
-    expect(containerContent("cover")).toBe("(block | tableBlock | video | audio | file | embed | buttons | spacer)*")
-    expect(containerContent("media_text")).toBe("(block | tableBlock | video | audio | file | embed | buttons | spacer | details)*")
-    expect(topLevelContent()).toBe("(block | tableBlock | video | audio | file | embed | buttons | spacer | group | details | gallery | columns | cover | mediaText)+")
+    expect(containerContent("cover")).toBe("(block | tableBlock | video | audio | file | embed | html | buttons | spacer)*")
+    expect(containerContent("media_text")).toBe("(block | tableBlock | video | audio | file | embed | html | buttons | spacer | details)*")
+    expect(topLevelContent()).toBe("(block | tableBlock | video | audio | file | embed | html | buttons | spacer | group | details | gallery | columns | cover | mediaText)+")
   })
 
   it("a cover or media & text with no image to show is out of the reading order, with its blocks (#427)", () => {

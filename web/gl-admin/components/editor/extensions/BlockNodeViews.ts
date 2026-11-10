@@ -27,6 +27,7 @@ import { hasHeaderRow } from "./TableBlock"
 import { DETAILS_OPEN_HELP, DETAILS_OPEN_LABEL } from "./DetailsBlock"
 import { button, MediaBlockView, MediaLookupTracker, mediaIcon, missingPanel } from "./MediaBlockViews"
 import { EmbedBlockView } from "./EmbedBlockViews"
+import { HtmlBlockView } from "./HtmlBlockViews"
 import { GALLERY_EMPTY_FRESH, GALLERY_EMPTY_TEXT, GALLERY_EMPTY_TITLE } from "./GalleryBlock"
 import { chooseGalleryImages, chooseMediaFor, uploadGalleryImages } from "../blocks/mediaPicking"
 import { deleteBlockTr, editorBlockAt, refOfBlock } from "../utils/blockTree"
@@ -97,6 +98,8 @@ export const BlockNodeViews = Extension.create({
             file: (node, view, getPos) => new MediaBlockView(node, view, getPos as () => number | undefined, editor),
             // #425 (EmbedBlockViews.ts): nothing from the provider loads until Load.
             embed: (node, view, getPos) => new EmbedBlockView(node, view, getPos as () => number | undefined, editor),
+            // #428 (HtmlBlockViews.ts): a code field for admins, a locked preview for the rest.
+            html: (node, view, getPos) => new HtmlBlockView(node, view, getPos as () => number | undefined, editor),
             // #426: columns, buttons and the spacer (LayoutBlockViews.ts).
             columns: (node, view, getPos) => new ColumnsView(node, view, getPos as () => number | undefined, editor),
             buttons: (node, view, getPos) => new ButtonsView(node, view, getPos as () => number | undefined, editor),

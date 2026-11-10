@@ -67,6 +67,8 @@ type Querier interface {
 	ClaimUserInvitation(ctx context.Context, tokenHash []byte) (UserInvitation, error)
 	// Frees a location for another menu (assigning a location moves it).
 	ClearMenuLocation(ctx context.Context, arg ClearMenuLocationParams) error
+	// After a publish: rows the published body doesn't use aren't on the site.
+	ClearPublishedHTMLSnippetsExcept(ctx context.Context, arg ClearPublishedHTMLSnippetsExceptParams) error
 	// The source's category terms (taxonomy "category"), the template's saved
 	// category. Tags and other taxonomies describe one post, not a kind of post.
 	CopyPostCategoryTermsToTemplate(ctx context.Context, arg CopyPostCategoryTermsToTemplateParams) error
@@ -139,6 +141,7 @@ type Querier interface {
 	CreatePostAccessRequest(ctx context.Context, arg CreatePostAccessRequestParams) (PostAccessRequest, error)
 	CreatePostComment(ctx context.Context, arg CreatePostCommentParams) (PostComment, error)
 	CreatePostCommentThread(ctx context.Context, arg CreatePostCommentThreadParams) (PostCommentThread, error)
+	CreatePostHTMLSnippet(ctx context.Context, arg CreatePostHTMLSnippetParams) (PostHtmlSnippet, error)
 	CreatePostMedia(ctx context.Context, arg CreatePostMediaParams) (PostMedium, error)
 	CreatePostMeta(ctx context.Context, arg CreatePostMetaParams) (PostMetum, error)
 	// Post templates (#322, 000043). A template is not a post: nothing in post.sql
@@ -522,6 +525,9 @@ type Querier interface {
 	// Every comment of a post's threads (deleted ones too, without a body), in thread
 	// order, with the author's current name.
 	ListPostComments(ctx context.Context, postID int64) ([]ListPostCommentsRow, error)
+	// Custom HTML (#428, 000053). Every query names the post: a snippet id from another post
+	// finds nothing.
+	ListPostHTMLSnippets(ctx context.Context, postID int64) ([]PostHtmlSnippet, error)
 	// A post's ledger (tests and support).
 	ListPostMentionNotifications(ctx context.Context, postID int64) ([]PostMentionNotification, error)
 	// A post's reminders (tests and support).
@@ -731,6 +737,10 @@ type Querier interface {
 	// published post's snapshot was kept, so it is live again as it was. No row:
 	// missing or not in the trash.
 	RestorePostFromTrash(ctx context.Context, id int64) (Post, error)
+	// Restoring a version: the markup it was published with, under the same id, whether the
+	// row was edited or deleted since. published_html is left alone: the site doesn't change
+	// until Update.
+	RestorePostHTMLSnippet(ctx context.Context, arg RestorePostHTMLSnippetParams) error
 	// Restoring a version's settings (#358, #357): the working SEO fields. A social
 	// image deleted since is left out (NULL), like a deleted featured image.
 	RestorePostSEO(ctx context.Context, arg RestorePostSEOParams) error
@@ -801,8 +811,11 @@ type Querier interface {
 	// Used by the variant backfill. changed_at is left alone: nothing the user
 	// edited changed.
 	SetMediaVariants(ctx context.Context, arg SetMediaVariantsParams) (Medium, error)
+	SetPostHTMLSnippetPublished(ctx context.Context, arg SetPostHTMLSnippetPublishedParams) error
 	SetPostTypeActive(ctx context.Context, arg SetPostTypeActiveParams) error
 	SetPostTypeActiveByRegisteredBy(ctx context.Context, arg SetPostTypeActiveByRegisteredByParams) error
+	// Inside a publish, before the version is used: the working copy with its markup.
+	SetPostVersionBlockDoc(ctx context.Context, arg SetPostVersionBlockDocParams) error
 	// Publishing also makes the post public: post_status follows the snapshot, so a
 	// post published from the editor is not left as 'draft' in the database. The
 	// published settings are the version's (#358); without a version (a post created
@@ -810,6 +823,8 @@ type Querier interface {
 	// is done once the post is published, by the scheduler or by hand: its time and
 	// retry state are cleared.
 	SetPublishedVersionOnPost(ctx context.Context, arg SetPublishedVersionOnPostParams) error
+	// Inside ScheduleUpdateTx: the frozen body with its markup.
+	SetScheduledUpdateBlockDoc(ctx context.Context, arg SetScheduledUpdateBlockDocParams) error
 	// Sets (or, with '', removes) the avatar and returns the one it replaced, so the
 	// API can delete that file after the commit. The row lock makes two uploads at
 	// once each see the other's file as the previous one, so neither leaks.
@@ -875,6 +890,7 @@ type Querier interface {
 	UpdatePostBlockDocFromCollab(ctx context.Context, arg UpdatePostBlockDocFromCollabParams) (int64, error)
 	// An edit by the author. sql.ErrNoRows when it was deleted meanwhile.
 	UpdatePostCommentBody(ctx context.Context, arg UpdatePostCommentBodyParams) (PostComment, error)
+	UpdatePostHTMLSnippet(ctx context.Context, arg UpdatePostHTMLSnippetParams) (PostHtmlSnippet, error)
 	UpdatePostMeta(ctx context.Context, arg UpdatePostMetaParams) (PostMetum, error)
 	// PUT /posts/:id/template (#336): the page's working template ('' = the theme's
 	// default). On a published page it reaches the site on Update (golive_post_settings,

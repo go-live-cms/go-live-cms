@@ -583,6 +583,16 @@ are the most fragile part of the codebase. **Before editing anything under
   The public `src/components/blocks/details/` is the browser's own `<details>` (no script) and the
   default theme styles it. History diffs its summary like a caption and `open` as an attribute.
   Rules: `gl-admin/lib/collaboration/CLAUDE.md` (blockBridge notes, Details).
+- **Custom HTML (#428, design `docs/design/block-library.md` 5):** the Advanced entry in the catalog
+  (`/html`, admins only, the server enforces it). The node is `extensions/HtmlBlock.ts` (an atom
+  holding a snippet id, never markup), the view `extensions/HtmlBlockViews.ts`: an admin gets HTML /
+  Preview and a code field (Tab indents, Esc then Tab leaves; saved debounced, and flushed before
+  Publish), everyone else the locked preview with "Only admins can edit this block", and can still
+  move it (`ui/HtmlToolbar.tsx`). The markup is `lib/htmlSnippetsStore.ts`, memory only, from `lib/api/
+  htmlSnippets.ts`; read when a block first asks, so a post without one costs no request. Previews
+  show what the server kept (and through DOMPurify); a link in one doesn't navigate. The public
+  `src/components/blocks/html/` outputs `attrs.html` and nothing else. Rules:
+  `gl-admin/lib/collaboration/CLAUDE.md` (blockBridge notes), `api/CLAUDE.md` ("Custom HTML").
 - **Columns, buttons, spacer (#426, design `docs/design/block-library.md` 2.2, 4):** Layout
   entries in the catalog (`/columns`, whose insert opens `ui/ColumnsPicker.ts`: four layouts, Esc
   inserts nothing; `/buttons`; `/spacer`). Nodes in `extensions/ColumnsBlock.ts`, `ButtonsBlock.ts`,

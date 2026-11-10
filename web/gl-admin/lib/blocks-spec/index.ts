@@ -14,6 +14,7 @@ import {
   type SpacerSize,
 } from "./layoutBlocks"
 import { EMBED_PROVIDERS, isValidEmbedRef, normalizeEmbedTitle, type EmbedProvider } from "./embeds"
+import { isSnippetId } from "./customHtml"
 import {
   COVER_ALIGNS,
   COVER_OVERLAY_MAX,
@@ -31,6 +32,7 @@ export * from "./media"
 export * from "./inlineNodes"
 export * from "./layoutBlocks"
 export * from "./embeds"
+export * from "./customHtml"
 export * from "./coverMedia"
 
 // Block Spec v1 - Authoritative Types
@@ -59,6 +61,7 @@ export type KnownBlockType =
   | "audio"
   | "file"
   | "embed"
+  | "html"
   | "columns"
   | "column"
   | "buttons"
@@ -501,6 +504,19 @@ export type EmbedBlock = BaseBlock<
     ref?: string
     title?: string
     caption?: CaptionText[]
+  }
+>
+
+/**
+ * Custom HTML (#428), a flow block: a snippet id and nothing else in a working copy.
+ * `html`, the sanitized markup, is written by publish and exists only in a published
+ * document or a version (`customHtml.ts`).
+ */
+export type HtmlBlock = BaseBlock<
+  "html",
+  {
+    snippetId?: string
+    html?: string
   }
 >
 
@@ -979,6 +995,13 @@ export const zEmbed = zBase.extend({
     }),
 })
 
+// #428. Strict: the store only ever writes a working copy, where markup has no business
+// (the bridge never produces it; this is what would catch a change that did).
+export const zHtml = zBase.extend({
+  type: z.literal("html"),
+  attrs: z.object({ snippetId: z.string().refine(isSnippetId, "is not a snippet id").optional() }).strict(),
+})
+
 /**
  * Catch-all for theme/custom block types not in the known set. Any version: a theme
  * block keeps the version its theme wrote even when that theme isn't installed here.
@@ -1013,6 +1036,7 @@ const knownBlockSchemas: Record<KnownBlockType, z.ZodTypeAny> = {
   audio: zAudio,
   file: zFile,
   embed: zEmbed,
+  html: zHtml,
   columns: zColumns,
   column: zColumn,
   buttons: zButtons,

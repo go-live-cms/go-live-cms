@@ -290,6 +290,21 @@ describe("schemaFingerprint (#416)", () => {
       expect(embed).toBeDefined()
     })
 
+    it("custom HTML (#428) changed it: a node type the doc and its containers name, with its one attr", () => {
+      const after = getCoreSchema()
+      expect(after.nodes.html).toBeDefined()
+      expect(describeSchemaForFingerprint(after)).toContain("html")
+      // A stale tab that didn't know the attr would rewrite the element and lose the id.
+      const spec = after.spec.nodes.get("html")!
+      const { snippetId: _snippetId, ...attrs } = spec.attrs as Record<string, unknown>
+      const withoutSnippetId = new Schema({
+        nodes: after.spec.nodes.update("html", { ...spec, attrs: attrs as NonNullable<typeof spec.attrs> }),
+        marks: after.spec.marks,
+        topNode: after.spec.topNode,
+      })
+      expect(schemaFingerprint(withoutSnippetId)).not.toBe(schemaFingerprint(after))
+    })
+
     it("columns, buttons and the spacer (#426) changed it: new node types, named by the doc, a group and a details", () => {
       // The schema as it was before #426: none of them, and a doc, group and details without them.
       const { columns, buttons, spacer, document: _document, group: _group, details: _details, cover: _cover, mediaText: _mediaText, ...rest } = schemaExtensions({ collaborating: true })

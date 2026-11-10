@@ -20,6 +20,7 @@ import { GlHighlight, GlSubscript, GlSuperscript } from "../../components/editor
 import { AudioBlock, FileBlock, MediaBlockCommands, VideoBlock } from "../../components/editor/extensions/MediaBlocks"
 import { ContentLink, DateChip, Mention } from "../../components/editor/extensions/InlineNodes"
 import { EmbedBlock, EmbedBlockCommands } from "../../components/editor/extensions/EmbedBlock"
+import { HtmlBlock, HtmlBlockCommands } from "../../components/editor/extensions/HtmlBlock"
 import { Columns } from "../../components/editor/extensions/ColumnsBlock"
 import { Buttons } from "../../components/editor/extensions/ButtonsBlock"
 import { Spacer } from "../../components/editor/extensions/SpacerBlock"
@@ -113,6 +114,10 @@ export function schemaExtensions({ collaborating }: { collaborating: boolean }) 
     // fingerprint (#416).
     embed: EmbedBlock,
     embedCommands: EmbedBlockCommands,
+    // #428: custom HTML (a snippet id; the markup is the API's, admins only). A new node
+    // type, so it changes the fingerprint (#416).
+    html: HtmlBlock,
+    htmlCommands: HtmlBlockCommands,
     // #426: columns (with `column`) and, in flow, buttons (with `button`) and the spacer.
     // Each changes the fingerprint (#416), so a stale tab is refused rather than deleting them.
     columns: Columns,

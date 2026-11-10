@@ -149,6 +149,8 @@ var postReadRouteTemplates = []string{
 	"/api/v1/posts/:id/comments",
 	// Per-block "Last edited by" (#328).
 	"/api/v1/posts/:id/block-edits",
+	// Custom HTML's working markup (#428): the locked preview.
+	"/api/v1/posts/:id/html-snippets",
 }
 
 // moderatorPostRoutes are per-post GET routes for editors and admins only

@@ -251,6 +251,8 @@ const TYPE_LABELS: Record<string, string> = {
   file: "File",
   // #425
   embed: "Embed",
+  // #428
+  html: "Custom HTML",
   // #426
   columns: "Columns",
   column: "Column",
@@ -262,7 +264,7 @@ const TYPE_LABELS: Record<string, string> = {
 }
 
 /** The media blocks without text of their own (#423): their caption or label is diffed instead. */
-const MEDIA_ONLY = new Set(["image", "video", "audio", "file", "embed"])
+const MEDIA_ONLY = new Set(["image", "video", "audio", "file", "embed", "html"])
 /** The blocks whose caption is a word diff (an image's, a table's, a video's, an audio block's). */
 const CAPTIONED = new Set(["image", "table", "video", "audio", "embed"])
 
@@ -367,6 +369,10 @@ function attrChanges(v: Block, w: Block): AttrChange[] {
       add("title", "Title", display(va.title), display(wa.title))
       break
     }
+    // #428: the markup, as published and as the working table has it (`withWorkingHtml`).
+    case "html":
+      add("html", "HTML", display(va.html), display(wa.html))
+      break
     case "group": {
       const width = (a: Record<string, unknown>) => GROUP_WIDTH_LABELS[String(a.align ?? "content")] ?? GROUP_WIDTH_LABELS.content
       const style = (a: Record<string, unknown>) => GROUP_STYLE_LABELS[String(a.style ?? "none")] ?? GROUP_STYLE_LABELS.none
