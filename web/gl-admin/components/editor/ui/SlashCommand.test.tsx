@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from "vitest"
 import { Editor } from "@tiptap/core"
 import { schemaExtensions } from "@gl-admin/lib/collaboration/schema"
 import { stubJsdomRangeLayout } from "@gl-admin/lib/collaboration/testHelpers"
-import { CORE_BLOCKS, ICONS, flattenSections, menuEntries, searchCatalog, type CatalogEntry } from "../blocks/catalog"
+import { CORE_BLOCKS, flattenSections, menuEntries, searchCatalog, type CatalogEntry } from "../blocks/catalog"
 import { SLASH_MENU_ID, SlashCommandExtension, SlashCommandList, type SlashCommandListRef } from "./SlashCommand"
 
 // The slash menu (#415) through the real suggestion plugin and the real list: what opens
@@ -14,8 +14,6 @@ import { SLASH_MENU_ID, SlashCommandExtension, SlashCommandList, type SlashComma
 
 stubJsdomRangeLayout()
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
-
-const customHtml: CatalogEntry = { id: "html", type: "html", name: "Custom HTML", group: "advanced", icon: { path: ICONS.html }, insert: () => {} }
 
 let editor: Editor | null = null
 let root: Root | null = null
@@ -130,7 +128,7 @@ describe("the slash menu", () => {
     makeEditor()
     type("/")
     const groups = Array.from(document.querySelectorAll('[role="listbox"] > [role="group"]')).map((g) => g.getAttribute("aria-label"))
-    expect(groups).toEqual(["Text", "Media", "Layout", "Embeds"])
+    expect(groups).toEqual(["Text", "Media", "Layout", "Embeds", "Advanced"])
     expect(document.querySelector(".editor-insert__footer")!.textContent).toBe("↑↓ to move↵ to insertesc to close")
 
     type("he")
@@ -183,15 +181,15 @@ describe("the slash menu", () => {
     press("ArrowDown")
     expect(active()!.textContent).toBe("Group")
     // Columns, Buttons and Spacer (#426), the embeds (#425), then it wraps.
-    for (const name of ["Columns", "Buttons", "Spacer", "YouTube", "Vimeo", "X", "Embed a link"]) {
+    for (const name of ["Columns", "Buttons", "Spacer", "YouTube", "Vimeo", "X", "Embed a link", "Custom HTMLAdmins"]) {
       press("ArrowDown")
       expect(active()!.textContent).toBe(name)
     }
     press("ArrowDown")
     expect(active()!.textContent).toBe("Paragraph")
     press("ArrowUp")
-    expect(active()!.textContent).toBe("Embed a link")
-    for (const name of ["X", "Vimeo", "YouTube", "Spacer", "Buttons", "Columns", "Group", "Divider---"]) {
+    expect(active()!.textContent).toBe("Custom HTMLAdmins")
+    for (const name of ["Embed a link", "X", "Vimeo", "YouTube", "Spacer", "Buttons", "Columns", "Group", "Divider---"]) {
       press("ArrowUp")
       expect(active()!.textContent).toBe(name)
     }
@@ -288,7 +286,7 @@ describe("the slash menu", () => {
 
 describe("the role gate in the menu", () => {
   it("shows Advanced with the Admins pill to admins only", () => {
-    makeEditor("<p>first</p><p></p>", menuEntries({ role: "admin" }, [...CORE_BLOCKS, customHtml]))
+    makeEditor("<p>first</p><p></p>", menuEntries({ role: "admin" }, CORE_BLOCKS))
     type("/")
     const html = options().find((o) => o.textContent?.startsWith("Custom HTML"))!
     expect(html.querySelector(".editor-insert__pill")!.textContent).toBe("Admins")
@@ -296,8 +294,8 @@ describe("the role gate in the menu", () => {
 
     // A contributor isn't offered the embeds (#425).
     const embeds = CORE_BLOCKS.filter((entry) => entry.group === "embeds").length
-    for (const [role, count] of [["editor", CORE_BLOCKS.length], ["contributor", CORE_BLOCKS.length - embeds]] as const) {
-      makeEditor("<p>first</p><p></p>", menuEntries({ role }, [...CORE_BLOCKS, customHtml]))
+    for (const [role, count] of [["editor", CORE_BLOCKS.length - 1], ["contributor", CORE_BLOCKS.length - 1 - embeds]] as const) {
+      makeEditor("<p>first</p><p></p>", menuEntries({ role }, CORE_BLOCKS))
       type("/")
       expect(options()).toHaveLength(count)
       expect(options().some((o) => o.textContent?.includes("Custom HTML"))).toBe(false)

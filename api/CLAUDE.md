@@ -696,6 +696,50 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   a reader. Stored docs and versions aren't touched: allowing it again brings them back. Only a doc
   with an embed costs the settings lookup; if the lookup fails every embed is hidden.
 
+## Custom HTML (#428, `000053`, `post_html_snippets.go`, `customhtml/`)
+
+The one place the public site outputs raw HTML. **The markup is not in the Yjs doc.**
+
+- Block `html` v1 holds `snippetId` (a UUID, `customhtml.ValidSnippetID`) and nothing else:
+  `sanitizeHTMLBlockAttrs` is an allowlist, so no client can get markup into a working copy through
+  the collab store or `POST /posts`. Editors and contributors can move or delete the block.
+- `post_html_snippets` (`post_id`, `snippet_id`, `html`, `published_html`), PK on both ids, so
+  every lookup names the post and another post's id finds nothing (it renders nothing). `GET
+  /posts/:id/html-snippets` is `canReadPost` (the locked preview); **`POST` and `PUT
+  .../:snippet_id` are `requireSiteAdmin`**, the only client way in. Ids are the server's.
+  Responses carry what was kept after sanitizing. Activity: `html_edited` (throttled).
+- **The sanitizer is `customhtml.Sanitize` (bluemonday), an allowlist of elements, attributes, URL
+  schemes, CSS properties and CSS functions; nothing is filtered by hand.** No script, style,
+  iframe, object, embed, form controls, svg or math, `on*`, `id`, `name` or `data-*`
+  (`/gl-embeds.js` reads `data-embed-*`, so they would bypass Allowed embeds); `style` is checked
+  per declaration (`safeCSSValue`: an allowlist of functions, so no `expression()`, and `url()` only
+  http(s) or a path). It runs on write and on publish; `customhtmltest.XSSPayloads` is the table
+  both `customhtml` and the API's tests run. It lives outside `api` so `db` can call it and no
+  publish path can leave it out.
+- **Publish** (`publishLockedPost`, so Publish, Update, bulk and the scheduler): after the version
+  row is inserted, `materializeHTML` copies the post's own sanitized markup into `attrs.html`
+  (absent when the id isn't this post's) and rewrites the version. Versions and `/public` never
+  read the working table. `published_block_hash` hashes the published doc **without** `attrs.html`
+  (`golive_block_doc_without_html_markup`, 000053), or every such post would always have "changes";
+  an admin's edit, which changes no `block_doc`, is the other half (`published_html` differs from
+  `html`, `golive_post_html_snippets_changed`, inside `golive_post_has_unpublished_changes` and
+  `GetPostSettingsState`). A row the published body doesn't use has `published_html` NULL.
+- **A scheduled update freezes the markup** with its body (`ScheduleUpdateTx`); it's sanitized again
+  when applied, and an admin's later edit is a change waiting for the next Update.
+- **Duplicate and templates** copy snippets with new ids (`copyHTMLSnippets`, `customhtml.Rekey`):
+  duplicates from the source's rows; a template holds the markup in its own `block_doc` (a snapshot,
+  like a version) and a post made from it gets rows. An id that isn't the source's is dropped, so a
+  copy never inherits another post's snippet.
+- **Restore** (`restore-settings`, editors and admins): the version's markup, read from the version
+  and sanitized again, goes back into the working row under the same id, replacing a later edit and
+  recreating a deleted row. Like the rest of a restore it reaches the site on Update. An orphan row
+  (its block deleted) stays until the post is deleted permanently, so undo and restore find it.
+- Tests: `customhtml/*_test.go`, `post_html_snippets_test.go` (real DB: the role matrix, an editor
+  token writing directly, another post's snippet, inline markup through the collab PUT and `POST
+  /posts`, the payload table on write and on publish, publish, the public page without the row,
+  "Changes not published", scheduled updates, duplicate, template, restore) and
+  `TestHTMLSnippetRoutesRequireRole` (`htmlSnippetRoutes`, the route audit).
+
 ## Categories, merges and redirects (#331, #146, `000047`)
 
 - **One category per post** (taxonomy `category`, `db.CategoryTaxonomy`): `PUT

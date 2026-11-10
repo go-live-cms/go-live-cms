@@ -1,4 +1,4 @@
-import { Extension } from "@tiptap/core"
+import { Extension, type Editor } from "@tiptap/core"
 import { NodeSelection, Selection, TextSelection, type EditorState, type Transaction } from "@tiptap/pm/state"
 import {
   childBlocks,
@@ -30,6 +30,14 @@ import { applyBlockMove } from "../utils/blockMoveSync"
 // outline is `.ProseMirror-selectednode`) and collaborators see it as a range. Each key is
 // one transaction this user makes; none is an appendTransaction (rule 7 in
 // lib/collaboration/CLAUDE.md), and a move or delete is one Yjs transaction and one undo step.
+
+/** The block one place up or down among its siblings (⌘⇧↑↓, the custom HTML toolbar, #428). */
+export function moveBlockBy(editor: Editor, block: EditorBlock, dir: -1 | 1) {
+  const { state } = editor
+  const target = siblingTarget(state.doc, block, dir)
+  const move = target ? planBlockMove(state, block, target) : null
+  if (move) applyBlockMove(editor.view, move)
+}
 
 function selectBlock(state: EditorState, block: EditorBlock): Transaction {
   return state.tr.setSelection(NodeSelection.create(state.doc, block.pos)).scrollIntoView()
@@ -113,12 +121,9 @@ export const BlockNavigationKeys = Extension.create<
   addKeyboardShortcuts() {
     const move = (dir: -1 | 1) => () => {
       if (!this.editor.isEditable) return false
-      const { state } = this.editor
-      const block = editorBlockAtSelection(state)
+      const block = editorBlockAtSelection(this.editor.state)
       if (!block) return false
-      const target = siblingTarget(state.doc, block, dir)
-      const move = target ? planBlockMove(state, block, target) : null
-      if (move) applyBlockMove(this.editor.view, move)
+      moveBlockBy(this.editor, block, dir)
       // Never the browser's "select to the start" at the first block.
       return true
     }

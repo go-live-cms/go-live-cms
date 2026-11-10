@@ -40,6 +40,7 @@ const POST_VERBS: Record<string, string> = {
   created: "created",
   updated: "updated the settings of",
   edited: "edited",
+  html_edited: "edited the custom HTML of",
   published: "published",
   unpublished: "unpublished",
   scheduled: "scheduled",

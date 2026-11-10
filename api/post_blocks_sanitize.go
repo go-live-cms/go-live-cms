@@ -5,6 +5,8 @@ import (
 	"net/url"
 	"strings"
 	"unicode"
+
+	"github.com/go-live-cms/go-live-cms/customhtml"
 )
 
 // Server-side sanitization of Block Spec v1 documents (issue #188).
@@ -109,6 +111,8 @@ func sanitizeBlock(block map[string]interface{}) {
 		keepOnlyAttrs(attrs)
 	case footnoteBlockType:
 		sanitizeFootnoteAttrs(attrs)
+	case customhtml.BlockType:
+		sanitizeHTMLBlockAttrs(attrs)
 	case "cover":
 		sanitizeCoverAttrs(attrs)
 	case "media_text":
@@ -426,6 +430,17 @@ func sanitizeFileAttrs(attrs map[string]interface{}) {
 	keepOnlyAttrs(attrs, "mediaId", "label")
 	sanitizeMediaID(attrs)
 	sanitizePlainText(attrs, "label", fileLabelMaxRunes)
+}
+
+// sanitizeHTMLBlockAttrs (#428): a custom HTML block in a working copy holds a snippet id
+// and nothing else. This is what stops any client, whatever it sends through the collab
+// server or POST /posts, from putting markup in the document: `html` is deleted here, and
+// only a publish writes it, from the admin-only table.
+func sanitizeHTMLBlockAttrs(attrs map[string]interface{}) {
+	keepOnlyAttrs(attrs, "snippetId")
+	if id, ok := attrs["snippetId"].(string); !ok || !customhtml.ValidSnippetID(id) {
+		delete(attrs, "snippetId")
+	}
 }
 
 // sanitizeCite makes attrs' `cite` plain text (see sanitizeBlockquoteAttrs).

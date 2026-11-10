@@ -114,7 +114,6 @@ type Post struct {
 	Slug                 string                `json:"slug"`
 	PublishedSettings    pqtype.NullRawMessage `json:"published_settings"`
 	BlockDocHash         sql.NullString        `json:"block_doc_hash"`
-	PublishedBlockHash   sql.NullString        `json:"published_block_hash"`
 	SeoTitle             string                `json:"seo_title"`
 	SeoDescription       string                `json:"seo_description"`
 	SocialImageID        sql.NullInt64         `json:"social_image_id"`
@@ -129,6 +128,7 @@ type Post struct {
 	DeletedAt            sql.NullTime          `json:"deleted_at"`
 	TrashedFromStatus    sql.NullString        `json:"trashed_from_status"`
 	PageTemplate         string                `json:"page_template"`
+	PublishedBlockHash   sql.NullString        `json:"published_block_hash"`
 }
 
 type PostAccessRequest struct {
@@ -174,6 +174,15 @@ type PostCommentThread struct {
 	CreatedAt  time.Time     `json:"created_at"`
 	ResolvedAt sql.NullTime  `json:"resolved_at"`
 	ResolvedBy sql.NullInt64 `json:"resolved_by"`
+}
+
+type PostHtmlSnippet struct {
+	PostID        int64          `json:"post_id"`
+	SnippetID     string         `json:"snippet_id"`
+	Html          string         `json:"html"`
+	PublishedHtml sql.NullString `json:"published_html"`
+	CreatedAt     time.Time      `json:"created_at"`
+	UpdatedAt     time.Time      `json:"updated_at"`
 }
 
 type PostMedium struct {

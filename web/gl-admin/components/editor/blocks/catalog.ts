@@ -8,6 +8,7 @@ import { TABLE_ICON } from "../extensions/TableBlock"
 import { acceptsFootnoteRef } from "../extensions/FootnotesBlock"
 import { EMBED_ICONS, MEDIA_BLOCK_ICONS, type EmbedProvider } from "@gl-admin/lib/blocks-spec"
 import { requestEmbedFieldFocus, takeEmbedFieldFocus } from "./embedLinks"
+import { requestHtmlFieldFocus, takeHtmlFieldFocus } from "./htmlSnippets"
 import { currentAllowedEmbeds } from "@gl-admin/lib/editorSettings"
 
 // The block catalog (#415, docs/design/block-library.md 3.1): every block the editor can
@@ -466,6 +467,21 @@ export const CORE_BLOCKS: readonly CatalogEntry[] = [
     icon: { path: EMBED_ICONS.link },
     roles: EMBED_ROLES,
     insert: (editor, range) => insertEmbed(editor, range, null),
+  },
+  // Advanced (#428): an `advanced` entry is admins only (`entryRoles`). That only hides it:
+  // the markup is written through admin-only API routes, so the server is what enforces it.
+  // No `.focus()`: TipTap focuses the editor a frame later, taking focus from the code field.
+  {
+    id: "html",
+    type: "html",
+    name: "Custom HTML",
+    group: "advanced",
+    keywords: ["embed code", "markup", "snippet", "raw"],
+    icon: { path: ICONS.html },
+    insert: (editor, range) => {
+      requestHtmlFieldFocus()
+      if (!editor.chain().deleteRange(range).insertHtmlBlock().run()) takeHtmlFieldFocus()
+    },
   },
 ]
 

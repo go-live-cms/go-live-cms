@@ -97,6 +97,9 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
       schema.embed,
       // #425: insert an embed, its caption; no schema.
       schema.embedCommands,
+      // #428: a snippet id, never markup; its command has no schema.
+      schema.html,
+      schema.htmlCommands,
       // #426
       schema.columns,
       schema.buttons,
@@ -148,6 +151,7 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
             case "audio":
             case "file":
             case "embed":
+            case "html":
               return ""
             case "imageCaption":
             case "tableCaption":

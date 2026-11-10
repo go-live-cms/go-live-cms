@@ -281,6 +281,11 @@ interface BlockComponentProps {
   per-provider templates on click, adds `.is-loaded`, `role="region"` and moves focus in; X loads its
   widget then. Nothing renders for an empty block, an invalid one, or a provider the site no longer
   allows (the API empties those).
+- **Custom HTML (#428, `html/`, "Published · layout"):** the one raw HTML on the site:
+  `div.html-block` around `attrs.html`, the string the API sanitized on publish, and nothing else
+  (never a client's value: the working copy has only a snippet id). Nothing renders without it, so
+  a snippet id that isn't the post's shows nothing. The admin's own markup is styled by the theme's
+  normal rules and its own classes.
 - **Cover, media & text (#427, "Published · media & embeds", `cover/`, `media_text/`):** `div.cover`
   (`alignwide` / `alignfull`, `--dim` the overlay as a fraction) with the image, then `div.cover-inner`
   holding the blocks; `div.media-text` (`is-media-right`) with `figure.media-text-media` first, so it
