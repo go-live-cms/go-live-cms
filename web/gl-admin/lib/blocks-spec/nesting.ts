@@ -18,6 +18,8 @@
  * the public renderer and the tests all read the same table.
  */
 
+import { isMediaMissing } from "./media"
+
 /**
  * The core Block Spec types that hold no blocks (design 2.2's `flow`). Lists count as
  * flow: their items are their own business, as before #414. Theme blocks and any type
@@ -400,6 +402,8 @@ export function blocksInReadingOrder(doc: DocLike | null | undefined): string[] 
     const block = Object.prototype.hasOwnProperty.call(blocks, id) ? blocks[id] : undefined
     if (!block || typeof block !== "object") return
     seen.add(id)
+    // A cover or media & text (#427) with no image to show isn't on the page, nor is what it holds.
+    if ((block.type === "cover" || block.type === "media_text") && (block.attrs?.mediaId == null || isMediaMissing(doc, block.attrs.mediaId))) return
     out.push(id)
     if (isContainerType(block.type) && Array.isArray(block.children)) block.children.forEach(visit)
   }

@@ -38,7 +38,7 @@ describe("text on a cover (4.5:1 with the overlay)", () => {
 
   it("is white in both palettes: the overlay is black, so it doesn't follow the theme", () => {
     expect(rule(".cover")).toContain("color: #ffffff")
-    expect(rule(".site .prose .cover-inner a:not(.btn),") || css).toContain("color: #ffffff")
+    expect(rule(".site .prose .cover-inner a:not(.btn):hover")).toContain("color: #ffffff")
     expect(themeConfig.colors?.light).toBeDefined()
     expect(themeConfig.colors?.dark).toBeDefined()
   })
@@ -110,7 +110,7 @@ describe("at 1280", () => {
   })
 
   it("the blocks inside reset the prose rhythm for themselves", () => {
-    expect(rule(".prose .media-text-body > * + *") || css).toMatch(/margin-top: 0\.8em/)
+    expect(rule(".prose .media-text-body > * + *")).toContain("margin-top: 0.8em")
   })
 })
 

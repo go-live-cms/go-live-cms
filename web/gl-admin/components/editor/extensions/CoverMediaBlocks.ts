@@ -1,6 +1,7 @@
 import { Extension, mergeAttributes, Node } from "@tiptap/core"
 import { isChangeOrigin } from "@tiptap/extension-collaboration"
 import { Plugin, PluginKey, TextSelection, type EditorState, type Transaction } from "@tiptap/pm/state"
+import { Mapping } from "@tiptap/pm/transform"
 import {
   containerContent,
   containerOfNode,
@@ -180,15 +181,25 @@ export const EmptyContainerFill = Extension.create({
     return [
       new Plugin({
         key: emptyContainerFillKey,
-        appendTransaction(transactions, _old, state) {
+        appendTransaction(transactions, oldState, state) {
           if (!transactions.some((tr) => tr.docChanged) || transactions.some((tr) => isChangeOrigin(tr))) return null
+          const mapping = new Mapping()
+          for (const tr of transactions) mapping.appendMapping(tr.mapping)
+          const back = mapping.invert()
+          // Only one these changes emptied: a merge can leave one empty until the server's
+          // repair, and typing elsewhere meanwhile must not fill it or take the caret there.
+          const emptiedHere = (pos: number) => {
+            const before = oldState.doc.nodeAt(back.map(pos))
+            return !(before && before.type === state.doc.nodeAt(pos)?.type && before.childCount === 0)
+          }
           const positions: number[] = []
           const walk = (parent: typeof state.doc, start: number) => {
             parent.forEach((child, offset) => {
               const pos = start + offset
               const rule = containerOfNode(child.type.name)
-              if (rule?.emptyNotInSchema && child.childCount === 0) positions.push(pos)
-              else if (rule && !rule.emptyNotInSchema) walk(child, pos + 1)
+              if (rule?.emptyNotInSchema && child.childCount === 0) {
+                if (emptiedHere(pos)) positions.push(pos)
+              } else if (rule && !rule.emptyNotInSchema) walk(child, pos + 1)
             })
           }
           walk(state.doc, 0)

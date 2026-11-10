@@ -174,13 +174,18 @@ export async function uploadGalleryImages(editor: Editor, pos: number, files: Fi
   return uploaded
 }
 
+const KIND_NOUNS: Record<MediaPickerKind, string> = { image: "an image", video: "a video", audio: "an audio file", document: "a document" }
+
 /**
  * Uploads `file` and points the block at `pos` at it (the block's own Upload). The block is
  * found again by id after the upload. Rejects with the upload's error.
  */
 export async function uploadMediaFor(editor: Editor, pos: number, file: File): Promise<Media> {
   const node = editor.state.doc.nodeAt(pos)
-  if (!node || !mediaKindOfNode(node)) throw new Error("This block can't hold a file")
+  const kind = node ? mediaKindOfNode(node) : null
+  if (!node || !kind) throw new Error("This block can't hold a file")
+  // The file dialog's filter is only a hint ("All files"), as in the picker's Upload.
+  if (file.type && !mimeMatchesKind(file.type, kind)) throw new Error(`${file.name} isn't ${KIND_NOUNS[kind]}`)
   const ref = refOfBlock({ node, pos })
   const media = await uploadMediaFile(file)
   applyMediaToBlock(editor, ref, media)

@@ -1244,10 +1244,10 @@
     overflow: hidden;
     position: relative;
 
+    // The whole image, uncropped: a click and the dot mean the same place on it.
     img {
-      aspect-ratio: 3 / 2;
       display: block;
-      object-fit: cover;
+      height: auto;
       width: 100%;
     }
   }

@@ -218,6 +218,16 @@ describe("the nesting limits (#427)", () => {
     expect(cover.attrs.mediaId).toBe(1)
   })
 
+  it("a cover a merge emptied isn't filled, and doesn't take the caret, when someone types elsewhere", () => {
+    const e = makeEditor({ type: "doc", content: [{ type: "cover", attrs: { "data-block-id": COVER, mediaId: 1 } }, para(AFTER, "after")] })
+    expect(e.state.doc.child(0).childCount).toBe(0)
+    const at = posOf(e, AFTER) + 1
+    e.view.dispatch(e.state.tr.setSelection(TextSelection.create(e.state.doc, at)))
+    e.view.dispatch(e.state.tr.insertText("x", at))
+    expect(e.state.doc.child(0).childCount).toBe(0)
+    expect(e.state.selection.$from.parent.attrs["data-block-id"]).toBe(AFTER)
+  })
+
   it("a selection across its blocks, deleted, keeps a block too", () => {
     const e = makeEditor(coverDoc())
     const from = posOf(e, HEAD) + 1
@@ -373,6 +383,14 @@ describe("the shared picker and missing media (#423)", () => {
     registerMediaPickerHost(e, { open: () => {} })
     await uploadMediaFor(e, posOf(e, COVER), new File(["x"], "a.jpg", { type: "image/jpeg" }))
     expect(nodeOf(e, COVER).attrs.mediaId).toBe(7)
+  })
+
+  it("Upload refuses a file that isn't an image; the file dialog's filter is only a hint", async () => {
+    const e = makeEditor(coverDoc({ mediaId: null }))
+    registerMediaPickerHost(e, { open: () => {} })
+    await expect(uploadMediaFor(e, posOf(e, COVER), new File(["x"], "notes.pdf", { type: "application/pdf" }))).rejects.toThrow("notes.pdf isn't an image")
+    expect(api.createMedia).not.toHaveBeenCalled()
+    expect(nodeOf(e, COVER).attrs.mediaId).toBeNull()
   })
 
   it("a deleted file shows \"The image file is missing\" with Replace; the blocks stay", async () => {

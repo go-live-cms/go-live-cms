@@ -137,15 +137,13 @@ const IMAGE_BLOCK_TYPES = new Set(["image", "cover", "media_text"])
 
 // isFirstImageBlock reports whether blockId is the first image in the doc, in
 // reading order at any depth (one inside a group counts, #414). That image is often
-// the largest thing above the fold, so it loads eagerly; later ones are lazy. A block
-// that won't render one (its media was deleted, a cover with none chosen) doesn't count.
+// the largest thing above the fold, so it loads eagerly; later ones are lazy. An image whose
+// media was deleted doesn't count (`blocksInReadingOrder` already leaves out a cover with none).
 export function isFirstImageBlock(doc: BlockDocV1, blockId: string): boolean {
   const blocks = doc.blocks as Record<string, { type?: string; attrs?: { mediaId?: unknown } } | undefined>
   const first = blocksInReadingOrder(doc).find((id) => {
     const block = blocks[id]
-    if (!block?.type || !IMAGE_BLOCK_TYPES.has(block.type)) return false
-    if (isMediaMissing(doc, block.attrs?.mediaId)) return false
-    return block.type === "image" || block.attrs?.mediaId !== undefined
+    return !!block?.type && IMAGE_BLOCK_TYPES.has(block.type) && !isMediaMissing(doc, block.attrs?.mediaId)
   })
   return first === blockId
 }

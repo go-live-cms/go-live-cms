@@ -10,7 +10,6 @@ import {
   COVER_OVERLAY_STEP,
   focalFromMedia,
   focalOfNodeAttrs,
-  focalPosition,
   isBlockDecorative,
   isCoverAlign,
   isMediaTextPosition,
@@ -56,6 +55,12 @@ function AxisField({ label, value, onCommit }: { label: string; value: number; o
   const id = useId()
   const [text, setText] = useState(String(value))
   useEffect(() => setText(String(value)), [value])
+  // On leaving the field or Enter, not per keystroke: typing 40 isn't a stop at 4% for everyone.
+  const commit = () => {
+    const parsed = /^\d{1,3}$/.test(text) ? normalizeFocalAxis(Number(text)) : null
+    if (parsed !== null && parsed !== value) onCommit(parsed)
+    else setText(String(value))
+  }
   return (
     <div className="block-settings__unit">
       <label htmlFor={id}>{label}</label>
@@ -64,12 +69,13 @@ function AxisField({ label, value, onCommit }: { label: string; value: number; o
         type="text"
         inputMode="numeric"
         value={text}
-        onChange={(event) => {
-          setText(event.target.value)
-          const parsed = /^\d{1,3}$/.test(event.target.value) ? normalizeFocalAxis(Number(event.target.value)) : null
-          if (parsed !== null) onCommit(parsed)
+        onChange={(event) => setText(event.target.value)}
+        onBlur={commit}
+        onKeyDown={(event) => {
+          if (event.key !== "Enter") return
+          event.preventDefault()
+          commit()
         }}
-        onBlur={() => setText(String(value))}
       />
       <span aria-hidden="true">%</span>
     </div>
@@ -104,7 +110,7 @@ export function FocalPointField({ editor, block, media }: { editor: TiptapEditor
         Focal point
       </span>
       <div className="block-settings__focal" onClick={onClick}>
-        <img src={getMediaVariantPreviewURL(media, "medium")} alt="" draggable={false} style={{ objectPosition: focalPosition(focal) }} />
+        <img src={getMediaVariantPreviewURL(media, "medium")} alt="" draggable={false} />
         <button
           type="button"
           className="block-settings__focal-dot"

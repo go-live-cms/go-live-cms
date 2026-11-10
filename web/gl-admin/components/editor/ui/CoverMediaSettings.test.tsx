@@ -75,6 +75,7 @@ const typeAxis = (input: HTMLInputElement, value: string) =>
     setter.call(input, value)
     input.dispatchEvent(new Event("input", { bubbles: true }))
   })
+const enter = (input: HTMLInputElement) => act(() => void input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })))
 const typeAlt = (value: string) =>
   act(() => {
     const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!
@@ -151,15 +152,28 @@ describe("the focal point's keyboard (\"Keyboard\" › Focal point)", () => {
     expect(attrs()).toBe(before)
   })
 
-  it("the X and Y fields take exact values, clamped; junk is ignored", async () => {
+  it("the X and Y fields take exact values on Enter, clamped; junk puts the value back", async () => {
     mount(cover({ focalX: 50, focalY: 40 }))
     await flush()
     typeAxis(axis("X"), "12")
+    // Nothing is written while typing.
+    expect(attrs().focalX).toBe(50)
+    enter(axis("X"))
     expect(attrs().focalX).toBe(12)
     typeAxis(axis("Y"), "400")
+    enter(axis("Y"))
     expect(attrs().focalY).toBe(100)
+    expect(axis("Y").value).toBe("100")
     typeAxis(axis("X"), "abc")
+    enter(axis("X"))
     expect(attrs().focalX).toBe(12)
+    expect(axis("X").value).toBe("12")
+  })
+
+  it("shows the whole image, so a click means the same place on it whatever the point is", async () => {
+    mount(cover({ focalX: 10, focalY: 90 }))
+    await flush()
+    expect((container.querySelector(".block-settings__focal img") as HTMLImageElement).style.objectPosition).toBe("")
   })
 
   it("a cover with no image yet has no focal point control", async () => {

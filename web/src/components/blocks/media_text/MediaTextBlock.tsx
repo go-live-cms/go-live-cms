@@ -2,6 +2,7 @@ import React from "react"
 import type { BlockComponentProps } from "../types"
 import { columnImageSizes } from "../columns/ColumnsBlock"
 import { containerImageFor } from "../utils/blockImage"
+import ContainerImg from "../utils/ContainerImg"
 import { ImageSizesContext } from "../utils/responsiveImage"
 
 /**
@@ -14,24 +15,13 @@ const MediaTextBlock: React.FC<BlockComponentProps> = ({ block, doc, renderBlock
   const sizes = columnImageSizes(0.5, "content")
   const shown = containerImageFor(doc, block as { id: string; type: "media_text"; attrs: unknown }, sizes)
   if (!shown) return null
-  const { image, alt, eager } = shown
   const right = (block.attrs as { position?: unknown } | undefined)?.position === "right"
-  const className = ["media-text", right && "is-media-right", !image && "is-no-media"].filter(Boolean).join(" ")
+  const className = ["media-text", right && "is-media-right", !shown.image && "is-no-media"].filter(Boolean).join(" ")
   return (
     <div id={anchorId} className={className}>
-      {image && (
+      {shown.image && (
         <figure className="media-text-media">
-          <img
-            src={image.src}
-            srcSet={image.srcSet}
-            sizes={image.sizes}
-            width={image.width}
-            height={image.height}
-            style={image.objectPosition ? { objectPosition: image.objectPosition } : undefined}
-            loading={eager ? undefined : "lazy"}
-            decoding="async"
-            alt={alt}
-          />
+          <ContainerImg shown={{ ...shown, image: shown.image }} />
         </figure>
       )}
       <ImageSizesContext.Provider value={sizes}>
