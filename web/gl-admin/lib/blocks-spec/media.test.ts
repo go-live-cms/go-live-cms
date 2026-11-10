@@ -20,8 +20,8 @@ import {
 
 describe("media blocks (#423)", () => {
   it("map each media block to the picker kind it takes", () => {
-    expect(MEDIA_BLOCK_KINDS).toEqual({ image: "image", video: "video", audio: "audio", file: "document" })
-    expect(MEDIA_BLOCK_TYPES).toEqual(["image", "video", "audio", "file"])
+    expect(MEDIA_BLOCK_KINDS).toEqual({ image: "image", video: "video", audio: "audio", file: "document", cover: "image", media_text: "image" })
+    expect(MEDIA_BLOCK_TYPES).toEqual(["image", "video", "audio", "file", "cover", "media_text"])
     expect(MEDIA_PICKER_KINDS).toEqual(["image", "video", "audio", "document"])
     expect(isMediaBlockType("video")).toBe(true)
     expect(isMediaBlockType("toString")).toBe(false)
@@ -38,7 +38,7 @@ describe("media blocks (#423)", () => {
 
   it("agree with the API on which blocks show media and on the label's cap", () => {
     const go = readFileSync(path.resolve("../api/post_block_media.go"), "utf8")
-    expect(go).toMatch(/mediaBlockTypes = map\[string\]bool\{"image": true, "video": true, "audio": true, "file": true\}/)
+    expect(go).toMatch(/mediaBlockTypes = map\[string\]bool\{"image": true, "video": true, "audio": true, "file": true, "cover": true, "media_text": true\}/)
     const sanitizer = readFileSync(path.resolve("../api/post_blocks_sanitize.go"), "utf8")
     expect(sanitizer).toContain(`const fileLabelMaxRunes = ${FILE_LABEL_MAX_LENGTH}`)
   })

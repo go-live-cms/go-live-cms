@@ -26,17 +26,20 @@ type blockContainer struct {
 }
 
 // blockContainers: the containers. Group (#414) is the first, details (#421) the second,
-// gallery (#424) the third, columns and column (#426) the next; cover, … are rows here and in
-// nesting.ts. A details' summary and a gallery's caption are attrs (runs), not children, so
-// their rows are only their blocks. A gallery holds images only and may be empty. No group in
-// a column: the canvas draws a group holding columns, never the reverse, and the table stays
-// acyclic.
+// gallery (#424) the third, columns and column (#426) the next, cover and media & text (#427)
+// the last; footnotes … are rows here and in nesting.ts. A details' summary and a gallery's
+// caption are attrs (runs), not children, so their rows are only their blocks. A gallery holds
+// images only and may be empty. No group in a column: the canvas draws a group holding
+// columns, never the reverse, and the table stays acyclic. A group may hold media & text,
+// never a cover.
 var blockContainers = map[string]blockContainer{
-	"group":   {accepts: []string{"flow", "details", "columns"}, min: 1},
-	"details": {accepts: []string{"flow"}, min: 1},
-	"gallery": {accepts: []string{"image"}, min: 0},
-	"columns": {accepts: []string{"column"}, min: 2, max: 4},
-	"column":  {accepts: []string{"flow", "details"}, min: 1, nestedOnly: true},
+	"group":      {accepts: []string{"flow", "details", "columns", "media_text"}, min: 1},
+	"details":    {accepts: []string{"flow"}, min: 1},
+	"gallery":    {accepts: []string{"image"}, min: 0},
+	"columns":    {accepts: []string{"column"}, min: 2, max: 4},
+	"column":     {accepts: []string{"flow", "details"}, min: 1, nestedOnly: true},
+	"cover":      {accepts: []string{"flow"}, min: 1},
+	"media_text": {accepts: []string{"flow", "details"}, min: 1},
 	// #422: the post's one list of notes. Only the store enforces "one, last": Yjs can merge
 	// two (footnotes.ts on the web side), and the collab server repairs them before a store.
 	"footnotes": {accepts: []string{"footnote"}, min: 1, onePerDocLast: true},

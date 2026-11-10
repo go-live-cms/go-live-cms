@@ -1,8 +1,10 @@
 // onStoreDocument (#206): derive `block_doc` from the live doc and persist both.
 //
 //   1. put columns back in shape if concurrent edits broke the 2–4 limit
-//      (repairColumnsFragment, #426, and the footnotes list, #422), then stamp missing/duplicate block ids into the live
-//      doc (stampFragmentBlockIds), so ids don't churn between stores;
+//      (repairColumnsFragment, #426, and the footnotes list, #422), give a cover or media & text
+//      that lost every block an empty line (repairEmptyContainers, #427), then stamp
+//      missing/duplicate block ids into the live doc (stampFragmentBlockIds), so ids don't
+//      churn between stores;
 //   2. fragment → ProseMirror → pmToBlockDoc, per top-level node (fragmentToBlockDoc),
 //      with the blocks seeding dropped (meta.dropped) merged back (restoreDroppedBlocks),
 //      then repeats within one list removed (dedupeBlockRefs, #414);
@@ -20,6 +22,7 @@ import {
   fragmentToBlockDoc,
   repairColumnsFragment,
   repairFootnotesFragment,
+  repairEmptyContainers,
   stampFragmentBlockIds,
   type UnconvertibleBlock,
 } from "../gl-admin/lib/collaboration/fragmentBridge"
@@ -68,13 +71,14 @@ export const canonicalJSON = (value: unknown): string =>
 
 const sameDoc = (a: BlockDocV1 | null, b: BlockDocV1): boolean => !!a && canonicalJSON(a) === canonicalJSON(b)
 
-/** Steps 1–4. Mutates the doc only to repair columns and stamp block ids (origin SERVER_ORIGIN). */
+/** Steps 1–4. Mutates the doc only to repair columns and empty containers and stamp block ids (origin SERVER_ORIGIN). */
 export function prepareStore(doc: Y.Doc, schema: Schema, input: StoreInput): PreparedStore {
   const fragment = doc.getXmlFragment(EDITOR_FRAGMENT)
   let stamped = 0
   doc.transact(() => {
     repairColumnsFragment(fragment)
     repairFootnotesFragment(fragment)
+    repairEmptyContainers(fragment)
     stamped = stampFragmentBlockIds(fragment)
   }, SERVER_ORIGIN)
 

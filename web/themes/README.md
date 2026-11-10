@@ -989,6 +989,8 @@ These are always available and don't need registration:
 | `file`         | A download row (`div.file-block`: `.file-icon`, `.file-text` with the link and `.file-meta` "PDF · 240 KB", `a.btn.file-download`) |
 | `gallery`      | Images in a grid (`figure.gallery-block > ul.gallery`, `--cols` the column count), each with its own alt and caption (below) |
 | `embed`        | A placeholder for YouTube, Vimeo, X, CodePen, SoundCloud or Spotify that loads nothing until a reader clicks (below) |
+| `cover`        | An image with blocks on top (`div.cover > img + div.cover-inner`, `--dim` its overlay, below) |
+| `media_text`   | An image beside blocks, stacked on phones (`div.media-text > figure.media-text-media + div.media-text-body`, `is-media-right`) |
 
 **Every theme styles the three #419 blocks** and defines `.sr-only` (the callout says its
 tone in a visually hidden span): they render with only their classes
@@ -1074,6 +1076,15 @@ default, `is-3-columns` / `is-4-columns`, `is-33-67` / `is-67-33` for the two-co
 column. A spacer's height is `var(--space-5)`, `--space-7`, `--space-8` or `--space-9`; define those on
 your scale, or it uses the default theme's (24, 48, 64, 96 px). Style `.btn`, `.btn-primary` and
 `.btn-secondary`. The default theme's rules are in `styles/theme.css`.
+
+**Cover and media & text (#427).** A `.cover` sets `--dim` (0 to 0.8) on itself: draw the image
+behind `.cover-inner` and a black layer of that alpha over it. **Text on it must keep 4.5:1**
+over any image an editor picks, at every overlay: 55% does that alone over pure white, so below it
+the default theme adds a scrim behind `.cover-inner` (`1 - 0.45 / (1 - var(--dim))`,
+`themes/default/coverBlocks.test.ts` checks every step). Text and buttons on it are white in light and
+dark. Style `.media-text` as two columns that stack on phones; the media comes first in the markup,
+so don't reorder it there (`is-media-right` moves it only on wide screens). The default theme's rules are in
+`styles/theme.css`.
 
 **Media blocks (#423).** Video, audio and file render only when the file is there: a block
 whose media was deleted is left out with its caption (so is an image), and files come only

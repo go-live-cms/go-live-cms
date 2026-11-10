@@ -36,6 +36,16 @@ export function useMediaLookup(mediaId: unknown): MediaLookup | { status: "loadi
 
 export default function MediaBlockSettings({ editor, node, blockRef }: { editor: TiptapEditor; node: PMNode; blockRef: BlockRef }) {
   const kind = node.type.name as MediaNode
+  return (
+    <div className="block-settings__media">
+      <MediaFileRow editor={editor} node={node} blockRef={blockRef} kind={kind} />
+      {(kind === "video" || kind === "audio") && <p className="post-settings__hint">{NEVER_AUTOPLAY}</p>}
+    </div>
+  )
+}
+
+/** The file the block shows, with Replace. `kind` says which words and icon it uses. */
+export function MediaFileRow({ editor, node, blockRef, kind }: { editor: TiptapEditor; node: PMNode; blockRef: BlockRef; kind: MediaNode }) {
   const lookup = useMediaLookup(node.attrs.mediaId)
   const media = lookup?.status === "found" ? lookup.media : null
 
@@ -55,28 +65,25 @@ export default function MediaBlockSettings({ editor, node, blockRef }: { editor:
           : "No file yet"
 
   return (
-    <div className="block-settings__media">
-      <div className="block-settings__filerow">
-        {media && isRasterImage(media) ? (
-          <img src={getMediaVariantPreviewURL(media, "thumb")} alt="" className="block-settings__file-thumb" />
-        ) : (
-          <span className="block-settings__file-icon" aria-hidden="true">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-              <path d={lookup?.status === "missing" ? MEDIA_BLOCK_ICONS.missing : MEDIA_BLOCK_ICONS[kind]} />
-            </svg>
-          </span>
-        )}
-        <div className="block-settings__file-text">
-          <b className="block-settings__file-name">{name}</b>
-          {media && <span className="block-settings__file-meta">{[mediaFileLine(kind, media), "from Media"].filter(Boolean).join(" · ")}</span>}
-        </div>
-        {editor.isEditable && (
-          <button type="button" className="block-settings__file-replace" onClick={replace}>
-            {typeof node.attrs.mediaId === "number" ? "Replace" : "Choose from Media"}
-          </button>
-        )}
+    <div className="block-settings__filerow">
+      {media && isRasterImage(media) ? (
+        <img src={getMediaVariantPreviewURL(media, "thumb")} alt="" className="block-settings__file-thumb" />
+      ) : (
+        <span className="block-settings__file-icon" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+            <path d={lookup?.status === "missing" ? MEDIA_BLOCK_ICONS.missing : MEDIA_BLOCK_ICONS[kind]} />
+          </svg>
+        </span>
+      )}
+      <div className="block-settings__file-text">
+        <b className="block-settings__file-name">{name}</b>
+        {media && <span className="block-settings__file-meta">{[mediaFileLine(kind, media), "from Media"].filter(Boolean).join(" · ")}</span>}
       </div>
-      {(kind === "video" || kind === "audio") && <p className="post-settings__hint">{NEVER_AUTOPLAY}</p>}
+      {editor.isEditable && (
+        <button type="button" className="block-settings__file-replace" onClick={replace}>
+          {typeof node.attrs.mediaId === "number" ? "Replace" : "Choose from Media"}
+        </button>
+      )}
     </div>
   )
 }

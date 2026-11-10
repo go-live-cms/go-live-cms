@@ -145,7 +145,7 @@ the collab server.
   blocks showing it, in document order, for the order-0 row too. `SyncPostContentMedia`
   takes parallel `media_ids`/`block_ids`/`block_types` (`db.ContentMediaUse`, built by
   `BlockDocV1.contentMediaUses`: every media block, `mediaBlockTypes` = image, video, audio, file
-  since #423; the Tx params' `ContentMedia`). Unsetting or replacing the
+  since #423, cover and media & text since #427; the Tx params' `ContentMedia`). Unsetting or replacing the
   featured image goes through `UnlinkPostFeaturedMedia`, which keeps an image that is also in
   the body as a content link. `GET /media/:id/posts` adds `usages` (`featured` | `block` |
   `attached`, `mediaUsages`). One row per pair keeps #325's counts unchanged.
@@ -1368,6 +1368,13 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   button's `href` is a node attr, which the link-mark check never saw:** `sanitizeButtonNode` keeps
   only an `isSafeURL(href, safeHrefSchemes)` one and runs from `sanitizePMNode` too, so a `button` in
   any block's pm is covered. `buttonHrefVectors.json` is the web's too.
+- **Cover and media & text (#427, `post_blocks_cover.go`, `post_blocks_cover_test.go`):** two rows of
+  `blockContainers` (`cover` flow only, `media_text` flow and details; a group holds media & text,
+  never a cover). Each an allowlist: `mediaId`, `alt` (plain text, 255 code points), `decorative` (a
+  boolean), `focal` (x and y clamped to 0–100, whole; anything else is deleted), and a cover's
+  `overlay` (clamped to 0–80, snapped to steps of 5) and `align`, a media & text's `position`.
+  `coverMediaVectors.json` is the web's too. Both are in `mediaBlockTypes` (post_media, "Used in", the
+  public `media` map), their entries an image's: variants, no file info (`imageBlockTypes`).
 - **Gallery (#424, `post_blocks_gallery_test.go`):** a container (`blockContainers`: `image` only,
   0+; a group doesn't accept it). Its caption is an attr, not a child: `sanitizeGalleryAttrs` is an
   allowlist (`columns` a number clamped to 2–4, anything else deleted; `caption` reduced like an

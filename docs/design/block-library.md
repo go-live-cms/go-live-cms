@@ -537,8 +537,8 @@ tests at each step including the collab round trip.
 | Group | container | `style`, `align` | |
 | Buttons | flow | `align` (`left`/`center`); buttons as child nodes (`button`: `href`, `variant`, label text) | Not a container in Block Spec: the buttons are parts, kept in `pm`. Their `href` is a node attr, which `sanitizePMNode` doesn't check today (it checks link marks only), so the Go side adds an `isSafeURL(href, safeHrefSchemes)` check on `button` nodes. Built in #426: outside the `block` group like the table; `buttonHrefVectors.json` pins the editor's check to Go's; the public page leaves out a button with no link. |
 | Spacer | flow | `size` (a theme spacing step, not px) | Built in #426: steps `5`, `7`, `8`, `9` of the theme's `--space-*` (24, 48, 64, 96 px in the default theme). |
-| Cover | container | 2.2 | Overlay 0–80 in steps of 5. |
-| Media & text | container | 2.2 | Media above text on phones. |
+| Cover | container | 2.2 | Overlay 0–80 in steps of 5. Built in #427: the image is `mediaId` alone (no `src`, like video); `decorative` is on by default; `focal` is the block's own override of the media's, whole percent, stored only once moved; the focal point is two scalar node attrs (`focalX`, `focalY`), because y-tiptap compares attrs by identity and would rewrite an object on every sync. **May be empty in the schema** (`*`, `emptyNotInSchema`), as the columns limit: two people deleting its last two blocks at once would otherwise delete the cover and its image. The collab store puts a line back (`repairEmptyContainers`). Below the 55% that keeps 4.5:1 alone, the default theme puts a scrim behind the text. Its image deleted: left out with its blocks, as #352 says. |
+| Media & text | container | 2.2 | Media above text on phones. Built in #427 the same way; the media comes first in the markup, so the phone order needs no rule, and `is-media-right` is `order: 2` only above 640px. A group may hold one (2.2); a cover can't be nested at all. |
 | Custom HTML | flow | `snippetId` | Section 5. |
 
 ---
@@ -615,7 +615,7 @@ The sub-issues of #352, in build order. "→" lists hard dependencies.
 11. **#424 Gallery** (P2). → #414, #417, #423.
 12. **#425 Embeds** (P2): section 5. → #415.
 13. **#426 Columns, buttons, spacer** (P2). → #414, #417.
-14. **#427 Cover, media & text** (P2). → #414, #417, #423.
+14. **#427 Cover, media & text** (P2). → #414, #417, #423. Built.
 15. **#428 Custom HTML** (P2): section 5. → #415; last, once enforcement is agreed.
 
 This keeps #352's order (marks and menus, text, media, embeds, layout, custom HTML) with

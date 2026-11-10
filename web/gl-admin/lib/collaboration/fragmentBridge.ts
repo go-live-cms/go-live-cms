@@ -263,6 +263,32 @@ export function repairFootnotesFragment(fragment: Y.XmlFragment): number {
 }
 
 /**
+ * Put an empty paragraph into every container of the live doc that lost its last block
+ * (#427: a cover or a media & text, `emptyNotInSchema`). One transaction; returns how many
+ * it changed. The same reason as the columns above: Yjs merges two people deleting the last
+ * two blocks of a cover into an empty one, which the store's checks refuse, and only the
+ * server may fix it (rule 7). The schema allows it, or y-tiptap would delete the element and
+ * its image for every peer.
+ */
+export function repairEmptyContainers(fragment: Y.XmlFragment, newParagraph: () => Y.XmlElement = () => new Y.XmlElement("paragraph")): number {
+  const empty: Y.XmlElement[] = []
+  const walk = (parent: Y.XmlFragment | Y.XmlElement) => {
+    for (const child of parent.toArray()) {
+      if (!(child instanceof Y.XmlElement)) continue
+      const rule = containerOfNode(child.nodeName)
+      if (rule?.emptyNotInSchema && child.length === 0) empty.push(child)
+      walk(child)
+    }
+  }
+  walk(fragment)
+  if (empty.length === 0) return 0
+  const write = () => empty.forEach((element) => element.insert(0, [newParagraph()]))
+  if (fragment.doc) fragment.doc.transact(write)
+  else write()
+  return empty.length
+}
+
+/**
  * Give every node that becomes a block (`isBlockNode`: top-level nodes, list items of a
  * list at any depth, and a container's children, #414) a valid, unique `data-block-id` in
  * the live doc, by BlockIdExtension's rules:

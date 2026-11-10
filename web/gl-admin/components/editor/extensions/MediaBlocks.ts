@@ -35,7 +35,7 @@ export function mediaIdFromElement(element: Element | null | undefined): number 
   return value && /^\d+$/.test(value) ? Number(value) : null
 }
 
-const mediaIdAttribute = {
+export const mediaIdAttribute = {
   mediaId: {
     default: null,
     parseHTML: (element: HTMLElement) => mediaIdFromElement(element),

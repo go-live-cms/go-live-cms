@@ -79,7 +79,7 @@ describe("the catalog", () => {
           "Footnote",
         ],
       ],
-      ["Media", ["Image", "Gallery", "Video", "Audio", "File"]],
+      ["Media", ["Image", "Gallery", "Video", "Audio", "File", "Cover", "Media & text"]],
       ["Layout", ["Divider", "Group", "Columns", "Buttons", "Spacer"]],
       ["Embeds", ["YouTube", "Vimeo", "X", "Embed a link"]],
     ])
@@ -125,6 +125,7 @@ describe("search (names and keywords)", () => {
       ["Heading 4", undefined],
       ["Heading 5", undefined],
       ["Heading 6", undefined],
+      ["Cover", "hero"],
       ["Divider", "hr"],
     ])
   })
@@ -223,6 +224,8 @@ const PM_NODE: Record<string, string> = {
   buttons: "buttons",
   spacer: "spacer",
   footnotes: "footnotes",
+  cover: "cover",
+  media_text: "mediaText",
 }
 
 describe("insert", () => {

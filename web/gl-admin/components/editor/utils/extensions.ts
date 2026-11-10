@@ -23,6 +23,7 @@ import { BlockActions } from "./blockActions"
 import { BlockGutterKeys } from "./blockGutter"
 import { BlockNavigationKeys, BlockSelectionKeys } from "../extensions/BlockNavigation"
 import { NodeSelectionGuard } from "../extensions/NodeSelectionGuard"
+import { EmptyContainerFill } from "../extensions/CoverMediaBlocks"
 import { authManager } from "@gl-admin/lib/auth"
 import { tiptapExtensionRegistry } from "./extensionRegistry"
 import { installedThemeBlockEditors } from "@gl-admin/lib/theme-blocks/editorBlocks"
@@ -100,6 +101,10 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
       schema.columns,
       schema.buttons,
       schema.spacer,
+      // #427
+      schema.cover,
+      schema.mediaText,
+      schema.coverMediaCommands,
       schema.mention,
       schema.contentLink,
       schema.dateChip,
@@ -124,6 +129,7 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
       // Blocks at any depth from the keyboard (#417): Esc, ↵, ↑↓, ⌘⇧↑↓, ⌫; no schema.
       BlockSelectionKeys,
       BlockNavigationKeys,
+      EmptyContainerFill,
       PasteSanitizer,
       Placeholder.configure({
         includeChildren: true,

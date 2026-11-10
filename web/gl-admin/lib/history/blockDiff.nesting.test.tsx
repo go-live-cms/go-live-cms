@@ -69,6 +69,45 @@ describe("blockDiff with containers (#414)", () => {
   })
 })
 
+describe("blockDiff with cover and media & text (#427)", () => {
+  const CV = "blk-cover-000001"
+  const P = "blk-para-0000001"
+  const container = (type: string, attrs: Record<string, unknown>, text = "on top"): BlockDocV1 =>
+    ({
+      doc_version: 1,
+      blocks_order: [CV],
+      blocks: {
+        [CV]: { id: CV, type, version: 1, attrs, children: [P] },
+        [P]: { id: P, type: "paragraph", version: 1, attrs: { text } },
+      },
+    }) as BlockDocV1
+  const changed = (v: BlockDocV1, w: BlockDocV1) => Object.fromEntries((diffBlockDocs(v, w).entries[0].attrs ?? []).map((a) => [a.key, [a.version, a.working]]))
+
+  it("identical docs are the same; a text edit shows on its block, inside", () => {
+    const a = container("cover", { mediaId: 1, overlay: 55 })
+    expect(diffBlockDocs(a, a).entries[0].status).toBe("same")
+    const edited = diffBlockDocs(a, container("cover", { mediaId: 1, overlay: 55 }, "on top now"))
+    expect(edited.entries[0].children![0].status).toBe("changed")
+  })
+
+  it("names a cover's image, alt text, focal point, overlay and width", () => {
+    const v = container("cover", { mediaId: 1, alt: "A", decorative: true, overlay: 55 })
+    const w = container("cover", { mediaId: 2, alt: "B", decorative: false, focal: { x: 10, y: 90 }, overlay: 30, align: "wide" })
+    expect(changed(v, w)).toEqual({
+      file: ["Media #1", "Media #2"],
+      alt: ["A", "B"],
+      decorative: ["On", "Off"],
+      focal: ["From the image", "10%, 90%"],
+      overlay: ["55%", "30%"],
+      align: ["Content", "Wide"],
+    })
+  })
+
+  it("names media & text's position", () => {
+    expect(changed(container("media_text", { mediaId: 1 }), container("media_text", { mediaId: 1, position: "right" }))).toEqual({ position: ["Left", "Right"] })
+  })
+})
+
 describe("blockDiff with a details (#421)", () => {
   const D = "blk-details-0001"
   const details = (summary: string, attrs: Record<string, unknown> = {}, text = "answer"): BlockDocV1 => ({

@@ -141,10 +141,12 @@ describe("the slash menu", () => {
       "Heading 4",
       "Heading 5",
       "Heading 6",
+      // By its keyword "hero" (#427).
+      "Cover",
     ])
     expect(options()[0].querySelector("b")!.textContent).toBe("He")
     expect(document.querySelector('[role="listbox"]')!.getAttribute("aria-label")).toBe("Blocks matching he")
-    expect(document.querySelector(".editor-insert__footer")!.textContent).toBe("6 results↵ inserts Heading 1")
+    expect(document.querySelector(".editor-insert__footer")!.textContent).toBe("7 results↵ inserts Heading 1")
 
     // Something only keywords have: "/photo" (Image's and Gallery's, shown on the right).
     act(() => {
@@ -171,8 +173,8 @@ describe("the slash menu", () => {
     expect(active()!.textContent).toBe("Footnote")
     press("ArrowDown")
     expect(active()!.textContent).toBe("Image")
-    // Gallery (#424), video, audio and file (#423), then Layout.
-    for (const name of ["Gallery", "Video", "Audio", "File"]) {
+    // Gallery (#424), video, audio and file (#423), cover and media & text (#427), then Layout.
+    for (const name of ["Gallery", "Video", "Audio", "File", "Cover", "Media & text"]) {
       press("ArrowDown")
       expect(active()!.textContent).toBe(name)
     }

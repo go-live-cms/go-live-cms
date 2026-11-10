@@ -591,6 +591,14 @@ are the most fragile part of the codebase. **Before editing anything under
   removed column's blocks do: `gl-admin/lib/collaboration/CLAUDE.md` (blockBridge notes, Layout
   blocks). Public markup: `src/components/blocks/README.md`, the default theme's rules in
   `themes/default/styles/theme.css` (`themes/default/layoutBlocks.test.ts`).
+- **Cover, media & text (#427, design `docs/design/block-library.md` 2.2, 3.4, 4):** Media entries in the
+  catalog (`/cover`, `/media`, the line becomes the first block). Nodes and commands in
+  `extensions/CoverMediaBlocks.ts`, views (toolbar, image, drop zone, missing state, "No alt text"
+  flag) in `extensions/CoverMediaViews.ts`, the Block tab in `ui/CoverMediaSettings.tsx`, whose focal point
+  takes ← → ↑ ↓ 1%, ⇧ 10%, and exact X and Y. Both use the shared picker, count in "Used in" and are left out
+  of the page when their image is deleted, blocks included. Rules: `gl-admin/lib/collaboration/CLAUDE.md`
+  (blockBridge notes, Cover and media & text). Public markup: `src/components/blocks/README.md`; the
+  theme's contrast rule: `themes/README.md`.
 - **Gallery (#424):** a Media entry in the catalog (`/gallery`, an empty gallery on the line, the
   caret in its caption). The node and its commands are `extensions/GalleryBlock.ts`; the view (a grid,
   **Add images** while the cursor is in it, and with no images the empty state: Upload and Choose from

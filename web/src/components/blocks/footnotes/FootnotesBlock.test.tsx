@@ -133,6 +133,27 @@ describe("the published footnotes (#422, the canvas's Published · text)", () =>
     expect(html).not.toContain(">A<")
   })
 
+  describe("a reference in a cover or media & text (#427)", () => {
+    const withCover = (type: "cover" | "media_text", extra: Record<string, unknown> = {}) => {
+      const holder = { id: "cover-0001", type, version: 1, attrs: { mediaId: 7 }, children: ["para-00001"] }
+      const d = doc(["cover-0001", "para-00002", "notes-0001"], holder, paragraph("para-00001", ref("note-00001")), paragraph("para-00002", ref("note-00002")), list("note-00001", "note-00002"), note("note-00001", "In the cover"), note("note-00002", "After it"))
+      return { ...d, ...extra } as BlockDocV1
+    }
+
+    it.each(["cover", "media_text"] as const)("%s: numbered in reading order while its image is there", (type) => {
+      const html = render(withCover(type))
+      expect(html).toContain('<li id="fn-1">In the cover')
+      expect(html).toContain('<li id="fn-2">After it')
+    })
+
+    it.each(["cover", "media_text"] as const)("%s: its image deleted, it holds no number and no back link dangles", (type) => {
+      const html = render(withCover(type, { media_missing: [7] }))
+      expect(html).not.toContain("In the cover")
+      expect(html).toContain('<li id="fn-1">After it')
+      for (const [, target] of html.matchAll(/href="#([^"]+)"/g)) expect(html).toContain(`id="${target}"`)
+    })
+  })
+
   it("trims a blank last paragraph before the list too", () => {
     const d = doc(["para-00001", "para-blank1", "notes-0001"], paragraph("para-00001", ref("note-00001")), paragraph("para-blank1"), list("note-00001"), note("note-00001", "N"))
     expect(render(d)).not.toContain('id="b-para-blank1"')

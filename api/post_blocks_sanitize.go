@@ -109,6 +109,10 @@ func sanitizeBlock(block map[string]interface{}) {
 		keepOnlyAttrs(attrs)
 	case footnoteBlockType:
 		sanitizeFootnoteAttrs(attrs)
+	case "cover":
+		sanitizeCoverAttrs(attrs)
+	case "media_text":
+		sanitizeMediaTextAttrs(attrs)
 	}
 
 	// Block colour (#356): a palette token on the core blocks that take one.

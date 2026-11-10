@@ -18,6 +18,8 @@ collab server (`web/collab-server/`) converts between the two. See
 - `layoutBlocks.ts` (#426): the rules of columns, buttons and the spacer (layouts, widths, the
   button href check `normalizeButtonHref`, the spacer's theme steps). `buttonHrefVectors.json` is
   shared with the API.
+- `coverMedia.ts` (#427): cover and media & text: the overlay, alt text, the focal point's rules
+  and keys, and the node ⇄ stored attrs. `coverMediaVectors.json` is shared with the API.
 - `embeds.ts` (#425): the embed providers: ref patterns, player addresses and their iframe
   attributes, frame hosts (the CSPs), and the title's rules.
 - `nesting.ts` (#414): **the nesting table** (which types are containers and what each holds),
@@ -98,6 +100,13 @@ posts.block_doc → publish → post_versions → public site (SSR)
   its references point at. Numbers aren't stored anywhere
 - **spacer** (#426): flow, `attrs.size` a step of the theme's spacing scale: `5`, `7`, `8`, `9`
   (`SPACER_STEPS`), never pixels
+- **cover** (#427): a container at the top level: `children` are flow blocks on top of one image.
+  `attrs.mediaId`, `attrs.alt` (absent: none), `attrs.decorative` (always written; absent reads as
+  true), `attrs.focal` `{x, y}` whole percent (absent: the media's own), `attrs.overlay` 0–80 in
+  steps of 5 (always written), `attrs.align` `wide`/`full` (absent: content). No `src`
+- **media_text** (#427): a container at the top level or in a group: `children` are flow blocks
+  and details beside one image. `mediaId`, `alt`, `decorative` (absent reads as false), `focal`, and
+  `attrs.position` `right` (absent: left)
 - Theme blocks: unknown types keep their ProseMirror JSON in `attrs.pm` and round-trip
   unchanged.
 

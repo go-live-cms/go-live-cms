@@ -32,25 +32,36 @@ export function galleryImageMissingAlt(alt: unknown, lookup: MediaLookup | { sta
   return !(lookup?.status === "found" && lookup.media.decorative === true)
 }
 
+type SyncedElement = HTMLInputElement | HTMLTextAreaElement
+
 /**
  * A text field that always shows the document's value, so what's typed is compared with
  * what the post says now: a collaborator's change arrives while this user types, and the
  * caret stays where it was.
  */
-function SyncedField({
+export function SyncedField({
   id,
   value,
   placeholder,
   inputRef,
   onType,
+  rows,
+  disabled,
+  invalid,
+  describedBy,
 }: {
   id: string
   value: string
   placeholder?: string
-  inputRef?: React.RefObject<HTMLInputElement | null>
+  inputRef?: React.RefObject<SyncedElement | null>
   onType: (text: string) => void
+  /** A textarea of this many rows, else a one-line input. */
+  rows?: number
+  disabled?: boolean
+  invalid?: boolean
+  describedBy?: string
 }) {
-  const own = useRef<HTMLInputElement>(null)
+  const own = useRef<SyncedElement>(null)
   const field = inputRef ?? own
   useLayoutEffect(() => {
     const input = field.current
@@ -66,16 +77,20 @@ function SyncedField({
     const caret = prefix === selectionStart ? selectionStart : Math.max(0, value.length - atEnd)
     input.setSelectionRange(caret, caret)
   }, [value, field])
-  return (
-    <input
-      ref={field}
-      id={id}
-      type="text"
-      className="gl-input block-settings__input"
-      defaultValue={value}
-      placeholder={placeholder}
-      onChange={(event: ChangeEvent<HTMLInputElement>) => onType(event.target.value)}
-    />
+  const shared = {
+    id,
+    className: "gl-input block-settings__input",
+    defaultValue: value,
+    placeholder,
+    disabled,
+    "aria-invalid": invalid ? true : undefined,
+    "aria-describedby": describedBy,
+    onChange: (event: ChangeEvent<SyncedElement>) => onType(event.target.value),
+  }
+  return rows ? (
+    <textarea ref={field as React.RefObject<HTMLTextAreaElement>} rows={rows} {...shared} />
+  ) : (
+    <input ref={field as React.RefObject<HTMLInputElement>} type="text" {...shared} />
   )
 }
 
@@ -88,7 +103,7 @@ function ImageRow({
   editor: TiptapEditor
   image: { node: PMNode; pos: number }
   expanded: boolean
-  altRef: React.RefObject<HTMLInputElement | null>
+  altRef: React.RefObject<SyncedElement | null>
 }) {
   const ref: BlockRef = refOfBlock(image)
   const lookup = useMediaLookup(image.node.attrs.mediaId)
@@ -160,7 +175,7 @@ export default function GallerySettings({
 }) {
   const images = galleryImages(galleryPos, gallery)
   const columns = normalizeGalleryColumns(gallery.attrs.columns)
-  const altRef = useRef<HTMLInputElement>(null)
+  const altRef = useRef<SyncedElement>(null)
 
   // ↵ on the selected image in the post: focus lands in its alt text, now or once the panel is up.
   useEffect(() => {

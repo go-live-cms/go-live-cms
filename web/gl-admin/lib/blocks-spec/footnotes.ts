@@ -20,7 +20,7 @@
 //
 // Pure data and functions: the collab server, the editor and the public renderer share them.
 
-import type { DocLike } from "./nesting"
+import { isLeftOffPage, type DocLike } from "./nesting"
 
 export const FOOTNOTE_REF_NODE = "footnoteRef"
 export const FOOTNOTE_NODE = "footnote"
@@ -150,8 +150,8 @@ export function footnoteIndex(doc: DocLike | null | undefined, renders: (block: 
     if (typeof id !== "string" || seen.has(id) || !has(id)) return
     seen.add(id)
     const block = blocks[id]
-    // `renders`: a block nothing in this build draws (a removed theme's) has no anchors to link to.
-    if (!block || typeof block !== "object" || block.type === FOOTNOTES_TYPE || !renders(block)) return
+    // `renders`, and a cover with no image: a block that isn't drawn has no anchors to link to.
+    if (!block || typeof block !== "object" || block.type === FOOTNOTES_TYPE || !renders(block) || isLeftOffPage(doc, block)) return
     walkFootnoteRefs(block.attrs?.pm, (node) => {
       const target = normalizeFootnoteId(node.attrs?.footnoteId)
       const note = target === null ? undefined : listed.get(target)
