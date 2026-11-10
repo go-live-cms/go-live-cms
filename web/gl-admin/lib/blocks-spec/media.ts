@@ -27,6 +27,8 @@ export const MEDIA_BLOCK_ICONS = {
   audio: "M9 18V5l12-2v13M9 18a3 3 0 1 1-6 0a3 3 0 1 1 6 0M21 16a3 3 0 1 1-6 0a3 3 0 1 1 6 0",
   file: "M14 3H6v18h12V7zM14 3v4h4",
   gallery: "M3 3h8v8H3zM13 3h8v8h-8zM3 13h8v8H3zM13 13h8v8h-8z",
+  cover: "M3 4h18v16H3zM7 15h10M7 11h6",
+  media_text: "M3 5h8v14H3zM14 8h7M14 12h7M14 16h5",
   missing: "M3 3h18v18H3zM21 15l-5-5-4 4M3 3l18 18",
 } as const
 
@@ -40,6 +42,9 @@ export const MEDIA_BLOCK_KINDS = {
   video: "video",
   audio: "audio",
   file: "document",
+  // #427: containers that show one image by the same `attrs.mediaId`.
+  cover: "image",
+  media_text: "image",
 } as const satisfies Record<string, MediaPickerKind>
 
 export type MediaBlockType = keyof typeof MEDIA_BLOCK_KINDS

@@ -221,7 +221,7 @@ describe("schemaFingerprint (#416)", () => {
     it("the table (#420) changed it: new node types, and a doc and a group that name the table block", () => {
       // The schema as it was before #420: no table nodes (nor #421's details), `(block | group)+`
       // doc, `block+` group.
-      const { table: _table, document: _document, group: _group, details: _details, columns: _columns, ...rest } = schemaExtensions({ collaborating: true })
+      const { table: _table, document: _document, group: _group, details: _details, columns: _columns, cover: _cover, mediaText: _mediaText, ...rest } = schemaExtensions({ collaborating: true })
       const OldDocument = Node.create({ name: "doc", topNode: true, content: "(block | group)+" })
       const OldGroup = Group.extend({ content: "block+" })
       const before = getSchema([OldDocument, ...Object.values({ ...rest, group: OldGroup })])
@@ -241,7 +241,7 @@ describe("schemaFingerprint (#416)", () => {
 
     it("details (#421) changed it: new node types, and a doc and a group that name details", () => {
       // The schema as it was before #421 (after #423): no details nodes, a doc and a group without them.
-      const { document: _document, group: _group, details, columns: _columns, ...rest } = schemaExtensions({ collaborating: true })
+      const { document: _document, group: _group, details, columns: _columns, cover: _cover, mediaText: _mediaText, ...rest } = schemaExtensions({ collaborating: true })
       const OldDocument = Node.create({ name: "doc", topNode: true, content: "(block | tableBlock | video | audio | file | group)+" })
       const OldGroup = Group.extend({ content: "(block | tableBlock | video | audio | file)+" })
       const before = getSchema([OldDocument, ...Object.values({ ...rest, group: OldGroup })])
@@ -277,7 +277,7 @@ describe("schemaFingerprint (#416)", () => {
     })
 
     it("the embed block (#425) changed it: a node type, named by the doc and a group", () => {
-      const { embed, embedCommands: _commands, document: _document, group: _group, details: _details, columns: _columns, ...rest } = schemaExtensions({ collaborating: true })
+      const { embed, embedCommands: _commands, document: _document, group: _group, details: _details, columns: _columns, cover: _cover, mediaText: _mediaText, ...rest } = schemaExtensions({ collaborating: true })
       const flow = "(block | tableBlock | video | audio | file)"
       const OldDocument = Node.create({ name: "doc", topNode: true, content: `(block | tableBlock | video | audio | file | group | details)+` })
       const OldGroup = _group.extend({ content: `(${flow.slice(1, -1)} | details)+` })
@@ -292,7 +292,7 @@ describe("schemaFingerprint (#416)", () => {
 
     it("columns, buttons and the spacer (#426) changed it: new node types, named by the doc, a group and a details", () => {
       // The schema as it was before #426: none of them, and a doc, group and details without them.
-      const { columns, buttons, spacer, document: _document, group: _group, details: _details, ...rest } = schemaExtensions({ collaborating: true })
+      const { columns, buttons, spacer, document: _document, group: _group, details: _details, cover: _cover, mediaText: _mediaText, ...rest } = schemaExtensions({ collaborating: true })
       const OldDocument = Node.create({ name: "doc", topNode: true, content: "(block | tableBlock | video | audio | file | embed | group | details | gallery)+" })
       const OldGroup = Group.extend({ content: "(block | tableBlock | video | audio | file | embed | details)+" })
       const OldDetails = Details.extend({ content: "detailsSummary (block | tableBlock | video | audio | file | embed)+" })
@@ -313,10 +313,31 @@ describe("schemaFingerprint (#416)", () => {
       expect(getCoreSchema().nodes.columns.spec.content).toBe("column+")
     })
 
+    it("cover and media & text (#427) changed it: two node types, named by the doc and a group", () => {
+      // The schema as it was before #427: neither of them, and a doc and group that name neither.
+      const { cover, mediaText, coverMediaCommands: _commands, document: _document, group: _group, ...rest } = schemaExtensions({ collaborating: true })
+      const OldDocument = Node.create({ name: "doc", topNode: true, content: "(block | tableBlock | video | audio | file | embed | buttons | spacer | group | details | gallery | columns)+" })
+      const OldGroup = Group.extend({ content: "(block | tableBlock | video | audio | file | embed | buttons | spacer | details | columns)+" })
+      const before = getSchema([OldDocument, ...Object.values({ ...rest, group: OldGroup })])
+      for (const name of ["cover", "mediaText"]) {
+        expect(before.nodes[name], name).toBeUndefined()
+        expect(getCoreSchema().nodes[name], name).toBeDefined()
+      }
+      expect(schemaFingerprint(before)).not.toBe(core)
+      // A tab whose cover or media & text lacks an attribute is refused too.
+      const overlayless = getSchema(Object.values({ ...schemaExtensions({ collaborating: true }), cover: cover.extend({ addAttributes: () => ({}) }) }))
+      expect(schemaFingerprint(overlayless)).not.toBe(core)
+      const positionless = getSchema(Object.values({ ...schemaExtensions({ collaborating: true }), mediaText: mediaText.extend({ addAttributes: () => ({}) }) }))
+      expect(schemaFingerprint(positionless)).not.toBe(core)
+      // May be empty in the schema, on purpose: y-tiptap deletes what fails a content check.
+      expect(getCoreSchema().nodes.cover.spec.content).toMatch(/\*$/)
+      expect(getCoreSchema().nodes.mediaText.spec.content).toMatch(/\*$/)
+    })
+
     it("the video, audio and file blocks (#423) changed it: three node types, named by the doc and a group", () => {
       // The schema as it was before #423 (and #421): no media nodes, no details, and the doc and the group name
       // only the table next to `block`.
-      const { video, audio, file, mediaCommands: _commands, document: _document, group: _group, details: _details, columns: _columns, ...rest } = schemaExtensions({ collaborating: true })
+      const { video, audio, file, mediaCommands: _commands, document: _document, group: _group, details: _details, columns: _columns, cover: _cover, mediaText: _mediaText, ...rest } = schemaExtensions({ collaborating: true })
       const OldDocument = Node.create({ name: "doc", topNode: true, content: "(block | tableBlock | group)+" })
       const OldGroup = Group.extend({ content: "(block | tableBlock)+" })
       const before = getSchema([OldDocument, ...Object.values({ ...rest, group: OldGroup })])

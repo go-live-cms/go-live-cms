@@ -14,12 +14,24 @@ import {
   type SpacerSize,
 } from "./layoutBlocks"
 import { EMBED_PROVIDERS, isValidEmbedRef, normalizeEmbedTitle, type EmbedProvider } from "./embeds"
+import {
+  COVER_ALIGNS,
+  COVER_OVERLAY_MAX,
+  COVER_OVERLAY_MIN,
+  COVER_OVERLAY_STEP,
+  MEDIA_ALT_MAX_LENGTH,
+  MEDIA_TEXT_POSITIONS,
+  type CoverAlign,
+  type FocalPercent,
+  type MediaTextPosition,
+} from "./coverMedia"
 
 export * from "./nesting"
 export * from "./media"
 export * from "./inlineNodes"
 export * from "./layoutBlocks"
 export * from "./embeds"
+export * from "./coverMedia"
 
 // Block Spec v1 - Authoritative Types
 export type BlockID = string
@@ -51,6 +63,8 @@ export type KnownBlockType =
   | "column"
   | "buttons"
   | "spacer"
+  | "cover"
+  | "media_text"
 
 /** BlockType allows known types + arbitrary custom types from themes */
 export type BlockType = KnownBlockType | (string & {})
@@ -546,6 +560,43 @@ export type ButtonsBlock = BaseBlock<
 export type SpacerBlock = BaseBlock<"spacer", { size?: SpacerSize }>
 
 /**
+ * Cover (#427), a container (`nesting.ts`): `children` are the flow blocks on top of one
+ * image. Rules in `coverMedia.ts`. No `src`: the image's URL comes from the media library.
+ */
+export type CoverBlock = BaseBlock<
+  "cover",
+  {
+    mediaId?: number
+    alt?: string
+    /** Always written. Absent reads as true: a cover's text carries the meaning. */
+    decorative?: boolean
+    /** Whole percent. Absent: the media's own focal point. */
+    focal?: FocalPercent
+    /** 0–80 in steps of 5, always written. Absent reads as `COVER_OVERLAY_DEFAULT`. */
+    overlay?: number
+    /** Absent: "content". */
+    align?: CoverAlign
+  }
+>
+
+/**
+ * Media & text (#427), a container (`nesting.ts`): `children` are the flow blocks and details
+ * beside one image, which sits above them on phones.
+ */
+export type MediaTextBlock = BaseBlock<
+  "media_text",
+  {
+    mediaId?: number
+    alt?: string
+    /** Always written. Absent reads as false. */
+    decorative?: boolean
+    focal?: FocalPercent
+    /** Absent: "left". */
+    position?: MediaTextPosition
+  }
+>
+
+/**
  * Custom block type for theme-defined blocks (e.g., alert, callout, etc.)
  * Preserves the full ProseMirror JSON for round-trip fidelity.
  */
@@ -585,6 +636,8 @@ export type Block =
   | ColumnBlock
   | ButtonsBlock
   | SpacerBlock
+  | CoverBlock
+  | MediaTextBlock
   | CustomBlock
 
 export interface BlockDocV1 {
@@ -840,6 +893,40 @@ export const zColumn = zBase.extend({
   children: z.array(zBlockID),
 })
 
+// #427. The bridge writes these normalized (`coverMedia.ts`), so a value outside them isn't
+// from the bridge. Count and child types are the nesting table's (nestingIssues).
+const zFocal = z.object({ x: z.number().int().min(0).max(100), y: z.number().int().min(0).max(100) }).strict()
+const zMediaAlt = z
+  .string()
+  .min(1)
+  .refine((alt) => [...alt].length <= MEDIA_ALT_MAX_LENGTH, `at most ${MEDIA_ALT_MAX_LENGTH} characters`)
+  .optional()
+
+export const zCover = zBase.extend({
+  type: z.literal("cover"),
+  attrs: z.object({
+    mediaId: zMediaId,
+    alt: zMediaAlt,
+    decorative: z.boolean().optional(),
+    focal: zFocal.optional(),
+    overlay: z.number().int().min(COVER_OVERLAY_MIN).max(COVER_OVERLAY_MAX).multipleOf(COVER_OVERLAY_STEP).optional(),
+    align: z.enum(COVER_ALIGNS).optional(),
+  }),
+  children: z.array(zBlockID),
+})
+
+export const zMediaText = zBase.extend({
+  type: z.literal("media_text"),
+  attrs: z.object({
+    mediaId: zMediaId,
+    alt: zMediaAlt,
+    decorative: z.boolean().optional(),
+    focal: zFocal.optional(),
+    position: z.enum(MEDIA_TEXT_POSITIONS).optional(),
+  }),
+  children: z.array(zBlockID),
+})
+
 // A button's only attrs are its link and style (`.strict()`, as the API keeps nothing else),
 // and its href is one the API would keep: the bridge never writes another.
 const zButton = z.object({
@@ -930,6 +1017,8 @@ const knownBlockSchemas: Record<KnownBlockType, z.ZodTypeAny> = {
   column: zColumn,
   buttons: zButtons,
   spacer: zSpacer,
+  cover: zCover,
+  media_text: zMediaText,
 }
 
 // A known type must match its own schema; only other types fall back to the custom

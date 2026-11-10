@@ -749,6 +749,98 @@
           "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "x" } }
         }
       }
+    },
+    {
+      "name": "a cover (#427) holds flow blocks at the top level",
+      "valid": true,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["cover-0001"],
+        "blocks": {
+          "cover-0001": { "id": "cover-0001", "type": "cover", "version": 1, "attrs": { "mediaId": 12, "overlay": 55, "decorative": true }, "children": ["head-00001", "para-00001", "butn-00001"] },
+          "head-00001": { "id": "head-00001", "type": "heading", "version": 1, "attrs": { "level": 2, "text": "Notes" } },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "Updates" } },
+          "butn-00001": { "id": "butn-00001", "type": "buttons", "version": 1, "attrs": { "pm": { "type": "buttons", "content": [{ "type": "button" }] } } }
+        }
+      }
+    },
+    {
+      "name": "a cover (#427) needs a block",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["cover-0001"],
+        "blocks": {
+          "cover-0001": { "id": "cover-0001", "type": "cover", "version": 1, "attrs": {}, "children": [] }
+        }
+      }
+    },
+    {
+      "name": "a cover (#427) holds no details",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["cover-0001"],
+        "blocks": {
+          "cover-0001": { "id": "cover-0001", "type": "cover", "version": 1, "attrs": {}, "children": ["detail-001"] },
+          "detail-001": { "id": "detail-001", "type": "details", "version": 1, "attrs": {}, "children": ["para-00001"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "x" } }
+        }
+      }
+    },
+    {
+      "name": "a cover (#427) can't be inside a group",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["group-0001"],
+        "blocks": {
+          "group-0001": { "id": "group-0001", "type": "group", "version": 1, "attrs": {}, "children": ["cover-0001"] },
+          "cover-0001": { "id": "cover-0001", "type": "cover", "version": 1, "attrs": {}, "children": ["para-00001"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "x" } }
+        }
+      }
+    },
+    {
+      "name": "media & text (#427) holds flow and details, and may sit in a group",
+      "valid": true,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["group-0001"],
+        "blocks": {
+          "group-0001": { "id": "group-0001", "type": "group", "version": 1, "attrs": {}, "children": ["media-0001"] },
+          "media-0001": { "id": "media-0001", "type": "media_text", "version": 1, "attrs": { "mediaId": 12, "position": "right", "decorative": false }, "children": ["head-00001", "detail-001"] },
+          "head-00001": { "id": "head-00001", "type": "heading", "version": 1, "attrs": { "level": 3, "text": "Faster" } },
+          "detail-001": { "id": "detail-001", "type": "details", "version": 1, "attrs": {}, "children": ["para-00001"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "x" } }
+        }
+      }
+    },
+    {
+      "name": "media & text (#427) holds no group, cover or columns",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["media-0001"],
+        "blocks": {
+          "media-0001": { "id": "media-0001", "type": "media_text", "version": 1, "attrs": {}, "children": ["group-0001"] },
+          "group-0001": { "id": "group-0001", "type": "group", "version": 1, "attrs": {}, "children": ["para-00001"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "x" } }
+        }
+      }
+    },
+    {
+      "name": "media & text (#427) can't be in a column or a details",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["detail-001"],
+        "blocks": {
+          "detail-001": { "id": "detail-001", "type": "details", "version": 1, "attrs": {}, "children": ["media-0001"] },
+          "media-0001": { "id": "media-0001", "type": "media_text", "version": 1, "attrs": {}, "children": ["para-00001"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "x" } }
+        }
+      }
     }
   ]
 }

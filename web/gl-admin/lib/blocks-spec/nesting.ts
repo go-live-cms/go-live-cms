@@ -18,6 +18,8 @@
  * the public renderer and the tests all read the same table.
  */
 
+import { isMediaMissing } from "./media"
+
 /**
  * The core Block Spec types that hold no blocks (design 2.2's `flow`). Lists count as
  * flow: their items are their own business, as before #414. Theme blocks and any type
@@ -110,6 +112,15 @@ export interface ContainerRule {
    * covers a paste, the one local change that doesn't go through those.
    */
   countNotInSchema?: boolean
+  /**
+   * The content expression allows no blocks at all (`*`, #427), though `min` is 1 everywhere
+   * else: a container with something of its own that an empty one must not cost. y-tiptap
+   * deletes an element whose children fail the content check, for every peer, so two people
+   * deleting the last two blocks of a cover at once would delete the cover and its image. The
+   * collab store puts an empty paragraph back (`repairEmptyContainers`), and in an editor so does
+   * the local fill (`EmptyContainerFill`), which also covers cutting its only block.
+   */
+  emptyNotInSchema?: boolean
 }
 
 /**
@@ -131,11 +142,16 @@ export interface ContainerRule {
  * in a group; a `column` only exists inside its `columns` and holds flow and details. **No
  * group in a column** (design 7's open question, decided by the canvas: it draws a group
  * holding columns, never the reverse), so the table stays acyclic.
+ *
+ * Cover and media & text (#427) each show one image (attrs, not a part) with their blocks on
+ * top of or beside it. A cover holds flow at the top level; media & text holds flow and details
+ * at the top level or in a group. Each keeps an empty line when its last block goes
+ * (`fillWhenEmptied`) and may be empty in the schema (`emptyNotInSchema`).
  */
 export const CONTAINERS = {
   group: {
     node: "group",
-    accepts: ["flow", "details", "columns"],
+    accepts: ["flow", "details", "columns", "media_text"],
     min: 1,
     topLevel: true,
     synthesize: { type: "paragraph", role: "paragraph" },
@@ -172,6 +188,24 @@ export const CONTAINERS = {
     topLevel: false,
     synthesize: { type: "paragraph", role: "paragraph" },
     fillWhenEmptied: true,
+  },
+  cover: {
+    node: "cover",
+    accepts: ["flow"],
+    min: 1,
+    topLevel: true,
+    synthesize: { type: "paragraph", role: "paragraph" },
+    fillWhenEmptied: true,
+    emptyNotInSchema: true,
+  },
+  media_text: {
+    node: "mediaText",
+    accepts: ["flow", "details"],
+    min: 1,
+    topLevel: true,
+    synthesize: { type: "paragraph", role: "paragraph" },
+    fillWhenEmptied: true,
+    emptyNotInSchema: true,
   },
 } as const satisfies Record<string, ContainerRule>
 
@@ -292,6 +326,7 @@ export function containerContent(type: ContainerType): string {
   const choice = names.length === 1 ? names[0] : `(${names.join(" | ")})`
   let blocks: string
   if (rule.countNotInSchema) blocks = `${choice}+`
+  else if (rule.emptyNotInSchema) blocks = `${choice}*`
   else if (rule.max !== undefined) blocks = `${choice}{${rule.min},${rule.max}}`
   else blocks = rule.min === 0 ? `${choice}*` : rule.min === 1 ? `${choice}+` : `${choice}{${rule.min},}`
   const parts = rule.parts ?? []
@@ -367,6 +402,8 @@ export function blocksInReadingOrder(doc: DocLike | null | undefined): string[] 
     const block = Object.prototype.hasOwnProperty.call(blocks, id) ? blocks[id] : undefined
     if (!block || typeof block !== "object") return
     seen.add(id)
+    // A cover or media & text (#427) with no image to show isn't on the page, nor is what it holds.
+    if ((block.type === "cover" || block.type === "media_text") && (block.attrs?.mediaId == null || isMediaMissing(doc, block.attrs.mediaId))) return
     out.push(id)
     if (isContainerType(block.type) && Array.isArray(block.children)) block.children.forEach(visit)
   }

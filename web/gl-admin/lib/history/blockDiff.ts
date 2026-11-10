@@ -20,6 +20,7 @@ import { isContainerType } from "../blocks-spec/nesting"
 import { EMBED_PROVIDER_SPECS, embedTargetOf } from "../blocks-spec/embeds"
 // Pure too.
 import { COLUMNS_LAYOUT_LABELS, isColumnsLayout, spacerPx, type ColumnsLayout } from "../blocks-spec/layoutBlocks"
+import { isBlockDecorative, normalizeCoverOverlay, normalizeFocal } from "../blocks-spec/coverMedia"
 import {
   contentTokens,
   diffTokens,
@@ -255,6 +256,9 @@ const TYPE_LABELS: Record<string, string> = {
   column: "Column",
   buttons: "Buttons",
   spacer: "Spacer",
+  // #427
+  cover: "Cover",
+  media_text: "Media & text",
 }
 
 /** The media blocks without text of their own (#423): their caption or label is diffed instead. */
@@ -413,6 +417,30 @@ function attrChanges(v: Block, w: Block): AttrChange[] {
     case "spacer": {
       const height = (a: Record<string, unknown>) => `${spacerPx(a.size)} px`
       add("size", "Height", height(va), height(wa))
+      break
+    }
+    // #427: the image is the media id, its text the children (diffed like any container's).
+    case "cover":
+    case "media_text": {
+      const media = (a: Record<string, unknown>) => (typeof a.mediaId === "number" ? `Media #${a.mediaId}` : null)
+      const focal = (a: Record<string, unknown>) => {
+        const point = normalizeFocal(a.focal)
+        return point ? `${point.x}%, ${point.y}%` : "From the image"
+      }
+      const decorative = (a: Record<string, unknown>) => (isBlockDecorative(v.type as "cover" | "media_text", a.decorative) ? "On" : "Off")
+      add("file", "Image", media(va), media(wa))
+      add("alt", "Alt text", display(va.alt), display(wa.alt))
+      add("decorative", "Decorative image", decorative(va), decorative(wa))
+      add("focal", "Focal point", focal(va), focal(wa))
+      if (v.type === "cover") {
+        const overlay = (a: Record<string, unknown>) => `${normalizeCoverOverlay(a.overlay)}%`
+        const width = (a: Record<string, unknown>) => GROUP_WIDTH_LABELS[String(a.align ?? "content")] ?? GROUP_WIDTH_LABELS.content
+        add("overlay", "Overlay", overlay(va), overlay(wa))
+        add("align", "Width", width(va), width(wa))
+      } else {
+        const position = (a: Record<string, unknown>) => (a.position === "right" ? "Right" : "Left")
+        add("position", "Media position", position(va), position(wa))
+      }
       break
     }
     case "column":

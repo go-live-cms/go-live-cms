@@ -1265,6 +1265,162 @@ body {
   }
 }
 
+/* Cover (#427, "Published · media & embeds"): an image behind its blocks, darkened by
+   --dim (the block's overlay, 0 to 0.8). Text on it is white in both palettes: the overlay
+   is black, so it doesn't follow the theme. */
+.cover {
+  --dim: 0.55; /* the block's own value, as an inline style, replaces this */
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  box-sizing: border-box;
+  min-height: clamp(380px, 52vw, 560px);
+  padding: clamp(24px, 5vw, 64px) var(--container-gutter);
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background: #111110;
+  color: #ffffff;
+}
+.prose .cover > img {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  border-radius: 0;
+}
+.cover::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: rgb(0 0 0 / var(--dim, 0.55));
+}
+.prose .cover.alignfull {
+  border-radius: 0;
+}
+/* 45% of the image is what white text can sit on at 4.5:1 over a pure white image. Below 55%
+   overlay the text gets the rest from a scrim of its own, so a light overlay brightens the
+   picture without making the words unreadable; from 55% up it adds nothing. The formula is
+   checked for every overlay step in coverBlocks.test.ts. */
+.cover-inner {
+  --cover-scrim: max(0, calc(1 - 0.45 / (1 - var(--dim, 0.55))));
+  position: relative;
+  width: 100%;
+  max-width: var(--content-width);
+  margin-inline: auto;
+}
+.cover-inner::before {
+  content: "";
+  position: absolute;
+  inset: calc(-1 * var(--space-4));
+  z-index: -1;
+  border-radius: var(--radius-sm);
+  background: rgb(0 0 0 / var(--cover-scrim));
+}
+.prose .cover-inner > *,
+.prose .media-text-body > * {
+  margin: 0;
+}
+.prose .cover-inner > * + *,
+.prose .media-text-body > * + * {
+  margin-top: 0.8em;
+}
+.prose .cover-inner > h1,
+.prose .cover-inner > h2 {
+  font-size: var(--size-3xl);
+}
+.prose .cover-inner > h3,
+.prose .media-text-body > h3 {
+  font-size: var(--size-xl);
+}
+.prose .cover-inner > h4,
+.prose .media-text-body > h4 {
+  font-size: var(--size-lg);
+}
+.prose .cover-inner > p {
+  font-size: var(--size-lg);
+  line-height: var(--leading-normal);
+}
+.prose .media-text-body > h1 {
+  font-size: var(--size-3xl);
+}
+.prose .media-text-body > h2 {
+  font-size: var(--size-2xl);
+}
+.prose .cover-inner :is(h1, h2, h3, h4, h5, h6, blockquote, cite, figcaption, li, .pullquote p),
+.prose .cover-inner :is(strong, em),
+.prose .cover-inner li::marker {
+  color: #ffffff;
+}
+.site .prose .cover-inner a:not(.btn),
+.site .prose .cover-inner a:not(.btn):hover {
+  color: #ffffff;
+}
+/* A block with a surface of its own keeps the theme's text on it. */
+.prose .cover-inner :is(.callout, pre, :not(pre) > code, .embed-frame, .file-block, .table-scroll) {
+  color: var(--color-text);
+}
+.prose .cover-inner :is(.file-block, .table-scroll) {
+  background: var(--color-background);
+}
+.site .cover .btn-primary {
+  background: #ffffff;
+  color: #111110;
+}
+.site .cover .btn-primary:hover {
+  background: #eeeeec;
+  color: #111110;
+  text-decoration: none;
+}
+.site .cover .btn-secondary {
+  background: transparent;
+  border-color: #ffffff;
+  color: #ffffff;
+}
+.site .cover .btn-secondary:hover {
+  background: rgb(255 255 255 / 0.14);
+  color: #ffffff;
+  text-decoration: none;
+}
+.site .cover :focus-visible {
+  outline-color: #ffffff;
+}
+
+/* Media & text (#427): the media and its blocks side by side, the media above on phones. */
+.media-text {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: clamp(24px, 4vw, 48px);
+  align-items: center;
+}
+.media-text.is-no-media {
+  grid-template-columns: minmax(0, 1fr);
+}
+.media-text.is-media-right > .media-text-media {
+  order: 2;
+}
+.prose .media-text-media {
+  margin: 0;
+}
+.prose .media-text-media img {
+  aspect-ratio: 4 / 5;
+}
+@media (max-width: 640px) {
+  .media-text {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .media-text.is-media-right > .media-text-media {
+    order: 0;
+  }
+  .prose .media-text-media img {
+    aspect-ratio: 3 / 2;
+  }
+}
+
 /* Pull quote (#419, "Published · text"): one line set large and centred under the
    accent rule, the citation below. Not a quote's italic or its quote mark. */
 .prose .pullquote {

@@ -456,6 +456,30 @@ kept so references in code stay valid.
     (four users in a tinted group of three columns, concurrent adds and removals, a restart),
     `blocks-spec/layoutBlocks.test.ts`, `src/components/blocks/layoutBlocks.test.tsx`,
     `themes/default/layoutBlocks.test.ts`, Go `post_blocks_layout_test.go`, cases in `nestingVectors.json`.
+- **Cover and media & text (#427, `components/editor/extensions/CoverMediaBlocks.ts`, views `CoverMediaViews.ts`,
+  panel `ui/CoverMediaSettings.tsx`, rules `blocks-spec/coverMedia.ts`).** Two rows of the table: `cover`
+  (flow, top level only) and `media_text` (flow and details, top level or in a group). The image is
+  `mediaId` alone, like a video's; attrs are last writer wins.
+  - **`focalX` and `focalY` are two scalars, never one object:** y-tiptap compares attributes by
+    identity, so an object attr would be written to the shared doc on every sync of the node. In Block
+    Spec they are one `focal`, both or neither. A block has one only after someone moved it; until then
+    it follows the media's `focal_point`.
+  - **An empty one is valid in the schema (`*`, `emptyNotInSchema`), though the table says 1+.** The
+    #426 rule: y-tiptap deletes an element whose children fail the content check, so two people
+    deleting the last two blocks at once would delete the cover and its image for every peer
+    (`CoverMedia.collab.test.ts`). The store runs `repairEmptyContainers` before stamping ids; a
+    local change that empties one gets its line back from `EmptyContainerFill` (rule 7: not on a sync).
+    The block delete and a move out already leave a line (`fillWhenEmptied`).
+  - **Choosing an image** resets `focalX`/`focalY` and takes its alt text (`applyMediaToBlock`); a
+    cover keeps its Decorative switch (default on), media & text follows the media's.
+  - **Paste** keeps the type, overlay, align and position; the image doesn't paste (media comes from
+    the library), so a pasted one shows its empty state with its text.
+  - **Stale clients:** a bundle from before #427 lacks both nodes (and a narrower doc and group); the
+    fingerprint guard (#416) refuses it (`schemaFingerprint.test.ts`).
+  - Tests: `blockBridge.coverMedia.test.ts`, `extensions/CoverMedia.test.ts`, `CoverMedia.collab.test.ts`
+    (two users, the merge that empties one, a restart), `ui/CoverMediaSettings.test.tsx` (the focal
+    point's keys), `blocks-spec/coverMedia.test.ts`, `src/components/blocks/coverMedia.test.tsx`,
+    `themes/default/coverBlocks.test.ts`, Go `post_blocks_cover_test.go`, cases in `nestingVectors.json`.
 - **Inline marks highlight, superscript, subscript (#418, `components/editor/extensions/InlineMarks.ts`).**
   TipTap's Highlight (`multicolor: false`: **no `color` attr**, one theme colour), Superscript
   and Subscript 3.4.2, in `schemaExtensions`. Superscript and subscript **exclude each other**
