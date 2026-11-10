@@ -12,7 +12,6 @@ SET key = 'theme:' || old.extension_id || ':' || substr(old.key, length(old.exte
 WHERE old.extension_type = 'theme'
   AND position(':' IN old.extension_id) = 0
   AND left(old.key, length(old.extension_id) + 1) = old.extension_id || ':'
-  AND old.key NOT LIKE 'theme:%'
   AND NOT EXISTS (
     SELECT 1 FROM extension_settings AS taken
     WHERE taken.key = 'theme:' || old.extension_id || ':' || substr(old.key, length(old.extension_id) + 2)

@@ -27,9 +27,9 @@ type extensionSettingsFixture struct {
 	store  db.Store
 	admin  db.User
 
-	marker              string
-	themeSlug, themeKey string
-	pluginSlug, pluginK string
+	marker                string
+	themeSlug, themeKey   string
+	pluginSlug, pluginKey string
 }
 
 func newExtensionSettingsFixture(t *testing.T) extensionSettingsFixture {
@@ -47,12 +47,12 @@ func newExtensionSettingsFixture(t *testing.T) extensionSettingsFixture {
 		pluginSlug: "secret" + suffix,
 	}
 	f.themeKey = "theme:" + f.themeSlug + ":accent"
-	f.pluginK = "plugin:" + f.pluginSlug + ":api_key"
+	f.pluginKey = "plugin:" + f.pluginSlug + ":api_key"
 
 	ctx := context.Background()
 	for _, row := range []db.UpsertExtensionSettingParams{
 		{Key: f.themeKey, Value: json.RawMessage(`"indigo"`), ExtensionType: "theme", ExtensionID: f.themeSlug},
-		{Key: f.pluginK, Value: json.RawMessage(`"` + f.marker + `"`), ExtensionType: "plugin", ExtensionID: f.pluginSlug},
+		{Key: f.pluginKey, Value: json.RawMessage(`"` + f.marker + `"`), ExtensionType: "plugin", ExtensionID: f.pluginSlug},
 	} {
 		_, err := store.UpsertExtensionSetting(ctx, row)
 		require.NoError(t, err)
@@ -86,7 +86,7 @@ func (f extensionSettingsFixture) pluginValueUnchanged(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
-	require.Equal(t, f.pluginK, rows[0].Key)
+	require.Equal(t, f.pluginKey, rows[0].Key)
 	require.JSONEq(t, `"`+f.marker+`"`, string(rows[0].Value))
 }
 
@@ -116,7 +116,7 @@ func TestPublicExtensionSettingsServeThemesOnly(t *testing.T) {
 	})
 
 	t.Run("a plugin's row answers like an unknown key", func(t *testing.T) {
-		recorder := f.do(t, http.MethodGet, base+"/"+f.pluginK, "", nil)
+		recorder := f.do(t, http.MethodGet, base+"/"+f.pluginKey, "", nil)
 		unknown := f.do(t, http.MethodGet, base+"/plugin:nothing:here", "", nil)
 		require.Equal(t, http.StatusNotFound, recorder.Code)
 		require.Equal(t, unknown.Code, recorder.Code)
@@ -139,7 +139,7 @@ func TestPublicExtensionSettingsServeThemesOnly(t *testing.T) {
 
 	t.Run("an admin's token unlocks nothing on these routes", func(t *testing.T) {
 		auth := asUser(t, f.server, f.admin)
-		require.Equal(t, http.StatusNotFound, f.do(t, http.MethodGet, base+"/"+f.pluginK, "", auth).Code)
+		require.Equal(t, http.StatusNotFound, f.do(t, http.MethodGet, base+"/"+f.pluginKey, "", auth).Code)
 		require.NotContains(t, f.do(t, http.MethodGet, base+"?extension_type=plugin", "", auth).Body.String(), f.marker)
 	})
 }
@@ -156,17 +156,17 @@ func TestExtensionSettingsWritesRefusePlugins(t *testing.T) {
 	}
 
 	t.Run("PUT refuses the plugin type", func(t *testing.T) {
-		require.Equal(t, http.StatusBadRequest, put(f.pluginK, "plugin", f.pluginSlug).Code)
+		require.Equal(t, http.StatusBadRequest, put(f.pluginKey, "plugin", f.pluginSlug).Code)
 		f.pluginValueUnchanged(t)
 	})
 
 	t.Run("PUT refuses a plugin's key under the theme type", func(t *testing.T) {
-		require.Equal(t, http.StatusBadRequest, put(f.pluginK, "theme", f.pluginSlug).Code)
+		require.Equal(t, http.StatusBadRequest, put(f.pluginKey, "theme", f.pluginSlug).Code)
 		f.pluginValueUnchanged(t)
 	})
 
 	t.Run("DELETE leaves a plugin's row alone", func(t *testing.T) {
-		require.Equal(t, http.StatusNotFound, f.do(t, http.MethodDelete, base+"/"+f.pluginK, "", auth).Code)
+		require.Equal(t, http.StatusNotFound, f.do(t, http.MethodDelete, base+"/"+f.pluginKey, "", auth).Code)
 		f.pluginValueUnchanged(t)
 	})
 

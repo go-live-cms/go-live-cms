@@ -47,19 +47,21 @@ export interface UpdateSettingsRequest {
   front_page_id?: number | null
 }
 
+// /extension-settings serves and accepts theme rows only (#451).
 export interface ExtensionSetting {
   key: string
   value: any
-  extension_type: "plugin" | "theme"
+  extension_type: "theme"
   extension_id: string
   created_at: string
   changed_at: string
 }
 
 export interface UpsertExtensionSettingRequest {
+  // theme:<extension_id>:<name>
   key: string
   value: any
-  extension_type: "plugin" | "theme"
+  extension_type: "theme"
   extension_id: string
 }
 
