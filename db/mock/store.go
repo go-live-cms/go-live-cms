@@ -1373,20 +1373,6 @@ func (mr *MockStoreMockRecorder) DeleteAllThemeSettings(arg0, arg1 interface{}) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteAllThemeSettings", reflect.TypeOf((*MockStore)(nil).DeleteAllThemeSettings), arg0, arg1)
 }
 
-// DeleteExtensionSetting mocks base method.
-func (m *MockStore) DeleteExtensionSetting(arg0 context.Context, arg1 string) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteExtensionSetting", arg0, arg1)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// DeleteExtensionSetting indicates an expected call of DeleteExtensionSetting.
-func (mr *MockStoreMockRecorder) DeleteExtensionSetting(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteExtensionSetting", reflect.TypeOf((*MockStore)(nil).DeleteExtensionSetting), arg0, arg1)
-}
-
 // DeleteExtensionSettingsByExtension mocks base method.
 func (m *MockStore) DeleteExtensionSettingsByExtension(arg0 context.Context, arg1 db.DeleteExtensionSettingsByExtensionParams) error {
 	m.ctrl.T.Helper()
@@ -1786,6 +1772,21 @@ func (mr *MockStoreMockRecorder) DeleteTheme(arg0, arg1 interface{}) *gomock.Cal
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTheme", reflect.TypeOf((*MockStore)(nil).DeleteTheme), arg0, arg1)
 }
 
+// DeleteThemeExtensionSetting mocks base method.
+func (m *MockStore) DeleteThemeExtensionSetting(arg0 context.Context, arg1 string) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteThemeExtensionSetting", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DeleteThemeExtensionSetting indicates an expected call of DeleteThemeExtensionSetting.
+func (mr *MockStoreMockRecorder) DeleteThemeExtensionSetting(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteThemeExtensionSetting", reflect.TypeOf((*MockStore)(nil).DeleteThemeExtensionSetting), arg0, arg1)
+}
+
 // DeleteThemeSetting mocks base method.
 func (m *MockStore) DeleteThemeSetting(arg0 context.Context, arg1 db.DeleteThemeSettingParams) error {
 	m.ctrl.T.Helper()
@@ -1988,21 +1989,6 @@ func (m *MockStore) GetCurrentReviewRequest(arg0 context.Context, arg1 int64) (d
 func (mr *MockStoreMockRecorder) GetCurrentReviewRequest(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCurrentReviewRequest", reflect.TypeOf((*MockStore)(nil).GetCurrentReviewRequest), arg0, arg1)
-}
-
-// GetExtensionSetting mocks base method.
-func (m *MockStore) GetExtensionSetting(arg0 context.Context, arg1 string) (db.ExtensionSetting, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetExtensionSetting", arg0, arg1)
-	ret0, _ := ret[0].(db.ExtensionSetting)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetExtensionSetting indicates an expected call of GetExtensionSetting.
-func (mr *MockStoreMockRecorder) GetExtensionSetting(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetExtensionSetting", reflect.TypeOf((*MockStore)(nil).GetExtensionSetting), arg0, arg1)
 }
 
 // GetFeaturedImage mocks base method.
@@ -3025,6 +3011,21 @@ func (mr *MockStoreMockRecorder) GetThemeBySlug(arg0, arg1 interface{}) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetThemeBySlug", reflect.TypeOf((*MockStore)(nil).GetThemeBySlug), arg0, arg1)
 }
 
+// GetThemeExtensionSetting mocks base method.
+func (m *MockStore) GetThemeExtensionSetting(arg0 context.Context, arg1 string) (db.ExtensionSetting, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetThemeExtensionSetting", arg0, arg1)
+	ret0, _ := ret[0].(db.ExtensionSetting)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetThemeExtensionSetting indicates an expected call of GetThemeExtensionSetting.
+func (mr *MockStoreMockRecorder) GetThemeExtensionSetting(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetThemeExtensionSetting", reflect.TypeOf((*MockStore)(nil).GetThemeExtensionSetting), arg0, arg1)
+}
+
 // GetThemeSetting mocks base method.
 func (m *MockStore) GetThemeSetting(arg0 context.Context, arg1 db.GetThemeSettingParams) (db.ThemeSetting, error) {
 	m.ctrl.T.Helper()
@@ -3468,21 +3469,6 @@ func (m *MockStore) ListCreditedAuthors(arg0 context.Context, arg1 db.ListCredit
 func (mr *MockStoreMockRecorder) ListCreditedAuthors(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListCreditedAuthors", reflect.TypeOf((*MockStore)(nil).ListCreditedAuthors), arg0, arg1)
-}
-
-// ListExtensionSettings mocks base method.
-func (m *MockStore) ListExtensionSettings(arg0 context.Context) ([]db.ExtensionSetting, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListExtensionSettings", arg0)
-	ret0, _ := ret[0].([]db.ExtensionSetting)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// ListExtensionSettings indicates an expected call of ListExtensionSettings.
-func (mr *MockStoreMockRecorder) ListExtensionSettings(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListExtensionSettings", reflect.TypeOf((*MockStore)(nil).ListExtensionSettings), arg0)
 }
 
 // ListExtensionSettingsByExtension mocks base method.
@@ -4158,6 +4144,21 @@ func (m *MockStore) ListTermPostIDs(arg0 context.Context, arg1 int64) ([]int64, 
 func (mr *MockStoreMockRecorder) ListTermPostIDs(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListTermPostIDs", reflect.TypeOf((*MockStore)(nil).ListTermPostIDs), arg0, arg1)
+}
+
+// ListThemeExtensionSettings mocks base method.
+func (m *MockStore) ListThemeExtensionSettings(arg0 context.Context) ([]db.ExtensionSetting, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListThemeExtensionSettings", arg0)
+	ret0, _ := ret[0].([]db.ExtensionSetting)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListThemeExtensionSettings indicates an expected call of ListThemeExtensionSettings.
+func (mr *MockStoreMockRecorder) ListThemeExtensionSettings(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListThemeExtensionSettings", reflect.TypeOf((*MockStore)(nil).ListThemeExtensionSettings), arg0)
 }
 
 // ListThemeSettings mocks base method.
