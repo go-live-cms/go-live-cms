@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"strconv"
+
+	"github.com/go-live-cms/go-live-cms/customhtml"
 )
 
 type CreatePostTemplateTxParams struct {
@@ -27,11 +29,16 @@ type CreatePostTemplateTxParams struct {
 func (store *SQLStore) CreatePostTemplateTx(ctx context.Context, arg CreatePostTemplateTxParams) (PostTemplate, error) {
 	var template PostTemplate
 	err := store.execTx(ctx, func(q *Queries) error {
-		var err error
+		// Custom HTML (#428): a template is a snapshot, so its markup is in its own
+		// block_doc (attrs.html), like a version's.
+		blockDoc, err := materializeHTML(ctx, q, arg.SourcePostID, arg.BlockDoc)
+		if err != nil {
+			return err
+		}
 		template, err = q.CreatePostTemplate(ctx, CreatePostTemplateParams{
 			PostType:     arg.PostType,
 			Name:         arg.Name,
-			BlockDoc:     arg.BlockDoc,
+			BlockDoc:     blockDoc,
 			WithSettings: arg.WithSettings,
 			SourcePostID: arg.SourcePostID,
 			CreatedBy:    sql.NullInt64{Int64: arg.CreatedBy, Valid: arg.CreatedBy != 0},
@@ -79,8 +86,16 @@ func (store *SQLStore) CreatePostFromTemplateTx(ctx context.Context, arg CreateP
 		if err != nil {
 			return err
 		}
+		// Custom HTML (#428): the template's markup becomes the post's own rows, with new ids.
+		writeSnippets, err := copyHTMLSnippets(ctx, q, &arg.CreatePostsParams, customhtml.Markup(template.BlockDoc))
+		if err != nil {
+			return err
+		}
 		post, err = q.CreatePosts(ctx, arg.CreatePostsParams)
 		if err != nil {
+			return err
+		}
+		if err := writeSnippets(post.ID); err != nil {
 			return err
 		}
 		if _, err := q.CreateUserPost(ctx, CreateUserPostParams{PostID: post.ID, UserID: arg.UserID, Order: 0}); err != nil {

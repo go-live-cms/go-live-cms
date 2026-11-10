@@ -19,8 +19,9 @@ const (
 const (
 	// Posts.
 	ActivityCreated       = "created"
-	ActivityUpdated       = "updated" // details/SEO/featured image saved (throttled)
-	ActivityEdited        = "edited"  // body edited through the collab server (throttled)
+	ActivityUpdated       = "updated"     // details/SEO/featured image saved (throttled)
+	ActivityEdited        = "edited"      // body edited through the collab server (throttled)
+	ActivityHTMLEdited    = "html_edited" // a custom HTML block's markup saved by an admin (#428, throttled)
 	ActivityPublished     = "published"
 	ActivityUnpublished   = "unpublished"
 	ActivityScheduled     = "scheduled"

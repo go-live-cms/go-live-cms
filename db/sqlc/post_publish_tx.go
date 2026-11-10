@@ -1,6 +1,7 @@
 package db
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -9,6 +10,8 @@ import (
 	"time"
 
 	"github.com/sqlc-dev/pqtype"
+
+	"github.com/go-live-cms/go-live-cms/customhtml"
 )
 
 type PublishPostTxParams struct {
@@ -87,9 +90,29 @@ func publishLockedPost(ctx context.Context, q *Queries, arg PublishPostTxParams)
 	if err != nil {
 		return PublishPostTxResult{}, fmt.Errorf("insert version: %w", err)
 	}
+	// Custom HTML (#428): the published body carries its sanitized markup, so versions and
+	// the public page never read post_html_snippets.
+	blockDoc, err := materializeHTML(ctx, q, arg.PostID, version.BlockDoc)
+	if err != nil {
+		return PublishPostTxResult{}, err
+	}
+	if err := setVersionBlockDoc(ctx, q, version.ID, version.BlockDoc, blockDoc); err != nil {
+		return PublishPostTxResult{}, err
+	}
 	return publishInsertedVersion(ctx, q, arg.PostID, PublishPostTxResult{
-		VersionID: version.ID, VersionNo: version.VersionNo, BlockDoc: version.BlockDoc,
+		VersionID: version.ID, VersionNo: version.VersionNo, BlockDoc: blockDoc,
 	}, arg.ContentMedia)
+}
+
+// setVersionBlockDoc rewrites a version just inserted when its body changed.
+func setVersionBlockDoc(ctx context.Context, q *Queries, versionID int64, before, after json.RawMessage) error {
+	if bytes.Equal(before, after) {
+		return nil
+	}
+	if err := q.SetPostVersionBlockDoc(ctx, SetPostVersionBlockDocParams{ID: versionID, BlockDoc: after}); err != nil {
+		return fmt.Errorf("store version body: %w", err)
+	}
+	return nil
 }
 
 // publishInsertedVersion makes a version just inserted the post's published
@@ -105,6 +128,9 @@ func publishInsertedVersion(ctx context.Context, q *Queries, postID int64, versi
 		PublishedBlockDoc:  pqtype.NullRawMessage{RawMessage: version.BlockDoc, Valid: true},
 	}); err != nil {
 		return PublishPostTxResult{}, fmt.Errorf("set published version: %w", err)
+	}
+	if err := recordPublishedHTML(ctx, q, postID, version.BlockDoc); err != nil {
+		return PublishPostTxResult{}, err
 	}
 	if contentMedia != nil {
 		if err := syncContentMedia(ctx, q, postID, contentMedia(version.BlockDoc)); err != nil {
@@ -206,6 +232,21 @@ func (store *SQLStore) ScheduleUpdateTx(ctx context.Context, arg ScheduleUpdateT
 		if err != nil {
 			return fmt.Errorf("store scheduled update: %w", err)
 		}
+		// Custom HTML (#428): the markup is frozen with the rest of the body; an admin's
+		// later edit isn't included.
+		working, err := q.GetPostBlocks(ctx, arg.PostID)
+		if err != nil {
+			return fmt.Errorf("read working copy: %w", err)
+		}
+		frozen, err := materializeHTML(ctx, q, arg.PostID, working.Content)
+		if err != nil {
+			return err
+		}
+		if !bytes.Equal(frozen, working.Content) {
+			if err := q.SetScheduledUpdateBlockDoc(ctx, SetScheduledUpdateBlockDocParams{PostID: arg.PostID, BlockDoc: frozen}); err != nil {
+				return fmt.Errorf("freeze html: %w", err)
+			}
+		}
 		result = PostScheduledUpdateRow(row)
 		return nil
 	})
@@ -256,8 +297,16 @@ func (store *SQLStore) PublishScheduledUpdateTx(ctx context.Context, arg Publish
 		if err != nil {
 			return fmt.Errorf("insert version: %w", err)
 		}
+		// Custom HTML (#428): sanitized again on publish; the snapshot may be days old.
+		blockDoc, err := customhtml.Resanitize(version.BlockDoc)
+		if err != nil {
+			return fmt.Errorf("sanitize frozen html: %w", err)
+		}
+		if err := setVersionBlockDoc(ctx, q, version.ID, version.BlockDoc, blockDoc); err != nil {
+			return err
+		}
 		result, err = publishInsertedVersion(ctx, q, arg.PostID, PublishPostTxResult{
-			VersionID: version.ID, VersionNo: version.VersionNo, BlockDoc: version.BlockDoc,
+			VersionID: version.ID, VersionNo: version.VersionNo, BlockDoc: blockDoc,
 		}, arg.ContentMedia)
 		return err
 	})
@@ -296,6 +345,10 @@ type RestoredPostSettings struct {
 	// PageTemplate is the version's template (#336); nil (a version without one)
 	// keeps the working template.
 	PageTemplate *string
+
+	// HTMLSnippets is the markup the version was published with, by snippet id (#428):
+	// each goes back into the working row under the same id, edited or deleted since.
+	HTMLSnippets map[string]string
 }
 
 // RestorePostSettingsTx puts a version's settings back into the post's working
@@ -337,6 +390,11 @@ func (store *SQLStore) RestorePostSettingsTx(ctx context.Context, arg RestorePos
 		}
 		if err := replaceByline(ctx, q, arg.PostID, authors); err != nil {
 			return fmt.Errorf("restore byline: %w", err)
+		}
+		for id, html := range arg.Settings.HTMLSnippets {
+			if err := q.RestorePostHTMLSnippet(ctx, RestorePostHTMLSnippetParams{PostID: arg.PostID, SnippetID: id, Html: html}); err != nil {
+				return fmt.Errorf("restore html snippet: %w", err)
+			}
 		}
 		var err error
 		post, err = q.RestorePostTitleAndDescription(ctx, RestorePostTitleAndDescriptionParams{

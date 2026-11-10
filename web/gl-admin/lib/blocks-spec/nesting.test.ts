@@ -110,15 +110,15 @@ describe("the nesting table", () => {
   })
 
   it("derives the content expressions", () => {
-    expect(containerContent("group")).toBe("(block | tableBlock | video | audio | file | embed | buttons | spacer | details | columns)+")
+    expect(containerContent("group")).toBe("(block | tableBlock | video | audio | file | embed | html | buttons | spacer | details | columns)+")
     // #421: its part first, then flow.
-    expect(containerContent("details")).toBe("detailsSummary (block | tableBlock | video | audio | file | embed | buttons | spacer)+")
+    expect(containerContent("details")).toBe("detailsSummary (block | tableBlock | video | audio | file | embed | html | buttons | spacer)+")
     // #424: image blocks, none is fine, then its caption.
     expect(containerContent("gallery")).toBe("image* galleryCaption")
     // #426: the 2–4 limit is the table's, not the schema's (`countNotInSchema`), each column holding flow and details.
     expect(containerContent("columns")).toBe("column+")
-    expect(containerContent("column")).toBe("(block | tableBlock | video | audio | file | embed | buttons | spacer | details)+")
-    expect(topLevelContent()).toBe("(block | tableBlock | video | audio | file | embed | buttons | spacer | group | details | gallery | columns)+")
+    expect(containerContent("column")).toBe("(block | tableBlock | video | audio | file | embed | html | buttons | spacer | details)+")
+    expect(topLevelContent()).toBe("(block | tableBlock | video | audio | file | embed | html | buttons | spacer | group | details | gallery | columns)+")
   })
 
   it("details (#421): holds flow, sits at the top or in a group, its summary a part (never a block)", () => {

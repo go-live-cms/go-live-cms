@@ -20,6 +20,7 @@ collab server (`web/collab-server/`) converts between the two. See
   shared with the API.
 - `embeds.ts` (#425): the embed providers: ref patterns, player addresses and their iframe
   attributes, frame hosts (the CSPs), and the title's rules.
+- `customHtml.ts` (#428): the custom HTML block's snippet ids and its locked note.
 - `nesting.ts` (#414): **the nesting table** (which types are containers and what each holds),
   the shared block predicate `isBlockNode`, the content expressions, `dedupeBlockRefs`,
   `nestingIssues` (the structural checks `validateBlockDoc` runs) and `blocksInReadingOrder`.
@@ -83,6 +84,9 @@ posts.block_doc → publish → post_versions → public site (SSR)
   most `EMBED_TITLE_MAX_LENGTH` code points, never HTML; absent: the provider's name) and
   `attrs.caption` (runs, like an image's). Never HTML from a provider or a pasted URL.
   `embedVectors.json` is shared with the API
+- **html** (#428, `customHtml.ts`): flow; `attrs.snippetId` (a UUID; absent: nothing written yet) and
+  **no markup**, which is in the API's `post_html_snippets`, written by admins only. `attrs.html`, the
+  sanitized markup, is written by publish and exists only in a published document or a version
 - **file** (#423): flow; `attrs.mediaId` and `attrs.label`, the link text (plain, by
   `normalizeFileLabel`: trimmed, at most `FILE_LABEL_MAX_LENGTH` code points; absent: the file's
   name)

@@ -248,7 +248,7 @@ kept so references in code stay valid.
 - Every block node type needs the **`data-block-id`** attr (added globally by
   `BlockIdExtension` to paragraph/heading/blockquote/codeBlock/horizontalRule/image/
   bullet_list/ordered_list/listItem, callout/pullQuote/taskList/taskItem (#419), tableBlock (#420),
-  video/audio/file (#423), embed (#425), buttons/spacer (#426) and every container, `CONTAINER_NODE_NAMES`). Custom/theme nodes must declare it too or
+  video/audio/file (#423), embed (#425), html (#428), buttons/spacer (#426) and every container, `CONTAINER_NODE_NAMES`). Custom/theme nodes must declare it too or
   `schema.nodeFromJSON` throws "Unsupported attribute".
 - **Callout, pull quote, to-do list (#419, three flow blocks).** Schema in `schemaExtensions`
   (`components/editor/extensions/Callout.ts`, `PullQuote.ts`, `TodoList.ts`: TipTap's TaskList/
@@ -520,6 +520,24 @@ kept so references in code stay valid.
   `EmbedBlock.collab.test.ts`, `blocks-spec/embeds.test.ts`, the public
   `src/components/blocks/embed/EmbedBlock.test.tsx`, Go `embeds_test.go` and two cases in
   `nestingVectors.json`.
+- **Custom HTML (#428, `components/editor/extensions/HtmlBlock.ts`): a flow atom holding a snippet
+  id, and never any markup** (`STANDALONE_FLOW_NODE_NAMES`). Block Spec `html` v1: `snippetId`
+  (`normalizeSnippetId`, `blocks-spec/customHtml.ts`), a node attr, last writer wins, set once by the
+  admin who first saves it. The markup is the API's `post_html_snippets`, so no Yjs update can
+  create or change it, and nothing here decodes one.
+  - **The doc can't carry markup, whatever a client writes.** The bridge reads only the id (a Yjs
+    element's other attributes stop there), `zHtml` is strict, and the API keeps only the id.
+    `attrs.html` exists only in a published document or a version; `blockDocToPM` doesn't read it,
+    so a restore brings the id back and the API's restore route brings the markup.
+  - **No parse rule:** no HTML, pasted or otherwise, makes one or names a snippet. So copy and
+    paste don't carry a block; **Duplicate** gives an empty one (`withoutBlockIds`), because two
+    blocks on one snippet would change together. A move keeps the node, so the id goes with it.
+  - **Stale clients:** a bundle from before #428 has no `html` node (and a narrower doc and
+    containers); the fingerprint guard (#416) refuses it (`schemaFingerprint.test.ts`).
+  - Tests: `blockBridge.html.test.ts`, `extensions/HtmlBlock.test.ts` (schema, the admin's field and
+    Preview, the locked preview, read-only), `extensions/HtmlBlock.collab.test.ts` (a client writing
+    the Yjs doc directly, a move, a restart), `lib/htmlSnippetsStore.test.ts`,
+    `src/components/blocks/html/HtmlBlock.test.tsx`, Go `post_html_snippets_test.go`.
 - **Inline nodes (#320, `components/editor/extensions/InlineNodes.ts`, rules in
   `blocks-spec/inlineNodes.ts`): `mention` {userId, label}, `contentLink` {postId, label},
   `dateChip` {date, time, reminder}.** Inline **atoms** in the `inline` group, so they live in a

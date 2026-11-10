@@ -26,16 +26,8 @@ import { currentColumnsPicker } from "../ui/ColumnsPicker"
 // insert and turnInto focus the editor, which scrolls the selection into view.
 stubJsdomRangeLayout()
 
-// A stand-in for Custom HTML (#428), the only Advanced block the design has.
-const customHtml: CatalogEntry = {
-  id: "html",
-  type: "html",
-  name: "Custom HTML",
-  group: "advanced",
-  keywords: ["embed code", "markup"],
-  icon: { path: ICONS.html },
-  insert: () => {},
-}
+// Custom HTML (#428), the only Advanced block the design has.
+const customHtml = CORE_BLOCKS.find((entry) => entry.id === "html")!
 // The design's /vid example: the Video block (#423) and embeds the catalog doesn't have yet.
 const video = (name: string, group: CatalogEntry["group"], keywords: string[] = []): CatalogEntry => ({
   id: name.toLowerCase(),
@@ -81,6 +73,7 @@ describe("the catalog", () => {
       ["Media", ["Image", "Gallery", "Video", "Audio", "File"]],
       ["Layout", ["Divider", "Group", "Columns", "Buttons", "Spacer"]],
       ["Embeds", ["YouTube", "Vimeo", "X", "Embed a link"]],
+      ["Advanced", ["Custom HTML"]],
     ])
     expect(BLOCK_GROUPS.map((g) => g.label)).toEqual(["Text", "Media", "Layout", "Embeds", "Advanced"])
   })
@@ -125,6 +118,7 @@ describe("search (names and keywords)", () => {
       ["Heading 5", undefined],
       ["Heading 6", undefined],
       ["Divider", "hr"],
+      ["Custom HTML", undefined],
     ])
   })
 
@@ -157,19 +151,20 @@ describe("search (names and keywords)", () => {
 })
 
 describe("the role gate", () => {
-  const entries = [...CORE_BLOCKS, customHtml]
+  const entries = CORE_BLOCKS
 
   it("offers Advanced entries to admins only, with the Admins pill", () => {
     expect(names(menuEntries({ role: "admin" }, entries))).toContain("Custom HTML")
     expect(names(menuEntries({ role: "Admin" }, entries))).toContain("Custom HTML")
     // Contributors don't get the embeds (#425: resolving a link is for editors and up).
     const embeds = CORE_BLOCKS.filter((entry) => entry.group === "embeds").length
-    for (const [role, count] of [["editor", CORE_BLOCKS.length], ["contributor", CORE_BLOCKS.length - embeds], [null, CORE_BLOCKS.length - embeds], [undefined, CORE_BLOCKS.length - embeds]] as const) {
+    const everyoneElse = CORE_BLOCKS.length - 1
+    for (const [role, count] of [["editor", everyoneElse], ["contributor", everyoneElse - embeds], [null, everyoneElse - embeds], [undefined, everyoneElse - embeds]] as const) {
       expect(names(menuEntries({ role }, entries))).not.toContain("Custom HTML")
       expect(menuEntries({ role }, entries)).toHaveLength(count)
     }
     expect(isAdminOnly(customHtml)).toBe(true)
-    expect(CORE_BLOCKS.some(isAdminOnly)).toBe(false)
+    expect(CORE_BLOCKS.filter(isAdminOnly)).toEqual([customHtml])
     // The Advanced group shows only when an admin's menu has something in it.
     expect(searchCatalog(menuEntries({ role: "admin" }, entries), "").map((s) => s.label)).toContain("Advanced")
     expect(searchCatalog(menuEntries({ role: "editor" }, entries), "").map((s) => s.label)).not.toContain("Advanced")
@@ -218,6 +213,7 @@ const PM_NODE: Record<string, string> = {
   audio: "audio",
   file: "file",
   embed: "embed",
+  html: "html",
   columns: "columns",
   buttons: "buttons",
   spacer: "spacer",

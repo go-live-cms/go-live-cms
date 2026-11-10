@@ -23,9 +23,20 @@ type DuplicatePostTxParams struct {
 func (store *SQLStore) DuplicatePostTx(ctx context.Context, arg DuplicatePostTxParams) (Post, error) {
 	var post Post
 	err := store.execTx(ctx, func(q *Queries) error {
-		var err error
+		// Custom HTML (#428): the copy gets its own rows, with new ids.
+		markup, err := postHTMLMarkup(ctx, q, arg.SourceID)
+		if err != nil {
+			return err
+		}
+		writeSnippets, err := copyHTMLSnippets(ctx, q, &arg.CreatePostsParams, markup)
+		if err != nil {
+			return err
+		}
 		post, err = q.CreatePosts(ctx, arg.CreatePostsParams)
 		if err != nil {
+			return err
+		}
+		if err := writeSnippets(post.ID); err != nil {
 			return err
 		}
 		if _, err := q.CreateUserPost(ctx, CreateUserPostParams{PostID: post.ID, UserID: arg.UserID, Order: 0}); err != nil {

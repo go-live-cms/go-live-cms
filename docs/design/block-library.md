@@ -572,7 +572,7 @@ Each is confirmed (or changed) as the first acceptance item of its sub-issue.
   X's widget script can't be limited without a `script-src` that would constrain themes;
   that stays out of scope, and the script is only ever requested after a click.
 
-**Custom HTML is admin-only, enforced by the server**:
+**Custom HTML is admin-only, enforced by the server**, confirmed in #428 and built as written:
 
 - Recommended: **the HTML isn't in the Yjs doc.** The block holds a `snippetId`; the
   markup lives in a `post_html_snippets` row (post id, snippet id, html) written only

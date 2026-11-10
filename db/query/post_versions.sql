@@ -100,7 +100,8 @@ SELECT golive_post_settings(p.id)::jsonb AS working,
 FROM posts p
 CROSS JOIN LATERAL (SELECT golive_post_settings_changed(p.id, p.published_settings) AS changed) s
 CROSS JOIN LATERAL (
-    SELECT p.post_status = 'published' AND p.block_doc_hash IS DISTINCT FROM p.published_block_hash AS changed
+    SELECT p.post_status = 'published'
+       AND (p.block_doc_hash IS DISTINCT FROM p.published_block_hash OR golive_post_html_snippets_changed(p.id)) AS changed
 ) b
 WHERE p.id = $1;
 

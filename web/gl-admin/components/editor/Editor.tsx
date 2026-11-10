@@ -23,12 +23,15 @@ import BubbleMenu from "./ui/BubbleMenu"
 import BlockTypeToolbar from "./ui/BlockTypeToolbar"
 import ImageToolbar from "./ui/ImageToolbar"
 import EmbedToolbar from "./ui/EmbedToolbar"
+import HtmlToolbar from "./ui/HtmlToolbar"
 import DragHandle from "./ui/DragHandle"
 import BlockComments from "./ui/BlockComments"
 import type { BlockRef } from "./utils/blockActions"
 import type { PostCommentsStore } from "@gl-admin/lib/commentsStore"
 import { PostBlockEditsStore } from "@gl-admin/lib/blockEditsStore"
 import { BlockEditsContext } from "./blockEditsContext"
+import { PostHtmlSnippetsStore } from "@gl-admin/lib/htmlSnippetsStore"
+import { provideHtmlSnippets } from "./blocks/htmlSnippets"
 import CharacterCount from "./ui/CharacterCount"
 import MediaPickerHost from "./ui/MediaPickerHost"
 import { getExtensions } from "./utils/extensions"
@@ -125,6 +128,8 @@ export interface EditorRef {
   // Scheduling an update (#335) waits for it too: the API then flushes the server and
   // freezes block_doc, so the snapshot has those edits.
   whenAcknowledged: () => Promise<void>
+  // Custom HTML blocks read the post's markup again (#428: a restore put a version's back).
+  refreshHtmlSnippets: () => void
   // Load a stored version into the working copy through the editor (#136)
   restoreVersion: (doc: BlockDocV1) => Promise<{ saved: boolean }>
   /**
@@ -277,6 +282,31 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
     }
   }, [value, editor, collab, readOnly])
 
+  // Custom HTML (#428): the post's markup, for the blocks' views, bound or static. Read when
+  // a block first asks; again on every reconnect and when the tab is shown (another admin's
+  // edit has no message of its own). Created by the effect that destroys it (StrictMode).
+  const [htmlSnippets, setHtmlSnippets] = useState<PostHtmlSnippetsStore | null>(null)
+  useEffect(() => {
+    if (!editor || !postId) return
+    const store = new PostHtmlSnippetsStore(postId)
+    store.onSaved = () => callbacks.current.onStored?.()
+    provideHtmlSnippets(editor, store)
+    setHtmlSnippets(store)
+    const offSynced = collab?.onSynced(() => store.refreshIfStarted())
+    const onVisible = () => {
+      if (document.visibilityState === "visible") store.refreshIfStarted()
+    }
+    document.addEventListener("visibilitychange", onVisible)
+    return () => {
+      offSynced?.()
+      document.removeEventListener("visibilitychange", onVisible)
+      // A block still waiting to save gets its chance before the store goes.
+      void store.flush().finally(() => store.destroy())
+      provideHtmlSnippets(editor, null)
+      setHtmlSnippets(null)
+    }
+  }, [editor, postId, collab])
+
   // Not bound because the doc has types this editor can't build: show the REST working
   // copy (GET /posts/:id/blocks). No Yjs involved.
   const staticLoadedRef = useRef<{ editor: typeof editor; postId: number } | null>(null)
@@ -331,7 +361,8 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
         onPublishStart?.()
         try {
           // The API flushes the collab server before reading block_doc; make sure the
-          // server has every edit typed here first.
+          // server has every edit typed here first, custom HTML's too (#428).
+          await htmlSnippets?.flush()
           await saveStatus?.whenAcknowledged()
           const token = authManager.getAccessToken()
           if (token) blockAPIClient.setAuthToken(token)
@@ -349,8 +380,10 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
       whenAcknowledged: async () => {
         if (unbuildable) throw blockedError()
         if (readOnly) return
+        await htmlSnippets?.flush()
         await saveStatus?.whenAcknowledged()
       },
+      refreshHtmlSnippets: () => htmlSnippets?.refreshIfStarted(),
       restoreVersion: async (doc) => {
         if (unbuildable) throw blockedError()
         if (!collab || !saveStatus || !editor || readOnly) throw new Error("Restoring needs the collaborative editor")
@@ -366,7 +399,7 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
       jumpToCollaborator: (clientIds) =>
         editor && !editor.isDestroyed && collab ? scrollToCollaborator(editor.view, collab.provider.awareness, clientIds) : false,
     }),
-    [collab, saveStatus, editor, postId, readOnly, isPublishing, saveState, onPublishStart, onPublishSuccess, onPublishError, unbuildable]
+    [collab, saveStatus, editor, postId, readOnly, isPublishing, saveState, onPublishStart, onPublishSuccess, onPublishError, unbuildable, htmlSnippets]
   )
 
   const applyLinkWithModal = useCallback(() => {
@@ -475,6 +508,7 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
       {!readOnly && <BlockTypeToolbar editor={editor} />}
       {!readOnly && <ImageToolbar editor={editor} />}
       {!readOnly && <EmbedToolbar editor={editor} />}
+      {!readOnly && <HtmlToolbar editor={editor} />}
       {!readOnly && (
         <BlockEditsContext.Provider value={blockEdits}>
           <DragHandle editor={editor} postUrl={postUrl} onComment={commentsLive ? onComment : undefined} />

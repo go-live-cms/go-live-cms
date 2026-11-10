@@ -139,5 +139,12 @@ func (server *Server) RegisterPostRoutes(rg *gin.RouterGroup) {
 		// read the post; written only by the collab server's store
 		posts.GET("/:id/block-edits", auth, author, server.listPostBlockEdits)
 
+		// Custom HTML (#428, post_html_snippets.go): read by anyone who may read the post
+		// (the locked preview), written only by admins. The only way markup gets into
+		// post_html_snippets from a client.
+		posts.GET("/:id/html-snippets", auth, author, server.listPostHTMLSnippets)
+		posts.POST("/:id/html-snippets", auth, requireSiteAdmin(server), server.createPostHTMLSnippet)
+		posts.PUT("/:id/html-snippets/:snippet_id", auth, requireSiteAdmin(server), server.updatePostHTMLSnippet)
+
 	}
 }

@@ -229,6 +229,58 @@ func TestEmbedRoutesRequireRole(t *testing.T) {
 	}
 }
 
+// htmlSnippetRoutes are the custom HTML routes (#428), every method. They are how markup
+// gets into the post, so TestHTMLSnippetRoutesRequireRole fails when one is added without
+// being listed here (so its rule gets a look), or answers an anonymous request, or a write
+// answers an editor or a contributor.
+var htmlSnippetRoutes = map[string]string{
+	"GET /api/v1/posts/:id/html-snippets":             "canReadPost: the locked preview",
+	"POST /api/v1/posts/:id/html-snippets":            "requireSiteAdmin",
+	"PUT /api/v1/posts/:id/html-snippets/:snippet_id": "requireSiteAdmin",
+}
+
+func TestHTMLSnippetRoutesRequireRole(t *testing.T) {
+	store := mockdb.NewMockStore(gomock.NewController(t))
+	server := newTestServer(t, store)
+	editor := db.User{ID: 51, Username: "editor", Role: RoleEditor}
+	contributor := db.User{ID: 52, Username: "contrib", Role: RoleContributor}
+	store.EXPECT().GetUser(gomock.Any(), editor.ID).AnyTimes().Return(editor, nil)
+	store.EXPECT().GetUser(gomock.Any(), contributor.ID).AnyTimes().Return(contributor, nil)
+
+	registered := map[string]bool{}
+	for _, route := range server.router.Routes() {
+		if !strings.Contains(route.Path, "html-snippets") {
+			continue
+		}
+		key := route.Method + " " + route.Path
+		registered[key] = true
+		_, listed := htmlSnippetRoutes[key]
+		require.True(t, listed, "%s is a custom HTML route missing from htmlSnippetRoutes", key)
+		require.False(t, strings.HasPrefix(route.Path, "/public"), "the working markup is never public: %s", key)
+
+		t.Run(key, func(t *testing.T) {
+			body := `{"html":"<b>x</b>"}`
+			recorder := httptest.NewRecorder()
+			server.router.ServeHTTP(recorder, httptest.NewRequest(route.Method, routeExample(route.Path), strings.NewReader(body)))
+			require.Equal(t, http.StatusUnauthorized, recorder.Code, "%s answers without a token", key)
+
+			if route.Method == http.MethodGet {
+				return
+			}
+			for _, caller := range []db.User{editor, contributor} {
+				request := httptest.NewRequest(route.Method, routeExample(route.Path), strings.NewReader(body))
+				addAuthorization(t, request, server.tokenMaker, authorizationTypeBearer, caller.ID, caller.Username, time.Minute)
+				recorder = httptest.NewRecorder()
+				server.router.ServeHTTP(recorder, request)
+				require.Equal(t, http.StatusForbidden, recorder.Code, "%s answers a %s", key, caller.Role)
+			}
+		})
+	}
+	for key := range htmlSnippetRoutes {
+		require.True(t, registered[key], "htmlSnippetRoutes lists %s, which is no longer a route", key)
+	}
+}
+
 // routeExample fills a route template's parameters: /posts/:id/meta becomes
 // /posts/1/meta.
 func routeExample(path string) string {

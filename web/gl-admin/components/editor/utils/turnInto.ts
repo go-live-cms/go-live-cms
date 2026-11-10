@@ -20,6 +20,8 @@ export const computeTurnIntoFromSelection = (editor: TiptapEditor): TurnIntoValu
     // #423
     if (node.type.name === "video" || node.type.name === "audio" || node.type.name === "file") return node.type.name
     if (node.type.name === "embed") return embedEntryId(node.attrs.provider)
+    // #428
+    if (node.type.name === "html") return "html"
     if (node.type.name === "horizontalRule") return "divider"
     if (node.type.name === "codeBlock") return "code-block"
     if (node.type.name === "blockquote") return "quote"

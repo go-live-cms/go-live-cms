@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react"
 import type { Editor as TiptapEditor } from "@tiptap/core"
 import { NodeSelection } from "prosemirror-state"
+import { authManager } from "@gl-admin/lib/auth"
 import {
   GROUP_ALIGNS,
   GROUP_STYLES,
@@ -43,6 +44,13 @@ import {
 
 const WIDTH_LABELS: Record<GroupAlign, string> = { content: "Content", wide: "Wide", full: "Full" }
 const BACKGROUND_LABELS: Record<GroupStyle, string> = { none: "None", tinted: "Tinted" }
+
+// #428, the canvas's Custom HTML settings, plus what happens to what's written.
+function htmlBlockHint(role: string | null | undefined): string {
+  return role?.toLowerCase() === "admin"
+    ? "Only admins can add or edit this block. Editors and contributors see it as a locked preview and can still move it. Scripts, event handlers and frames are removed when it's saved."
+    : "View only: only admins can edit custom HTML. Ask an admin to change it."
+}
 
 type BlockInfo = { name: string; icon: BlockIconSpec }
 
@@ -199,6 +207,8 @@ export default function BlockSettingsPanel({ editor }: { editor: TiptapEditor })
         />
       ) : block.node.type.name === "embed" ? (
         <EmbedBlockSettings key={ref.id ?? ref.pos} editor={editor} node={block.node} blockRef={ref} />
+      ) : block.node.type.name === "html" ? (
+        <p className="post-settings__hint">{htmlBlockHint(authManager.getState().user?.role)}</p>
       ) : block.node.type.name === "columns" ? (
         <ColumnsSettings editor={editor} block={block} />
       ) : block.node.type.name === "buttons" ? (

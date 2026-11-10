@@ -3,6 +3,8 @@ import Notice from "@gl-admin/components/ui/Notice"
 import Skeleton from "@gl-admin/components/ui/Skeleton"
 import BlockRenderer from "@/components/BlockRenderer"
 import type { BlockDocV1 } from "@gl-admin/lib/blocks-spec"
+import { listHtmlSnippets } from "@gl-admin/lib/api/htmlSnippets"
+import { hasHtmlBlock, withWorkingHtml } from "@gl-admin/lib/htmlSnippetsStore"
 import {
   blockAPIClient,
   type PostSettings,
@@ -260,7 +262,11 @@ export function VersionPreview({ version, postId, workingKey = 0 }: VersionPrevi
             : Promise.resolve(null),
         ])
         if (controller.signal.aborted) return
-        const working = fullDoc(blocks.doc)
+        // Custom HTML's working markup isn't in the document (#428).
+        const stored = fullDoc(blocks.doc)
+        const snippets = hasHtmlBlock(stored) ? await listHtmlSnippets(postId).catch(() => []) : []
+        if (controller.signal.aborted) return
+        const working = withWorkingHtml(stored, snippets)
         const diff = await computeBlockDiff(fullDoc(version.doc), working, { signal: controller.signal })
         if (controller.signal.aborted) return
         setComparison({ state: "ready", postId, versionNo: version.version_no, diff, working, settings })

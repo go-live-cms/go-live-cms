@@ -363,6 +363,20 @@ func (mr *MockStoreMockRecorder) ClearMenuLocation(arg0, arg1 interface{}) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClearMenuLocation", reflect.TypeOf((*MockStore)(nil).ClearMenuLocation), arg0, arg1)
 }
 
+// ClearPublishedHTMLSnippetsExcept mocks base method.
+func (m *MockStore) ClearPublishedHTMLSnippetsExcept(arg0 context.Context, arg1 db.ClearPublishedHTMLSnippetsExceptParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ClearPublishedHTMLSnippetsExcept", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ClearPublishedHTMLSnippetsExcept indicates an expected call of ClearPublishedHTMLSnippetsExcept.
+func (mr *MockStoreMockRecorder) ClearPublishedHTMLSnippetsExcept(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClearPublishedHTMLSnippetsExcept", reflect.TypeOf((*MockStore)(nil).ClearPublishedHTMLSnippetsExcept), arg0, arg1)
+}
+
 // ConfirmEmailChangeTx mocks base method.
 func (m *MockStore) ConfirmEmailChangeTx(arg0 context.Context, arg1 []byte) (db.ConfirmEmailChangeTxResult, error) {
 	m.ctrl.T.Helper()
@@ -971,6 +985,21 @@ func (m *MockStore) CreatePostFromTemplateTx(arg0 context.Context, arg1 db.Creat
 func (mr *MockStoreMockRecorder) CreatePostFromTemplateTx(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreatePostFromTemplateTx", reflect.TypeOf((*MockStore)(nil).CreatePostFromTemplateTx), arg0, arg1)
+}
+
+// CreatePostHTMLSnippet mocks base method.
+func (m *MockStore) CreatePostHTMLSnippet(arg0 context.Context, arg1 db.CreatePostHTMLSnippetParams) (db.PostHtmlSnippet, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreatePostHTMLSnippet", arg0, arg1)
+	ret0, _ := ret[0].(db.PostHtmlSnippet)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreatePostHTMLSnippet indicates an expected call of CreatePostHTMLSnippet.
+func (mr *MockStoreMockRecorder) CreatePostHTMLSnippet(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreatePostHTMLSnippet", reflect.TypeOf((*MockStore)(nil).CreatePostHTMLSnippet), arg0, arg1)
 }
 
 // CreatePostMedia mocks base method.
@@ -3771,6 +3800,21 @@ func (mr *MockStoreMockRecorder) ListPostComments(arg0, arg1 interface{}) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPostComments", reflect.TypeOf((*MockStore)(nil).ListPostComments), arg0, arg1)
 }
 
+// ListPostHTMLSnippets mocks base method.
+func (m *MockStore) ListPostHTMLSnippets(arg0 context.Context, arg1 int64) ([]db.PostHtmlSnippet, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListPostHTMLSnippets", arg0, arg1)
+	ret0, _ := ret[0].([]db.PostHtmlSnippet)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListPostHTMLSnippets indicates an expected call of ListPostHTMLSnippets.
+func (mr *MockStoreMockRecorder) ListPostHTMLSnippets(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPostHTMLSnippets", reflect.TypeOf((*MockStore)(nil).ListPostHTMLSnippets), arg0, arg1)
+}
+
 // ListPostMentionNotifications mocks base method.
 func (m *MockStore) ListPostMentionNotifications(arg0 context.Context, arg1 int64) ([]db.PostMentionNotification, error) {
 	m.ctrl.T.Helper()
@@ -4899,6 +4943,20 @@ func (mr *MockStoreMockRecorder) RestorePostFromTrash(arg0, arg1 interface{}) *g
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RestorePostFromTrash", reflect.TypeOf((*MockStore)(nil).RestorePostFromTrash), arg0, arg1)
 }
 
+// RestorePostHTMLSnippet mocks base method.
+func (m *MockStore) RestorePostHTMLSnippet(arg0 context.Context, arg1 db.RestorePostHTMLSnippetParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RestorePostHTMLSnippet", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RestorePostHTMLSnippet indicates an expected call of RestorePostHTMLSnippet.
+func (mr *MockStoreMockRecorder) RestorePostHTMLSnippet(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RestorePostHTMLSnippet", reflect.TypeOf((*MockStore)(nil).RestorePostHTMLSnippet), arg0, arg1)
+}
+
 // RestorePostSEO mocks base method.
 func (m *MockStore) RestorePostSEO(arg0 context.Context, arg1 db.RestorePostSEOParams) error {
 	m.ctrl.T.Helper()
@@ -5241,6 +5299,20 @@ func (mr *MockStoreMockRecorder) SetPostAuthorsTx(arg0, arg1 interface{}) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetPostAuthorsTx", reflect.TypeOf((*MockStore)(nil).SetPostAuthorsTx), arg0, arg1)
 }
 
+// SetPostHTMLSnippetPublished mocks base method.
+func (m *MockStore) SetPostHTMLSnippetPublished(arg0 context.Context, arg1 db.SetPostHTMLSnippetPublishedParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetPostHTMLSnippetPublished", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetPostHTMLSnippetPublished indicates an expected call of SetPostHTMLSnippetPublished.
+func (mr *MockStoreMockRecorder) SetPostHTMLSnippetPublished(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetPostHTMLSnippetPublished", reflect.TypeOf((*MockStore)(nil).SetPostHTMLSnippetPublished), arg0, arg1)
+}
+
 // SetPostTermTx mocks base method.
 func (m *MockStore) SetPostTermTx(arg0 context.Context, arg1 db.SetPostTermTxParams) (db.SetPostTermTxResult, error) {
 	m.ctrl.T.Helper()
@@ -5284,6 +5356,20 @@ func (mr *MockStoreMockRecorder) SetPostTypeActiveByRegisteredBy(arg0, arg1 inte
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetPostTypeActiveByRegisteredBy", reflect.TypeOf((*MockStore)(nil).SetPostTypeActiveByRegisteredBy), arg0, arg1)
 }
 
+// SetPostVersionBlockDoc mocks base method.
+func (m *MockStore) SetPostVersionBlockDoc(arg0 context.Context, arg1 db.SetPostVersionBlockDocParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetPostVersionBlockDoc", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetPostVersionBlockDoc indicates an expected call of SetPostVersionBlockDoc.
+func (mr *MockStoreMockRecorder) SetPostVersionBlockDoc(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetPostVersionBlockDoc", reflect.TypeOf((*MockStore)(nil).SetPostVersionBlockDoc), arg0, arg1)
+}
+
 // SetPublishedVersionOnPost mocks base method.
 func (m *MockStore) SetPublishedVersionOnPost(arg0 context.Context, arg1 db.SetPublishedVersionOnPostParams) error {
 	m.ctrl.T.Helper()
@@ -5296,6 +5382,20 @@ func (m *MockStore) SetPublishedVersionOnPost(arg0 context.Context, arg1 db.SetP
 func (mr *MockStoreMockRecorder) SetPublishedVersionOnPost(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetPublishedVersionOnPost", reflect.TypeOf((*MockStore)(nil).SetPublishedVersionOnPost), arg0, arg1)
+}
+
+// SetScheduledUpdateBlockDoc mocks base method.
+func (m *MockStore) SetScheduledUpdateBlockDoc(arg0 context.Context, arg1 db.SetScheduledUpdateBlockDocParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetScheduledUpdateBlockDoc", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetScheduledUpdateBlockDoc indicates an expected call of SetScheduledUpdateBlockDoc.
+func (mr *MockStoreMockRecorder) SetScheduledUpdateBlockDoc(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetScheduledUpdateBlockDoc", reflect.TypeOf((*MockStore)(nil).SetScheduledUpdateBlockDoc), arg0, arg1)
 }
 
 // SetUserAvatar mocks base method.
@@ -5651,6 +5751,21 @@ func (m *MockStore) UpdatePostCommentBody(arg0 context.Context, arg1 db.UpdatePo
 func (mr *MockStoreMockRecorder) UpdatePostCommentBody(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePostCommentBody", reflect.TypeOf((*MockStore)(nil).UpdatePostCommentBody), arg0, arg1)
+}
+
+// UpdatePostHTMLSnippet mocks base method.
+func (m *MockStore) UpdatePostHTMLSnippet(arg0 context.Context, arg1 db.UpdatePostHTMLSnippetParams) (db.PostHtmlSnippet, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdatePostHTMLSnippet", arg0, arg1)
+	ret0, _ := ret[0].(db.PostHtmlSnippet)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdatePostHTMLSnippet indicates an expected call of UpdatePostHTMLSnippet.
+func (mr *MockStoreMockRecorder) UpdatePostHTMLSnippet(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePostHTMLSnippet", reflect.TypeOf((*MockStore)(nil).UpdatePostHTMLSnippet), arg0, arg1)
 }
 
 // UpdatePostMediaTx mocks base method.

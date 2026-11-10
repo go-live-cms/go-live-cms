@@ -78,6 +78,9 @@ export function withoutBlockIds(json: any): any {
   if (out.attrs && typeof out.attrs === "object") {
     const { [BLOCK_ID]: _id, ...attrs } = out.attrs
     out.attrs = attrs
+    // A copy of a custom HTML block (#428) starts empty: two blocks on one snippet would
+    // change together, and the markup is only an admin's to make.
+    if (out.type === "html") out.attrs = { ...attrs, snippetId: null }
   }
   if (Array.isArray(out.content)) out.content = out.content.map(withoutBlockIds)
   return out

@@ -20,6 +20,8 @@ import {
   normalizeSpacerSize,
   embedStoredAttrs,
   EMBED_BLOCK_VERSION,
+  HTML_BLOCK_VERSION,
+  normalizeSnippetId,
   AUDIO_BLOCK_VERSION,
   FILE_BLOCK_VERSION,
   VIDEO_BLOCK_VERSION,
@@ -426,6 +428,13 @@ function pmNodeToBlock(node: PMNode, allBlocks: Record<BlockID, Block>, seenIds:
         version: EMBED_BLOCK_VERSION,
         attrs: { ...embedStoredAttrs(node.attrs), ...(caption ? { caption } : {}) },
       }
+    }
+
+    // #428. The snippet id alone: whatever else a client's Yjs update put on the element,
+    // `html` included, stops here. The markup is the API's (blocks-spec/customHtml.ts).
+    case "html": {
+      const snippetId = normalizeSnippetId(node.attrs.snippetId)
+      return { id, type: "html", version: HTML_BLOCK_VERSION, attrs: snippetId ? { snippetId } : {} }
     }
 
     default:
@@ -1236,6 +1245,11 @@ function blockToPMNode(block: Block, allBlocks: Record<BlockID, Block>, ctx: Con
         ...(caption.length > 0 ? { content: [{ type: "imageCaption", content: caption }] } : {}),
       }
     }
+
+    // #428. A version's `attrs.html` isn't read here: a restore brings the id back, and the
+    // API puts the version's markup back in the working row.
+    case "html":
+      return { type: "html", attrs: { ...baseAttrs, snippetId: normalizeSnippetId((block.attrs as { snippetId?: unknown }).snippetId) } }
 
     case "list_item":
       if (block.attrs.pm) {

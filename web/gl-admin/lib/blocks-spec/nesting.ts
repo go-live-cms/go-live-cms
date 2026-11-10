@@ -44,6 +44,8 @@ export const FLOW_TYPES = [
   "file",
   // #425
   "embed",
+  // #428
+  "html",
   // #426
   "buttons",
   "spacer",
@@ -58,7 +60,8 @@ export const FLOW_TYPES = [
  */
 // The media blocks (#423) and embeds (#425) too: one in a quote's pm would never render.
 // Buttons and the spacer (#426) too: the page renders them from their own blocks only.
-export const STANDALONE_FLOW_NODE_NAMES = ["tableBlock", "video", "audio", "file", "embed", "buttons", "spacer"] as const
+// Custom HTML (#428) too: its markup is only ever rendered from its own block.
+export const STANDALONE_FLOW_NODE_NAMES = ["tableBlock", "video", "audio", "file", "embed", "html", "buttons", "spacer"] as const
 
 /**
  * The list types: `children` are their items, as before #414. Each list has one item
@@ -200,6 +203,8 @@ export const BLOCK_NODE_NAMES: Readonly<Record<string, string>> = {
   file: "file",
   // #425
   embed: "embed",
+  // #428
+  html: "html",
   // #426
   buttons: "buttons",
   spacer: "spacer",
