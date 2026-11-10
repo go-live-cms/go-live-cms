@@ -54,7 +54,11 @@ type BlockMedia struct {
 // mediaBlockTypes are the core block types that show a media item by `attrs.mediaId`
 // (Block Spec `MEDIA_BLOCK_TYPES`): each is in post_media (#176, "Used in") and in the
 // public `media` map. The image's entry has its variants; the others' their file info.
-var mediaBlockTypes = map[string]bool{"image": true, "video": true, "audio": true, "file": true}
+var mediaBlockTypes = map[string]bool{"image": true, "video": true, "audio": true, "file": true, "cover": true, "media_text": true}
+
+// imageBlockTypes are the media blocks showing an image (#427: a cover's and media & text's
+// too): their entries carry the variants, the others the file info.
+var imageBlockTypes = map[string]bool{"image": true, "cover": true, "media_text": true}
 
 // isBlockDocShape reports whether a decoded doc would also decode into
 // BlockDocV1: doc_version a number, blocks_order an array of strings, blocks
@@ -88,7 +92,7 @@ func isBlockDocShape(doc map[string]interface{}) bool {
 }
 
 // blockDocMediaIDs returns the mediaIds of the doc's media blocks (image, video, audio,
-// file), at any depth (the flat map).
+// file, cover, media & text), at any depth (the flat map).
 func blockDocMediaIDs(doc map[string]interface{}) []int64 {
 	ids, _ := blockDocMediaRefs(doc)
 	return ids
@@ -109,7 +113,7 @@ func blockDocMediaRefs(doc map[string]interface{}) ([]int64, map[int64]bool) {
 		attrs, _ := block["attrs"].(map[string]interface{})
 		if id, ok := blockMediaID(attrs["mediaId"]); ok {
 			ids = append(ids, id)
-			if blockType != "image" {
+			if !imageBlockTypes[blockType] {
 				fileInfo[id] = true
 			}
 		}

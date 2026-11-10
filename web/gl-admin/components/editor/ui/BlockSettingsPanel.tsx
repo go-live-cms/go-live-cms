@@ -19,6 +19,7 @@ import MediaBlockSettings from "./MediaBlockSettings"
 import Segment from "./BlockSettingsSegment"
 import { ButtonsSettings, ColumnsSettings, SpacerSettings } from "./LayoutBlockSettings"
 import GallerySettings from "./GallerySettings"
+import { CoverSettings, MediaTextSettings } from "./CoverMediaSettings"
 import { galleryImageCount } from "../extensions/GalleryBlock"
 import EmbedBlockSettings from "./EmbedBlockSettings"
 import {
@@ -151,6 +152,8 @@ export default function BlockSettingsPanel({ editor }: { editor: TiptapEditor })
         <div>
           <b className="block-settings__name">{info.name}</b>
           {isGallery && <span className="block-settings__sub">{galleryImageCount(block.node)}</span>}
+          {block.node.type.name === "cover" && <span className="block-settings__sub">An image with blocks on top.</span>}
+          {block.node.type.name === "mediaText" && <span className="block-settings__sub">An image beside other blocks.</span>}
         </div>
       </div>
       {path.length > 0 && (
@@ -216,6 +219,10 @@ export default function BlockSettingsPanel({ editor }: { editor: TiptapEditor })
         <ButtonsSettings editor={editor} block={block} />
       ) : block.node.type.name === "spacer" ? (
         <SpacerSettings editor={editor} block={block} />
+      ) : block.node.type.name === "cover" ? (
+        <CoverSettings editor={editor} block={block} />
+      ) : block.node.type.name === "mediaText" ? (
+        <MediaTextSettings editor={editor} block={block} />
       ) : (
         <p className="post-settings__hint">This block has no settings here. Its toolbar has its options.</p>
       )}

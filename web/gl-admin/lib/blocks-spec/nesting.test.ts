@@ -110,7 +110,7 @@ describe("the nesting table", () => {
   })
 
   it("derives the content expressions", () => {
-    expect(containerContent("group")).toBe("(block | tableBlock | video | audio | file | embed | html | buttons | spacer | details | columns)+")
+    expect(containerContent("group")).toBe("(block | tableBlock | video | audio | file | embed | html | buttons | spacer | details | columns | mediaText)+")
     // #421: its part first, then flow.
     expect(containerContent("details")).toBe("detailsSummary (block | tableBlock | video | audio | file | embed | html | buttons | spacer)+")
     // #424: image blocks, none is fine, then its caption.
@@ -118,7 +118,37 @@ describe("the nesting table", () => {
     // #426: the 2–4 limit is the table's, not the schema's (`countNotInSchema`), each column holding flow and details.
     expect(containerContent("columns")).toBe("column+")
     expect(containerContent("column")).toBe("(block | tableBlock | video | audio | file | embed | html | buttons | spacer | details)+")
-    expect(topLevelContent()).toBe("(block | tableBlock | video | audio | file | embed | html | buttons | spacer | group | details | gallery | columns)+")
+    // #427: `*`, so a merge that empties one doesn't cost its image (`emptyNotInSchema`); the table still says 1+.
+    expect(containerContent("cover")).toBe("(block | tableBlock | video | audio | file | embed | html | buttons | spacer)*")
+    expect(containerContent("media_text")).toBe("(block | tableBlock | video | audio | file | embed | html | buttons | spacer | details)*")
+    expect(topLevelContent()).toBe("(block | tableBlock | video | audio | file | embed | html | buttons | spacer | group | details | gallery | columns | cover | mediaText)+")
+  })
+
+  it("a cover or media & text with no image to show is out of the reading order, with its blocks (#427)", () => {
+    const doc = (attrs: Record<string, unknown>, extra: Record<string, unknown> = {}) => ({
+      blocks_order: ["c", "p"],
+      blocks: { c: { type: "cover", attrs, children: ["h"] }, h: { type: "heading", attrs: {} }, p: { type: "paragraph", attrs: {} } },
+      ...extra,
+    })
+    expect(blocksInReadingOrder(doc({ mediaId: 1 }))).toEqual(["c", "h", "p"])
+    expect(blocksInReadingOrder(doc({ mediaId: 1 }, { media_missing: [1] }))).toEqual(["p"])
+    expect(blocksInReadingOrder(doc({}))).toEqual(["p"])
+  })
+
+  it("cover and media & text (#427): the limits, and which containers may hold them", () => {
+    expect(CONTAINERS.cover).toMatchObject({ min: 1, topLevel: true, fillWhenEmptied: true, emptyNotInSchema: true })
+    expect(CONTAINERS.media_text).toMatchObject({ min: 1, topLevel: true, fillWhenEmptied: true, emptyNotInSchema: true })
+    expect(acceptsChild("cover", "paragraph")).toBe(true)
+    expect(acceptsChild("cover", "details")).toBe(false)
+    expect(acceptsChild("media_text", "details")).toBe(true)
+    expect(acceptsChild("group", "media_text")).toBe(true)
+    expect(acceptsChild("group", "cover")).toBe(false)
+    for (const parent of ["details", "column", "columns", "gallery", "cover", "media_text"]) {
+      expect(acceptsChild(parent, "cover"), parent).toBe(false)
+      expect(acceptsChild(parent, "media_text"), parent).toBe(false)
+    }
+    expect(isBlockNode("paragraph", "cover")).toBe(true)
+    expect(isBlockNode("paragraph", "mediaText")).toBe(true)
   })
 
   it("details (#421): holds flow, sits at the top or in a group, its summary a part (never a block)", () => {

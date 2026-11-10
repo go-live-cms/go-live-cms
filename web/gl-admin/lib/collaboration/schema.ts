@@ -24,6 +24,7 @@ import { HtmlBlock, HtmlBlockCommands } from "../../components/editor/extensions
 import { Columns } from "../../components/editor/extensions/ColumnsBlock"
 import { Buttons } from "../../components/editor/extensions/ButtonsBlock"
 import { Spacer } from "../../components/editor/extensions/SpacerBlock"
+import { Cover, CoverMediaCommands, MediaText } from "../../components/editor/extensions/CoverMediaBlocks"
 
 const lowlight = createLowlight(common)
 
@@ -122,6 +123,11 @@ export function schemaExtensions({ collaborating }: { collaborating: boolean }) 
     columns: Columns,
     buttons: Buttons,
     spacer: Spacer,
+    // #427: two more containers (one image, its blocks on top or beside it). Each changes the
+    // fingerprint (#416), and so does the wider doc and group that name them.
+    cover: Cover,
+    mediaText: MediaText,
+    coverMediaCommands: CoverMediaCommands,
     // #320: inline atoms inside text (an @ mention, a link to a post, a date chip). New
     // node types, so they change the fingerprint (#416) like a new block does.
     mention: Mention,

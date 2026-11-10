@@ -41,7 +41,7 @@ const STYLE_LABELS: Record<ButtonVariant, string> = { primary: "Primary", second
 const ALIGN_LABELS: Record<ButtonsAlign, string> = { left: "Left", center: "Centre" }
 
 /** A labelled group of toggle buttons in a block's toolbar, the group's look. */
-function segment(doc: Document, label: string, block: string, options: { value: string; text: string; onClick: () => void }[]) {
+export function segment(doc: Document, label: string, block: string, options: { value: string; text: string; onClick: () => void }[]) {
   const field = doc.createElement("div")
   field.className = "editor-group__field"
   field.setAttribute("role", "group")
@@ -68,7 +68,7 @@ function segment(doc: Document, label: string, block: string, options: { value: 
 }
 
 /** ← → move between a toolbar's buttons, Esc goes back to the block in the text. */
-function toolbarKeys(toolbar: HTMLElement, onEscape: () => void) {
+export function toolbarKeys(toolbar: HTMLElement, onEscape: () => void) {
   toolbar.addEventListener("keydown", (event) => {
     const target = event.target as HTMLElement
     if (target.tagName === "INPUT") return
@@ -85,7 +85,7 @@ function toolbarKeys(toolbar: HTMLElement, onEscape: () => void) {
 }
 
 /** A selected block stays selected through a change of its own attributes. */
-function selectBlockAgain(view: EditorView, pos: number, name: string) {
+export function selectBlockAgain(view: EditorView, pos: number, name: string) {
   if (view.state.doc.nodeAt(pos)?.type.name === name) view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, pos)))
   view.focus()
 }

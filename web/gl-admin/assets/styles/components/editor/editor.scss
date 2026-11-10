@@ -901,6 +901,185 @@
     display: none;
   }
 
+  // Cover and media & text (#427, "Editor · cover, media & text"): an image behind or beside
+  // the blocks, and the toolbar while the cursor is in it. Nothing here clips a remote
+  // caret's label (`overflow`), so a corner radius goes on each layer.
+  .editor-cover,
+  .editor-media-text {
+    margin: 12px 0;
+    position: relative;
+  }
+
+  .editor-cover[data-align="wide"] {
+    margin-inline: -24px;
+  }
+
+  .editor-cover[data-align="full"] {
+    margin-inline: -48px;
+  }
+
+  @media (width <= 768px) {
+    .editor-cover[data-align="wide"],
+    .editor-cover[data-align="full"] {
+      margin-inline: 0;
+    }
+  }
+
+  .editor-cover__toolbar,
+  .editor-media-text__toolbar {
+    align-items: center;
+    display: none;
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-4);
+    margin-bottom: var(--space-2);
+    position: relative;
+    user-select: none;
+
+    .editor-group__option:not([hidden]) {
+      align-items: center;
+      display: inline-flex;
+      gap: var(--space-1);
+    }
+  }
+
+  .editor-cover.has-selection > .editor-cover__toolbar,
+  .editor-media-text.has-selection > .editor-media-text__toolbar {
+    display: flex;
+  }
+
+  &[contenteditable="false"] .editor-cover__toolbar,
+  &[contenteditable="false"] .editor-media-text__toolbar,
+  &[contenteditable="false"] .editor-cover-flag {
+    display: none;
+  }
+
+  .editor-cover__frame {
+    border-radius: 8px;
+    position: relative;
+  }
+
+  // stylelint-disable-next-line selector-class-pattern
+  .editor-cover.ProseMirror-selectednode > .editor-cover__frame,
+  // stylelint-disable-next-line selector-class-pattern
+  .editor-media-text.ProseMirror-selectednode > .editor-media-text__frame {
+    outline: 2px solid var(--selected-border-color);
+    outline-offset: 2px;
+  }
+
+  .editor-cover[data-state="found"] > .editor-cover__frame {
+    --cover-text: #fff;
+
+    background: #111110;
+    color: var(--cover-text);
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    min-height: 280px;
+    padding: var(--space-6);
+
+    .editor-cover__content {
+      caret-color: var(--cover-text);
+      position: relative;
+
+      :is(h1, h2, h3, h4, h5, h6, p, li, blockquote) {
+        color: var(--cover-text);
+      }
+    }
+  }
+
+  .editor-cover[data-state="found"] .editor-cover__media {
+    inset: 0;
+    position: absolute;
+
+    &::after {
+      background: rgb(0 0 0 / var(--dim, 0.55));
+      border-radius: 8px;
+      content: "";
+      inset: 0;
+      position: absolute;
+    }
+  }
+
+  .editor-cover__image {
+    border-radius: 8px;
+    display: block;
+    height: 100%;
+    object-fit: cover;
+    width: 100%;
+  }
+
+  .editor-cover[data-state="empty"] .editor-media__drop {
+    justify-content: center;
+    min-height: 200px;
+  }
+
+  // A cover nobody has given an image is the drop zone alone until the cursor is in it.
+  .editor-cover[data-blank]:not(.has-selection) .editor-cover__content {
+    display: none;
+  }
+
+  .editor-media-text__frame {
+    align-items: center;
+    border-radius: 8px;
+    display: grid;
+    gap: 20px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    position: relative;
+
+    @media (width <= 640px) {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  .editor-media-text[data-position="right"] .editor-media-text__media {
+    order: 2;
+
+    @media (width <= 640px) {
+      order: 0;
+    }
+  }
+
+  .editor-media-text__image {
+    aspect-ratio: 4 / 5;
+    border-radius: 8px;
+    display: block;
+    object-fit: cover;
+    width: 100%;
+  }
+
+  .editor-media-text__content > :first-child {
+    margin-top: 0;
+  }
+
+  .editor-media-text__content > :last-child {
+    margin-bottom: 0;
+  }
+
+  .editor-cover-flag:not([hidden]) {
+    align-items: center;
+    background: var(--warning-bg);
+    border: 1px solid var(--warning-text);
+    border-radius: var(--radius-md);
+    color: var(--warning-label);
+    cursor: pointer;
+    display: inline-flex;
+    font: inherit;
+    font-size: var(--type-footnote);
+    font-weight: 600;
+    gap: var(--space-1);
+    left: 10px;
+    min-height: 28px;
+    padding: 0 10px;
+    position: absolute;
+    top: 10px;
+    z-index: 1;
+
+    &:focus-visible {
+      outline: 2px solid var(--focus-ring);
+      outline-offset: 1px;
+    }
+  }
+
   .editor-columns__content {
     display: grid;
     gap: var(--space-3);

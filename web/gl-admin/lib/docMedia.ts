@@ -5,14 +5,14 @@ import type { BlockDocV1 } from "./blocks-spec"
 
 // The admin renders stored block docs with the public `BlockRenderer` (History's preview and
 // comparison, #136, #355), from REST reads that don't carry the API's `media` map. A video,
-// audio or file block (#423) renders from that map alone (its URL, type, size), so this
-// adds those entries, and `media_missing`, from the editor's media lookups
-// (`mediaLookup.ts`): the same answers the editor's own views show. Images keep rendering
-// from their src.
+// audio or file block (#423), and a cover or media & text (#427), render from that map alone
+// (the URL, type, size, an image's variants), so this adds those entries, and `media_missing`,
+// from the editor's media lookups (`mediaLookup.ts`): the same answers the editor's own views
+// show. Images keep rendering from their src.
 
 type DocWithMedia = BlockDocV1 & { media?: Record<string, unknown>; media_missing?: number[] }
 
-const FILE_BLOCK_TYPES = new Set(["video", "audio", "file"])
+const FILE_BLOCK_TYPES = new Set(["video", "audio", "file", "cover", "media_text"])
 
 /** The media ids of the doc's video, audio and file blocks, each once. */
 export function fileBlockMediaIds(doc: BlockDocV1 | null | undefined): number[] {
@@ -43,6 +43,9 @@ export async function withFileBlockMedia<T extends BlockDocV1>(doc: T): Promise<
       file_size: m.file_size,
       name: m.name,
       filename: m.original_filename,
+      variants: m.variants,
+      focal_point: m.focal_point,
+      decorative: m.decorative,
     }
   })
   return { ...doc, media, ...(missing.length > 0 ? { media_missing: missing } : {}) }

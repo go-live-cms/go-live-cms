@@ -1,5 +1,5 @@
 import { createContext } from "react"
-import { blocksInReadingOrder, type BlockDocV1 } from "@gl-admin/lib/blocks-spec"
+import { blocksInReadingOrder, isMediaMissing, type BlockDocV1 } from "@gl-admin/lib/blocks-spec"
 import { safeImageSrc } from "./safeUrl"
 
 // Image variants and focal point on the public site (#255).
@@ -132,11 +132,18 @@ export function responsiveImageAttrs(
 
 const round = (v: number) => Math.round(v * 10) / 10
 
+// The blocks whose first image can be the post's hero (#427: a cover's or media & text's too).
+const IMAGE_BLOCK_TYPES = new Set(["image", "cover", "media_text"])
+
 // isFirstImageBlock reports whether blockId is the first image in the doc, in
 // reading order at any depth (one inside a group counts, #414). That image is often
-// the largest thing above the fold, so it loads eagerly; later ones are lazy.
+// the largest thing above the fold, so it loads eagerly; later ones are lazy. An image whose
+// media was deleted doesn't count (`blocksInReadingOrder` already leaves out a cover with none).
 export function isFirstImageBlock(doc: BlockDocV1, blockId: string): boolean {
-  const blocks = doc.blocks as Record<string, { type?: string } | undefined>
-  const first = blocksInReadingOrder(doc).find((id) => blocks[id]?.type === "image")
+  const blocks = doc.blocks as Record<string, { type?: string; attrs?: { mediaId?: unknown } } | undefined>
+  const first = blocksInReadingOrder(doc).find((id) => {
+    const block = blocks[id]
+    return !!block?.type && IMAGE_BLOCK_TYPES.has(block.type) && !isMediaMissing(doc, block.attrs?.mediaId)
+  })
   return first === blockId
 }

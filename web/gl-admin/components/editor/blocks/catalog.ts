@@ -106,6 +106,9 @@ export const ICONS = {
   file: MEDIA_BLOCK_ICONS.file,
   // #424, the canvas's Gallery tile.
   gallery: MEDIA_BLOCK_ICONS.gallery,
+  // #427 ("Editor · cover, media & text")
+  cover: MEDIA_BLOCK_ICONS.cover,
+  mediaText: MEDIA_BLOCK_ICONS.media_text,
   // #426 ("Editor · columns, group, buttons, spacer")
   columns: COLUMNS_ICON,
   buttons: "M3 8h18v8H3zM8 12h8",
@@ -328,6 +331,25 @@ export const CORE_BLOCKS: readonly CatalogEntry[] = [
     keywords: ["download", "pdf", "document", "attachment"],
     icon: { path: ICONS.file },
     insert: (editor, range) => chain(editor, range).insertMediaBlock("file").run(),
+  },
+  // #427, containers with one image: the line it's typed on becomes its first block.
+  {
+    id: "cover",
+    type: "cover",
+    name: "Cover",
+    group: "media",
+    keywords: ["hero", "banner", "background", "header image"],
+    icon: { path: ICONS.cover },
+    insert: (editor, range) => chain(editor, range).insertCover().run(),
+  },
+  {
+    id: "media-text",
+    type: "media_text",
+    name: "Media & text",
+    group: "media",
+    keywords: ["image and text", "side by side", "picture", "split"],
+    icon: { path: ICONS.mediaText },
+    insert: (editor, range) => chain(editor, range).insertMediaText().run(),
   },
   // Layout
   {
