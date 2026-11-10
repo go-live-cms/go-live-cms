@@ -800,7 +800,7 @@ Backend API client with these methods:
 
 ### `context.settings: ThemeSettings`
 
-Theme-specific key-value storage, automatically namespaced by theme slug. Each theme can only access its own settings.
+Theme-specific key-value storage, automatically namespaced by theme slug (stored as `theme:<slug>:<key>`). Each theme can only access its own settings. Reading needs no sign-in and writing needs an admin's token, so **anyone can read what a theme stores here: never put a secret in it**.
 
 | Method            | Description                                   |
 | ----------------- | --------------------------------------------- |

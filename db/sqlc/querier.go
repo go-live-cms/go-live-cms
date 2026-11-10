@@ -176,7 +176,6 @@ type Querier interface {
 	DeleteActivityBefore(ctx context.Context, arg DeleteActivityBeforeParams) (int64, error)
 	DeleteAllPostMeta(ctx context.Context, postID int64) error
 	DeleteAllThemeSettings(ctx context.Context, themeID int64) error
-	DeleteExtensionSetting(ctx context.Context, key string) error
 	DeleteExtensionSettingsByExtension(ctx context.Context, arg DeleteExtensionSettingsByExtensionParams) error
 	DeleteMedia(ctx context.Context, id int64) error
 	DeleteMediaByUserID(ctx context.Context, userID int64) error
@@ -211,6 +210,7 @@ type Querier interface {
 	DeleteTaxonomyTerm(ctx context.Context, id int64) error
 	DeleteTaxonomyType(ctx context.Context, name string) error
 	DeleteTheme(ctx context.Context, id int64) error
+	DeleteThemeExtensionSetting(ctx context.Context, key string) (int64, error)
 	DeleteThemeSetting(ctx context.Context, arg DeleteThemeSettingParams) error
 	DeleteUser(ctx context.Context, id int64) error
 	// Removal (#333, #319), after ReassignPostBylines: the member's remaining credits,
@@ -231,7 +231,6 @@ type Querier interface {
 	// reviewer asked for changes and nothing was published since (the note still
 	// applies). Names are joined now; NULL for a member removed since.
 	GetCurrentReviewRequest(ctx context.Context, postID int64) (GetCurrentReviewRequestRow, error)
-	GetExtensionSetting(ctx context.Context, key string) (ExtensionSetting, error)
 	GetFeaturedImage(ctx context.Context, postID int64) (GetFeaturedImageRow, error)
 	// The member's newest request for the post (the view-only notice's state).
 	GetLatestPostAccessRequest(ctx context.Context, arg GetLatestPostAccessRequestParams) (PostAccessRequest, error)
@@ -350,6 +349,9 @@ type Querier interface {
 	GetTermParents(ctx context.Context, id int64) ([]TaxonomyTerm, error)
 	GetTheme(ctx context.Context, id int64) (Theme, error)
 	GetThemeBySlug(ctx context.Context, slug string) (Theme, error)
+	// The public /extension-settings routes read through these two, so a plugin's
+	// row can't reach them (#451). Plugins get their own admin-only reads.
+	GetThemeExtensionSetting(ctx context.Context, key string) (ExtensionSetting, error)
 	// Theme Settings Queries
 	GetThemeSetting(ctx context.Context, arg GetThemeSettingParams) (ThemeSetting, error)
 	GetUser(ctx context.Context, id int64) (User, error)
@@ -445,7 +447,6 @@ type Querier interface {
 	// this type that the caller may read (viewer_id as in ListPosts, #393), trash aside.
 	// Public fields only. Kept short: a filter menu, not a member directory.
 	ListCreditedAuthors(ctx context.Context, arg ListCreditedAuthorsParams) ([]ListCreditedAuthorsRow, error)
-	ListExtensionSettings(ctx context.Context) ([]ExtensionSetting, error)
 	ListExtensionSettingsByExtension(ctx context.Context, arg ListExtensionSettingsByExtensionParams) ([]ExtensionSetting, error)
 	// Home's "Needs attention" (#147): scheduled posts whose last attempt failed (the
 	// scheduler keeps retrying; a success or a schedule change clears it). viewer_id
@@ -600,6 +601,7 @@ type Querier interface {
 	ListTaxonomyTermsByType(ctx context.Context, arg ListTaxonomyTermsByTypeParams) ([]ListTaxonomyTermsByTypeRow, error)
 	ListTaxonomyTypes(ctx context.Context) ([]TaxonomyType, error)
 	ListTermPostIDs(ctx context.Context, taxonomyTermID int64) ([]int64, error)
+	ListThemeExtensionSettings(ctx context.Context) ([]ExtensionSetting, error)
 	ListThemeSettings(ctx context.Context, themeID int64) ([]ThemeSetting, error)
 	ListThemes(ctx context.Context) ([]Theme, error)
 	ListUsers(ctx context.Context, arg ListUsersParams) ([]User, error)
