@@ -13,15 +13,6 @@ import (
 	"github.com/lib/pq"
 )
 
-const deleteExtensionSetting = `-- name: DeleteExtensionSetting :exec
-DELETE FROM extension_settings WHERE key = $1
-`
-
-func (q *Queries) DeleteExtensionSetting(ctx context.Context, key string) error {
-	_, err := q.db.ExecContext(ctx, deleteExtensionSetting, key)
-	return err
-}
-
 const deleteExtensionSettingsByExtension = `-- name: DeleteExtensionSettingsByExtension :exec
 DELETE FROM extension_settings 
 WHERE extension_type = $1 AND extension_id = $2
@@ -37,22 +28,17 @@ func (q *Queries) DeleteExtensionSettingsByExtension(ctx context.Context, arg De
 	return err
 }
 
-const getExtensionSetting = `-- name: GetExtensionSetting :one
-SELECT key, value, extension_type, extension_id, created_at, changed_at FROM extension_settings WHERE key = $1
+const deleteThemeExtensionSetting = `-- name: DeleteThemeExtensionSetting :execrows
+DELETE FROM extension_settings
+WHERE key = $1 AND extension_type = 'theme'
 `
 
-func (q *Queries) GetExtensionSetting(ctx context.Context, key string) (ExtensionSetting, error) {
-	row := q.db.QueryRowContext(ctx, getExtensionSetting, key)
-	var i ExtensionSetting
-	err := row.Scan(
-		&i.Key,
-		&i.Value,
-		&i.ExtensionType,
-		&i.ExtensionID,
-		&i.CreatedAt,
-		&i.ChangedAt,
-	)
-	return i, err
+func (q *Queries) DeleteThemeExtensionSetting(ctx context.Context, key string) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteThemeExtensionSetting, key)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const getPublicFrontPage = `-- name: GetPublicFrontPage :one
@@ -133,13 +119,41 @@ func (q *Queries) GetSettings(ctx context.Context) (Setting, error) {
 	return i, err
 }
 
-const listExtensionSettings = `-- name: ListExtensionSettings :many
+const getThemeExtensionSetting = `-- name: GetThemeExtensionSetting :one
+
 SELECT key, value, extension_type, extension_id, created_at, changed_at FROM extension_settings
-ORDER BY extension_type, extension_id, key
+WHERE key = $1 AND extension_type = 'theme'
 `
 
-func (q *Queries) ListExtensionSettings(ctx context.Context) ([]ExtensionSetting, error) {
-	rows, err := q.db.QueryContext(ctx, listExtensionSettings)
+// The public /extension-settings routes read through these two, so a plugin's
+// row can't reach them (#451). Plugins get their own admin-only reads.
+func (q *Queries) GetThemeExtensionSetting(ctx context.Context, key string) (ExtensionSetting, error) {
+	row := q.db.QueryRowContext(ctx, getThemeExtensionSetting, key)
+	var i ExtensionSetting
+	err := row.Scan(
+		&i.Key,
+		&i.Value,
+		&i.ExtensionType,
+		&i.ExtensionID,
+		&i.CreatedAt,
+		&i.ChangedAt,
+	)
+	return i, err
+}
+
+const listExtensionSettingsByExtension = `-- name: ListExtensionSettingsByExtension :many
+SELECT key, value, extension_type, extension_id, created_at, changed_at FROM extension_settings
+WHERE extension_type = $1 AND extension_id = $2
+ORDER BY key
+`
+
+type ListExtensionSettingsByExtensionParams struct {
+	ExtensionType string `json:"extension_type"`
+	ExtensionID   string `json:"extension_id"`
+}
+
+func (q *Queries) ListExtensionSettingsByExtension(ctx context.Context, arg ListExtensionSettingsByExtensionParams) ([]ExtensionSetting, error) {
+	rows, err := q.db.QueryContext(ctx, listExtensionSettingsByExtension, arg.ExtensionType, arg.ExtensionID)
 	if err != nil {
 		return nil, err
 	}
@@ -168,19 +182,14 @@ func (q *Queries) ListExtensionSettings(ctx context.Context) ([]ExtensionSetting
 	return items, nil
 }
 
-const listExtensionSettingsByExtension = `-- name: ListExtensionSettingsByExtension :many
+const listThemeExtensionSettings = `-- name: ListThemeExtensionSettings :many
 SELECT key, value, extension_type, extension_id, created_at, changed_at FROM extension_settings
-WHERE extension_type = $1 AND extension_id = $2
-ORDER BY key
+WHERE extension_type = 'theme'
+ORDER BY extension_id, key
 `
 
-type ListExtensionSettingsByExtensionParams struct {
-	ExtensionType string `json:"extension_type"`
-	ExtensionID   string `json:"extension_id"`
-}
-
-func (q *Queries) ListExtensionSettingsByExtension(ctx context.Context, arg ListExtensionSettingsByExtensionParams) ([]ExtensionSetting, error) {
-	rows, err := q.db.QueryContext(ctx, listExtensionSettingsByExtension, arg.ExtensionType, arg.ExtensionID)
+func (q *Queries) ListThemeExtensionSettings(ctx context.Context) ([]ExtensionSetting, error) {
+	rows, err := q.db.QueryContext(ctx, listThemeExtensionSettings)
 	if err != nil {
 		return nil, err
 	}

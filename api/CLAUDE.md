@@ -90,6 +90,12 @@ the collab server.
   `publicGETRoutes` with its reason (health, `/uploads`, settings, themes, post types,
   taxonomy config). `post_reads_auth_test.go` checks the roles and that `/public` never
   serves a draft, against the real database.
+- **Extension settings (#451):** `GET /extension-settings[/:key]` are public for the theme,
+  so they answer theme rows only: `GetThemeExtensionSetting` and `ListThemeExtensionSettings`
+  can't return a plugin's row, and `?extension_type=plugin` is an empty list. `PUT` refuses the
+  plugin type and any key but `theme:<extension_id>:<name>` (`validThemeSettingKey`), `DELETE`
+  answers 404 for a plugin's row. Don't serve a plugin's settings from these routes; they get
+  their own admin-only ones (design: `docs/design/plugin-system.md` section 6).
 - **Media ownership:** admins and editors may update/delete any media; any other
   role only its own (`canWriteMedia`, used by both PUT and DELETE `/media/:id`).
   Every content role may upload (`requireContentAuthor`, #135).

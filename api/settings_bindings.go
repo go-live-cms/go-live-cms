@@ -3,6 +3,7 @@ package api
 import (
 	"database/sql"
 	"encoding/json"
+	"strings"
 )
 
 // UpdateSettingsRequest represents the request body for updating settings
@@ -72,12 +73,28 @@ type SettingsResponse struct {
 	ChangedAt   string `json:"changed_at"`
 }
 
+// extensionTypeTheme is the only extension_type the /extension-settings routes
+// read or write: they are public, and a plugin's settings may hold secrets
+// (#451). Plugins get their own admin-only routes.
+const extensionTypeTheme = "theme"
+
 // ExtensionSettingRequest represents the request body for upserting an extension setting
 type ExtensionSettingRequest struct {
 	Key           string      `json:"key" binding:"required,min=1,max=255,setting_key"`
 	Value         interface{} `json:"value" binding:"required"`
-	ExtensionType string      `json:"extension_type" binding:"required,oneof=plugin theme"`
+	ExtensionType string      `json:"extension_type" binding:"required,oneof=theme"`
 	ExtensionID   string      `json:"extension_id" binding:"required,min=1,max=100,setting_key"`
+}
+
+// validThemeSettingKey reports whether key is theme:<extensionID>:<name>.
+// key alone is the table's primary key, so the slug is what keeps two themes'
+// settings apart, and the prefix keeps them apart from plugin:<slug>:<name>.
+func validThemeSettingKey(key, extensionID string) bool {
+	if strings.Contains(extensionID, ":") {
+		return false
+	}
+	name, ok := strings.CutPrefix(key, extensionTypeTheme+":"+extensionID+":")
+	return ok && name != ""
 }
 
 // ExtensionSettingResponse represents an extension setting response
