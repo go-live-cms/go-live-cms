@@ -1,7 +1,7 @@
 // onStoreDocument (#206): derive `block_doc` from the live doc and persist both.
 //
 //   1. put columns back in shape if concurrent edits broke the 2–4 limit
-//      (repairColumnsFragment, #426), then stamp missing/duplicate block ids into the live
+//      (repairColumnsFragment, #426, and the footnotes list, #422), then stamp missing/duplicate block ids into the live
 //      doc (stampFragmentBlockIds), so ids don't churn between stores;
 //   2. fragment → ProseMirror → pmToBlockDoc, per top-level node (fragmentToBlockDoc),
 //      with the blocks seeding dropped (meta.dropped) merged back (restoreDroppedBlocks),
@@ -19,6 +19,7 @@ import {
   EDITOR_FRAGMENT,
   fragmentToBlockDoc,
   repairColumnsFragment,
+  repairFootnotesFragment,
   stampFragmentBlockIds,
   type UnconvertibleBlock,
 } from "../gl-admin/lib/collaboration/fragmentBridge"
@@ -73,6 +74,7 @@ export function prepareStore(doc: Y.Doc, schema: Schema, input: StoreInput): Pre
   let stamped = 0
   doc.transact(() => {
     repairColumnsFragment(fragment)
+    repairFootnotesFragment(fragment)
     stamped = stampFragmentBlockIds(fragment)
   }, SERVER_ORIGIN)
 

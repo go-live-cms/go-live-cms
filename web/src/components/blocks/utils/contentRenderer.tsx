@@ -7,6 +7,8 @@ import { calloutMarkup, plainText, pullQuoteMarkup, todoListMarkup } from "./tex
 import { CONTENT_LINK_NODE, DATE_CHIP_NODE, dateChipAttrs, MENTION_NODE, normalizeInlineLabel } from "@gl-admin/lib/blocks-spec/inlineNodes"
 import { dateChipDateTime, formatDateChip } from "../../../lib/dateChips"
 import { DEFAULT_DATE_SETTINGS } from "../../../lib/siteDates"
+import { FOOTNOTE_REF_NODE } from "@gl-admin/lib/blocks-spec/footnotes"
+import { FootnoteRefMark } from "./footnotes"
 
 /**
  * Render a single text node with its marks (bold, italic, link, code, etc.)
@@ -170,6 +172,11 @@ export function renderContent(content: PMNode[] | undefined): React.ReactNode {
 
     if (node.type === MENTION_NODE || node.type === CONTENT_LINK_NODE || node.type === DATE_CHIP_NODE) {
       return renderInlineNode(node, index)
+    }
+
+    // #422: its number and anchors come from the doc (`FootnotesContext`); nothing for a stale one.
+    if (node.type === FOOTNOTE_REF_NODE) {
+      return <FootnoteRefMark key={index} node={node} />
     }
 
     // The #419 blocks inside a quote or a list item (the schema lets them go there): the

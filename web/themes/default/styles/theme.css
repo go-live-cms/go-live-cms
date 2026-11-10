@@ -1486,6 +1486,46 @@ body {
 .prose details > :last-child:not(summary) {
   margin-bottom: 1.25em;
 }
+/* Footnotes (#422, "Published · text"): a superscript link to each note, and the notes under a
+   rule at the end, in the heading face and the muted colour. Light and dark come from the tokens. */
+.prose .fn-ref {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  text-decoration: none;
+  padding: 0 0.12em;
+}
+.prose .fn-ref,
+.prose .footnotes li {
+  scroll-margin-top: calc(var(--header-height, 64px) + var(--space-4));
+}
+.footnotes {
+  margin-top: 3.5em;
+  padding-top: 1.5em;
+  border-top: 1px solid var(--color-border);
+  font-family: var(--font-heading);
+  font-size: var(--size-sm);
+  line-height: var(--leading-normal);
+  color: var(--color-text-muted);
+}
+.footnotes h2 {
+  margin: 0 0 1em;
+  font-family: var(--font-heading);
+  font-size: var(--size-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+.prose .footnotes ol {
+  padding-left: 1.4em;
+}
+.prose .footnotes li + li {
+  margin-top: 0.5em;
+}
+.prose .fn-back {
+  margin-left: 0.3em;
+  text-decoration: none;
+}
 /* Gallery (#424, "Published · media & embeds"): a grid of square tiles, each cropped at its
    focal point, --cols wide (the block's Columns), two columns on a phone. */
 .prose .gallery {

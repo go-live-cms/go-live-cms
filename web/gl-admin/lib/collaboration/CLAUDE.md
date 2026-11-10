@@ -456,6 +456,31 @@ kept so references in code stay valid.
     (four users in a tinted group of three columns, concurrent adds and removals, a restart),
     `blocks-spec/layoutBlocks.test.ts`, `src/components/blocks/layoutBlocks.test.tsx`,
     `themes/default/layoutBlocks.test.ts`, Go `post_blocks_layout_test.go`, cases in `nestingVectors.json`.
+- **Footnotes (#422, `components/editor/extensions/FootnotesBlock.ts`, `FootnoteEditing.ts`, rules `blocks-spec/footnotes.ts`).**
+  An inline atom `footnoteRef` {footnoteId}; a container `footnotes` (a row of the table) of `footnote` blocks, whose **block
+  id is the `footnoteId`** of their references.
+  - **No appendTransaction creates, renumbers or deletes one (rule 7).** `insertFootnote` puts the reference and the note
+    (and the list, the first time) in its own transaction. Numbers are the order of the references: decorations in the editor
+    (`footnoteNumbers`), `footnoteIndex` on the page. Nothing stores one, so two users can't disagree and no sync rewrites anything.
+  - **"One list, last" is not in the schema (`onePerDocLast`, `blocks-spec/footnotes.ts`).** y-tiptap fits the fragment into the doc, so
+    a second list would be dropped for every peer. The doc's content allows any; `nestingIssues` and the API refuse them in a stored doc;
+    the commands keep the rule locally; `repairFootnotesFragment` runs before each store (the first list takes the others' notes, ids kept,
+    and moves to the end). Until then a peer may briefly see two. `restoreDroppedBlocks` keeps the list last; TrailingNode is told not to
+    follow it (`notAfter`).
+  - **The awkward states:** a reference deleted keeps its note, flagged "Not referenced" with Remove (a note with references can't be
+    removed, and the API never deletes one). A note deleted leaves its references showing "?" (no number); on the page they render nothing.
+    Copying a reference (duplicate a block, paste in the same post) makes a second reference to the same note: same number, a back link each.
+    A reference pasted from another post has no note here: it's left out, its text stays (`keepKnownFootnoteRefs`, `transformPasted`).
+    A pasted list keeps only its text (`PasteSanitizer` drops the types). Duplicating a post remaps `footnoteId` with the block ids (`regenerateBlockIDs`).
+    Restoring a version replaces both halves at once. On the page: an orphaned or empty note isn't listed, and its references render nothing.
+  - **A note is rich text and one paragraph:** `FOOTNOTE_CONTENT` names text, hard breaks and the #320 nodes, so a reference can't go in a note
+    (paste and drag are refused by the schema). `isolating`, never joined; ↵ or Esc go back to the text, ↵ on a selected reference to its note.
+    The list and its notes aren't editor blocks (`isEditorBlock`): no gutter, block menu or drag. The list is not `selectable`.
+  - **Stale clients:** a bundle from before #422 has no footnote nodes (and a narrower doc); the fingerprint guard (#416) refuses it
+    (`schemaFingerprint.test.ts`).
+  - Tests: `blockBridge.footnotes.test.ts` (bridge, repair), `blocks-spec/footnotes.test.ts` (numbers), `extensions/FootnotesBlock.test.ts`
+    (commands, keys, views, paste), `FootnotesBlock.collab.test.ts` (two users, the stored doc, a restart, a restore),
+    `src/components/blocks/footnotes/FootnotesBlock.test.tsx`, Go `post_blocks_footnotes_test.go`, cases in both vector files.
 - **Inline marks highlight, superscript, subscript (#418, `components/editor/extensions/InlineMarks.ts`).**
   TipTap's Highlight (`multicolor: false`: **no `color` attr**, one theme colour), Superscript
   and Subscript 3.4.2, in `schemaExtensions`. Superscript and subscript **exclude each other**

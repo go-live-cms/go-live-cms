@@ -118,7 +118,9 @@ describe("the nesting table", () => {
     // #426: the 2–4 limit is the table's, not the schema's (`countNotInSchema`), each column holding flow and details.
     expect(containerContent("columns")).toBe("column+")
     expect(containerContent("column")).toBe("(block | tableBlock | video | audio | file | embed | buttons | spacer | details)+")
-    expect(topLevelContent()).toBe("(block | tableBlock | video | audio | file | embed | buttons | spacer | group | details | gallery | columns)+")
+    // #422: notes only. "One list, last" is the table's rule, not the schema's (`onePerDocLast`).
+    expect(containerContent("footnotes")).toBe("footnote+")
+    expect(topLevelContent()).toBe("(block | tableBlock | video | audio | file | embed | buttons | spacer | group | details | gallery | columns | footnotes)+")
   })
 
   it("details (#421): holds flow, sits at the top or in a group, its summary a part (never a block)", () => {

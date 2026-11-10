@@ -110,12 +110,20 @@ export interface ContainerRule {
    * covers a paste, the one local change that doesn't go through those.
    */
   countNotInSchema?: boolean
+  /**
+   * At most one per doc, at the top level, after every other block (the footnotes list, #422).
+   * Not in the content expressions, for the reason above: `nestingIssues` and the API refuse it
+   * in a stored doc, and the collab server repairs the fragment first (`repairFootnotesFragment`).
+   */
+  onePerDocLast?: boolean
 }
 
 /**
  * The containers. Group (#414) is the first, Details (#421) the second, Gallery (#424) the
  * third; columns, column, cover, media & text and footnotes follow in their own issues
  * (#352's build order), each a row here.
+ *
+ * Footnotes (#422, `footnotes.ts`): the post's one list of notes, each a `footnote` block.
  *
  * Details' summary is a **part** (`detailsSummary`, rich text): a child node with no id,
  * always its first child, stored as the block's `attrs.summary` runs, never as a block
@@ -173,6 +181,14 @@ export const CONTAINERS = {
     synthesize: { type: "paragraph", role: "paragraph" },
     fillWhenEmptied: true,
   },
+  footnotes: {
+    node: "footnotes",
+    accepts: ["footnote"],
+    min: 1,
+    topLevel: true,
+    synthesize: { type: "footnote", role: "footnote-note" },
+    onePerDocLast: true,
+  },
 } as const satisfies Record<string, ContainerRule>
 
 export type ContainerType = keyof typeof CONTAINERS
@@ -203,6 +219,8 @@ export const BLOCK_NODE_NAMES: Readonly<Record<string, string>> = {
   // #426
   buttons: "buttons",
   spacer: "spacer",
+  // #422: only in a `footnotes` list, so not flow.
+  footnote: "footnote",
   ...Object.fromEntries(Object.entries(CONTAINERS).map(([type, rule]) => [type, rule.node])),
 }
 
@@ -376,7 +394,7 @@ export function blocksInReadingOrder(doc: DocLike | null | undefined): string[] 
 
 // ── Structure (design 2.3) ──────────────────────────────────────────────────────────
 
-interface DocLike {
+export interface DocLike {
   blocks_order?: unknown
   blocks?: unknown
 }
@@ -440,7 +458,8 @@ export interface NestingIssue {
  * 3. No cycles (a block can't be its own descendant).
  * 4. A container's children are of the types and in the count the table allows; a core
  *    block that is neither a container nor a list has no `children`; a container that only
- *    exists inside its parent (a `column`, #426) isn't in `blocks_order`.
+ *    exists inside its parent (a `column`, #426) isn't in `blocks_order`, nor is a `footnote`
+ *    (#422); a footnotes list is the only one in the doc and the last block of `blocks_order`.
  * An unreferenced block is not an error (restores and dropped blocks pass through such
  * states). `children` that isn't an array of strings is an error. Theme and unknown types
  * may have children (as before #414); rules 1–3 apply to them too.
@@ -469,8 +488,16 @@ export function nestingIssues(doc: unknown): NestingIssue[] {
   order.forEach((id, index) => {
     reference(id, null, ["blocks_order", index])
     // A `column` (#426) only exists inside its `columns`.
-    const rule = has(id) ? containerRule(blocks[id as string].type) : undefined
-    if (rule && !rule.topLevel) issues.push({ path: ["blocks_order", index], message: `a ${String(blocks[id as string].type)} can't be at the top level` })
+    const type = has(id) ? blocks[id as string].type : undefined
+    const rule = containerRule(type)
+    if ((rule && !rule.topLevel) || type === "footnote") issues.push({ path: ["blocks_order", index], message: `a ${String(type)} can't be at the top level` })
+    // The footnotes list (#422): one, after every other block.
+    if (rule?.onePerDocLast) {
+      if (index !== order.length - 1) issues.push({ path: ["blocks_order", index], message: `a ${String(type)} must be the last block` })
+      if (order.slice(0, index).some((other) => has(other) && blocks[other as string].type === type)) {
+        issues.push({ path: ["blocks_order", index], message: `a doc has at most one ${String(type)} block` })
+      }
+    }
   })
 
   const keys = Object.keys(blocks).sort()

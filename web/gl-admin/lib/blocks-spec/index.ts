@@ -20,6 +20,7 @@ export * from "./media"
 export * from "./inlineNodes"
 export * from "./layoutBlocks"
 export * from "./embeds"
+export * from "./footnotes"
 
 // Block Spec v1 - Authoritative Types
 export type BlockID = string
@@ -51,6 +52,8 @@ export type KnownBlockType =
   | "column"
   | "buttons"
   | "spacer"
+  | "footnotes"
+  | "footnote"
 
 /** BlockType allows known types + arbitrary custom types from themes */
 export type BlockType = KnownBlockType | (string & {})
@@ -560,6 +563,15 @@ export type CustomBlock = BaseBlock<
   number
 >
 
+/**
+ * Footnotes (#422, `footnotes.ts`), a container: `children` are its `footnote` blocks. At most
+ * one per doc, the last block of `blocks_order`. No attrs of its own.
+ */
+export type FootnotesBlock = BaseBlock<"footnotes", {}>
+
+/** A note: its block id is the `footnoteId` of the references to it. `attrs.pm` is a `footnote` node. */
+export type FootnoteBlock = BaseBlock<"footnote", { pm?: any; text?: string }>
+
 export type Block =
   | ParagraphBlock
   | HeadingBlock
@@ -585,6 +597,8 @@ export type Block =
   | ColumnBlock
   | ButtonsBlock
   | SpacerBlock
+  | FootnotesBlock
+  | FootnoteBlock
   | CustomBlock
 
 export interface BlockDocV1 {
@@ -866,6 +880,20 @@ export const zButtons = zBase.extend({
   }),
 })
 
+// #422. The list has no attrs, a note is text; which notes a doc may have is the nesting table's.
+export const zFootnotes = zBase.extend({
+  type: z.literal("footnotes"),
+  attrs: z.object({}),
+  children: z.array(zBlockID),
+})
+
+export const zFootnote = zBase.extend({
+  type: z.literal("footnote"),
+  attrs: z.object({
+    pm: z.any().optional(),
+    text: z.string().optional(),
+  }),
+})
 export const zSpacer = zBase.extend({
   type: z.literal("spacer"),
   attrs: z.object({ size: z.enum(SPACER_SIZES).optional() }),
@@ -930,6 +958,8 @@ const knownBlockSchemas: Record<KnownBlockType, z.ZodTypeAny> = {
   column: zColumn,
   buttons: zButtons,
   spacer: zSpacer,
+  footnotes: zFootnotes,
+  footnote: zFootnote,
 }
 
 // A known type must match its own schema; only other types fall back to the custom

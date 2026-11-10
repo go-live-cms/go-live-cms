@@ -601,6 +601,11 @@ are the most fragile part of the codebase. **Before editing anything under
   transaction each. The public `src/components/blocks/gallery/` and the default theme's `.gallery`
   rules (two columns at 640px). History diffs the caption like a caption, columns as an attribute and
   the images as children. Rules: `gl-admin/lib/collaboration/CLAUDE.md` (blockBridge notes, Gallery).
+- **Footnotes (#422, design `docs/design/block-library.md` 2.2, 2.9, 4):** a Text entry in the catalog (`/footnote`, `inline`: any slot whose
+  text takes one) and the selection toolbar's Footnote. Both call `insertFootnote`: the reference, its note in the post's list, the caret in the
+  note. The list's rows are `FootnoteView` (`extensions/FootnoteEditing.ts`): number, ↩, and "Not referenced" with Remove. The Block tab (the list's)
+  says how many. Published: `section.footnotes` with `fn-N` / `ref-N` anchors both ways, in `src/components/blocks/footnotes/`, numbers from
+  `FootnotesContext` (`BlockRenderer`). Rules: `gl-admin/lib/collaboration/CLAUDE.md` (blockBridge notes, Footnotes).
 - **Inline marks (#418, design `docs/design/block-library.md` 3.3):** Highlight, Superscript and
   Subscript in the selection toolbar (`ui/BubbleMenu.tsx`, after Link; not in a caption), ⌘⇧H,
   ⌘. and ⌘,. The marks are `extensions/InlineMarks.ts` (rules, the concurrent-edit case and the

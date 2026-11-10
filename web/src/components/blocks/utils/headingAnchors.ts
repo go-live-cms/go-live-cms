@@ -5,7 +5,7 @@
  * always gives the same ids, on every render. Tested in headingAnchors.test.ts.
  */
 import { createContext } from "react"
-import { blockAnchorId, blocksInReadingOrder, type Block, type BlockDocV1 } from "@gl-admin/lib/blocks-spec"
+import { blockAnchorId, blocksInReadingOrder, FOOTNOTES_TITLE_ID, type Block, type BlockDocV1 } from "@gl-admin/lib/blocks-spec"
 
 // Block id → element id for the doc being rendered; BlockRenderer provides it and
 // HeadingBlock reads it. Empty outside a BlockRenderer (no ids).
@@ -94,6 +94,12 @@ export function headingAnchors(doc: BlockDocV1 | null | undefined, reserved: Ite
   for (const blockId of doc.blocks_order) {
     const anchor = blockAnchorId(blockId)
     if (anchor) used.add(anchor)
+  }
+  // The footnotes' anchors (#422), in a post that has them: never a post without, where a
+  // heading called "Ref 1" keeps the id it always had.
+  if (doc.blocks_order.some((blockId) => doc.blocks[blockId]?.type === "footnotes")) {
+    used.add(FOOTNOTES_TITLE_ID)
+    patterns.push(/^fn-\d+$/, /^ref-\d+(-\d+)?$/)
   }
   const reservedByPattern = (id: string) => patterns.some((p) => p.test(id))
   const taken = (id: string) => used.has(id) || reservedByPattern(id)

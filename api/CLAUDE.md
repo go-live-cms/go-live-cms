@@ -1367,6 +1367,11 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   allowlist (`columns` a number clamped to 2–4, anything else deleted; `caption` reduced like an
   image's by `sanitizeCaption`). Its images are image blocks, so they get the image rules and are in
   `post_media` through `walkBlocks` ("Used in"). Six cases in `nestingVectors.json`.
+- **Footnotes (#422, `post_blocks_footnotes_test.go`):** `footnotes` is a container (`footnote` only, 1+, `onePerDocLast`: one per doc, the last
+  of `blocks_order`, in `checkBlockNesting`); `footnote` a core type that only lives in it. A `footnoteRef` is an inline node with an allowlist
+  (`footnoteId` only, a block id; `sanitizeInlineNodeAttrs`), dropped when invalid. `sanitizeFootnoteAttrs` keeps `pm` (a footnote node with no
+  reference in it) and `text`. A note nothing refers to is kept: the API never deletes one. `regenerateBlockIDs` remaps `footnoteId` with the block
+  ids, or a duplicated post's references would all go stale. No migration.
 - **Marks are an allowlist (#418, `post_blocks_marks_test.go`):** `sanitizeMarks` keeps only
   `allowedMarkTypes` (bold, code, italic, strike, underline, link, highlight, superscript,
   subscript: exactly the editor schema's marks, checked by the web's

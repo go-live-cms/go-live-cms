@@ -18,6 +18,7 @@ import Segment from "./BlockSettingsSegment"
 import { ButtonsSettings, ColumnsSettings, SpacerSettings } from "./LayoutBlockSettings"
 import GallerySettings from "./GallerySettings"
 import { galleryImageCount } from "../extensions/GalleryBlock"
+import { FOOTNOTES_HELP, footnotesBlockAtSelection, footnotesNoteCount } from "../extensions/FootnotesBlock"
 import EmbedBlockSettings from "./EmbedBlockSettings"
 import {
   ancestorBlocks,
@@ -56,7 +57,9 @@ export function blockInfo(block: Pick<EditorBlock, "node">): BlockInfo {
       : type === "embed"
         ? entries.find((e) => e.id === embedEntryId(block.node.attrs.provider))
         : entries.find((e) => e.type === type)
-  if (entry) return { name: entry.name, icon: entry.icon }
+  if (entry && block.node.type.name !== "footnotes") return { name: entry.name, icon: entry.icon }
+  // #422: the catalog's entry adds one note; what's selected is the list.
+  if (block.node.type.name === "footnotes" && entry) return { name: "Footnotes", icon: entry.icon }
   if (block.node.type.name === "listItem") return { name: "List item", icon: { glyph: "•" } }
   // #426: not in the catalog (it only exists inside a columns block).
   if (block.node.type.name === "column") return { name: "Column", icon: { path: "M3 4h18v16H3z" } }
@@ -67,7 +70,8 @@ type Snapshot = { block: EditorBlock; path: EditorBlock[] } | null
 
 function snapshot(editor: TiptapEditor): Snapshot {
   if (editor.isDestroyed) return null
-  const block = editorBlockAtSelection(editor.state)
+  // A note isn't an editor block (#422): its panel is the list's.
+  const block = editorBlockAtSelection(editor.state) ?? footnotesBlockAtSelection(editor.state)
   return block ? { block, path: ancestorBlocks(editor.state.doc, block) } : null
 }
 
@@ -142,6 +146,7 @@ export default function BlockSettingsPanel({ editor }: { editor: TiptapEditor })
         <div>
           <b className="block-settings__name">{info.name}</b>
           {isGallery && <span className="block-settings__sub">{galleryImageCount(block.node)}</span>}
+          {block.node.type.name === "footnotes" && <span className="block-settings__sub">{footnotesNoteCount(block.node)}</span>}
         </div>
       </div>
       {path.length > 0 && (
@@ -205,6 +210,8 @@ export default function BlockSettingsPanel({ editor }: { editor: TiptapEditor })
         <ButtonsSettings editor={editor} block={block} />
       ) : block.node.type.name === "spacer" ? (
         <SpacerSettings editor={editor} block={block} />
+      ) : block.node.type.name === "footnotes" ? (
+        <p className="post-settings__hint">{FOOTNOTES_HELP}</p>
       ) : (
         <p className="post-settings__hint">This block has no settings here. Its toolbar has its options.</p>
       )}

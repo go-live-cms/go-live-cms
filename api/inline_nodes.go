@@ -31,6 +31,8 @@ const (
 	mentionNodeType     = "mention"
 	contentLinkNodeType = "contentLink"
 	dateChipNodeType    = "dateChip"
+	// footnoteRefNodeType (#422): the id of its note, and nothing else.
+	footnoteRefNodeType = "footnoteRef"
 
 	// inlineLabelMaxRunes caps a mention's or link's label (INLINE_LABEL_MAX_LENGTH).
 	inlineLabelMaxRunes = 200
@@ -44,11 +46,14 @@ var (
 	chipDateRe   = regexp.MustCompile(`^(\d{4})-(\d{2})-(\d{2})$`)
 	chipTimeRe   = regexp.MustCompile(`^([01]\d|2[0-3]):([0-5]\d)$`)
 	entityIDText = regexp.MustCompile(`^\d{1,15}$`)
+	// footnoteIDRe is a block id a reference may point at (Block Spec normalizeFootnoteId).
+	footnoteIDRe = regexp.MustCompile(`^[A-Za-z0-9_-]{10,128}$`)
 )
 
-// isInlineNodeType reports whether t is one of the #320 inline nodes.
+// isInlineNodeType reports whether t is one of the inline nodes with an attr allowlist:
+// the #320 ones and a footnote reference (#422).
 func isInlineNodeType(t string) bool {
-	return t == mentionNodeType || t == contentLinkNodeType || t == dateChipNodeType
+	return t == mentionNodeType || t == contentLinkNodeType || t == dateChipNodeType || t == footnoteRefNodeType
 }
 
 // normalizeEntityID is a user or post id: a positive integer (a JSON number, or digits).
@@ -121,6 +126,54 @@ func normalizeChipTime(v interface{}) string {
 	return s
 }
 
+// normalizeFootnoteID is a reference's target: a block id, else "".
+func normalizeFootnoteID(v interface{}) string {
+	s, ok := v.(string)
+	if !ok {
+		return ""
+	}
+	s = strings.TrimSpace(s)
+	if !footnoteIDRe.MatchString(s) {
+		return ""
+	}
+	return s
+}
+
+// sanitizeFootnoteAttrs keeps only a note's own attrs (#422, an allowlist): `pm` when it is a
+// footnote node, with no reference inside it (a note can't cite a note, and the editor's
+// schema refuses one), and `text` when a string. A note nothing refers to is kept: removing
+// it is the author's call, never the API's.
+func sanitizeFootnoteAttrs(attrs map[string]interface{}) {
+	keepOnlyAttrs(attrs, "pm", "text")
+	if _, ok := attrs["text"].(string); !ok {
+		delete(attrs, "text")
+	}
+	pm, ok := attrs["pm"].(map[string]interface{})
+	if !ok || pm["type"] != footnoteBlockType {
+		delete(attrs, "pm")
+		return
+	}
+	dropFootnoteRefs(pm)
+}
+
+func dropFootnoteRefs(node map[string]interface{}) {
+	content, ok := node["content"].([]interface{})
+	if !ok {
+		return
+	}
+	kept := make([]interface{}, 0, len(content))
+	for _, child := range content {
+		if childMap, ok := child.(map[string]interface{}); ok {
+			if stringOf(childMap["type"]) == footnoteRefNodeType {
+				continue
+			}
+			dropFootnoteRefs(childMap)
+		}
+		kept = append(kept, child)
+	}
+	node["content"] = kept
+}
+
 func normalizeReminder(v interface{}) bool {
 	b, ok := v.(bool)
 	if ok {
@@ -166,6 +219,12 @@ func sanitizeInlineNodeAttrs(t string, attrs map[string]interface{}) map[string]
 			tm = defaultReminderTime
 		}
 		return map[string]interface{}{"date": date, "time": tm, "reminder": reminder}
+	case footnoteRefNodeType:
+		id := normalizeFootnoteID(attrs["footnoteId"])
+		if id == "" {
+			return nil
+		}
+		return map[string]interface{}{"footnoteId": id}
 	}
 	return attrs
 }
@@ -182,7 +241,7 @@ func sanitizeInlineNode(node map[string]interface{}) map[string]interface{} {
 		return node
 	}
 	label := normalizeInlineLabel(attrs["label"])
-	if t == dateChipNodeType || label == "" {
+	if t == dateChipNodeType || t == footnoteRefNodeType || label == "" {
 		return nil
 	}
 	if t == mentionNodeType {

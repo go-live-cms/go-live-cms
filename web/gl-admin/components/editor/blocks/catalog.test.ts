@@ -76,6 +76,7 @@ describe("the catalog", () => {
           "Code",
           "Table",
           "Details",
+          "Footnote",
         ],
       ],
       ["Media", ["Image", "Gallery", "Video", "Audio", "File"]],
@@ -221,6 +222,7 @@ const PM_NODE: Record<string, string> = {
   columns: "columns",
   buttons: "buttons",
   spacer: "spacer",
+  footnotes: "footnotes",
 }
 
 describe("insert", () => {

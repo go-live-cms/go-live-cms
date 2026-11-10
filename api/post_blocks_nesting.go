@@ -21,6 +21,8 @@ type blockContainer struct {
 	max int
 	// nestedOnly: never in blocks_order, only inside its parent (a column).
 	nestedOnly bool
+	// onePerDocLast: at most one per doc, the last block of blocks_order (the footnotes list).
+	onePerDocLast bool
 }
 
 // blockContainers: the containers. Group (#414) is the first, details (#421) the second,
@@ -35,6 +37,9 @@ var blockContainers = map[string]blockContainer{
 	"gallery": {accepts: []string{"image"}, min: 0},
 	"columns": {accepts: []string{"column"}, min: 2, max: 4},
 	"column":  {accepts: []string{"flow", "details"}, min: 1, nestedOnly: true},
+	// #422: the post's one list of notes. Only the store enforces "one, last": Yjs can merge
+	// two (footnotes.ts on the web side), and the collab server repairs them before a store.
+	"footnotes": {accepts: []string{"footnote"}, min: 1, onePerDocLast: true},
 }
 
 // flowBlockTypes are the core types that hold no blocks. Lists count as flow (their
@@ -60,10 +65,13 @@ var listBlockTypes = map[string]bool{"bullet_list": true, "ordered_list": true, 
 // listItemBlockTypes are the lists' items: blocks with ids that only live in their list.
 var listItemBlockTypes = map[string]bool{"list_item": true, "todo_item": true}
 
+// footnoteBlockType is a note (#422): a block with an id that only lives in a footnotes list.
+const footnoteBlockType = "footnote"
+
 // isCoreBlockType: a type this build knows (flow, the list items, the containers).
 func isCoreBlockType(t string) bool {
 	_, container := blockContainers[t]
-	return flowBlockTypes[t] || listItemBlockTypes[t] || container
+	return flowBlockTypes[t] || listItemBlockTypes[t] || container || t == footnoteBlockType
 }
 
 // isFlowBlockType: a core flow type, or any type that isn't core (a theme block, a type
@@ -131,7 +139,8 @@ func (doc *BlockDocV1) deduplicateBlocks() {
 //  3. no cycles;
 //  4. a container's children are of the types and in the count the table allows, a core
 //     block that is neither a container nor a list has no children, and a container that
-//     only exists inside its parent (a column) isn't in blocks_order.
+//     only exists inside its parent (a column) isn't in blocks_order, nor is a footnote, and a
+//     footnotes list is the only one in the doc and the last block of blocks_order (#422).
 //
 // An unreferenced block is not an error. children that isn't an array of strings is.
 // Theme and unknown types may have children; rules 1–3 apply to them too.
@@ -161,12 +170,24 @@ func (doc *BlockDocV1) checkBlockNesting() error {
 		return nil
 	}
 
-	for _, id := range doc.BlocksOrder {
+	seenOnePerDoc := map[string]bool{}
+	for index, id := range doc.BlocksOrder {
 		if err := reference(id, ""); err != nil {
 			return err
 		}
-		if blockContainers[typeOf(id)].nestedOnly {
-			return fmt.Errorf("block %q: a %s can't be at the top level", truncateID(id), typeOf(id))
+		blockType := typeOf(id)
+		rule := blockContainers[blockType]
+		if rule.nestedOnly || blockType == footnoteBlockType {
+			return fmt.Errorf("block %q: a %s can't be at the top level", truncateID(id), blockType)
+		}
+		if rule.onePerDocLast {
+			if index != len(doc.BlocksOrder)-1 {
+				return fmt.Errorf("block %q: a %s must be the last block", truncateID(id), blockType)
+			}
+			if seenOnePerDoc[blockType] {
+				return fmt.Errorf("block %q: a doc has at most one %s block", truncateID(id), blockType)
+			}
+			seenOnePerDoc[blockType] = true
 		}
 	}
 

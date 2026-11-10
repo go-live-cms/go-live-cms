@@ -7,7 +7,7 @@ const blockIdPluginKey = new PluginKey("blockId")
 
 // Generate unique block IDs
 let idCounter = 0
-function generateBlockId(): string {
+export function generateBlockId(): string {
   idCounter++
   const timestamp = Date.now()
   const random = Math.random().toString(36).substring(2, 9)
@@ -136,6 +136,8 @@ export const BlockIdExtension = Extension.create({
           // #426: a row of buttons is one block (its `button`s are parts, with no id).
           "buttons",
           "spacer",
+          // #422: a note's id is the `footnoteId` of the references to it.
+          "footnote",
           ...CONTAINER_NODE_NAMES,
         ],
         attributes: {

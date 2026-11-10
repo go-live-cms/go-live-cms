@@ -23,6 +23,7 @@ import { EmbedBlock, EmbedBlockCommands } from "../../components/editor/extensio
 import { Columns } from "../../components/editor/extensions/ColumnsBlock"
 import { Buttons } from "../../components/editor/extensions/ButtonsBlock"
 import { Spacer } from "../../components/editor/extensions/SpacerBlock"
+import { FootnoteRef, Footnotes } from "../../components/editor/extensions/FootnotesBlock"
 
 const lowlight = createLowlight(common)
 
@@ -48,6 +49,9 @@ export function schemaExtensions({ collaborating }: { collaborating: boolean }) 
       // The doc's content comes from the nesting table (#414): `document` below.
       document: false,
       dropcursor: { width: 2, color: "var(--editor-cursor,#3b82f6)" },
+      // #422: the footnotes list is the post's last block; TrailingNode would add an empty
+      // line after it on every load, and a block after the list is refused by the store.
+      trailingNode: { notAfter: ["footnotes"] },
       link: false,
       undoRedo: collaborating ? false : undefined,
     }),
@@ -122,6 +126,10 @@ export function schemaExtensions({ collaborating }: { collaborating: boolean }) 
     mention: Mention,
     contentLink: ContentLink,
     dateChip: DateChip,
+    // #422: the inline reference and the post's list of notes (`footnote` comes with it).
+    // New node types and a wider doc, so they change the fingerprint (#416).
+    footnoteRef: FootnoteRef,
+    footnotes: Footnotes,
     blockId: BlockIdExtension,
   }
 }

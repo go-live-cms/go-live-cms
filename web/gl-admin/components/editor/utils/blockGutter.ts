@@ -52,7 +52,7 @@ export function gutterAccepts(editor: Editor, ref: BlockRef): (entry: CatalogEnt
   const block = resolveBlock(editor.state.doc, ref)
   // A column's + adds to the column (#426): nothing the menus offer can go beside it.
   const holder = block?.node.type.name === "column" ? "column" : (block?.holder.type.name ?? "doc")
-  return (entry) => holderAcceptsType(holder, entry.type)
+  return (entry) => !!entry.inline || holderAcceptsType(holder, entry.type)
 }
 
 /**

@@ -2672,3 +2672,120 @@
     margin: 0;
   }
 }
+// Footnotes (#422, "Editor · table, details, pull quote, callout, footnotes"): the number is a
+// decoration, so it comes from the doc at every peer. Notes show in number order (`order`, set
+// by the note's view): the list's own order isn't re-sorted when references move.
+.editor-footnote-ref {
+  color: var(--text-selected);
+  cursor: pointer;
+  font-size: 0.72em;
+  font-weight: 600;
+  line-height: 0;
+  padding: 0 0.12em;
+  position: relative;
+  top: -0.5em;
+  vertical-align: baseline;
+
+  &::after {
+    content: attr(data-footnote-number);
+  }
+
+  &[data-footnote-missing]::after {
+    color: var(--danger-text);
+    content: "?";
+  }
+
+  &.ProseMirror-selectednode {
+    border-radius: 3px;
+    outline: 2px solid var(--focus-ring);
+  }
+}
+
+.editor-footnotes {
+  border-top: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 20px;
+  margin-top: var(--space-6, 24px);
+  padding-top: 10px;
+}
+
+// Over the editor's own heading rules.
+.gl-content-editor .editor-footnotes__title {
+  color: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 16px;
+  margin: 0 0 6px;
+  text-transform: uppercase;
+  user-select: none;
+}
+
+.editor-footnotes__list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.editor-footnote {
+  align-items: baseline;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+
+  &.is-empty::before {
+    content: none;
+  }
+
+  &.is-empty .editor-footnote__text::before {
+    color: var(--text-placeholder);
+    content: "Write the note";
+    float: left;
+    height: 0;
+    pointer-events: none;
+  }
+}
+
+.editor-footnote__number {
+  user-select: none;
+}
+
+.editor-footnote__actions {
+  align-items: baseline;
+  display: inline-flex;
+  gap: 8px;
+  user-select: none;
+}
+
+.editor-footnote__back,
+.editor-footnote__remove {
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--text-selected);
+  cursor: pointer;
+  font: inherit;
+  padding: 0 2px;
+
+  &:focus-visible {
+    outline: 2px solid var(--focus-ring);
+  }
+}
+
+.editor-footnote__unreferenced {
+  color: var(--warning-label);
+  font-size: 12px;
+}
+
+.ProseMirror[contenteditable="false"] .editor-footnote__remove {
+  display: none;
+}
+
+.editor-toolbar__button--label {
+  align-items: center;
+  display: inline-flex;
+  gap: 4px;
+  padding-inline: 6px;
+  width: auto;
+}

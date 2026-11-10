@@ -93,6 +93,9 @@ posts.block_doc → publish → post_versions → public site (SSR)
 - **buttons** (#426): flow, its buttons in `attrs.pm` (a `buttons` node of `button` nodes, each
   `href` when it has one, `variant` when `secondary`, its label as one text run; parts, no ids),
   `attrs.text` the labels, `attrs.align` `center` (absent: left)
+- **footnotes** / **footnote** (#422, `footnotes.ts`): `footnotes` is a container of `footnote` blocks, at most one per doc, the last of
+  `blocks_order`, no attrs. A `footnote` is one note: `attrs.pm` (a `footnote` node, rich inline text) and `attrs.text`. Its block id is what
+  its references point at. Numbers aren't stored anywhere
 - **spacer** (#426): flow, `attrs.size` a step of the theme's spacing scale: `5`, `7`, `8`, `9`
   (`SPACER_STEPS`), never pixels
 - Theme blocks: unknown types keep their ProseMirror JSON in `attrs.pm` and round-trip
@@ -109,6 +112,8 @@ Not block types: inline atoms inside a text block's `pm` (no block version chang
 - **`dateChip`** `{date, time, reminder}`: a calendar day (YYYY-MM-DD), an optional HH:MM in the
   site's zone, and whether its author asked to be reminded (a reminder always has a time,
   09:00 by default). Formatted when rendered; the reminder's owner is the API's, never stored.
+
+- **`footnoteRef`** `{footnoteId}` (#422, `footnotes.ts`): the id of its note, nothing else. Its number is the order of the references.
 
 Every value goes through the normalizers here; `inlineNodeVectors.json` is shared with the
 API's sanitizer tests. An invalid mention or link is its label as text, an invalid chip is

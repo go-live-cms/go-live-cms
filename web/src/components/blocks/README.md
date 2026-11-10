@@ -252,6 +252,11 @@ interface BlockComponentProps {
   `a.btn.btn-primary` / `.btn-secondary`: every href goes through `normalizeButtonHref` again, and
   a button with no link or label is left out. `spacer/` is an empty `div.spacer`, `aria-hidden`, its
   height `var(--space-<n>, <px>)` from the theme's scale.
+- **Footnotes (#422, `footnotes/`, "Published · text"):** a reference is `<sup><a class="fn-ref" href="#fn-N" id="ref-N" aria-label="Footnote N">N</a></sup>`, in any
+  text (`utils/footnotes.tsx`, from `FootnotesContext`, which `BlockRenderer` fills). The list is `section.footnotes[aria-labelledby=fn-title]`, an `h2#fn-title` and an
+  `ol` of `li#fn-N`, each with `a.fn-back[href=#ref-N]` ("Back to reference N"). A note used twice has `ref-N-2` and a second back link. Everything comes from
+  `footnoteIndex`: a reference with no note, a note nothing refers to and an empty note render nothing, so no link can dangle. `headingAnchors` keeps a heading off
+  these ids in a post with footnotes. `footnote/` is only for what renders one block at a time (History).
 - **Inline marks (`utils/contentRenderer.tsx`):** bold `<strong>`, italic `<em>`, underline `<u>`,
   strike `<s>`, code `<code>`, link `<a>` (`safeHref`), and since #418 highlight `<mark>` (no
   style: the theme's one colour), superscript `<sup>` and subscript `<sub>`, nested in schema

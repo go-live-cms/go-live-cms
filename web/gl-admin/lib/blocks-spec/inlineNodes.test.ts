@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import vectors from "./inlineNodeVectors.json"
+import { footnoteRefAttrs } from "./footnotes"
 import {
   addDays,
 } from "../mentionMenu"
@@ -20,6 +21,7 @@ import {
 
 const normalizers: Record<string, (attrs: Record<string, unknown>) => unknown> = {
   mention: mentionAttrs,
+  footnoteRef: footnoteRefAttrs,
   contentLink: contentLinkAttrs,
   dateChip: dateChipAttrs,
 }

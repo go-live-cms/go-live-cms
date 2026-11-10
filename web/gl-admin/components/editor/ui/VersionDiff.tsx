@@ -1,8 +1,9 @@
 import React, { Fragment, memo } from "react"
-import { normalizeCite, type Block, type BlockDocV1 } from "@gl-admin/lib/blocks-spec"
+import { footnoteIndex, normalizeCite, type Block, type BlockDocV1, type FootnoteIndex } from "@gl-admin/lib/blocks-spec"
 import type { PostSettings } from "@gl-admin/lib/api/blockAPI"
 import { blockRendererFor } from "@/components/BlockRenderer"
 import { renderTextNode } from "@/components/blocks/utils/contentRenderer"
+import { FootnotesContext } from "@/components/blocks/utils/footnotes"
 import {
   blockTypeLabel,
   isIdentical,
@@ -218,10 +219,18 @@ function Unrenderable({ block }: { block: Block }) {
   return <p className="version-diff__unrenderable">A {blockTypeLabel(block.type)} block this editor can't show.</p>
 }
 
+// One index per doc: a block's footnote numbers (#422) come from the whole doc.
+const footnoteIndexes = new WeakMap<BlockDocV1, FootnoteIndex>()
+function footnoteIndexOf(doc: BlockDocV1): FootnoteIndex {
+  let index = footnoteIndexes.get(doc)
+  if (!index) footnoteIndexes.set(doc, (index = footnoteIndex(doc)))
+  return index
+}
+
 function renderOne(doc: BlockDocV1, id: string): React.ReactNode {
   const block = doc.blocks[id]
   if (!block) return null
-  return blockRendererFor(doc)(id) ?? <Unrenderable block={block} />
+  return <FootnotesContext.Provider value={footnoteIndexOf(doc)}>{blockRendererFor(doc)(id) ?? <Unrenderable block={block} />}</FootnotesContext.Provider>
 }
 
 /** A changed block: its own markup with the diff inside, or the rendered block plus notes. */
