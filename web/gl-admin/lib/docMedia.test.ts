@@ -42,6 +42,26 @@ describe("the History preview's media map (#423)", () => {
     expect((doc as any).media).toBeUndefined()
   })
 
+  it("fills a cover's and media & text's entry too, with what the renderer needs for an image (#427)", async () => {
+    const withImage: BlockDocV1 = {
+      doc_version: 1,
+      blocks_order: ["cover-00001", "media-00001"],
+      blocks: {
+        "cover-00001": { id: "cover-00001", type: "cover", version: 1, attrs: { mediaId: 12 } },
+        "media-00001": { id: "media-00001", type: "media_text", version: 1, attrs: { mediaId: 99 } },
+      },
+    }
+    api.getMediaById.mockImplementation(async (id: number) => {
+      if (Number(id) === 99) throw new ApiError("Not found.", 404)
+      return { media: { id: 12, media_path: "/uploads/media/t.jpg", width: 1500, height: 1000, variants: { thumb: { path: "/uploads/t.jpg", width: 1, height: 1 } }, focal_point: { x: 0.5, y: 0.4 }, decorative: true } }
+    })
+    expect(fileBlockMediaIds(withImage)).toEqual([12, 99])
+    const out = (await withFileBlockMedia(withImage)) as any
+    expect(out.media["12"]).toMatchObject({ media_path: "/uploads/media/t.jpg", width: 1500, focal_point: { x: 0.5, y: 0.4 }, decorative: true })
+    expect(out.media["12"].variants.thumb.path).toBe("/uploads/t.jpg")
+    expect(out.media_missing).toEqual([99])
+  })
+
   it("leaves a doc without file blocks as it is", async () => {
     const plain: BlockDocV1 = { doc_version: 1, blocks_order: [], blocks: {} }
     expect(await withFileBlockMedia(plain)).toBe(plain)

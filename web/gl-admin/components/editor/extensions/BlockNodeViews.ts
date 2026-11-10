@@ -33,6 +33,7 @@ import { deleteBlockTr, editorBlockAt, refOfBlock } from "../utils/blockTree"
 import { moveGalleryImage, removeGalleryImage } from "../utils/galleryActions"
 import { focalObjectPosition } from "@gl-admin/lib/mediaLibrary"
 import { ButtonsView, ColumnsView, SpacerView } from "./LayoutBlockViews"
+import { CoverMediaView } from "./CoverMediaViews"
 
 const blockNodeViewsKey = new PluginKey("blockNodeViews")
 
@@ -100,6 +101,9 @@ export const BlockNodeViews = Extension.create({
             columns: (node, view, getPos) => new ColumnsView(node, view, getPos as () => number | undefined, editor),
             buttons: (node, view, getPos) => new ButtonsView(node, view, getPos as () => number | undefined, editor),
             spacer: (node, view, getPos) => new SpacerView(node, view, getPos as () => number | undefined, editor),
+            // #427: cover and media & text (CoverMediaViews.ts).
+            cover: (node, view, getPos) => new CoverMediaView(node, view, getPos as () => number | undefined, editor),
+            mediaText: (node, view, getPos) => new CoverMediaView(node, view, getPos as () => number | undefined, editor),
           },
           // Marks the quote or pull quote the cursor is in, so its empty citation field
           // shows, and the group or callout it is in (or the selected group), so its
@@ -131,9 +135,9 @@ export const BlockNodeViews = Extension.create({
 })
 
 /** The nodes whose view shows a field or settings while the cursor is in them. */
-const MARKED_WHILE_IN = new Set(["blockquote", "pullQuote", "group", "callout", "tableBlock", "details", "gallery", "columns", "buttons"])
+const MARKED_WHILE_IN = new Set(["blockquote", "pullQuote", "group", "callout", "tableBlock", "details", "gallery", "columns", "buttons", "cover", "mediaText"])
 /** The nodes whose view shows its toolbar while it is selected. */
-const MARKED_WHEN_SELECTED = new Set(["group", "tableBlock", "details", "gallery", "columns", "buttons"])
+const MARKED_WHEN_SELECTED = new Set(["group", "tableBlock", "details", "gallery", "columns", "buttons", "cover", "mediaText"])
 
 /** The `data-block-id` the node's renderHTML would put on it (BlockIdExtension). */
 function setBlockId(dom: HTMLElement, node: PMNode) {

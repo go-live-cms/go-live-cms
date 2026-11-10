@@ -276,6 +276,14 @@ interface BlockComponentProps {
   per-provider templates on click, adds `.is-loaded`, `role="region"` and moves focus in; X loads its
   widget then. Nothing renders for an empty block, an invalid one, or a provider the site no longer
   allows (the API empties those).
+- **Cover, media & text (#427, "Published · media & embeds", `cover/`, `media_text/`):** `div.cover`
+  (`alignwide` / `alignfull`, `--dim` the overlay as a fraction) with the image, then `div.cover-inner`
+  holding the blocks; `div.media-text` (`is-media-right`) with `figure.media-text-media` first, so it
+  sits above the text on phones, then `div.media-text-body`. The image comes from the `media` map
+  (`utils/blockImage.ts`: `/uploads` only, `srcset`, the block's own focal point else the media's). A
+  block whose image was deleted or never chosen renders nothing, its blocks included; a failed
+  lookup keeps the blocks without the picture (`is-no-media`). The first of these, or the first image
+  block, in reading order loads eagerly.
 - **Mentions, content links, dates (#320, inline nodes in any text, `renderInlineNode` in
   `utils/contentRenderer.tsx`):** a mention is `<span class="gl-mention">Ana Costa</span>` (the
   member's current name from the API, never an id or email, no "@"); a content link is

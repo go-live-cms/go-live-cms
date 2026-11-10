@@ -138,7 +138,7 @@ export const CROP_PREVIEWS = [
 ]
 
 // How a post uses a file (#176): its featured image, a content block showing it
-// (`block_id`, `block_type`: "image", "video", "audio", "file" (#423), or a theme block's
+// (`block_id`, `block_type`: "image", "video", "audio", "file" (#423), "cover", "media_text" (#427), or a theme block's
 // "theme:<slug>/<block>"), or a
 // link made some other way ("attached").
 export interface MediaUsage {
@@ -168,6 +168,7 @@ export interface UsedInRow {
 
 // "image" → "image block", "theme:example/alert" → "alert block".
 function blockNoun(blockType: string | undefined): string {
+  if (blockType === "media_text") return "media & text block"
   const name = (blockType || "image").split("/").pop()!.replace(/[-_]+/g, " ")
   return `${name.toLowerCase()} block`
 }

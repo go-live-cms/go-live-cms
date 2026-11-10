@@ -1,10 +1,10 @@
 import type { Editor } from "@tiptap/core"
 import type { Node as PMNode } from "@tiptap/pm/model"
 import { getMediaURL } from "@gl-admin/lib/api"
-import { MEDIA_BLOCK_KINDS, mimeMatchesKind, type MediaPickerKind } from "@gl-admin/lib/blocks-spec"
+import { isCoverMediaNode, MEDIA_BLOCK_KINDS, mimeMatchesKind, normalizeMediaAlt, type MediaPickerKind } from "@gl-admin/lib/blocks-spec"
 import { knownMedia, rememberMedia, uploadMediaFile } from "@gl-admin/lib/mediaLookup"
 import type { Media } from "@gl-admin/lib/api/types"
-import { blockSpecTypeOf, refOfBlock, resolveEditorBlock, type BlockRef } from "../utils/blockTree"
+import { blockSpecTypeOf, keepBlockSelected, refOfBlock, resolveEditorBlock, type BlockRef } from "../utils/blockTree"
 
 // Choosing the file of a media block (#423): Choose from Media, Upload and Replace, from the
 // block's view, its toolbar and the settings panel. The editor's views are plain DOM (no
@@ -66,6 +66,21 @@ function imageAttrsOf(media: Media) {
 }
 
 /**
+ * What a cover or media & text takes from a newly chosen image (#427): its alt text, and
+ * back to following that image's focal point (a focal point moved for the old picture means
+ * nothing on this one). A cover keeps its decorative switch; media & text follows the media.
+ */
+function coverMediaAttrsOf(media: Media, node: PMNode) {
+  return {
+    mediaId: media.id,
+    alt: normalizeMediaAlt(media.decorative ? "" : media.alt),
+    decorative: node.type.name === "cover" ? node.attrs.decorative : media.decorative === true,
+    focalX: null,
+    focalY: null,
+  }
+}
+
+/**
  * Points the block `ref` names at `media`, in one transaction. An image also takes the
  * media's URL, alt text and name, as before #423 (`MediaBlockManager`): its caption and
  * width stay, the media's description isn't copied anywhere, and a decorative image gets an
@@ -81,6 +96,12 @@ export function applyMediaToBlock(editor: Editor, ref: BlockRef, media: Media): 
   if (block.node.type.name === "image") {
     const tr = editor.state.tr.setNodeMarkup(block.pos, undefined, { ...block.node.attrs, ...imageAttrsOf(media) })
     editor.view.dispatch(tr)
+    hosts.get(editor)?.applied?.(media)
+    return true
+  }
+  if (isCoverMediaNode(block.node.type.name)) {
+    const { state } = editor
+    editor.view.dispatch(keepBlockSelected(state, block.pos, state.tr.setNodeMarkup(block.pos, undefined, { ...block.node.attrs, ...coverMediaAttrsOf(media, block.node) })))
     hosts.get(editor)?.applied?.(media)
     return true
   }

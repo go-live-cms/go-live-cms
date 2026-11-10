@@ -1,0 +1,28 @@
+{
+  "description": "Cover and media & text (#427): what the bridge and the API's sanitizer make of a stored value. Read by blocks-spec/coverMedia.test.ts (normalizeCoverOverlay, normalizeFocal) and api/post_blocks_cover_test.go (sanitizeCoverAttrs, sanitizeMediaTextAttrs). `null` as `want` means the attr is left out and the block uses its default.",
+  "overlay": [
+    { "in": 0, "want": 0 },
+    { "in": 5, "want": 5 },
+    { "in": 55, "want": 55 },
+    { "in": 80, "want": 80 },
+    { "in": 57, "want": 55 },
+    { "in": 58, "want": 60 },
+    { "in": 2.5, "want": 5 },
+    { "in": 81, "want": 80 },
+    { "in": 500, "want": 80 },
+    { "in": -1, "want": 0 },
+    { "in": -500, "want": 0 }
+  ],
+  "focal": [
+    { "in": { "x": 50, "y": 40 }, "want": { "x": 50, "y": 40 } },
+    { "in": { "x": 0, "y": 100 }, "want": { "x": 0, "y": 100 } },
+    { "in": { "x": 140, "y": -3 }, "want": { "x": 100, "y": 0 } },
+    { "in": { "x": 12.4, "y": 87.5 }, "want": { "x": 12, "y": 88 } },
+    { "in": { "x": 50 }, "want": null },
+    { "in": { "y": 50 }, "want": null },
+    { "in": { "x": "50", "y": 40 }, "want": null },
+    { "in": { "x": null, "y": 40 }, "want": null },
+    { "in": 50, "want": null },
+    { "in": null, "want": null }
+  ]
+}

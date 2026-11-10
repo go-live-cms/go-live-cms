@@ -1202,6 +1202,119 @@
     font-weight: 400;
   }
 
+  // Cover and media & text (#427, the canvas's settings panels).
+  &__check {
+    align-items: center;
+    display: flex;
+    font-size: var(--type-label);
+    gap: var(--space-2);
+
+    input {
+      accent-color: var(--accent-solid);
+      height: 16px;
+      margin: 0;
+      width: 16px;
+    }
+  }
+
+  &__warning {
+    color: var(--warning-text);
+  }
+
+  &__row {
+    align-items: baseline;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  &__value {
+    color: var(--text-secondary);
+    font-size: var(--type-footnote);
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__range {
+    accent-color: var(--accent-solid);
+    width: 100%;
+  }
+
+  &__focal {
+    border-radius: var(--radius-md);
+    cursor: crosshair;
+    overflow: hidden;
+    position: relative;
+
+    img {
+      aspect-ratio: 3 / 2;
+      display: block;
+      object-fit: cover;
+      width: 100%;
+    }
+  }
+
+  &__focal-dot {
+    background: rgb(0 0 0 / 0.25);
+    border: 2px solid #fff;
+    border-radius: 50%;
+    box-shadow: 0 0 0 1px rgb(0 0 0 / 0.5), 0 2px 6px rgb(0 0 0 / 0.4);
+    cursor: move;
+    height: 28px;
+    margin: -14px 0 0 -14px;
+    padding: 0;
+    position: absolute;
+    width: 28px;
+
+    &:focus-visible {
+      outline: 2px solid var(--focus-ring);
+      outline-offset: 2px;
+    }
+  }
+
+  &__focal-xy {
+    display: grid;
+    gap: var(--space-2);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-top: var(--space-2);
+  }
+
+  &__unit {
+    align-items: center;
+    background: var(--background);
+    border: 1px solid var(--control-border);
+    border-radius: var(--radius-sm);
+    display: flex;
+    height: 32px;
+    overflow: hidden;
+
+    label,
+    span {
+      color: var(--text-secondary);
+      font-size: var(--type-caption);
+      padding: 0 10px;
+    }
+
+    label {
+      padding-right: 0;
+    }
+
+    span {
+      padding-left: 0;
+    }
+
+    input {
+      background: transparent;
+      border: 0;
+      color: var(--text-primary);
+      flex: 1;
+      font-size: var(--type-label);
+      font-variant-numeric: tabular-nums;
+      height: 100%;
+      min-width: 0;
+      outline-offset: -2px;
+      padding: 0 var(--space-2);
+    }
+  }
+
   &__option {
     background: transparent;
     border: 1px solid var(--border-strong);

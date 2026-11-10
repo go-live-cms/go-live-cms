@@ -47,6 +47,8 @@ const PM_NODE: Record<string, string> = {
   columns: "columns",
   buttons: "buttons",
   spacer: "spacer",
+  cover: "cover",
+  media_text: "mediaText",
 }
 
 // The table asks for its size first (#420): Create table with the defaults.

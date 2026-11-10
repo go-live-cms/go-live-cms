@@ -82,6 +82,8 @@ describe("usedInRows (the “Used in” data)", () => {
     ])
     // An API older than #176 sends no usages.
     expect(usageLabels({ relationship_type: "gallery" })).toEqual(["image in the post"])
+    // #427
+    expect(usageLabels({ relationship_type: "gallery", usages: [{ type: "block", block_id: "a", block_type: "cover" }, { type: "block", block_id: "b", block_type: "media_text" }] })).toEqual(["cover block", "media & text block"])
     expect(usageLabels({ relationship_type: "featured", usages: [] })).toEqual(["featured image"])
   })
 

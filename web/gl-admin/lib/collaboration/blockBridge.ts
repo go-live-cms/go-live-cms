@@ -23,6 +23,12 @@ import {
   AUDIO_BLOCK_VERSION,
   FILE_BLOCK_VERSION,
   VIDEO_BLOCK_VERSION,
+  COVER_BLOCK_VERSION,
+  coverNodeAttrs,
+  coverStoredAttrs,
+  MEDIA_TEXT_BLOCK_VERSION,
+  mediaTextNodeAttrs,
+  mediaTextStoredAttrs,
   type BlockColor,
   type BlockDocV1,
   type Block,
@@ -409,6 +415,13 @@ function pmNodeToBlock(node: PMNode, allBlocks: Record<BlockID, Block>, seenIds:
 
     case "column":
       return { id, type: "column", version: 1, attrs: {} }
+
+    // #427. Normalized by their own rules (`coverMedia.ts`); `children` are set by the caller.
+    case "cover":
+      return { id, type: "cover", version: COVER_BLOCK_VERSION, attrs: { ...mediaIdAttr(node.attrs.mediaId), ...coverStoredAttrs(node.attrs) } }
+
+    case "mediaText":
+      return { id, type: "media_text", version: MEDIA_TEXT_BLOCK_VERSION, attrs: { ...mediaIdAttr(node.attrs.mediaId), ...mediaTextStoredAttrs(node.attrs) } }
 
     case "buttons":
       return buttonsNodeToBlock(node, id)
@@ -1203,6 +1216,17 @@ function blockToPMNode(block: Block, allBlocks: Record<BlockID, Block>, ctx: Con
 
     case "column":
       return { type: "column", attrs: baseAttrs, content: containerChildrenToPM(block, allBlocks, ctx) }
+
+    // #427. Only valid values make it into the node; a bad one costs the attr, never the block.
+    case "cover": {
+      const attrs = block.attrs as Record<string, unknown>
+      return { type: "cover", attrs: { ...baseAttrs, ...mediaIdAttr(attrs.mediaId), ...coverNodeAttrs(attrs) }, content: containerChildrenToPM(block, allBlocks, ctx) }
+    }
+
+    case "media_text": {
+      const attrs = block.attrs as Record<string, unknown>
+      return { type: "mediaText", attrs: { ...baseAttrs, ...mediaIdAttr(attrs.mediaId), ...mediaTextNodeAttrs(attrs) }, content: containerChildrenToPM(block, allBlocks, ctx) }
+    }
 
     case "buttons":
       return buttonsBlockToPM(block, baseAttrs)

@@ -11,9 +11,11 @@ import {
   isColumnsLayout,
   isGroupAlign,
   isGroupStyle,
+  isMediaTextPosition,
   isSpacerSize,
   normalizeButtonHref,
   normalizeBlockColor,
+  normalizeCoverOverlay,
   normalizeCite,
   normalizeChipDate,
   normalizeChipTime,
@@ -88,8 +90,12 @@ const BLOCK_COLOR_TAGS = new Set(["P", "H1", "H2", "H3", "H4", "H5", "H6", "BLOC
 // Gallery (#424): `<div data-type="gallery" data-columns>` and its caption, from the editor's
 // own clipboard. Images are dropped as everywhere (they come from the media library), so a
 // pasted gallery has its caption and columns and no images, and shows the empty-gallery state.
-const CONTAINER_DIV_TYPES = new Set(["group", "details", "details-summary", "gallery", "gallery-caption", "columns", "column", "buttons", "button", "spacer"])
+// Cover and media & text (#427): `<div data-type="cover" data-overlay data-align>` and
+// `<div data-type="media-text" data-position>`, from the editor's own clipboard. The image isn't
+// kept (media comes from the library), so a pasted one has its blocks and shows its empty state.
+const CONTAINER_DIV_TYPES = new Set(["group", "details", "details-summary", "gallery", "gallery-caption", "columns", "column", "buttons", "button", "spacer", "cover", "media-text"])
 const isGroupDiv = (node: Element) => node.nodeName === "DIV" && node.getAttribute("data-type") === "group"
+const isCoverDiv = (node: Element) => isTyped(node, "DIV", "cover")
 const isColumnsDiv = (node: Element) => isTyped(node, "DIV", "columns")
 const isButtonsDiv = (node: Element) => isTyped(node, "DIV", "buttons")
 
@@ -145,7 +151,7 @@ function getPurifier() {
     ALLOWED_ATTR: [
       "href", "class", "data-pm-slice", "data-block-color", "data-type", "data-style", "data-align",
       "data-tone", "data-cite", "data-checked", "colspan", "rowspan", "data-open", "data-columns",
-      "data-layout", "data-href", "data-variant", "data-size",
+      "data-layout", "data-href", "data-variant", "data-size", "data-overlay", "data-position",
       "data-user-id", "data-post-id", "data-label", "data-date", "data-time", "data-reminder",
     ],
     ALLOW_DATA_ATTR: false,
@@ -181,8 +187,14 @@ function getPurifier() {
     } else if (data.attrName === "data-style") {
       if (!isGroupDiv(node) || !isGroupStyle(data.attrValue)) data.keepAttr = false
     } else if (data.attrName === "data-align") {
-      const valid = isButtonsDiv(node) ? isButtonsAlign(data.attrValue) : (isGroupDiv(node) || isColumnsDiv(node)) && isGroupAlign(data.attrValue)
+      const valid = isButtonsDiv(node) ? isButtonsAlign(data.attrValue) : (isGroupDiv(node) || isColumnsDiv(node) || isCoverDiv(node)) && isGroupAlign(data.attrValue)
       if (!valid) data.keepAttr = false
+    } else if (data.attrName === "data-overlay") {
+      const overlay = isCoverDiv(node) && /^\d+$/.test(data.attrValue) ? normalizeCoverOverlay(Number(data.attrValue)) : null
+      if (overlay === null) data.keepAttr = false
+      else data.attrValue = String(overlay)
+    } else if (data.attrName === "data-position") {
+      if (!isTyped(node, "DIV", "media-text") || !isMediaTextPosition(data.attrValue)) data.keepAttr = false
     } else if (data.attrName === "data-layout") {
       if (!isColumnsDiv(node) || !isColumnsLayout(data.attrValue)) data.keepAttr = false
     } else if (data.attrName === "data-href") {
