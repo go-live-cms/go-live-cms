@@ -212,6 +212,11 @@ func TestScanPluginsDirectory(t *testing.T) {
 	writePlugin(t, root, "not-a-plugin", "", map[string]string{"README.md": "no manifest"})
 	writePlugin(t, root, ".hidden", pluginJSON(".hidden", "1.0.0", 1, ""), nil)
 	require.NoError(t, os.WriteFile(filepath.Join(root, "README.md"), []byte("the directory's readme"), 0o644))
+	// A symlinked plugin directory isn't followed (the image has real files only).
+	linked := writePlugin(t, t.TempDir(), "linked", pluginJSON("linked", "1.0.0", 1, ""), nil)
+	if err := os.Symlink(linked, filepath.Join(root, "linked")); err != nil {
+		t.Logf("no symlink support here: %v", err)
+	}
 
 	plugins, err := ScanPluginsDirectory(root)
 	require.NoError(t, err)

@@ -138,7 +138,16 @@ func ScanPluginsDirectory(pluginsPath string) ([]DiscoveredPlugin, error) {
 	}
 	plugins := []DiscoveredPlugin{}
 	for _, entry := range entries {
-		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
+		if strings.HasPrefix(entry.Name(), ".") {
+			continue
+		}
+		if entry.Type()&fs.ModeSymlink != 0 {
+			// Not followed: a package is real files in the image. Said out loud, since the
+			// sync then marks the plugin missing.
+			slog.Warn("skipping plugin: symlinks are not followed", "plugin", entry.Name())
+			continue
+		}
+		if !entry.IsDir() {
 			continue
 		}
 		dir := filepath.Join(pluginsPath, entry.Name())
@@ -163,7 +172,15 @@ func ScanPluginsDirectory(pluginsPath string) ([]DiscoveredPlugin, error) {
 // A failed write is logged and the scan goes on; only failing to mark the missing
 // ones is returned.
 func (server *Server) SyncPluginsToDatabase(ctx context.Context, plugins []DiscoveredPlugin) error {
-	present := make([]string, 0, len(plugins))
+	return server.syncPlugins(ctx, plugins, nil)
+}
+
+// syncPlugins is SyncPluginsToDatabase that also treats the slugs in alsoPresent as
+// present. Only tests pass any: a test database is shared, and its other plugin rows
+// must not be marked missing because a test scanned a temporary directory.
+func (server *Server) syncPlugins(ctx context.Context, plugins []DiscoveredPlugin, alsoPresent []string) error {
+	present := make([]string, 0, len(plugins)+len(alsoPresent))
+	present = append(present, alsoPresent...)
 	for _, plugin := range plugins {
 		present = append(present, plugin.Slug)
 		server.syncDiscoveredPlugin(ctx, plugin)
@@ -197,8 +214,7 @@ func (server *Server) syncDiscoveredPlugin(ctx context.Context, plugin Discovere
 			return
 		}
 		server.recordPluginScanActivity(ctx, db.ActivityPluginUpdated, row.ID, map[string]any{
-			"previous_version": row.PreviousVersion, "version": row.Version,
-			"previous_status": row.PreviousStatus, "status": row.Status,
+			"version": row.Version, "previous_status": row.PreviousStatus, "status": row.Status,
 			"reason": "invalid_manifest",
 		})
 		return

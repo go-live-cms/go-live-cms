@@ -76,6 +76,8 @@
     { "name": "plugin_api missing", "valid": false, "field": "plugin_api", "set": { "plugin_api": null } },
     { "name": "plugin_api zero", "valid": false, "field": "plugin_api", "set": { "plugin_api": 0 } },
     { "name": "plugin_api fractional", "valid": false, "field": "plugin_api", "set": { "plugin_api": 1.5 } },
+    { "name": "plugin_api at its bound", "valid": true, "set": { "plugin_api": 1000000 } },
+    { "name": "plugin_api over its bound (too large for an int)", "valid": false, "field": "plugin_api", "set": { "plugin_api": 1e20 } },
     { "name": "plugin_api as a string", "valid": false, "field": "plugin_api", "set": { "plugin_api": "1" } },
     { "name": "capabilities not an array", "valid": false, "field": "capabilities", "set": { "capabilities": "posts:read" } },
     { "name": "an unknown capability", "valid": false, "field": "capabilities[1]", "set": { "capabilities": ["posts:read", "posts:write"] } },

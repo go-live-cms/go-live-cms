@@ -308,7 +308,7 @@ SET status = 'incompatible',
 FROM prev
 WHERE p.id = prev.id
   AND (p.status <> 'incompatible' OR p.content_hash <> $1)
-RETURNING p.id, p.slug, p.version, p.status, prev.version AS previous_version, prev.status AS previous_status
+RETURNING p.id, p.slug, p.version, p.status, prev.status AS previous_status
 `
 
 type MarkPluginInvalidParams struct {
@@ -317,12 +317,11 @@ type MarkPluginInvalidParams struct {
 }
 
 type MarkPluginInvalidRow struct {
-	ID              int64  `json:"id"`
-	Slug            string `json:"slug"`
-	Version         string `json:"version"`
-	Status          string `json:"status"`
-	PreviousVersion string `json:"previous_version"`
-	PreviousStatus  string `json:"previous_status"`
+	ID             int64  `json:"id"`
+	Slug           string `json:"slug"`
+	Version        string `json:"version"`
+	Status         string `json:"status"`
+	PreviousStatus string `json:"previous_status"`
 }
 
 // A known plugin whose directory is there but whose plugin.json no longer validates:
@@ -336,7 +335,6 @@ func (q *Queries) MarkPluginInvalid(ctx context.Context, arg MarkPluginInvalidPa
 		&i.Slug,
 		&i.Version,
 		&i.Status,
-		&i.PreviousVersion,
 		&i.PreviousStatus,
 	)
 	return i, err

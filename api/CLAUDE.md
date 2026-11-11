@@ -1317,14 +1317,15 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   outside test mode): **never deletes**. New → inserted disabled (`incompatible` outside the
   plugin_api range). Gone → `missing`, keeps `enabled` and settings; back → restored as it was.
   A known plugin whose `plugin.json` stops validating → `incompatible` with its last valid
-  manifest (`MarkPluginInvalid`); a never-valid one writes nothing. No `web/plugins` directory →
+  manifest (`MarkPluginInvalid`); a never-valid one writes nothing; a symlinked directory is
+  skipped with a warning. No `web/plugins` directory →
   no sync (nothing is marked missing). Every write is one conditional statement that returns a
   row only when it changed something (`plugins.sql`), so replicas scanning together record each
   change once (tested with four concurrent syncs).
 - **Routes** (`plugins_routes.go`): `GET /plugins`, `GET /plugins/:slug` (with `manifest`), `POST
   /plugins/:slug/enable|disable` are `requireSiteAdmin`; `GET /plugins/enabled` (content roles)
   → `{plugins: [slug]}`, enabled **and** installed only. Enable: 409 `plugin_missing` /
-  `plugin_incompatible`; enabling an enabled one (or disabling a disabled one) is 200 with no
+  `plugin_incompatible` (`plugin_changed` after a lost race); enabling an enabled one (or disabling a disabled one) is 200 with no
   event. Disable works in any status. Responses carry `active` (enabled and installed) and, for
   incompatible, `incompatible_reason` (`plugin_api` | `invalid_manifest`). They change no schema
   (design 5.3).
@@ -1335,8 +1336,8 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
 - Tests: `plugins_manifest_test.go` (vectors, hash, scan), `plugins_test.go` (routes, roles,
   races on a mock), `plugins_sync_test.go` (sync decisions on an in-memory table),
   `plugins_db_test.go` (the acceptance list against the real database). The scan is global, so
-  DB tests use unique slugs and keep plugin tests out of `db/sqlc` (a parallel package's scan
-  would mark its rows missing).
+  DB tests sync through `syncPlugins` with every row that isn't theirs kept present (the local
+  test database may be the dev stack's), and plugin tests stay out of `db/sqlc`.
 
 ## Gotchas
 

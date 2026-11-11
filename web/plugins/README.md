@@ -45,7 +45,7 @@ web/plugins/<slug>/
 | `name` | Required, not blank, at most 100 characters. |
 | `version` | Required, a semantic version (`1.2.0`, `2.0.0-beta.1`). |
 | `author`, `description` | Optional strings, at most 100 and 1000 characters. |
-| `plugin_api` | Required integer: the extension contract the plugin was written against. Outside core's range (today `1` to `1`) the plugin is listed as `incompatible` and can't be enabled. |
+| `plugin_api` | Required integer (1 to 1000000): the extension contract the plugin was written against. Outside core's range (today `1` to `1`) the plugin is listed as `incompatible` and can't be enabled. |
 | `capabilities` | Optional, distinct values of `posts:read`, `media:read`, `users:read`, `network`. Declared and shown, not enforced in Beta. |
 | `blocks` | Optional, up to 50 distinct directory names under `blocks/` (`^[A-Z][A-Za-z0-9]{0,63}$`). |
 | `settings` | Optional, up to 50 fields keyed `^[a-z][a-z0-9_]{0,63}$`. Each has `type` (`string`, `number`, `boolean`) and may have `default`, `label`, `description`; strings `enum`, `maxLength`, `secret`; numbers `enum`, `integer`, `minimum`, `maximum`. A `default` must satisfy the field's own rules. |

@@ -102,10 +102,14 @@ func (server *Server) respondPluginRaced(c *gin.Context, slug string, enabling b
 func respondPluginNotEnableable(c *gin.Context, plugin db.Plugin) {
 	rsp := gin.H{"plugin": toPluginResponse(plugin, false)}
 	switch plugin.Status {
+	case PluginStatusInstalled:
+		// Only after a lost race: it was enabled and disabled again meanwhile.
+		rsp["error"] = "the plugin changed meanwhile; try again"
+		rsp["code"] = "plugin_changed"
 	case PluginStatusMissing:
 		rsp["error"] = "the plugin is not in this build"
 		rsp["code"] = "plugin_missing"
-	default:
+	case PluginStatusIncompatible:
 		rsp["error"] = "the plugin is not compatible with this version of GoLive"
 		rsp["code"] = "plugin_incompatible"
 	}

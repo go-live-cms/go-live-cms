@@ -98,7 +98,7 @@ const (
 	// disables one (payload: version); the startup scan, as the system (no actor),
 	// records the rest: installed (version, status; restored: true when a missing
 	// plugin came back), updated (previous_version, version, previous_status, status,
-	// reason "invalid_manifest" when plugin.json stopped validating) and missing
+	// reason "invalid_manifest", without previous_version, when plugin.json stopped validating) and missing
 	// (version).
 	ActivityPluginEnabled   = "plugin_enabled"
 	ActivityPluginDisabled  = "plugin_disabled"

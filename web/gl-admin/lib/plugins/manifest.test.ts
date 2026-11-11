@@ -48,8 +48,8 @@ describe("plugin manifest vectors (shared with api/plugins_manifest.go)", () => 
 describe("plugin_api range", () => {
   it("matches the Go constants", () => {
     const go = fs.readFileSync(path.resolve("../api/plugins_manifest.go"), "utf8")
-    expect(go).toMatch(new RegExp(`PluginAPIMin = ${PLUGIN_API.min}\\b`))
-    expect(go).toMatch(new RegExp(`PluginAPIMax = ${PLUGIN_API.max}\\b`))
+    expect(go).toMatch(new RegExp(`PluginAPIMin\\s*=\\s*${PLUGIN_API.min}\\b`))
+    expect(go).toMatch(new RegExp(`PluginAPIMax\\s*=\\s*${PLUGIN_API.max}\\b`))
   })
 
   it("is compatible inside the range only", () => {

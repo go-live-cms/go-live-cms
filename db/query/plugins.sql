@@ -67,7 +67,7 @@ SET status = 'incompatible',
 FROM prev
 WHERE p.id = prev.id
   AND (p.status <> 'incompatible' OR p.content_hash <> @content_hash)
-RETURNING p.id, p.slug, p.version, p.status, prev.version AS previous_version, prev.status AS previous_status;
+RETURNING p.id, p.slug, p.version, p.status, prev.status AS previous_status;
 
 -- name: MarkMissingPlugins :many
 -- Every plugin whose directory is gone from the build. Never a delete: the row keeps

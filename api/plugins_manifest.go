@@ -101,6 +101,8 @@ const (
 	pluginHooksMax         = 16
 	pluginHookTimeoutMax   = 30000
 	pluginGuardPriorityMax = 1000
+	// pluginAPIMax bounds plugin_api so it always fits an int (and core's range is far below it).
+	pluginAPIMax = 1000000
 )
 
 // PluginManifest is a validated plugin.json.
@@ -244,8 +246,8 @@ func validatePluginManifestValue(value any, dir string) *PluginManifestError {
 
 	if api, present := manifest["plugin_api"]; !present {
 		return manifestProblem("plugin_api", "is required")
-	} else if n, ok := api.(float64); !ok || !isInteger(n) || n < 1 {
-		return manifestProblem("plugin_api", "must be an integer >= 1")
+	} else if n, ok := api.(float64); !ok || !isInteger(n) || n < 1 || n > pluginAPIMax {
+		return manifestProblem("plugin_api", "must be an integer from 1 to %d", pluginAPIMax)
 	}
 
 	if problem := validatePluginCapabilities(manifest["capabilities"]); problem != nil {

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -21,18 +22,34 @@ import (
 // issue's acceptance list, through the scan and the real router.
 //
 // The scan is global by design (a plugin not in the directory is marked missing), so
-// each run marks the fixtures of earlier runs missing. That's harmless, and every
-// assertion here is about this run's own unique slugs.
+// these tests sync through syncPlugins with every row that isn't theirs kept present:
+// the database is shared, and locally it may be the dev stack's.
 
 func pluginDBSlug(prefix string) string {
 	return prefix + "-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:12]
 }
 
-func syncPluginsFrom(t *testing.T, server *Server, root string) {
+// syncPluginsFrom scans root and syncs it, treating every plugin row that isn't one of
+// own as present, so a shared (or local dev) database's other plugins are never marked
+// missing by a test. own are this test's slugs, whose removal must be seen.
+func syncPluginsFrom(t *testing.T, server *Server, root string, own ...string) {
 	t.Helper()
 	plugins, err := ScanPluginsDirectory(root)
 	require.NoError(t, err)
-	require.NoError(t, server.SyncPluginsToDatabase(context.Background(), plugins))
+	require.NoError(t, server.syncPlugins(context.Background(), plugins, othersPresent(t, server, own)))
+}
+
+func othersPresent(t *testing.T, server *Server, own []string) []string {
+	t.Helper()
+	rows, err := server.store.ListPlugins(context.Background())
+	require.NoError(t, err)
+	others := []string{}
+	for _, row := range rows {
+		if !slices.Contains(own, row.Slug) {
+			others = append(others, row.Slug)
+		}
+	}
+	return others
 }
 
 func listedPlugin(t *testing.T, server *Server, admin db.User, slug string) (PluginResponse, bool) {
@@ -77,7 +94,7 @@ func TestPluginRegistryFlow(t *testing.T) {
 	writePlugin(t, root, future, pluginJSON(future, "1.0.0", PluginAPIMax+1, ""), nil)
 
 	// A valid plugin directory appears in GET /plugins after a restart, disabled.
-	syncPluginsFrom(t, server, root)
+	syncPluginsFrom(t, server, root, good, future)
 	listed, ok := listedPlugin(t, server, admin, good)
 	require.True(t, ok)
 	require.Equal(t, PluginStatusInstalled, listed.Status)
@@ -124,7 +141,7 @@ func TestPluginRegistryFlow(t *testing.T) {
 	goodDir := filepath.Join(root, good)
 	parked := filepath.Join(t.TempDir(), good)
 	require.NoError(t, os.Rename(goodDir, parked))
-	syncPluginsFrom(t, server, root)
+	syncPluginsFrom(t, server, root, good, future)
 	row, err = store.GetPluginBySlug(ctx, good)
 	require.NoError(t, err)
 	require.Equal(t, PluginStatusMissing, row.Status)
@@ -140,7 +157,7 @@ func TestPluginRegistryFlow(t *testing.T) {
 
 	// Putting it back restores it as it was.
 	require.NoError(t, os.Rename(parked, goodDir))
-	syncPluginsFrom(t, server, root)
+	syncPluginsFrom(t, server, root, good, future)
 	row, err = store.GetPluginBySlug(ctx, good)
 	require.NoError(t, err)
 	require.Equal(t, PluginStatusInstalled, row.Status)
@@ -151,13 +168,14 @@ func TestPluginRegistryFlow(t *testing.T) {
 	writePlugin(t, root, good, pluginJSON(good, "1.1.0", 1, ""), nil)
 	plugins, err := ScanPluginsDirectory(root)
 	require.NoError(t, err)
+	others := othersPresent(t, server, []string{good, future})
 	var wg sync.WaitGroup
 	errs := make(chan error, 4)
 	for range 4 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			errs <- server.SyncPluginsToDatabase(ctx, plugins)
+			errs <- server.syncPlugins(ctx, plugins, others)
 		}()
 	}
 	wg.Wait()
@@ -237,11 +255,11 @@ func TestPluginInvalidManifestDB(t *testing.T) {
 	root := t.TempDir()
 	slug := pluginDBSlug("brittle")
 	writePlugin(t, root, slug, pluginJSON(slug, "1.0.0", 1, ""), nil)
-	syncPluginsFrom(t, server, root)
+	syncPluginsFrom(t, server, root, slug)
 
 	writePlugin(t, root, slug, `{"manifest_version": 1, "id": "`+slug+`"}`, nil)
-	syncPluginsFrom(t, server, root)
-	syncPluginsFrom(t, server, root)
+	syncPluginsFrom(t, server, root, slug)
+	syncPluginsFrom(t, server, root, slug)
 	row, err := store.GetPluginBySlug(ctx, slug)
 	require.NoError(t, err)
 	require.Equal(t, PluginStatusIncompatible, row.Status)
@@ -252,7 +270,7 @@ func TestPluginInvalidManifestDB(t *testing.T) {
 	requireStatus(t, as(t, server, admin, http.MethodPost, "/api/v1/plugins/"+slug+"/enable", nil), http.StatusConflict)
 
 	writePlugin(t, root, slug, pluginJSON(slug, "1.0.1", 1, ""), nil)
-	syncPluginsFrom(t, server, root)
+	syncPluginsFrom(t, server, root, slug)
 	row, err = store.GetPluginBySlug(ctx, slug)
 	require.NoError(t, err)
 	require.Equal(t, PluginStatusInstalled, row.Status)

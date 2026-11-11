@@ -70,8 +70,7 @@ func (s *memoryPluginStore) MarkPluginInvalid(_ context.Context, arg db.MarkPlug
 	}
 	prevStatus := row.Status
 	row.Status, row.ContentHash = PluginStatusIncompatible, arg.ContentHash
-	return db.MarkPluginInvalidRow{ID: row.ID, Slug: row.Slug, Version: row.Version, Status: row.Status,
-		PreviousVersion: row.Version, PreviousStatus: prevStatus}, nil
+	return db.MarkPluginInvalidRow{ID: row.ID, Slug: row.Slug, Version: row.Version, Status: row.Status, PreviousStatus: prevStatus}, nil
 }
 
 func (s *memoryPluginStore) MarkMissingPlugins(_ context.Context, present []string) ([]db.Plugin, error) {
@@ -195,7 +194,7 @@ func TestSyncPluginsToDatabase(t *testing.T) {
 	require.Equal(t, "1.2.0", store.rows["alpha"].Version)
 	require.NotContains(t, store.rows, "never-valid")
 	require.Equal(t, []syncEvent{{Verb: db.ActivityPluginUpdated, Object: store.rows["alpha"].ID, Payload: map[string]any{
-		"previous_version": "1.2.0", "version": "1.2.0", "previous_status": "installed", "status": "incompatible", "reason": "invalid_manifest",
+		"version": "1.2.0", "previous_status": "installed", "status": "incompatible", "reason": "invalid_manifest",
 	}}}, takeEvents(t, server))
 	require.NoError(t, server.SyncPluginsToDatabase(ctx, scan))
 	require.Empty(t, takeEvents(t, server), "an unchanged invalid plugin is recorded once")

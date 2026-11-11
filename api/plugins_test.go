@@ -247,6 +247,19 @@ func TestEnablePlugin(t *testing.T) {
 		require.Empty(t, activityOf(t, server).verbs())
 	})
 
+	t.Run("enabled and disabled again meanwhile: 409 plugin_changed", func(t *testing.T) {
+		store := mockdb.NewMockStore(gomock.NewController(t))
+		server := newTestServer(t, store)
+		gomock.InOrder(
+			store.EXPECT().GetPluginBySlug(gomock.Any(), "alpha").Return(fixturePlugin("alpha", PluginStatusInstalled, false), nil),
+			store.EXPECT().EnablePlugin(gomock.Any(), gomock.Any()).Return(db.Plugin{}, sql.ErrNoRows),
+			store.EXPECT().GetPluginBySlug(gomock.Any(), "alpha").Return(fixturePlugin("alpha", PluginStatusInstalled, false), nil),
+		)
+		recorder := pluginRequest(t, server, store, &pluginAdmin, http.MethodPost, path)
+		requireStatus(t, recorder, http.StatusConflict)
+		require.Contains(t, recorder.Body.String(), `"code":"plugin_changed"`)
+	})
+
 	t.Run("enabled by someone else meanwhile: 200, recorded by them", func(t *testing.T) {
 		store := mockdb.NewMockStore(gomock.NewController(t))
 		server := newTestServer(t, store)

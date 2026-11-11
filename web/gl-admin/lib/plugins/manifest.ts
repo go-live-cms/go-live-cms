@@ -52,6 +52,7 @@ const LIMITS = {
   hooks: 16,
   hookTimeout: 30000,
   guardPriority: 1000,
+  pluginApi: 1000000,
 }
 
 export type PluginSettingType = "string" | "number" | "boolean"
@@ -158,8 +159,8 @@ function manifestProblem(value: unknown, dir: string): Problem | null {
 
   if (!has(value, "plugin_api")) return problem("plugin_api", "is required")
   const api = value.plugin_api
-  if (typeof api !== "number" || !Number.isInteger(api) || api < 1) {
-    return problem("plugin_api", "must be an integer >= 1")
+  if (typeof api !== "number" || !Number.isInteger(api) || api < 1 || api > LIMITS.pluginApi) {
+    return problem("plugin_api", `must be an integer from 1 to ${LIMITS.pluginApi}`)
   }
 
   return (
