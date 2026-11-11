@@ -229,6 +229,18 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 				server.logger.Warn("failed to sync themes", "error", err)
 			}
 		}
+
+		// Plugins (#455): registered like themes, but never deleted (themes_scanner.go).
+		// Without the directory nothing is synced, so nothing is marked missing.
+		discoveredPlugins, err := ScanPluginsDirectory(filepath.FromSlash(pluginsPath))
+		if err != nil {
+			server.logger.Warn("failed to scan plugins directory", "path", pluginsPath, "error", err)
+		} else {
+			server.logger.Info("scanned plugins directory", "path", pluginsPath, "plugins", len(discoveredPlugins))
+			if err := server.SyncPluginsToDatabase(server.ctx, discoveredPlugins); err != nil {
+				server.logger.Warn("failed to sync plugins", "error", err)
+			}
+		}
 	}
 
 	if shouldSeedDevData(config) {
@@ -451,6 +463,7 @@ func (server *Server) setupRoutes() error {
 
 	// Theme module routes (see themes_routes.go for complete definitions)
 	server.registerThemeRoutes(v1)
+	server.registerPluginRoutes(v1)
 
 	// Navigation menus (see menus_routes.go)
 	server.registerMenuRoutes(v1)

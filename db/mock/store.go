@@ -1872,6 +1872,21 @@ func (mr *MockStoreMockRecorder) DeleteUserSessions(arg0, arg1 interface{}) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteUserSessions", reflect.TypeOf((*MockStore)(nil).DeleteUserSessions), arg0, arg1)
 }
 
+// DisablePlugin mocks base method.
+func (m *MockStore) DisablePlugin(arg0 context.Context, arg1 string) (db.Plugin, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DisablePlugin", arg0, arg1)
+	ret0, _ := ret[0].(db.Plugin)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DisablePlugin indicates an expected call of DisablePlugin.
+func (mr *MockStoreMockRecorder) DisablePlugin(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DisablePlugin", reflect.TypeOf((*MockStore)(nil).DisablePlugin), arg0, arg1)
+}
+
 // DuplicatePostTx mocks base method.
 func (m *MockStore) DuplicatePostTx(arg0 context.Context, arg1 db.DuplicatePostTxParams) (db.Post, error) {
 	m.ctrl.T.Helper()
@@ -1885,6 +1900,21 @@ func (m *MockStore) DuplicatePostTx(arg0 context.Context, arg1 db.DuplicatePostT
 func (mr *MockStoreMockRecorder) DuplicatePostTx(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DuplicatePostTx", reflect.TypeOf((*MockStore)(nil).DuplicatePostTx), arg0, arg1)
+}
+
+// EnablePlugin mocks base method.
+func (m *MockStore) EnablePlugin(arg0 context.Context, arg1 db.EnablePluginParams) (db.Plugin, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "EnablePlugin", arg0, arg1)
+	ret0, _ := ret[0].(db.Plugin)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// EnablePlugin indicates an expected call of EnablePlugin.
+func (mr *MockStoreMockRecorder) EnablePlugin(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnablePlugin", reflect.TypeOf((*MockStore)(nil).EnablePlugin), arg0, arg1)
 }
 
 // EnsureDefaultCategory mocks base method.
@@ -2199,6 +2229,21 @@ func (m *MockStore) GetNextVersionNoForPost(arg0 context.Context, arg1 int64) (i
 func (mr *MockStoreMockRecorder) GetNextVersionNoForPost(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNextVersionNoForPost", reflect.TypeOf((*MockStore)(nil).GetNextVersionNoForPost), arg0, arg1)
+}
+
+// GetPluginBySlug mocks base method.
+func (m *MockStore) GetPluginBySlug(arg0 context.Context, arg1 string) (db.Plugin, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPluginBySlug", arg0, arg1)
+	ret0, _ := ret[0].(db.Plugin)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPluginBySlug indicates an expected call of GetPluginBySlug.
+func (mr *MockStoreMockRecorder) GetPluginBySlug(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPluginBySlug", reflect.TypeOf((*MockStore)(nil).GetPluginBySlug), arg0, arg1)
 }
 
 // GetPopularMedia mocks base method.
@@ -3175,6 +3220,21 @@ func (mr *MockStoreMockRecorder) GrantPostCollaborator(arg0, arg1 interface{}) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GrantPostCollaborator", reflect.TypeOf((*MockStore)(nil).GrantPostCollaborator), arg0, arg1)
 }
 
+// InsertDiscoveredPlugin mocks base method.
+func (m *MockStore) InsertDiscoveredPlugin(arg0 context.Context, arg1 db.InsertDiscoveredPluginParams) (db.Plugin, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InsertDiscoveredPlugin", arg0, arg1)
+	ret0, _ := ret[0].(db.Plugin)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// InsertDiscoveredPlugin indicates an expected call of InsertDiscoveredPlugin.
+func (mr *MockStoreMockRecorder) InsertDiscoveredPlugin(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InsertDiscoveredPlugin", reflect.TypeOf((*MockStore)(nil).InsertDiscoveredPlugin), arg0, arg1)
+}
+
 // InsertPostByline mocks base method.
 func (m *MockStore) InsertPostByline(arg0 context.Context, arg1 db.InsertPostBylineParams) error {
 	m.ctrl.T.Helper()
@@ -3471,6 +3531,21 @@ func (mr *MockStoreMockRecorder) ListCreditedAuthors(arg0, arg1 interface{}) *go
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListCreditedAuthors", reflect.TypeOf((*MockStore)(nil).ListCreditedAuthors), arg0, arg1)
 }
 
+// ListEnabledPluginSlugs mocks base method.
+func (m *MockStore) ListEnabledPluginSlugs(arg0 context.Context) ([]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListEnabledPluginSlugs", arg0)
+	ret0, _ := ret[0].([]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListEnabledPluginSlugs indicates an expected call of ListEnabledPluginSlugs.
+func (mr *MockStoreMockRecorder) ListEnabledPluginSlugs(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListEnabledPluginSlugs", reflect.TypeOf((*MockStore)(nil).ListEnabledPluginSlugs), arg0)
+}
+
 // ListExtensionSettingsByExtension mocks base method.
 func (m *MockStore) ListExtensionSettingsByExtension(arg0 context.Context, arg1 db.ListExtensionSettingsByExtensionParams) ([]db.ExtensionSetting, error) {
 	m.ctrl.T.Helper()
@@ -3694,6 +3769,21 @@ func (m *MockStore) ListPendingPostAccessRequests(arg0 context.Context, arg1 int
 func (mr *MockStoreMockRecorder) ListPendingPostAccessRequests(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPendingPostAccessRequests", reflect.TypeOf((*MockStore)(nil).ListPendingPostAccessRequests), arg0, arg1)
+}
+
+// ListPlugins mocks base method.
+func (m *MockStore) ListPlugins(arg0 context.Context) ([]db.Plugin, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListPlugins", arg0)
+	ret0, _ := ret[0].([]db.Plugin)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListPlugins indicates an expected call of ListPlugins.
+func (mr *MockStoreMockRecorder) ListPlugins(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPlugins", reflect.TypeOf((*MockStore)(nil).ListPlugins), arg0)
 }
 
 // ListPostAuthorProfiles mocks base method.
@@ -4455,6 +4545,36 @@ func (m *MockStore) MarkMentionsEmailed(arg0 context.Context, arg1 db.MarkMentio
 func (mr *MockStoreMockRecorder) MarkMentionsEmailed(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MarkMentionsEmailed", reflect.TypeOf((*MockStore)(nil).MarkMentionsEmailed), arg0, arg1)
+}
+
+// MarkMissingPlugins mocks base method.
+func (m *MockStore) MarkMissingPlugins(arg0 context.Context, arg1 []string) ([]db.Plugin, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MarkMissingPlugins", arg0, arg1)
+	ret0, _ := ret[0].([]db.Plugin)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// MarkMissingPlugins indicates an expected call of MarkMissingPlugins.
+func (mr *MockStoreMockRecorder) MarkMissingPlugins(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MarkMissingPlugins", reflect.TypeOf((*MockStore)(nil).MarkMissingPlugins), arg0, arg1)
+}
+
+// MarkPluginInvalid mocks base method.
+func (m *MockStore) MarkPluginInvalid(arg0 context.Context, arg1 db.MarkPluginInvalidParams) (db.MarkPluginInvalidRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MarkPluginInvalid", arg0, arg1)
+	ret0, _ := ret[0].(db.MarkPluginInvalidRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// MarkPluginInvalid indicates an expected call of MarkPluginInvalid.
+func (mr *MockStoreMockRecorder) MarkPluginInvalid(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MarkPluginInvalid", reflect.TypeOf((*MockStore)(nil).MarkPluginInvalid), arg0, arg1)
 }
 
 // MergeTaxonomyTermsTx mocks base method.
@@ -5662,6 +5782,21 @@ func (m *MockStore) UnresolvePostCommentThread(arg0 context.Context, arg1 int64)
 func (mr *MockStoreMockRecorder) UnresolvePostCommentThread(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnresolvePostCommentThread", reflect.TypeOf((*MockStore)(nil).UnresolvePostCommentThread), arg0, arg1)
+}
+
+// UpdateDiscoveredPlugin mocks base method.
+func (m *MockStore) UpdateDiscoveredPlugin(arg0 context.Context, arg1 db.UpdateDiscoveredPluginParams) (db.UpdateDiscoveredPluginRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateDiscoveredPlugin", arg0, arg1)
+	ret0, _ := ret[0].(db.UpdateDiscoveredPluginRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdateDiscoveredPlugin indicates an expected call of UpdateDiscoveredPlugin.
+func (mr *MockStoreMockRecorder) UpdateDiscoveredPlugin(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateDiscoveredPlugin", reflect.TypeOf((*MockStore)(nil).UpdateDiscoveredPlugin), arg0, arg1)
 }
 
 // UpdateMedia mocks base method.

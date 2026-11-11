@@ -94,6 +94,23 @@ type PasswordResetToken struct {
 	CreatedAt time.Time    `json:"created_at"`
 }
 
+type Plugin struct {
+	ID          int64           `json:"id"`
+	Slug        string          `json:"slug"`
+	Name        string          `json:"name"`
+	Version     string          `json:"version"`
+	Author      string          `json:"author"`
+	Description string          `json:"description"`
+	Manifest    json.RawMessage `json:"manifest"`
+	ContentHash string          `json:"content_hash"`
+	Status      string          `json:"status"`
+	Enabled     bool            `json:"enabled"`
+	EnabledAt   sql.NullTime    `json:"enabled_at"`
+	EnabledBy   sql.NullInt64   `json:"enabled_by"`
+	InstalledAt time.Time       `json:"installed_at"`
+	ChangedAt   time.Time       `json:"changed_at"`
+}
+
 type Post struct {
 	ID                   int64                 `json:"id"`
 	Title                string                `json:"title"`
