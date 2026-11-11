@@ -173,7 +173,10 @@ function reseedFromState(scratch: Y.Doc, record: CollabRecord, schema: Schema): 
   // version a fallback copied is block_doc's already, so taking it again changes nothing.)
   const blockDoc = withExtensionBlockShape(derived, new Set(Object.keys(dropped?.blocks ?? {})), previous, schema)
   if (missing) return blockDoc
-  return seedPlan(blockDoc, schema).dropped.entries.length < (dropped as DroppedBlocks).entries.length ? blockDoc : null
+  // Against the dropped blocks the doc still has: one whose container was deleted since
+  // isn't merged back (restoreDroppedBlocks), and counting it would reseed for nothing.
+  const stillThere = (dropped as DroppedBlocks).entries.filter((entry) => blockDoc.blocks[entry.id]).length
+  return seedPlan(blockDoc, schema).dropped.entries.length < stillThere ? blockDoc : null
 }
 
 const isMissingExtension = (type: unknown, schema: Schema): boolean =>

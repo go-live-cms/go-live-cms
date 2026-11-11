@@ -205,6 +205,51 @@ describe("a stored state with a removed extension's block (#453)", () => {
     expect(derived.blocks[NEW]).toEqual(readMeta(doc).dropped!.blocks[NEW])
   })
 
+  it("inside a list item: the item is hidden whole, the list stays, and a reinstall puts it back", () => {
+    const LIST = "blk-0453-list-0000001"
+    const ITEM_A = "blk-0453-item-a000001"
+    const ITEM_B = "blk-0453-item-b000001"
+    const pm = installed.nodeFromJSON({
+      type: "doc",
+      content: [
+        {
+          type: "bulletList",
+          attrs: { "data-block-id": LIST },
+          content: [
+            { type: "listItem", attrs: { "data-block-id": ITEM_A }, content: [{ type: "paragraph", content: text("Plain") }] },
+            { type: "listItem", attrs: { "data-block-id": ITEM_B }, content: [{ type: "paragraph", content: text("With") }, alertNode(null, "info", "Listed")] },
+          ],
+        },
+      ],
+    })
+    pm.check()
+    const blockDoc = pmToBlockDoc(pm)
+    const first = loadAndStore({ block_doc: blockDoc, block_revision: 4, ydoc_state: null, epoch: null }, installed)
+    const record = { ...first.next, block_doc: blockDoc }
+
+    const removal = loadAndStore(record, removed)
+    expect(removal.outcome).toMatchObject({ kind: "seeded", reason: "uninstalled-blocks", dropped: 1 })
+    expect(readMeta(removal.doc).dropped!.entries).toEqual([{ id: ITEM_B, parentId: LIST, afterId: ITEM_A }])
+    expect(elementNames(removal.doc)).not.toContain(ALERT_TYPE)
+    expect(findUnbuildableTypes(removal.doc.getXmlFragment(EDITOR_FRAGMENT), removed)).toBeNull()
+    expect(removal.next.block_doc!.blocks[ITEM_B]).toEqual(blockDoc.blocks[ITEM_B])
+    expect(loadAndStore(removal.next, removed).outcome).toMatchObject({ kind: "restored" })
+
+    const back = loadAndStore(removal.next, installed)
+    expect(back.outcome).toMatchObject({ kind: "seeded", reason: "uninstalled-blocks", dropped: 0 })
+    expect(fragmentToBlockDoc(back.doc.getXmlFragment(EDITOR_FRAGMENT), installed)).toEqual(blockDoc)
+  })
+
+  it("if the check throws, the state is applied as it was (never worse than before)", () => {
+    const record = storedInstalled()
+    // block_doc is only read when a reseed is needed; a malformed one makes the check throw.
+    const malformed = { ...record, block_doc: { blocks_order: "nope" } as unknown as BlockDocV1 }
+    const { doc, outcome } = loadAndStore(malformed, removed)
+    expect(outcome).toMatchObject({ kind: "restored", epoch: record.epoch })
+    expect((outcome as { reseedError?: string }).reseedError).toBeTruthy()
+    expect(elementNames(doc).filter((name) => name === ALERT_TYPE)).toHaveLength(3)
+  })
+
   it("a plugin: block (#452's namespace) is reseeded out the same way", () => {
     const PLUGIN = "plugin:reading-time/estimate"
     const NOTE = "blk-0453-plugin-000001"
@@ -256,6 +301,35 @@ describe("a block dropped for another reason doesn't reseed (#453)", () => {
     expect(readMeta(first.doc).dropped!.blocks[NEWER].type).toBe(ALERT_TYPE)
 
     expect(loadAndStore(first.next, installed).outcome).toEqual({ kind: "restored", epoch: first.outcome.epoch })
+  })
+
+  it("a dropped block whose container was deleted since doesn't count as one that came back", () => {
+    const NEWER = "blk-0453-newer-000002"
+    const BOX = "blk-0453-box-00000001"
+    const BAD = "blk-0453-badcode-0002"
+    const KEEP = "blk-0453-keep-0000001"
+    const blockDoc: BlockDocV1 = {
+      doc_version: 1,
+      blocks_order: [ID.intro, NEWER, BOX],
+      blocks: {
+        [ID.intro]: { id: ID.intro, type: "paragraph", version: 1, attrs: { text: "Intro" } },
+        [NEWER]: { id: NEWER, type: ALERT_TYPE, version: 99, attrs: { variant: "info", text: "From the future" } },
+        [BOX]: { id: BOX, type: "group", version: 1, attrs: {}, children: [KEEP, BAD] },
+        [KEEP]: { id: KEEP, type: "paragraph", version: 1, attrs: { text: "Kept" } },
+        [BAD]: { id: BAD, type: "code_block", version: 1, attrs: { code: "" } },
+      } as BlockDocV1["blocks"],
+    }
+    const first = loadAndStore({ block_doc: blockDoc, block_revision: 4, ydoc_state: null, epoch: null }, installed)
+    expect(first.outcome).toMatchObject({ kind: "seeded", dropped: 2 })
+    // Someone deletes the group: its dropped child is gone with it.
+    const deleted = loadAndStore(first.next, installed, (doc) => {
+      const fragment = doc.getXmlFragment(EDITOR_FRAGMENT)
+      const at = fragment.toArray().findIndex((child) => (child as Y.XmlElement).nodeName === "group")
+      doc.transact(() => fragment.delete(at, 1))
+    })
+    expect(deleted.next.block_doc!.blocks_order).toEqual([ID.intro, NEWER])
+
+    expect(loadAndStore(deleted.next, installed).outcome).toEqual({ kind: "restored", epoch: first.outcome.epoch })
   })
 
   it("a stored state with only core blocks is applied as is", () => {
