@@ -75,7 +75,7 @@ None of these is a plugin bug yet. Each becomes one the moment a plugin exists.
 
 | # | Problem | Where | Consequence |
 |---|---|---|---|
-| 1 | A post with **stored Yjs state** containing a block of a removed extension loads that state as is. The editor's gate can't build the node, so the **whole post** opens read-only. | `loadIntoDoc` (`usableState` → `Y.applyUpdate`), `findUnbuildableTypes`, `Editor.tsx` | `themes/README.md` says the block is hidden and the rest stays editable. That is only true on a **seed**, meaning a post with no usable state. Section 4.4. |
+| 1 | A post with **stored Yjs state** containing a block of a removed extension loads that state as is. The editor's gate can't build the node, so the **whole post** opens read-only. | `loadIntoDoc` (`usableState` → `Y.applyUpdate`), `findUnbuildableTypes`, `Editor.tsx` | `themes/README.md` says the block is hidden and the rest stays editable. That is only true on a **seed**, meaning a post with no usable state. Section 4.4. **Fixed by #453.** |
 | 2 | **`GET /extension-settings` and `/:key` are public** and return every type. `route_auth_test.go` allows it because the public theme reads them. | `settings_routes.go`, `listExtensionSettings` | A plugin's API key stored there would be world-readable. Section 6. |
 | 3 | `ThemeSettingsImpl` doesn't round-trip: `set` writes the bare `key`, `get` and `delete` read `<slug>:<key>`, and `getAll` expects an array where the API answers `{extension_settings, count}`. | `web/src/lib/theme-settings.ts` | A theme's stored setting is never read back, and two themes' same key collide on the primary key. Don't copy this code for plugins. Section 6. |
 

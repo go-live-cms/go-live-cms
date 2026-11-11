@@ -10,6 +10,7 @@ import {
   type DroppedBlock,
 } from "./blockBridge"
 import { schemaWithStandIns } from "./schema"
+import { isExtensionBlockType } from "../blocks-spec/themeBlocks"
 
 /**
  * Block Spec v1 ⇄ the editor's Yjs XmlFragment, without an editor. This is what the
@@ -40,22 +41,37 @@ export const pmRoots = (doc: BlockDocV1): unknown[] =>
     .filter(Boolean)
 
 /**
- * Write `doc` into an EMPTY fragment. Blocks that can't become a valid node are left
- * out and returned (#213), never thrown for the whole doc. Theme blocks are kept (see
- * schemaWithStandIns). Seeding a fragment that already has content would duplicate it.
+ * What seeding `doc` would write, without writing it: the ProseMirror doc and the blocks
+ * it leaves out. The collab server's reseed check (#453) dry-runs it.
+ *
+ * Unknown pre-#376 custom types get stand-ins (schemaWithStandIns), so they are kept in
+ * the fragment. Namespaced types (`theme:`, `plugin:`) never do (#453): an installed one
+ * has its real node, and an uninstalled one must not reach the fragment, where the editor
+ * couldn't bind (rule 10). Its block is dropped and kept; so is a quote or list item whose
+ * `pm` holds one, as a whole, until the extension is back.
  */
-export function seedFragment(doc: BlockDocV1, fragment: Y.XmlFragment, base: Schema): DroppedBlocks {
-  if (fragment.length > 0) throw new Error("seedFragment: the fragment is not empty")
-  const schema = schemaWithStandIns(base, pmRoots(doc))
+export function seedPlan(doc: BlockDocV1, base: Schema): { node: PMNode; dropped: DroppedBlocks } {
+  const schema = schemaWithStandIns(base, pmRoots(doc), isExtensionBlockType)
   const { node, dropped } = blockDocToPMWithReport(doc, schema)
-  prosemirrorToYXmlFragment(node, fragment)
   const blocks: Record<BlockID, Block> = {}
   for (const { id } of dropped) {
     walkBlockTree(doc, id, (block) => {
       blocks[block.id] = block
     })
   }
-  return { entries: dropped, blocks }
+  return { node, dropped: { entries: dropped, blocks } }
+}
+
+/**
+ * Write `doc` into an EMPTY fragment. Blocks that can't become a valid node are left
+ * out and returned (#213), never thrown for the whole doc (see seedPlan). Seeding a
+ * fragment that already has content would duplicate it.
+ */
+export function seedFragment(doc: BlockDocV1, fragment: Y.XmlFragment, base: Schema): DroppedBlocks {
+  if (fragment.length > 0) throw new Error("seedFragment: the fragment is not empty")
+  const { node, dropped } = seedPlan(doc, base)
+  prosemirrorToYXmlFragment(node, fragment)
+  return dropped
 }
 
 /** A node of the live doc that `fragmentToBlockDoc` couldn't convert: a top-level one, or a container's child. */

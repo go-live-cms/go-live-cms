@@ -80,7 +80,7 @@ every server boot — **read process logs from the very top**.
   behaviour.
 - `blockBridge.ts`: `pmToBlockDoc` / `blockDocToPM(WithReport)` / `setEditorBlockDoc`.
   Pure conversion (notes below).
-- `fragmentBridge.ts`: `seedFragment` / `fragmentToBlockDoc`: Block Spec v1 ⇄ the
+- `fragmentBridge.ts`: `seedFragment` (and `seedPlan`, its dry run, #453) / `fragmentToBlockDoc`: Block Spec v1 ⇄ the
   `"default"` XmlFragment with no editor, for the server. Same bridge, same schema, plus
   stand-ins so unknown nodes survive. Seeding returns `DroppedBlocks` (entries **and**
   their block trees); the server keeps that record in `meta.dropped` and passes it to
@@ -824,6 +824,30 @@ is a real block type for the editor, the collab server, the API and the public p
   `blockBridge.pluginBlocks.test.ts`, `blocks-spec/extensionBlocks.test.ts`,
   `collab-server/pluginBlocks.test.ts`, `BlockRenderer.pluginBlocks.test.tsx`, Go
   `TestPluginBlocks`.
+- **Stored state with an uninstalled block (#453, design `docs/design/plugin-system.md`
+  4.4).** The rule above used to hold only on a seed: a post with usable stored state loaded
+  the uninstalled node as is, so rule 10's gate opened the whole post read-only.
+  `loadIntoDoc` (`collab-server/load.ts`, still the only place that seeds, rule 11) now
+  applies the state to a **scratch** `Y.Doc` first and reseeds when (a) the fragment holds a
+  namespaced node (`isExtensionBlockType`: `theme:` or `plugin:`) the schema lacks, at any
+  depth, or (b) `meta.dropped` holds a namespaced block (or a block whose `pm` holds one) the
+  schema now has, and a dry-run seed (`seedPlan`) drops fewer blocks than `meta.dropped`
+  has. Otherwise the state goes into the real doc as before. The reseed derives the doc
+  **from the state** (`fragmentToBlockDoc` with `meta.dropped`, after the store's repairs
+  and stamping), not from `block_doc`; a block of a missing extension read through a stand-in
+  takes its `block_doc` version by id, else has its attrs lifted out of `pm` (the installed
+  shape). It seeds under a **new epoch** (rule 12), outcome `seeded`, reason
+  `uninstalled-blocks`, and the seed is PUT at once, so it happens once per removal and once
+  per reinstall. The dry run keeps a block dropped for another reason (bad content, a newer
+  version) from reseeding on every load. **`seedPlan`/`seedFragment` make no stand-in for a
+  namespaced type** (`schemaWithStandIns`' `skipNode`): one inside a quote's or list item's
+  `pm` would reach the fragment and the editor still couldn't bind, so that parent is hidden
+  and kept whole (#213) until a reinstall. `fragmentToBlockDoc` keeps its stand-ins: it needs
+  them to read such a state. If the check throws, the state is applied as before and
+  `collab_reseed_check_failed` is logged. Tests: `collab-server/reseed.test.ts` (top level,
+  Group, quote, `plugin:`, the lift, other drops), `lib/theme-blocks/uninstalledBlocks.collab.test.ts`
+  (the relay: an editor without the theme binds, edits, the store keeps the alerts, a reinstall
+  puts them back), `blockBridge.themeBlocks.test.ts`.
 - Mixed deploys: the editor, collab and api images must come from the same commit. A
   collab bundle with a block the editor lacks trips rule 10 (static read-only view); an
   editor with a block the collab bundle lacks has it stored through a stand-in, as a

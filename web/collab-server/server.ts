@@ -342,6 +342,11 @@ export function createCollabServer(options: CollabServerOptions) {
         dropped_blocks: outcome.kind === "seeded" ? outcome.dropped : undefined,
         revision: record.block_revision,
       })
+      // The #453 check threw: the state was applied as it was (an uninstalled block in it
+      // still makes the editor open the post read-only).
+      if (outcome.kind === "restored" && outcome.reseedError) {
+        logEvent("warn", "collab_reseed_check_failed", { request_id: requestId, doc, error: outcome.reseedError })
+      }
 
       // Persist a seed right away (Yjs state and epoch only; block_doc is what it was
       // seeded from), so a reload or restart restores this epoch instead of reseeding.

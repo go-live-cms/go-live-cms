@@ -47,7 +47,8 @@ the same rules as the API, and `collab_listening` logs `theme_blocks` (checked b
 `process.test.ts`, which also stores an alert through the real bundle). Blocks of a theme
 that isn't in the bundle are dropped at seed and kept in `meta.dropped`, and so are a
 plugin's (`plugin:<slug>/<block>`, #452; `pluginBlocks.test.ts`). The editor/render leak
-check covers `plugins/` too (`bundleChecks.mjs`, tested by `bundleChecks.test.ts`). Details:
+check covers `plugins/` too (`bundleChecks.mjs`, tested by `bundleChecks.test.ts`). A stored state that still holds
+one of either is reseeded once (#453). Details:
 `gl-admin/lib/collaboration/CLAUDE.md`, "Theme blocks".
 
 Tests: `npx vitest run --project collab-server` (from `web/`; plain Node env).
@@ -154,6 +155,11 @@ differs, and the API compares it with the password change alone).
 `GET /internal/posts/:id/collab` → `{block_doc, block_revision, ydoc_state?, epoch?}`.
 - Stored state at the post's current revision → `Y.applyUpdate` it. The API omits stale
   state; if it also sends `ydoc_block_revision`, the server checks the match itself.
+  **Unless it needs a reseed (#453):** the state goes into a scratch `Y.Doc` first, and a
+  fragment holding a `theme:`/`plugin:` node this build lacks, or a `meta.dropped` block of
+  one it has again (confirmed by a dry-run seed), is reseeded from the state under a new
+  epoch, reason `uninstalled-blocks`. Rules: `gl-admin/lib/collaboration/CLAUDE.md`
+  ("Stored state with an uninstalled block").
 - Otherwise **seed** (the only place anything seeds; the client never does):
   `seedFragment` (`blockDocToPMWithReport` + `prosemirrorToYXmlFragment` into
   `"default"`), the `DroppedBlocks` record into `meta.dropped`, a **new `meta.epoch`**,
@@ -266,7 +272,7 @@ Own port (`INTERNAL_PORT`, default 1236), **never published**.
 (#142, #155, #220, #254) One JSON object per line via
 `logEvent`. Events: `ws_connect`, `ws_close`, `ws_deny`, `ws_access_changed`,
 `ws_access_revoked`, `ws_access_check_failed` (user id, doc, old → new mode), `collab_load`,
-`collab_load_failed`, `collab_store`,
+`collab_load_failed`, `collab_reseed_check_failed`, `collab_store`,
 `collab_store_invalid`, `collab_store_empty_skipped`, `collab_store_unconvertible`,
 `collab_store_failed`, `collab_block_edits_failed`, `collab_flush`, `collab_flush_denied`, `collab_listening`,
 `collab_startup_failed`, `collab_shutdown`. Users by id only.
