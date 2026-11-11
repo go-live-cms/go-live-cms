@@ -40,7 +40,7 @@ WHERE u.id = @actor_id
 --     else's published post only when they are about the viewer (the actor or
 --     payload.user_id): who asked for or lost access isn't every contributor's
 --     business.
--- Member, invitation and settings events are admin-only. Names and titles are
+-- Member, invitation, settings and plugin events are admin-only. Names and titles are
 -- joined now, never stored. object_type/object_id narrow it to one object.
 -- subject_* is the member an access event is about (payload.user_id).
 SELECT
@@ -55,12 +55,15 @@ SELECT
     target.full_name AS target_full_name,
     subject.id AS subject_id,
     subject.username AS subject_username,
-    subject.full_name AS subject_full_name
+    subject.full_name AS subject_full_name,
+    pl.slug AS plugin_slug,
+    pl.name AS plugin_name
 FROM activity a
 LEFT JOIN users actor ON actor.id = a.actor_id
 LEFT JOIN posts p ON a.object_type = 'post' AND p.id = a.object_id
 LEFT JOIN media m ON a.object_type = 'media' AND m.id = a.object_id
 LEFT JOIN users target ON a.object_type = 'user' AND target.id = a.object_id
+LEFT JOIN plugins pl ON a.object_type = 'plugin' AND pl.id = a.object_id
 -- CASE, not AND: Postgres may evaluate the cast before a sibling condition.
 LEFT JOIN users subject ON a.verb LIKE 'access\_%'
     AND subject.id = CASE WHEN (a.payload->>'user_id') ~ '^[0-9]{1,18}$' THEN (a.payload->>'user_id')::bigint END

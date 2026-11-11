@@ -1046,7 +1046,7 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   `invitation_revoked`, joined (actor = the new member), user created (POST `/users`),
   `role_changed` (both routes, `previous_role`; none when the role is unchanged:
   `ChangeUserRoleTx` returns `PreviousRole`), removed;
-  `settings_updated` (`fields`); review requests (#323, below). The trash (#327): `trashed` (`from_status`), `restored` (`post_status`) and permanent delete as `deleted`, recorded by the per-post helpers in `posts_trash.go` so the bulk actions log each post too (bulk publish logs `published`: `publishPostByID` records it for both routes). Extension settings aren't recorded yet.
+  `settings_updated` (`fields`); review requests (#323, below). The trash (#327): `trashed` (`from_status`), `restored` (`post_status`) and permanent delete as `deleted`, recorded by the per-post helpers in `posts_trash.go` so the bulk actions log each post too (bulk publish logs `published`: `publishPostByID` records it for both routes). Extension settings aren't recorded yet. Plugins (#455, below): `plugin_*`, admin-only.
 - **Throttle:** high-volume events ("updated", and "edited" from the collab store) are at most
   one per member, verb and object per `activityEditWindow` (10 min, `CreateActivityThrottled`).
   The collab one is written **inside** `StorePostCollabTx` (`EditActivityWindow`, only stores
@@ -1297,6 +1297,46 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   `web/gl-admin/lib/blocks-spec/themeBlockVectors.json` holds the shared cases
   (`TestThemeBlockVectors` and the web's `themeBlocks.test.ts`). Handler tests get an
   empty manifest; set `server.themeBlocks` (`loadRepoThemeBlocks`) to test with the real one.
+
+## Plugin registry (#455, `000054`, `plugins_*.go`, design `docs/design/plugin-system.md` 2–4)
+
+- A plugin is `web/plugins/<slug>/` with a `plugin.json` (`web/plugins/README.md`). The image
+  ships it like `web/themes` (`Dockerfile`, `.dockerignore` `!web/plugins`). Installing = shipping
+  it in the image. A plugin is trusted code; capabilities are declared and shown, not enforced.
+- **One validator** (`ParsePluginManifest`, `plugins_manifest.go`): checks in a fixed order, first
+  problem with a field path (`settings.x.default`, `server.hooks[0].event`); unknown fields refused
+  at every level; `id` = directory name, `enabled` reserved (it's `GET /plugins/enabled`). Its
+  twin `web/gl-admin/lib/plugins/manifest.ts` shares `pluginManifestVectors.json`
+  (`TestPluginManifestVectors`, `manifest.test.ts`), and both suites validate every repository
+  plugin. Change a rule on both sides and add a vector. `PluginAPIMin`/`Max` = `PLUGIN_API` (tested).
+- **`plugins` table:** numeric `id` (activity's `object_id`), `slug`, manifest fields, `manifest`
+  (normalized JSON), `content_hash` (SHA-256 over the files, `pluginContentHash`: the future
+  signature's input), `status` installed | missing | incompatible, `enabled` (+ `enabled_at`,
+  `enabled_by` SET NULL). Settings stay in `extension_settings` (#457).
+- **Startup scan** (`ScanPluginsDirectory` + `SyncPluginsToDatabase` in `themes_scanner.go`,
+  outside test mode): **never deletes**. New → inserted disabled (`incompatible` outside the
+  plugin_api range). Gone → `missing`, keeps `enabled` and settings; back → restored as it was.
+  A known plugin whose `plugin.json` stops validating → `incompatible` with its last valid
+  manifest (`MarkPluginInvalid`); a never-valid one writes nothing. No `web/plugins` directory →
+  no sync (nothing is marked missing). Every write is one conditional statement that returns a
+  row only when it changed something (`plugins.sql`), so replicas scanning together record each
+  change once (tested with four concurrent syncs).
+- **Routes** (`plugins_routes.go`): `GET /plugins`, `GET /plugins/:slug` (with `manifest`), `POST
+  /plugins/:slug/enable|disable` are `requireSiteAdmin`; `GET /plugins/enabled` (content roles)
+  → `{plugins: [slug]}`, enabled **and** installed only. Enable: 409 `plugin_missing` /
+  `plugin_incompatible`; enabling an enabled one (or disabling a disabled one) is 200 with no
+  event. Disable works in any status. Responses carry `active` (enabled and installed) and, for
+  incompatible, `incompatible_reason` (`plugin_api` | `invalid_manifest`). They change no schema
+  (design 5.3).
+- **Activity** (`object_type` `plugin`, admin-only in the feed, which joins `plugin: {id, slug,
+  name}`): `plugin_enabled`/`plugin_disabled` (the admin, `{version}`); the scan as the system:
+  `plugin_installed` (`{version, status}`, `restored: true` on a return), `plugin_updated`
+  (versions and statuses, `reason: invalid_manifest`), `plugin_missing`.
+- Tests: `plugins_manifest_test.go` (vectors, hash, scan), `plugins_test.go` (routes, roles,
+  races on a mock), `plugins_sync_test.go` (sync decisions on an in-memory table),
+  `plugins_db_test.go` (the acceptance list against the real database). The scan is global, so
+  DB tests use unique slugs and keep plugin tests out of `db/sqlc` (a parallel package's scan
+  would mark its rows missing).
 
 ## Gotchas
 

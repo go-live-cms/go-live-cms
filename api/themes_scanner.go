@@ -1,9 +1,12 @@
 package api
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -104,6 +107,154 @@ func ScanThemesDirectory(themesPath string) ([]DiscoveredTheme, error) {
 	}
 
 	return themes, nil
+}
+
+// DiscoveredPlugin is one directory under web/plugins that has a plugin.json (#455).
+type DiscoveredPlugin struct {
+	// Slug is the directory name, which a valid manifest's id equals.
+	Slug string
+	Path string
+	// Manifest and ManifestJSON (normalized, as stored) are set when Err is nil.
+	Manifest     PluginManifest
+	ManifestJSON json.RawMessage
+	// ContentHash is the SHA-256 over the plugin's files (pluginContentHash); "" only
+	// when they couldn't be read.
+	ContentHash string
+	// Err is why the plugin can't be used: plugin.json doesn't validate, a declared
+	// block has no directory, or the files couldn't be read.
+	Err error
+}
+
+// ScanPluginsDirectory lists the plugins in pluginsPath (web/plugins): every
+// directory with a plugin.json, valid or not, since a plugin whose manifest stopped
+// validating is still there and must not be marked missing. Hidden directories and
+// directories without a plugin.json are not plugins. A missing pluginsPath is an
+// error, and the caller then skips the sync, so a build without the directory can't
+// mark every plugin missing.
+func ScanPluginsDirectory(pluginsPath string) ([]DiscoveredPlugin, error) {
+	entries, err := os.ReadDir(pluginsPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read plugins directory: %w", err)
+	}
+	plugins := []DiscoveredPlugin{}
+	for _, entry := range entries {
+		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
+			continue
+		}
+		dir := filepath.Join(pluginsPath, entry.Name())
+		if _, err := os.Stat(filepath.Join(dir, pluginManifestFile)); errors.Is(err, fs.ErrNotExist) {
+			slog.Warn("skipping plugin: missing plugin.json", "plugin", entry.Name())
+			continue
+		}
+		plugins = append(plugins, loadPluginDir(entry.Name(), dir))
+	}
+	return plugins, nil
+}
+
+// SyncPluginsToDatabase records the scan in the plugins table (000054), and each
+// change in the activity log as the system. Unlike SyncThemesToDatabase it never
+// deletes: a plugin that is gone becomes 'missing' and keeps its row, `enabled` and
+// its settings, so bringing it back restores it as it was. A new plugin starts
+// disabled; one outside core's plugin_api range, or whose manifest no longer
+// validates, is 'incompatible' and can't be enabled.
+//
+// Every replica runs this at startup. Each write returns a row only when it changed
+// something (plugins.sql), so a change is recorded once however many replicas scan.
+// A failed write is logged and the scan goes on; only failing to mark the missing
+// ones is returned.
+func (server *Server) SyncPluginsToDatabase(ctx context.Context, plugins []DiscoveredPlugin) error {
+	present := make([]string, 0, len(plugins))
+	for _, plugin := range plugins {
+		present = append(present, plugin.Slug)
+		server.syncDiscoveredPlugin(ctx, plugin)
+	}
+
+	missing, err := server.store.MarkMissingPlugins(ctx, present)
+	if err != nil {
+		return fmt.Errorf("failed to mark missing plugins: %w", err)
+	}
+	for _, plugin := range missing {
+		server.logger.Warn("plugin_missing", "plugin", plugin.Slug, "enabled", plugin.Enabled)
+		server.recordPluginScanActivity(ctx, db.ActivityPluginMissing, plugin.ID, map[string]any{"version": plugin.Version})
+	}
+	return nil
+}
+
+func (server *Server) syncDiscoveredPlugin(ctx context.Context, plugin DiscoveredPlugin) {
+	log := server.logger.With("plugin", plugin.Slug)
+
+	if plugin.Err != nil {
+		log.Warn("plugin_invalid", "error", plugin.Err)
+		if plugin.ContentHash == "" {
+			return
+		}
+		row, err := server.store.MarkPluginInvalid(ctx, db.MarkPluginInvalidParams{Slug: plugin.Slug, ContentHash: plugin.ContentHash})
+		if errors.Is(err, sql.ErrNoRows) {
+			return // never registered (nothing valid to show), or already marked
+		}
+		if err != nil {
+			log.Warn("plugin_sync_failed", "error", err)
+			return
+		}
+		server.recordPluginScanActivity(ctx, db.ActivityPluginUpdated, row.ID, map[string]any{
+			"previous_version": row.PreviousVersion, "version": row.Version,
+			"previous_status": row.PreviousStatus, "status": row.Status,
+			"reason": "invalid_manifest",
+		})
+		return
+	}
+
+	manifest := plugin.Manifest
+	status := PluginStatusInstalled
+	if !pluginAPICompatible(manifest.PluginAPI) {
+		status = PluginStatusIncompatible
+		log.Warn("plugin_incompatible", "plugin_api", manifest.PluginAPI, "plugin_api_min", PluginAPIMin, "plugin_api_max", PluginAPIMax)
+	}
+
+	inserted, err := server.store.InsertDiscoveredPlugin(ctx, db.InsertDiscoveredPluginParams{
+		Slug: plugin.Slug, Name: manifest.Name, Version: manifest.Version, Author: manifest.Author,
+		Description: manifest.Description, Manifest: plugin.ManifestJSON, ContentHash: plugin.ContentHash, Status: status,
+	})
+	if err == nil {
+		log.Info("plugin_installed", "version", inserted.Version, "status", inserted.Status)
+		server.recordPluginScanActivity(ctx, db.ActivityPluginInstalled, inserted.ID, map[string]any{"version": inserted.Version, "status": inserted.Status})
+		return
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		log.Warn("plugin_sync_failed", "error", err)
+		return
+	}
+
+	updated, err := server.store.UpdateDiscoveredPlugin(ctx, db.UpdateDiscoveredPluginParams{
+		Slug: plugin.Slug, Name: manifest.Name, Version: manifest.Version, Author: manifest.Author,
+		Description: manifest.Description, Manifest: plugin.ManifestJSON, ContentHash: plugin.ContentHash, Status: status,
+	})
+	if errors.Is(err, sql.ErrNoRows) {
+		return // unchanged
+	}
+	if err != nil {
+		log.Warn("plugin_sync_failed", "error", err)
+		return
+	}
+	if updated.PreviousStatus == PluginStatusMissing {
+		log.Info("plugin_restored", "version", updated.Version, "status", updated.Status)
+		payload := map[string]any{"version": updated.Version, "status": updated.Status, "restored": true}
+		if updated.PreviousVersion != updated.Version {
+			payload["previous_version"] = updated.PreviousVersion
+		}
+		server.recordPluginScanActivity(ctx, db.ActivityPluginInstalled, updated.ID, payload)
+		return
+	}
+	log.Info("plugin_updated", "previous_version", updated.PreviousVersion, "version", updated.Version, "status", updated.Status)
+	server.recordPluginScanActivity(ctx, db.ActivityPluginUpdated, updated.ID, map[string]any{
+		"previous_version": updated.PreviousVersion, "version": updated.Version,
+		"previous_status": updated.PreviousStatus, "status": updated.Status,
+	})
+}
+
+// recordPluginScanActivity records a scan event with the system as the actor.
+func (server *Server) recordPluginScanActivity(ctx context.Context, verb string, pluginID int64, payload map[string]any) {
+	server.recordActivity(ctx, server.logger, activityEvent{Verb: verb, ObjectType: db.ActivityObjectPlugin, ObjectID: pluginID, Payload: payload})
 }
 
 // parseThemeConfig extracts theme metadata from theme.config.ts

@@ -29,7 +29,14 @@ type ActivityMedia struct {
 	Name string `json:"name"`
 }
 
-// ActivityResponse is one event of GET /activity. post, media and user are set
+// ActivityPlugin is the plugin an event is about (#455), as it is now.
+type ActivityPlugin struct {
+	ID   int64  `json:"id"`
+	Slug string `json:"slug"`
+	Name string `json:"name"`
+}
+
+// ActivityResponse is one event of GET /activity. post, media, user and plugin are set
 // for that object type while the object exists; a deleted one leaves them out,
 // and object_type/object_id still say what it was.
 type ActivityResponse struct {
@@ -42,6 +49,7 @@ type ActivityResponse struct {
 	Post       *ActivityPost   `json:"post,omitempty"`
 	Media      *ActivityMedia  `json:"media,omitempty"`
 	User       *ActivityPerson `json:"user,omitempty"`
+	Plugin     *ActivityPlugin `json:"plugin,omitempty"`
 	// Subject is the member an edit access event is about (#321: the requester
 	// of a grant or decline, whose grant was revoked), while they exist.
 	Subject *ActivityPerson `json:"subject,omitempty"`
@@ -79,6 +87,10 @@ func toActivityResponse(row db.ListActivityRow) ActivityResponse {
 	case db.ActivityObjectUser:
 		if row.TargetUsername.Valid {
 			rsp.User = &ActivityPerson{ID: row.ObjectID, Username: row.TargetUsername.String, FullName: row.TargetFullName.String}
+		}
+	case db.ActivityObjectPlugin:
+		if row.PluginSlug.Valid {
+			rsp.Plugin = &ActivityPlugin{ID: row.ObjectID, Slug: row.PluginSlug.String, Name: row.PluginName.String}
 		}
 	}
 	return rsp

@@ -221,6 +221,11 @@ type Querier interface {
 	DeleteUserBylines(ctx context.Context, userID int64) ([]int64, error)
 	DeleteUserPost(ctx context.Context, postID int64) error
 	DeleteUserSessions(ctx context.Context, id int64) error
+	// Allowed in any status: disabling is how an admin stops a misbehaving plugin, and
+	// a missing one may come back. No row when it is already disabled.
+	DisablePlugin(ctx context.Context, slug string) (Plugin, error)
+	// No row when the plugin isn't installed and compatible, or is already enabled.
+	EnablePlugin(ctx context.Context, arg EnablePluginParams) (Plugin, error)
 	// A post of type "post" without a category gets the default one (Uncategorized). The
 	// other types may have none. Called by every writer of a post's terms.
 	EnsureDefaultCategory(ctx context.Context, postIds []int64) (int64, error)
@@ -251,6 +256,7 @@ type Querier interface {
 	GetMenuByLocation(ctx context.Context, location sql.NullString) (Menu, error)
 	GetMenuForUpdate(ctx context.Context, id int64) (Menu, error)
 	GetNextVersionNoForPost(ctx context.Context, postID int64) (int32, error)
+	GetPluginBySlug(ctx context.Context, slug string) (Plugin, error)
 	GetPopularMedia(ctx context.Context, limit int32) ([]GetPopularMediaRow, error)
 	GetPopularTaxonomyTerms(ctx context.Context, arg GetPopularTaxonomyTermsParams) ([]GetPopularTaxonomyTermsRow, error)
 	GetPost(ctx context.Context, id int64) (Post, error)
@@ -370,6 +376,9 @@ type Querier interface {
 	GetValidUserInvitationByTokenHash(ctx context.Context, tokenHash []byte) (UserInvitation, error)
 	// Idempotent: a grant that already exists keeps its first date and granter.
 	GrantPostCollaborator(ctx context.Context, arg GrantPostCollaboratorParams) error
+	// A plugin seen for the first time. It starts disabled. No row when another replica
+	// inserted it first.
+	InsertDiscoveredPlugin(ctx context.Context, arg InsertDiscoveredPluginParams) (Plugin, error)
 	// The new byline (#319): author_ids in credit order, "order" = position from 0.
 	InsertPostByline(ctx context.Context, arg InsertPostBylineParams) error
 	InsertPostVersion(ctx context.Context, arg InsertPostVersionParams) (InsertPostVersionRow, error)
@@ -413,7 +422,7 @@ type Querier interface {
 	//     else's published post only when they are about the viewer (the actor or
 	//     payload.user_id): who asked for or lost access isn't every contributor's
 	//     business.
-	// Member, invitation and settings events are admin-only. Names and titles are
+	// Member, invitation, settings and plugin events are admin-only. Names and titles are
 	// joined now, never stored. object_type/object_id narrow it to one object.
 	// subject_* is the member an access event is about (payload.user_id).
 	// CASE, not AND: Postgres may evaluate the cast before a sibling condition.
@@ -450,6 +459,9 @@ type Querier interface {
 	// this type that the caller may read (viewer_id as in ListPosts, #393), trash aside.
 	// Public fields only. Kept short: a filter menu, not a member directory.
 	ListCreditedAuthors(ctx context.Context, arg ListCreditedAuthorsParams) ([]ListCreditedAuthorsRow, error)
+	// What the block menus offer (GET /plugins/enabled): enabled and in this build.
+	// A missing or incompatible plugin keeps its flag but isn't running.
+	ListEnabledPluginSlugs(ctx context.Context) ([]string, error)
 	ListExtensionSettingsByExtension(ctx context.Context, arg ListExtensionSettingsByExtensionParams) ([]ExtensionSetting, error)
 	// Home's "Needs attention" (#147): scheduled posts whose last attempt failed (the
 	// scheduler keeps retrying; a success or a schedule change clears it). viewer_id
@@ -506,6 +518,12 @@ type Querier interface {
 	ListPendingAccessRequestsForReviewer(ctx context.Context, arg ListPendingAccessRequestsForReviewerParams) ([]ListPendingAccessRequestsForReviewerRow, error)
 	// A post's open requests with who asked, oldest first (the editor's notice).
 	ListPendingPostAccessRequests(ctx context.Context, postID int64) ([]ListPendingPostAccessRequestsRow, error)
+	// The plugin registry (#455, 000054). The startup scan writes through the
+	// *Discovered* / Mark* queries, the admin routes through Enable/Disable. Each write
+	// is one conditional statement that returns a row only when it changed something,
+	// so when several replicas scan at once exactly one of them records each change in
+	// the activity log.
+	ListPlugins(ctx context.Context) ([]Plugin, error)
 	// The "Written by" cards: every author in the post's published byline, in
 	// order. Empty unless the post is one the public site serves, so it never shows
 	// who wrote a draft, and every author it returns has a page.
@@ -669,6 +687,13 @@ type Querier interface {
 	LockUsersForUpdate(ctx context.Context, ids []int64) ([]LockUsersForUpdateRow, error)
 	// The ledger rows whose email went out.
 	MarkMentionsEmailed(ctx context.Context, arg MarkMentionsEmailedParams) error
+	// Every plugin whose directory is gone from the build. Never a delete: the row keeps
+	// `enabled`, and its settings stay in extension_settings.
+	MarkMissingPlugins(ctx context.Context, presentSlugs []string) ([]Plugin, error)
+	// A known plugin whose directory is there but whose plugin.json no longer validates:
+	// incompatible, with the last valid manifest kept. No row when it already was, for
+	// these files.
+	MarkPluginInvalid(ctx context.Context, arg MarkPluginInvalidParams) (MarkPluginInvalidRow, error)
 	// Deletes the rows of blocks that aren't in the post's new block_doc (keep_ids: every
 	// key of its "blocks", hidden blocks included).
 	PrunePostBlockEdits(ctx context.Context, arg PrunePostBlockEditsParams) error
@@ -875,6 +900,11 @@ type Querier interface {
 	// The snapshot stays in post_versions, so it can still be viewed and restored.
 	UnpublishPost(ctx context.Context, id int64) (Post, error)
 	UnresolvePostCommentThread(ctx context.Context, id int64) (PostCommentThread, error)
+	// A known plugin whose files or status changed since the last scan (an upgrade, a
+	// return from 'missing', a change of compatibility). `enabled` is kept. No row when
+	// nothing changed, including when another replica has just applied the same change:
+	// prev's FOR UPDATE waits for it and the WHERE then sees its values.
+	UpdateDiscoveredPlugin(ctx context.Context, arg UpdateDiscoveredPluginParams) (UpdateDiscoveredPluginRow, error)
 	UpdateMedia(ctx context.Context, arg UpdateMediaParams) (Medium, error)
 	// Metadata-only update used by PUT /media/:id. The file columns (media_path,
 	// file_size, mime_type, dimensions, original_filename) are set on upload and
