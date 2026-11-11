@@ -29,6 +29,7 @@ rollback. Guards, reseeding and verification: `docs/operations/collab-cutover.md
 | `env.ts` | `readEnv`, `readSecretEnv` (`<NAME>_FILE`, #158) for `main.ts`. |
 | `probe.ts`, `build.mjs`, `singleYjsInstance.mjs`, `main.ts` | Single-instance probe, esbuild bundle and its yjs plugin, entry point. |
 | `importMetaGlob.mjs` | esbuild plugin: Vite's eager `import.meta.glob` (the installed theme blocks, #376). |
+| `bundleChecks.mjs` | What `build.mjs` refuses in the bundle (a theme's or plugin's `editor`/`render`, React). |
 
 ## Theme blocks (#376)
 
@@ -44,7 +45,9 @@ in vitest but broke the Docker build. Shared rules belong in `gl-admin/lib/block
 store validates installed theme blocks against their spec (`themeBlockLookup(schema)`),
 the same rules as the API, and `collab_listening` logs `theme_blocks` (checked by
 `process.test.ts`, which also stores an alert through the real bundle). Blocks of a theme
-that isn't in the bundle are dropped at seed and kept in `meta.dropped`. Details:
+that isn't in the bundle are dropped at seed and kept in `meta.dropped`, and so are a
+plugin's (`plugin:<slug>/<block>`, #452; `pluginBlocks.test.ts`). The editor/render leak
+check covers `plugins/` too (`bundleChecks.mjs`, tested by `bundleChecks.test.ts`). Details:
 `gl-admin/lib/collaboration/CLAUDE.md`, "Theme blocks".
 
 Tests: `npx vitest run --project collab-server` (from `web/`; plain Node env).

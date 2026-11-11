@@ -809,8 +809,21 @@ is a real block type for the editor, the collab server, the API and the public p
   place by every store, and shown as a hidden block in the editor, whose other blocks stay
   editable. The API stores it unvalidated (generic sanitizer only); the public page
   renders nothing for it (`BlockRenderer`, logged once per type). Reinstalling the theme
-  brings it back. An unknown type that isn't `theme:` (pre-#376 data such as `alert`)
+  brings it back. An unknown type that isn't namespaced (pre-#376 data such as `alert`)
   still gets a stand-in, as before.
+- **Plugin blocks (#452, design `docs/design/plugin-system.md` 5.1):** `plugin:<slug>/<block>`
+  is the same kind of block in a second namespace, and **every check asks
+  `isExtensionBlockType` (`blocks-spec/themeBlocks.ts`), never `theme:` alone**: the
+  bridge's dispatch (`themeBlockToPM`: installed = the node type carries a spec, so a
+  stand-in never counts), `validateBlockDoc`, `BlockRenderer`, the catalog entry
+  (`plugin`, never `theme`) and Go's `isExtensionBlockType` (`api/theme_blocks.go`; the
+  manifest takes both). So an uninstalled plugin's block is dropped at seed and kept in
+  `meta.dropped`, never given a stand-in (one would put an element in the fragment that an
+  editor without the plugin can't build, rule 10). A new namespace goes in both predicates.
+  No plugin block is in the build yet (S6 adds `block.json`). Tests:
+  `blockBridge.pluginBlocks.test.ts`, `blocks-spec/extensionBlocks.test.ts`,
+  `collab-server/pluginBlocks.test.ts`, `BlockRenderer.pluginBlocks.test.tsx`, Go
+  `TestPluginBlocks`.
 - Mixed deploys: the editor, collab and api images must come from the same commit. A
   collab bundle with a block the editor lacks trips rule 10 (static read-only view); an
   editor with a block the collab bundle lacks has it stored through a stand-in, as a

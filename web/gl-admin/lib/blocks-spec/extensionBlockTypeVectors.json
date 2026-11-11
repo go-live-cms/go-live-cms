@@ -1,0 +1,5 @@
+{
+  "_comment": "Which block types are namespaced extension blocks (#452): isExtensionBlockType in blocks-spec/themeBlocks.ts (extensionBlocks.test.ts) and in api/theme_blocks.go (TestIsExtensionBlockType) must agree on every case. A new namespace goes in both predicates and here.",
+  "namespaced": ["theme:example/alert", "plugin:reading-time/estimate", "plugin:x", "theme:"],
+  "not_namespaced": ["paragraph", "alert", "sidenote", "", "themes:x/y", "plugins:x/y", "Plugin:x/y", "THEME:x/y", "x:plugin:y", " plugin:x/y"]
+}

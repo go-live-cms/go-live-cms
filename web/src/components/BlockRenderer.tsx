@@ -1,7 +1,7 @@
 import React from "react"
 import { blockAnchorId, blocksInReadingOrder, embedTargetOf, footnoteIndex, type BlockDocV1, type Block } from "@gl-admin/lib/blocks-spec"
 import { blockRegistry } from "./blocks/registry"
-import { isThemeBlockType } from "@gl-admin/lib/blocks-spec/themeBlocks"
+import { isExtensionBlockType } from "@gl-admin/lib/blocks-spec/themeBlocks"
 import { renderContent, getBlockContent, isBlankParagraph } from "./blocks/utils/contentRenderer"
 import { ImageSizesContext, BLOCK_IMAGE_SIZES } from "./blocks/utils/responsiveImage"
 import { HeadingIdsContext, headingAnchors, type HeadingAnchor } from "./blocks/utils/headingAnchors"
@@ -25,10 +25,10 @@ interface BlockRendererProps {
   headings?: HeadingAnchor[]
 }
 
-/** Whether this build draws `block`: its type has a component, and it isn't from a newer build of its theme. */
+/** Whether this build draws `block`: its type has a component, and it isn't from a newer build of its theme or plugin. */
 function rendersBlock(block: Block): boolean {
   if (!blockRegistry.getComponent(block.type)) return false
-  return !(isThemeBlockType(block.type) && block.version > (blockRegistry.get(block.type)?.version ?? 1))
+  return !(isExtensionBlockType(block.type) && block.version > (blockRegistry.get(block.type)?.version ?? 1))
 }
 
 /**
@@ -93,8 +93,8 @@ export function blockRendererFor(
     const Component = blockRegistry.getComponent(block.type)
 
     if (!Component) {
-      // A block nothing in this build renders: a theme block whose theme was removed
-      // (#376), or a type from an older build. It stays in the stored doc (the editor
+      // A block nothing in this build renders: a theme or plugin block whose extension
+      // was removed (#376, #452), or a type from an older build. It stays in the stored doc (the editor
       // keeps it hidden, not deleted); here it renders nothing. Logged once per type, not
       // on every request.
       if (!unknownTypesLogged.has(block.type)) {
@@ -104,9 +104,9 @@ export function blockRendererFor(
       return null
     }
 
-    // A theme block written by a newer build of its theme than this one (e.g. after a
-    // rollback, #376): its attrs may mean something this renderer doesn't know, so it
-    // renders nothing, like a block of a removed theme. It stays in the stored doc.
+    // A theme or plugin block written by a newer build of its extension than this one
+    // (e.g. after a rollback, #376): its attrs may mean something this renderer doesn't
+    // know, so it renders nothing, like a block of a removed one. It stays in the stored doc.
     if (!rendersBlock(block)) return null
 
     // WordPress-style shared props - every component gets the same interface

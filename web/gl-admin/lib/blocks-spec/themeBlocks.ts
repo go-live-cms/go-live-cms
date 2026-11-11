@@ -4,6 +4,16 @@
 // (`themes/blocks.manifest.json`, `scripts/theme-blocks-manifest.mjs`). The API's Go
 // sanitizer implements the same rules from that manifest (`api/theme_blocks.go`);
 // `themeBlockVectors.json` holds the cases both sides must agree on.
+//
+// Plugin blocks (#452, docs/design/plugin-system.md 5.1) are the same kind of block in
+// another namespace: `plugin:<slug>/<block>`. Everything here applies to them unchanged;
+// "theme block" in names below means "extension block" unless a function says otherwise
+// (`isThemeBlockType`, `themeOfBlockType`, `THEME_BLOCK_TYPE`).
+
+// The slug and block parts of every extension block type, theme or plugin (#452).
+const EXTENSION_SLUG = "[A-Za-z0-9][A-Za-z0-9_-]*"
+const EXTENSION_BLOCK = "[a-z][a-z0-9-]*"
+const extensionBlockType = (namespace: string) => new RegExp(`^${namespace}:(${EXTENSION_SLUG})\\/(${EXTENSION_BLOCK})$`)
 
 /**
  * A theme block's type, which is also its ProseMirror node name: `theme:<theme>/<block>`,
@@ -11,16 +21,43 @@
  * collide with or shadow one, and two themes can't collide with each other. `<theme>` is
  * the theme's directory name (letters, digits, `-`, `_`), `<block>` lowercase.
  */
-export const THEME_BLOCK_TYPE = /^theme:([A-Za-z0-9][A-Za-z0-9_-]*)\/([a-z][a-z0-9-]*)$/
+export const THEME_BLOCK_TYPE = extensionBlockType("theme")
 
 export function isThemeBlockType(type: unknown): type is string {
   return typeof type === "string" && type.startsWith("theme:")
+}
+
+/**
+ * Whether `type` is a namespaced extension block (#452): a theme block (`theme:<slug>/<block>`,
+ * #376) or a plugin block (`plugin:<slug>/<block>`, docs/design/plugin-system.md 5.1). No
+ * core type contains `:`. Everything that treats a block as "an extension's, maybe not in
+ * this build" asks this, never one namespace: an extension block that isn't installed is
+ * dropped at seed and kept in `meta.dropped` (#213), never given a stand-in.
+ */
+export function isExtensionBlockType(type: string): boolean {
+  // A stored doc isn't typed: a non-string type is no extension's (the old isThemeBlockType guard).
+  return typeof type === "string" && (type.startsWith("theme:") || type.startsWith("plugin:"))
 }
 
 /** The theme slug in a theme block type (`theme:example/alert` → `example`), or null. */
 export function themeOfBlockType(type: string): string | null {
   return THEME_BLOCK_TYPE.exec(type)?.[1] ?? null
 }
+
+/**
+ * A plugin block's type, also its ProseMirror node name and Yjs element name:
+ * `plugin:<slug>/<block>` (design 5.1). The same shape as a theme block's, so a plugin
+ * block can't collide with a core or a theme block, and two plugins can't collide.
+ */
+export const PLUGIN_BLOCK_TYPE = extensionBlockType("plugin")
+
+/** The plugin slug in a plugin block type (`plugin:reading-time/estimate` → `reading-time`), or null. */
+export function pluginOfBlockType(type: string): string | null {
+  return PLUGIN_BLOCK_TYPE.exec(type)?.[1] ?? null
+}
+
+/** Either extension block type, well formed: what a block spec's `type` may be. */
+const isWellFormedExtensionBlockType = (type: string): boolean => THEME_BLOCK_TYPE.test(type) || PLUGIN_BLOCK_TYPE.test(type)
 
 /**
  * One declared attribute. Values are plain JSON scalars: nested objects and arrays aren't
@@ -43,10 +80,14 @@ export interface ThemeBlockSpec {
 const RESERVED_ATTR = /^(pm|text|data-block-id|on.*)$/i
 const ATTR_NAME = /^[a-zA-Z][a-zA-Z0-9]*$/
 
-/** Why `spec` is not a usable theme block spec, or null. Checked when a theme is loaded. */
+/**
+ * Why `spec` is not a usable extension block spec, or null. Checked when a theme is loaded.
+ * A theme block and a plugin block (#452) share every rule but the namespace; which
+ * namespace a block may use is its loader's check (`collectThemeBlocks`: its theme's).
+ */
 export function themeBlockSpecProblem(spec: ThemeBlockSpec): string | null {
-  if (!THEME_BLOCK_TYPE.test(spec.type)) {
-    return `type "${spec.type}" must look like theme:<theme directory>/<block> (block: lowercase letters, digits, -)`
+  if (!isWellFormedExtensionBlockType(spec.type)) {
+    return `type "${spec.type}" must look like theme:<theme directory>/<block> or plugin:<slug>/<block> (block: lowercase letters, digits, -)`
   }
   if (!Number.isInteger(spec.version) || spec.version < 1) return `${spec.type}: version must be an integer >= 1`
   for (const [name, attr] of Object.entries(spec.attrs)) {

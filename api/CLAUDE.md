@@ -1297,6 +1297,10 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   `web/gl-admin/lib/blocks-spec/themeBlockVectors.json` holds the shared cases
   (`TestThemeBlockVectors` and the web's `themeBlocks.test.ts`). Handler tests get an
   empty manifest; set `server.themeBlocks` (`loadRepoThemeBlocks`) to test with the real one.
+- **Plugin blocks (#452):** `plugin:<slug>/<block>` is the same kind of block
+  (`isExtensionBlockType`, the web's predicate of the same name): the manifest accepts both
+  namespaces, an installed one is validated exactly like a theme block, one not in the
+  manifest is kept as is. `TestPluginBlocks`.
 
 ## Plugin registry (#455, `000054`, `plugins_*.go`, design `docs/design/plugin-system.md` 2–4)
 
