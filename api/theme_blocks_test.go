@@ -196,12 +196,24 @@ func TestLoadThemeBlockManifest(t *testing.T) {
 	require.Contains(t, withPlugin.Blocks, "plugin:reading-time/estimate")
 }
 
+// TestIsExtensionBlockType runs the cases shared with the web's predicate
+// (web/gl-admin/lib/blocks-spec/extensionBlockTypeVectors.json), so the API and the collab
+// server agree on which types are an extension's.
 func TestIsExtensionBlockType(t *testing.T) {
-	for _, blockType := range []string{"theme:example/alert", "plugin:reading-time/estimate"} {
+	raw, err := os.ReadFile(filepath.Join("..", "web", "gl-admin", "lib", "blocks-spec", "extensionBlockTypeVectors.json"))
+	require.NoError(t, err)
+	var vectors struct {
+		Namespaced    []string `json:"namespaced"`
+		NotNamespaced []string `json:"not_namespaced"`
+	}
+	require.NoError(t, json.Unmarshal(raw, &vectors))
+	require.NotEmpty(t, vectors.Namespaced)
+	require.NotEmpty(t, vectors.NotNamespaced)
+	for _, blockType := range vectors.Namespaced {
 		require.True(t, isExtensionBlockType(blockType), blockType)
 	}
 	// Core types never contain `:`; a pre-#376 custom type isn't namespaced either.
-	for _, blockType := range []string{"paragraph", "alert", "", "themes:x/y", "plugins:x/y", "Plugin:x/y", "x:plugin:y"} {
+	for _, blockType := range vectors.NotNamespaced {
 		require.False(t, isExtensionBlockType(blockType), blockType)
 	}
 }

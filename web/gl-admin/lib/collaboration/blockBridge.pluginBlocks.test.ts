@@ -77,14 +77,18 @@ describe("a plugin block that isn't installed", () => {
     })
   }
 
-  it("without a stored pm is dropped too", () => {
+  it("without a stored pm is dropped as an extension block, not as a custom block without PM data", () => {
     const doc: BlockDocV1 = {
       doc_version: 1,
       blocks_order: [GONE],
       blocks: { [GONE]: { id: GONE, type: "plugin:gone/widget", version: 1, attrs: { text: "kept" } } },
     }
+    // The pre-#376 custom-block path would warn and drop it for want of a pm; the
+    // extension path drops it because its plugin isn't installed, with no warning.
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
     const { dropped } = blockDocToPMWithReport(doc, getInstalledCollabSchema())
     expect(dropped).toEqual([{ id: GONE, parentId: null, afterId: null }])
+    expect(warn.mock.calls.flat().join(" ")).not.toContain("Unknown block type without PM data")
   })
 
   it("inside a group is dropped on its own, with its container, and comes back on the store", () => {

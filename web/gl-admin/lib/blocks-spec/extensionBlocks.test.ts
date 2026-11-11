@@ -10,16 +10,19 @@ import {
   type ThemeBlockSpec,
 } from "./themeBlocks"
 import { BLOCK_NODE_NAMES } from "./nesting"
+import vectors from "./extensionBlockTypeVectors.json"
 
 // Namespaced extension blocks beyond `theme:` (#452, docs/design/plugin-system.md 5.1):
 // a `plugin:<slug>/<block>` type is the same kind of block as a theme block.
 
 describe("extension block types", () => {
-  it("theme: and plugin: types are extension blocks; core and pre-#376 types aren't", () => {
-    for (const type of ["theme:example/alert", "plugin:reading-time/estimate"]) expect(isExtensionBlockType(type), type).toBe(true)
-    for (const type of ["paragraph", "alert", "sidenote", "", "themes:x/y", "plugins:x/y", "Plugin:x/y", "x:plugin:y"]) {
-      expect(isExtensionBlockType(type), type).toBe(false)
-    }
+  it("theme: and plugin: types are extension blocks; core and pre-#376 types aren't (vectors shared with the API)", () => {
+    for (const type of vectors.namespaced) expect(isExtensionBlockType(type), type).toBe(true)
+    for (const type of vectors.not_namespaced) expect(isExtensionBlockType(type), type).toBe(false)
+  })
+
+  it("a stored block's type that isn't a string is no extension's", () => {
+    for (const type of [undefined, null, 7, {}]) expect(isExtensionBlockType(type as unknown as string), String(type)).toBe(false)
   })
 
   it("no core type or node name is namespaced", () => {

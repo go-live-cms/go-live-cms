@@ -10,13 +10,18 @@
 // "theme block" in names below means "extension block" unless a function says otherwise
 // (`isThemeBlockType`, `themeOfBlockType`, `THEME_BLOCK_TYPE`).
 
+// The slug and block parts of every extension block type, theme or plugin (#452).
+const EXTENSION_SLUG = "[A-Za-z0-9][A-Za-z0-9_-]*"
+const EXTENSION_BLOCK = "[a-z][a-z0-9-]*"
+const extensionBlockType = (namespace: string) => new RegExp(`^${namespace}:(${EXTENSION_SLUG})\\/(${EXTENSION_BLOCK})$`)
+
 /**
  * A theme block's type, which is also its ProseMirror node name: `theme:<theme>/<block>`,
  * e.g. `theme:example/alert`. No core block type has a `:`, so a theme block can never
  * collide with or shadow one, and two themes can't collide with each other. `<theme>` is
  * the theme's directory name (letters, digits, `-`, `_`), `<block>` lowercase.
  */
-export const THEME_BLOCK_TYPE = /^theme:([A-Za-z0-9][A-Za-z0-9_-]*)\/([a-z][a-z0-9-]*)$/
+export const THEME_BLOCK_TYPE = extensionBlockType("theme")
 
 export function isThemeBlockType(type: unknown): type is string {
   return typeof type === "string" && type.startsWith("theme:")
@@ -30,7 +35,8 @@ export function isThemeBlockType(type: unknown): type is string {
  * dropped at seed and kept in `meta.dropped` (#213), never given a stand-in.
  */
 export function isExtensionBlockType(type: string): boolean {
-  return type.startsWith("theme:") || type.startsWith("plugin:")
+  // A stored doc isn't typed: a non-string type is no extension's (the old isThemeBlockType guard).
+  return typeof type === "string" && (type.startsWith("theme:") || type.startsWith("plugin:"))
 }
 
 /** The theme slug in a theme block type (`theme:example/alert` → `example`), or null. */
@@ -43,7 +49,7 @@ export function themeOfBlockType(type: string): string | null {
  * `plugin:<slug>/<block>` (design 5.1). The same shape as a theme block's, so a plugin
  * block can't collide with a core or a theme block, and two plugins can't collide.
  */
-export const PLUGIN_BLOCK_TYPE = /^plugin:([A-Za-z0-9][A-Za-z0-9_-]*)\/([a-z][a-z0-9-]*)$/
+export const PLUGIN_BLOCK_TYPE = extensionBlockType("plugin")
 
 /** The plugin slug in a plugin block type (`plugin:reading-time/estimate` → `reading-time`), or null. */
 export function pluginOfBlockType(type: string): string | null {
