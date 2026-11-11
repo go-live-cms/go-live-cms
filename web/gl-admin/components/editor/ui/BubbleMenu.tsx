@@ -33,6 +33,12 @@ const HighlightIcon = () => (
     <path d="m9 11-6 6v3h9l3-3M22 12l-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4" />
   </svg>
 )
+// #422, the canvas's Footnote button.
+const FootnoteIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M4 8h11M4 13h11M4 18h7M17 4h2v5M17 9h4" />
+  </svg>
+)
 // "x²" / "x₂", as the canvas draws them (the button's name is its aria-label).
 const ScriptLabel = ({ kind }: { kind: "sup" | "sub" }) => {
   const Tag = kind
@@ -79,6 +85,8 @@ const BubbleMenu = ({ editor, className = "", openLinkModal, ...props }: any) =>
   const { $from } = editor.state.selection
   const inCaption = TEXT_PART_NODE_NAMES.has($from.parent.type.name)
   const inCell = $from.depth > 1 && !!$from.node($from.depth - 1).type.spec.tableRole
+  // A note is one line of its own (#422): rich text, but nothing to turn it into.
+  const inNote = $from.parent.type.name === "footnote"
   const mark = (name: string, label: string, run: () => void, content: ReactNode, style?: CSSProperties) =>
     inCaption && !(CAPTION_MARKS as readonly string[]).includes(name) ? null : (
       <button
@@ -112,7 +120,7 @@ const BubbleMenu = ({ editor, className = "", openLinkModal, ...props }: any) =>
       {...props}
     >
       <div role="toolbar" aria-label="Format text" className="editor-toolbar__group">
-        {!inCaption && !inCell && (
+        {!inCaption && !inCell && !inNote && (
           <>
             <CommandSelect
               options={turnIntoOptions}
@@ -148,6 +156,21 @@ const BubbleMenu = ({ editor, className = "", openLinkModal, ...props }: any) =>
             {mark("highlight", "Highlight", () => editor.chain().focus().toggleHighlight().run(), <HighlightIcon />)}
             {mark("superscript", "Superscript", () => editor.chain().focus().toggleSuperscript().run(), <ScriptLabel kind="sup" />)}
             {mark("subscript", "Subscript", () => editor.chain().focus().toggleSubscript().run(), <ScriptLabel kind="sub" />)}
+          </>
+        )}
+        {/* #422: after the selection, and the caret moves to its note. Not where text can't hold one. */}
+        {editor.can().insertFootnote() && (
+          <>
+            <span aria-hidden="true" className="editor-toolbar__divider" />
+            <button
+              type="button"
+              aria-label="Add footnote"
+              className="editor-toolbar__button editor-toolbar__button--label"
+              onClick={() => editor.chain().focus().insertFootnote().run()}
+            >
+              <FootnoteIcon />
+              Footnote
+            </button>
           </>
         )}
       </div>

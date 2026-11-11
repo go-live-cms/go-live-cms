@@ -58,10 +58,20 @@ function show(from: number, to: number) {
   act(() => root.render(<BubbleMenu editor={editor} openLinkModal={() => {}} />))
 }
 
+describe("BubbleMenu footnote (#422)", () => {
+  it("adds a reference after the selection and moves to its note", () => {
+    show(1, 6)
+    expect(labels()).toContain("Add footnote")
+    act(() => button("Add footnote")!.click())
+    expect(editor.state.doc.lastChild!.type.name).toBe("footnotes")
+    expect(editor.state.selection.$from.parent.type.name).toBe("footnote")
+  })
+})
+
 describe("BubbleMenu marks (#418)", () => {
   it("offers Highlight, Superscript and Subscript after Link, and runs them", () => {
     show(1, 6) // "alpha"
-    const marks = labels().filter((label) => label !== "Turn into")
+    const marks = labels().filter((label) => label !== "Turn into" && label !== "Add footnote")
     expect(marks.slice(-4)).toEqual(["Link", "Highlight", "Superscript", "Subscript"])
     expect(button("Highlight")!.getAttribute("aria-pressed")).toBe("false")
 

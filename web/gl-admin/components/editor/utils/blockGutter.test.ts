@@ -75,7 +75,7 @@ describe("insertFromGutter", () => {
     expect(ed.state.doc.toJSON()).toEqual(before)
   })
 
-  it.each(CORE_BLOCKS.map((e) => [e.id, e] as const))("inserts %s on a new line below a block, which keeps its text", (_id, entry) => {
+  it.each(CORE_BLOCKS.filter((e) => !e.inline).map((e) => [e.id, e] as const))("inserts %s on a new line below a block, which keeps its text", (_id, entry) => {
     const ed = makeEditor("<h2>Intro</h2><p>alpha</p><p>end</p>")
     const alpha = topLevelBlockAt(ed.state.doc, ed.state.doc.firstChild!.nodeSize)!
     expect(insertFromGutter(ed, refOf(alpha), entry)).toBe(true)
@@ -86,7 +86,7 @@ describe("insertFromGutter", () => {
     expect(ed.state.doc.textContent).toBe("Introalphaend")
   })
 
-  it.each(CORE_BLOCKS.map((e) => [e.id, e] as const))("turns the empty line + is on into %s", (_id, entry) => {
+  it.each(CORE_BLOCKS.filter((e) => !e.inline).map((e) => [e.id, e] as const))("turns the empty line + is on into %s", (_id, entry) => {
     const ed = makeEditor("<p>alpha</p><p></p><p>end</p>")
     const empty = topLevelBlockAt(ed.state.doc, ed.state.doc.firstChild!.nodeSize)!
     expect(insertFromGutter(ed, refOf(empty), entry)).toBe(true)

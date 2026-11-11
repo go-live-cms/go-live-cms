@@ -19,6 +19,7 @@ import {
   normalizeButtonLabel,
   normalizeSpacerSize,
   embedStoredAttrs,
+  withFootnotesLast,
   EMBED_BLOCK_VERSION,
   HTML_BLOCK_VERSION,
   normalizeSnippetId,
@@ -137,7 +138,8 @@ export function pmToBlockDoc(pmDoc: PMNode): BlockDocV1 {
 
   return {
     doc_version: 1,
-    blocks_order: blocksOrder,
+    // The editor can briefly hold a block after the list (#422): the stored doc never does.
+    blocks_order: withFootnotesLast(blocksOrder, blocks),
     blocks,
   }
 }
@@ -427,6 +429,13 @@ function pmNodeToBlock(node: PMNode, allBlocks: Record<BlockID, Block>, seenIds:
 
     case "buttons":
       return buttonsNodeToBlock(node, id)
+
+    // #422. The list holds nothing but its notes; a note's id is what its references carry.
+    case "footnotes":
+      return { id, type: "footnotes", version: 1, attrs: {} }
+
+    case "footnote":
+      return { id, type: "footnote", version: 1, attrs: { pm: pmJSON(node), text: node.textContent || undefined } }
 
     case "spacer":
       return { id, type: "spacer", version: 1, attrs: { size: normalizeSpacerSize(node.attrs.size) } }
@@ -975,7 +984,8 @@ export function restoreDroppedBlocks(current: BlockDocV1, source: BlockDocV1, dr
     blocks[parentId] = { ...parent, children: insertAfter(parent.children ?? [], afterId, id) }
   }
 
-  return { ...current, blocks_order: order, blocks }
+  // A top-level block whose anchor is gone goes "at the end", but the footnotes list stays last (#422).
+  return { ...current, blocks_order: withFootnotesLast(order, blocks), blocks }
 }
 
 /**
@@ -1225,6 +1235,16 @@ function blockToPMNode(block: Block, allBlocks: Record<BlockID, Block>, ctx: Con
 
     case "column":
       return { type: "column", attrs: baseAttrs, content: containerChildrenToPM(block, allBlocks, ctx) }
+
+    case "footnotes":
+      return { type: "footnotes", attrs: baseAttrs, content: containerChildrenToPM(block, allBlocks, ctx) }
+
+    // #422: the stored pm is the note, whatever else it says it is.
+    case "footnote": {
+      const attrs = block.attrs as { pm?: { attrs?: Record<string, unknown>; content?: unknown[] }; text?: string }
+      const content = Array.isArray(attrs.pm?.content) ? attrs.pm.content : attrs.text ? [{ type: "text", text: attrs.text }] : undefined
+      return { type: "footnote", attrs: baseAttrs, ...(content ? { content } : {}) }
+    }
 
     // #427. Only valid values make it into the node; a bad one costs the attr, never the block.
     case "cover": {

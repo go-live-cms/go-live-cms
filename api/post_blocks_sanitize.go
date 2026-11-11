@@ -107,6 +107,10 @@ func sanitizeBlock(block map[string]interface{}) {
 		sanitizeButtonsAttrs(attrs)
 	case "spacer":
 		sanitizeSpacerAttrs(attrs)
+	case "footnotes":
+		keepOnlyAttrs(attrs)
+	case footnoteBlockType:
+		sanitizeFootnoteAttrs(attrs)
 	case customhtml.BlockType:
 		sanitizeHTMLBlockAttrs(attrs)
 	case "cover":

@@ -17,6 +17,7 @@ import { TableKeyboard } from "../extensions/TableBlock"
 import { DetailsKeyboard } from "../extensions/DetailsBlock"
 import { ButtonsKeyboard } from "../extensions/ButtonsBlock"
 import { GalleryKeyboard } from "../extensions/GalleryKeyboard"
+import { FootnoteEditing } from "../extensions/FootnoteEditing"
 import { TEXT_PART_NODE_NAMES } from "@gl-admin/lib/blocks-spec/nesting"
 import { BlockActions } from "./blockActions"
 import { BlockGutterKeys } from "./blockGutter"
@@ -110,6 +111,8 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
       schema.mention,
       schema.contentLink,
       schema.dateChip,
+      schema.footnoteRef,
+      schema.footnotes,
       schema.blockId,
       BlockNodeViews,
       // #320: the mention's current name and the site's date format; no schema.
@@ -122,6 +125,8 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
       ButtonsKeyboard,
       // #424: ← → between images, ⌘⇧← → reorder, ↵ to the image's alt text; no schema.
       GalleryKeyboard,
+      // #422: the numbers (decorations), a note's row, its keys and what a paste keeps; no schema.
+      FootnoteEditing,
       // The block menu's Ctrl D / Ctrl Shift P (#356); no schema.
       BlockActions,
       // Blocks at any depth from the keyboard (#417): Esc, ↵, ↑↓, ⌘⇧↑↓, ⌫; no schema.
@@ -154,6 +159,8 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
               return "Write a caption…"
             case "detailsSummary":
               return "Summary"
+            case "footnote":
+              return "Write the note"
             case "button":
               return "Button text"
             case "spacer":
@@ -200,7 +207,7 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
             const $at = state.doc.resolve(range.from)
             const parent = $at.parent
             const cell = $at.depth > 1 ? $at.node($at.depth - 1).type.spec.tableRole : undefined
-            return !TEXT_PART_NODE_NAMES.has(parent.type.name) && !parent.type.spec.code && !cell
+            return !TEXT_PART_NODE_NAMES.has(parent.type.name) && parent.type.name !== "footnote" && !parent.type.spec.code && !cell
           },
           // The whole menu (the list filters by the query itself): the role gate and the
           // active theme (catalog.ts). The role is a UI hint; the server enforces.

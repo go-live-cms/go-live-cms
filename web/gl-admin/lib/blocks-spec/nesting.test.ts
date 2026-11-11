@@ -118,10 +118,12 @@ describe("the nesting table", () => {
     // #426: the 2–4 limit is the table's, not the schema's (`countNotInSchema`), each column holding flow and details.
     expect(containerContent("columns")).toBe("column+")
     expect(containerContent("column")).toBe("(block | tableBlock | video | audio | file | embed | html | buttons | spacer | details)+")
+    // #422: notes only. "One list, last" is the table's rule, not the schema's (`onePerDocLast`).
+    expect(containerContent("footnotes")).toBe("footnote+")
     // #427: `*`, so a merge that empties one doesn't cost its image (`emptyNotInSchema`); the table still says 1+.
     expect(containerContent("cover")).toBe("(block | tableBlock | video | audio | file | embed | html | buttons | spacer)*")
     expect(containerContent("media_text")).toBe("(block | tableBlock | video | audio | file | embed | html | buttons | spacer | details)*")
-    expect(topLevelContent()).toBe("(block | tableBlock | video | audio | file | embed | html | buttons | spacer | group | details | gallery | columns | cover | mediaText)+")
+    expect(topLevelContent()).toBe("(block | tableBlock | video | audio | file | embed | html | buttons | spacer | group | details | gallery | columns | footnotes | cover | mediaText)+")
   })
 
   it("a cover or media & text with no image to show is out of the reading order, with its blocks (#427)", () => {

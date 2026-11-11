@@ -32,6 +32,13 @@
     { "name": "not a leap year", "type": "dateChip", "attrs": { "date": "2027-02-29" }, "expected": null },
     { "name": "a date with a time in it", "type": "dateChip", "attrs": { "date": "2026-11-12T10:00" }, "expected": null },
     { "name": "a year before 1000", "type": "dateChip", "attrs": { "date": "0999-01-01" }, "expected": null },
-    { "name": "no date", "type": "dateChip", "attrs": { "time": "10:00", "reminder": true }, "expected": null }
+    { "name": "no date", "type": "dateChip", "attrs": { "time": "10:00", "reminder": true }, "expected": null },
+    { "name": "a footnote reference", "type": "footnoteRef", "attrs": { "footnoteId": "note-000001" }, "expected": { "footnoteId": "note-000001" } },
+    { "name": "a uuid", "type": "footnoteRef", "attrs": { "footnoteId": "3f2a1c9e-7b4d-4e21-9a10-1234567890ab" }, "expected": { "footnoteId": "3f2a1c9e-7b4d-4e21-9a10-1234567890ab" } },
+    { "name": "only its target survives", "type": "footnoteRef", "attrs": { "footnoteId": "note-000001", "number": 7, "label": "x", "onclick": "alert(1)" }, "expected": { "footnoteId": "note-000001" } },
+    { "name": "no target", "type": "footnoteRef", "attrs": { "number": 1 }, "expected": null },
+    { "name": "too short to be a block id", "type": "footnoteRef", "attrs": { "footnoteId": "abc" }, "expected": null },
+    { "name": "markup in the target", "type": "footnoteRef", "attrs": { "footnoteId": "<img src=x onerror=alert(1)>" }, "expected": null },
+    { "name": "not a string", "type": "footnoteRef", "attrs": { "footnoteId": 12345678901 }, "expected": null }
   ]
 }

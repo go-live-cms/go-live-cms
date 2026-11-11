@@ -5,6 +5,7 @@ import { createImagePlaceholder } from "./mediaBlocks"
 import { openTableSizePicker } from "../ui/TableSizePicker"
 import { COLUMNS_ICON, openColumnsPicker } from "../ui/ColumnsPicker"
 import { TABLE_ICON } from "../extensions/TableBlock"
+import { acceptsFootnoteRef } from "../extensions/FootnotesBlock"
 import { EMBED_ICONS, MEDIA_BLOCK_ICONS, type EmbedProvider } from "@gl-admin/lib/blocks-spec"
 import { requestEmbedFieldFocus, takeEmbedFieldFocus } from "./embedLinks"
 import { requestHtmlFieldFocus, takeHtmlFieldFocus } from "./htmlSnippets"
@@ -73,6 +74,8 @@ export interface CatalogEntry {
    * enforced is enforced by the server (Custom HTML, #428).
    */
   roles?: readonly CatalogRole[]
+  /** Goes in the line rather than as a block (#422): any slot that holds text takes it. */
+  inline?: boolean
   /** Set on a theme block: offered only while that theme is active. */
   theme?: string
   /** False while the site has switched this block off (an embed provider off Allowed embeds, #425). */
@@ -113,6 +116,8 @@ export const ICONS = {
   columns: COLUMNS_ICON,
   buttons: "M3 8h18v8H3zM8 12h8",
   spacer: "M12 4v16M8 8l4-4 4 4M8 16l4 4 4-4",
+  // #422, the canvas's Footnote tile.
+  footnote: "M4 8h11M4 13h11M4 18h7M17 4h2v5M17 9h4",
 } as const
 
 const chain = (editor: Editor, range: InsertRange) => editor.chain().focus().deleteRange(range)
@@ -281,6 +286,18 @@ export const CORE_BLOCKS: readonly CatalogEntry[] = [
     keywords: ["toggle", "accordion", "collapse", "expand", "faq", "summary", "spoiler"],
     icon: { path: ICONS.details },
     insert: (editor, range) => chain(editor, range).setDetails().run(),
+  },
+  // #422: a reference at the caret and its note in the post's list, in one transaction; the
+  // caret goes to the note. The canvas's slash name is "/footnote".
+  {
+    id: "footnote",
+    type: "footnotes",
+    name: "Footnote",
+    group: "text",
+    keywords: ["citation", "reference", "endnote", "source"],
+    icon: { path: ICONS.footnote },
+    inline: true,
+    insert: (editor, range) => editor.chain().focus().insertFootnote(range).run(),
   },
   // Media
   {
@@ -522,11 +539,13 @@ export function menuEntries(context: MenuContext, entries: readonly CatalogEntry
 export function slotAcceptsAt(editor: Editor): (entry: CatalogEntry) => boolean {
   const { $from } = editor.state.selection
   const parent = $from.depth > 1 ? $from.node($from.depth - 1) : null
+  // In the line (#422): whatever the block, if its text takes the node.
+  const inlineFits = (entry: CatalogEntry) => !!entry.inline && acceptsFootnoteRef(editor.state, $from.pos)
   // A block that holds paragraphs only (a callout, a to-do item, #419; a table cell, #420):
   // any other entry would delete the typed /query and then fail to make its block there.
-  if (parent && parent.type.spec.content === "paragraph+") return (entry) => entry.type === "paragraph"
+  if (parent && parent.type.spec.content === "paragraph+") return (entry) => entry.type === "paragraph" || inlineFits(entry)
   const holder = parent?.type.name ?? "doc"
-  return (entry) => holderAcceptsType(holder, entry.type)
+  return (entry) => (entry.inline ? inlineFits(entry) : holderAcceptsType(holder, entry.type))
 }
 
 // The active theme, set by ThemeProvider when the admin loads (only its blocks are

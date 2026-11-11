@@ -1,9 +1,10 @@
 // onStoreDocument (#206): derive `block_doc` from the live doc and persist both.
 //
 //   1. put columns back in shape if concurrent edits broke the 2–4 limit
-//      (repairColumnsFragment, #426), give a cover or media & text that lost every block an
-//      empty line (repairEmptyContainers, #427), then stamp missing/duplicate block ids into
-//      the live doc (stampFragmentBlockIds), so ids don't churn between stores;
+//      (repairColumnsFragment, #426, and the footnotes list, #422), give a cover or media & text
+//      that lost every block an empty line (repairEmptyContainers, #427), then stamp
+//      missing/duplicate block ids into the live doc (stampFragmentBlockIds), so ids don't
+//      churn between stores;
 //   2. fragment → ProseMirror → pmToBlockDoc, per top-level node (fragmentToBlockDoc),
 //      with the blocks seeding dropped (meta.dropped) merged back (restoreDroppedBlocks),
 //      then repeats within one list removed (dedupeBlockRefs, #414);
@@ -20,6 +21,7 @@ import {
   EDITOR_FRAGMENT,
   fragmentToBlockDoc,
   repairColumnsFragment,
+  repairFootnotesFragment,
   repairEmptyContainers,
   stampFragmentBlockIds,
   type UnconvertibleBlock,
@@ -75,6 +77,7 @@ export function prepareStore(doc: Y.Doc, schema: Schema, input: StoreInput): Pre
   let stamped = 0
   doc.transact(() => {
     repairColumnsFragment(fragment)
+    repairFootnotesFragment(fragment)
     repairEmptyContainers(fragment)
     stamped = stampFragmentBlockIds(fragment)
   }, SERVER_ORIGIN)

@@ -21,6 +21,7 @@ import {
   normalizeChipTime,
   normalizeEntityId,
   normalizeInlineLabel,
+  normalizeFootnoteId,
 } from "@gl-admin/lib/blocks-spec"
 
 const pasteSanitizerPluginKey = new PluginKey("pasteSanitizer")
@@ -123,6 +124,10 @@ const isInlineSpan = (node: Element): boolean => {
 const BLOCK_DATA_TYPES: Readonly<Record<string, ReadonlySet<string>>> = {
   DIV: new Set([...CONTAINER_DIV_TYPES, "callout"]),
   SPAN: new Set(Object.keys(INLINE_SPAN_TYPES)),
+  // #422: a footnote reference. Whether this post has its note is `keepKnownFootnoteRefs`'s
+  // call, after parsing. A pasted list or note keeps its text only: the tags stay, the types
+  // don't, so a paste can never add a second list.
+  SUP: new Set(["footnote-ref"]),
   FIGURE: new Set(["pull-quote"]),
   UL: new Set(["taskList"]),
   LI: new Set(["taskItem"]),
@@ -153,6 +158,7 @@ function getPurifier() {
       "data-tone", "data-cite", "data-checked", "colspan", "rowspan", "data-open", "data-columns",
       "data-layout", "data-href", "data-variant", "data-size", "data-overlay", "data-position",
       "data-user-id", "data-post-id", "data-label", "data-date", "data-time", "data-reminder",
+      "data-footnote-id",
     ],
     ALLOW_DATA_ATTR: false,
     ALLOW_ARIA_ATTR: false,
@@ -176,6 +182,10 @@ function getPurifier() {
       else data.attrValue = color
     } else if (data.attrName === "data-type") {
       if (!BLOCK_DATA_TYPES[node.nodeName]?.has(data.attrValue)) data.keepAttr = false
+    } else if (data.attrName === "data-footnote-id") {
+      const id = isTyped(node, "SUP", "footnote-ref") ? normalizeFootnoteId(data.attrValue) : null
+      if (id === null) data.keepAttr = false
+      else data.attrValue = id
     } else if (data.attrName === "data-tone") {
       if (!isTyped(node, "DIV", "callout") || !isCalloutTone(data.attrValue)) data.keepAttr = false
     } else if (data.attrName === "data-cite") {
@@ -494,7 +504,9 @@ function parseStyle(style: string): Record<string, string> {
 // The to-do list and the callout (#419) wrap their content the same way, and so do a
 // table's parts (#420), so cells copied from a table paste as cells.
 const SLICE_CONTEXT_TYPES = new Set([
-  "bulletList", "orderedList", "listItem", "blockquote", "taskList", "taskItem", "callout", ...CONTAINER_NODE_NAMES,
+  "bulletList", "orderedList", "listItem", "blockquote", "taskList", "taskItem", "callout",
+  // The footnotes list can't be pasted (#422): text copied from a note pastes as text.
+  ...CONTAINER_NODE_NAMES.filter((name) => name !== "footnotes"),
   "tableBlock", "table", "tableRow", "tableCell",
 ])
 

@@ -751,6 +751,56 @@
       }
     },
     {
+      "name": "footnotes: a list last in the doc",
+      "valid": true,
+      "doc": { "doc_version": 1, "blocks_order": ["para-00001", "notes-0001"], "blocks": { "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "Hello" } }, "notes-0001": { "id": "notes-0001", "type": "footnotes", "version": 1, "attrs": {}, "children": ["note-00001"] }, "note-00001": { "id": "note-00001", "type": "footnote", "version": 1, "attrs": { "text": "A note" } } } }
+    },
+    {
+      "name": "footnotes: a list with no reference pointing at it is kept",
+      "valid": true,
+      "doc": { "doc_version": 1, "blocks_order": ["notes-0001"], "blocks": { "notes-0001": { "id": "notes-0001", "type": "footnotes", "version": 1, "attrs": {}, "children": ["note-00001"] }, "note-00001": { "id": "note-00001", "type": "footnote", "version": 1, "attrs": { "text": "A note" } } } }
+    },
+    {
+      "name": "footnotes: two lists",
+      "valid": false,
+      "doc": { "doc_version": 1, "blocks_order": ["para-00001", "notes-0001", "notes-0002"], "blocks": { "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "Hello" } }, "notes-0001": { "id": "notes-0001", "type": "footnotes", "version": 1, "attrs": {}, "children": ["note-00001"] }, "notes-0002": { "id": "notes-0002", "type": "footnotes", "version": 1, "attrs": {}, "children": ["note-00002"] }, "note-00001": { "id": "note-00001", "type": "footnote", "version": 1, "attrs": { "text": "A note" } }, "note-00002": { "id": "note-00002", "type": "footnote", "version": 1, "attrs": { "text": "Another" } } } }
+    },
+    {
+      "name": "footnotes: a block after the list",
+      "valid": false,
+      "doc": { "doc_version": 1, "blocks_order": ["notes-0001", "para-00001"], "blocks": { "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "Hello" } }, "notes-0001": { "id": "notes-0001", "type": "footnotes", "version": 1, "attrs": {}, "children": ["note-00001"] }, "note-00001": { "id": "note-00001", "type": "footnote", "version": 1, "attrs": { "text": "A note" } } } }
+    },
+    {
+      "name": "footnotes: in a group",
+      "valid": false,
+      "doc": { "doc_version": 1, "blocks_order": ["group-0001"], "blocks": { "group-0001": { "id": "group-0001", "type": "group", "version": 1, "attrs": {}, "children": ["notes-0001"] }, "notes-0001": { "id": "notes-0001", "type": "footnotes", "version": 1, "attrs": {}, "children": ["note-00001"] }, "note-00001": { "id": "note-00001", "type": "footnote", "version": 1, "attrs": { "text": "A note" } } } }
+    },
+    {
+      "name": "footnotes: an empty list",
+      "valid": false,
+      "doc": { "doc_version": 1, "blocks_order": ["notes-0001"], "blocks": { "notes-0001": { "id": "notes-0001", "type": "footnotes", "version": 1, "attrs": {}, "children": [] } } }
+    },
+    {
+      "name": "footnotes: holds only notes",
+      "valid": false,
+      "doc": { "doc_version": 1, "blocks_order": ["notes-0001"], "blocks": { "notes-0001": { "id": "notes-0001", "type": "footnotes", "version": 1, "attrs": {}, "children": ["para-00001"] }, "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "Hello" } } } }
+    },
+    {
+      "name": "footnotes: a note at the top level",
+      "valid": false,
+      "doc": { "doc_version": 1, "blocks_order": ["note-00001"], "blocks": { "note-00001": { "id": "note-00001", "type": "footnote", "version": 1, "attrs": { "text": "A note" } } } }
+    },
+    {
+      "name": "footnotes: a note in a group",
+      "valid": false,
+      "doc": { "doc_version": 1, "blocks_order": ["group-0001"], "blocks": { "group-0001": { "id": "group-0001", "type": "group", "version": 1, "attrs": {}, "children": ["note-00001"] }, "note-00001": { "id": "note-00001", "type": "footnote", "version": 1, "attrs": { "text": "A note" } } } }
+    },
+    {
+      "name": "footnotes: a note has no children",
+      "valid": false,
+      "doc": { "doc_version": 1, "blocks_order": ["para-00001", "notes-0001"], "blocks": { "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "Hello" } }, "notes-0001": { "id": "notes-0001", "type": "footnotes", "version": 1, "attrs": {}, "children": ["note-00001"] }, "note-00001": { "id": "note-00001", "type": "footnote", "version": 1, "attrs": {}, "children": ["para-00001"] } } }
+    },
+    {
       "name": "a cover (#427) holds flow blocks at the top level",
       "valid": true,
       "doc": {

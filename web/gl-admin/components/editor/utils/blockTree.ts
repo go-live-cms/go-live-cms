@@ -54,6 +54,9 @@ export function holdsBlocks(nodeName: string): boolean {
 
 /** Whether `node`, a child of `parent`, is an editor block (a block, not a list item). */
 export function isEditorBlock(node: PMNode, parent: PMNode): boolean {
+  // The footnotes list and its notes (#422) have no gutter, block menu or drag: the list stays
+  // last, a post has one, and a note goes through its own Remove.
+  if (node.type.name === "footnotes" || node.type.name === "footnote") return false
   return !LIST_ITEM_NODE_NAMES.has(node.type.name) && isBlockNode(node.type.name, parent.type.name)
 }
 
@@ -373,8 +376,9 @@ export function deleteBlockTr(state: EditorState, block: EditorBlock): Transacti
   if (range.fill) {
     takeAway(tr, range, range.from, range.to)
     tr.setSelection(TextSelection.create(tr.doc, range.from + 1))
-  } else if (range.from === 0 && range.to === state.doc.content.size) {
-    tr.replaceWith(0, state.doc.content.size, state.schema.nodes.paragraph.create())
+  } else if (range.from === 0 && (range.to === state.doc.content.size || onlyFootnotesAfter(state.doc, range.to))) {
+    // A post left with only its footnotes (#422) would have no line to type in: the list has no gutter.
+    tr.replaceWith(0, range.to, state.schema.nodes.paragraph.create())
     tr.setSelection(TextSelection.create(tr.doc, 1))
   } else {
     tr.delete(range.from, range.to)
@@ -386,6 +390,12 @@ export function deleteBlockTr(state: EditorState, block: EditorBlock): Transacti
     else tr.setSelection($at.nodeAfter ? Selection.near($at, 1) : Selection.near($at, -1))
   }
   return tr.scrollIntoView()
+}
+
+/** Whether all that follows `pos` at the top level is the footnotes list. */
+function onlyFootnotesAfter(doc: PMNode, pos: number): boolean {
+  const last = doc.lastChild
+  return last?.type.name === "footnotes" && pos === doc.content.size - last.nodeSize
 }
 
 /**

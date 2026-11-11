@@ -348,10 +348,20 @@ func regenerateBlockIDs(raw json.RawMessage, newID func() string) (json.RawMessa
 	return json.Marshal(doc)
 }
 
-// remapDataBlockIDs replaces every "data-block-id" string under v.
+// remapDataBlockIDs replaces every "data-block-id" string under v, and every footnote
+// reference's target (#422): a note's id is its block id, so a copy's references must
+// follow its notes to their new ids.
 func remapDataBlockIDs(v interface{}, mapID func(string) string) {
 	switch node := v.(type) {
 	case map[string]interface{}:
+		if stringOf(node["type"]) == footnoteRefNodeType {
+			if attrs, ok := node["attrs"].(map[string]interface{}); ok {
+				if target, ok := attrs["footnoteId"].(string); ok {
+					attrs["footnoteId"] = mapID(target)
+				}
+			}
+			return
+		}
 		for key, value := range node {
 			if s, ok := value.(string); ok && key == "data-block-id" {
 				node[key] = mapID(s)

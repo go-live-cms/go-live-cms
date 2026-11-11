@@ -218,6 +218,51 @@ export function repairColumnsFragment(fragment: Y.XmlFragment, newParagraph: () 
 }
 
 /**
+ * Put the live doc's footnotes in the shape a stored doc needs (#422): one list, after every
+ * other block. One transaction; returns how many lists it changed (0 means no Yjs update).
+ *
+ * Why it exists: "one, last" is a rule over the whole doc, and Yjs merges concurrent inserts
+ * without knowing it. Two people adding the first footnote at once make two lists; someone
+ * adding a paragraph at the end while another adds the first note can leave a block after the
+ * list. The schema allows both on purpose (`blocks-spec/footnotes.ts`), the editors go on
+ * working, and a client can't fix it (rule 7), so the server does before a store, as it
+ * repairs columns and stamps ids.
+ *
+ * Nothing is lost: the first list takes every other list's notes (copies, with their ids, so
+ * the references still point at them), a repeated id once, and moves to the end when a block
+ * is after it. Which list is first is the doc's order, the same for every peer.
+ */
+export function repairFootnotesFragment(fragment: Y.XmlFragment): number {
+  const isList = (child: unknown): child is Y.XmlElement => child instanceof Y.XmlElement && child.nodeName === "footnotes"
+  const lists = fragment.toArray().filter(isList)
+  if (lists.length === 0) return 0
+  if (lists.length === 1 && fragment.get(fragment.length - 1) === lists[0]) return 0
+
+  const write = () => {
+    const [keep, ...others] = lists
+    const ids = new Set(keep.toArray().map((note) => (note as Y.XmlElement).getAttribute("data-block-id")))
+    for (const other of others) {
+      for (const note of other.toArray()) {
+        const element = note as Y.XmlElement
+        const id = element.getAttribute("data-block-id")
+        if (id && ids.has(id)) continue
+        if (id) ids.add(id)
+        keep.insert(keep.length, [element.clone()])
+      }
+      fragment.delete(fragment.toArray().indexOf(other), 1)
+    }
+    if (fragment.get(fragment.length - 1) !== keep) {
+      const copy = keep.clone()
+      fragment.delete(fragment.toArray().indexOf(keep), 1)
+      fragment.insert(fragment.length, [copy])
+    }
+  }
+  if (fragment.doc) fragment.doc.transact(write)
+  else write()
+  return lists.length
+}
+
+/**
  * Put an empty paragraph into every container of the live doc that lost its last block
  * (#427: a cover or a media & text, `emptyNotInSchema`). One transaction; returns how many
  * it changed. The same reason as the columns above: Yjs merges two people deleting the last

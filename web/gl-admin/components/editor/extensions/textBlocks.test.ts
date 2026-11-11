@@ -131,12 +131,12 @@ describe("inserting (#419)", () => {
 })
 
 describe("the menus inside a callout or a to-do item (#419)", () => {
-  it("offer only Paragraph: nothing else can go in a block that holds paragraphs only", () => {
+  it("offer only Paragraph and what goes in the line: nothing else can go in a block that holds paragraphs only", () => {
     const ed = makeEditor(doc())
     for (const id of [CALLOUT, T1]) {
       ed.commands.setTextSelection(inside(ed, id))
       const accepts = slotAcceptsAt(ed)
-      expect(CORE_BLOCKS.filter(accepts).map((e) => e.id), id).toEqual(["paragraph"])
+      expect(CORE_BLOCKS.filter(accepts).map((e) => e.id), id).toEqual(["paragraph", "footnote"])
     }
     // At the top level, everything is offered as before.
     ed.commands.setTextSelection(ed.state.doc.content.size - 2)

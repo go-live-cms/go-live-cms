@@ -8,6 +8,7 @@ import Subscript from "@tiptap/extension-subscript"
 import Superscript from "@tiptap/extension-superscript"
 import { getCoreSchema, schemaExtensions } from "./schema"
 import { Group } from "../../components/editor/extensions/GroupBlock"
+import { Footnote } from "../../components/editor/extensions/FootnotesBlock"
 import { GlTable, GlTableRow, TableBlock, TableCaption } from "../../components/editor/extensions/TableBlock"
 import {
   decodeCollabAuthToken,
@@ -373,9 +374,27 @@ describe("schemaFingerprint (#416)", () => {
       expect(schemaFingerprint(noLabel)).not.toBe(core)
     })
 
+    it("footnotes (#422) changed it: three new node types, one in every text block, and a wider doc", () => {
+      const { footnoteRef, footnotes, document, ...rest } = schemaExtensions({ collaborating: true })
+      const OldDocument = document.extend({ content: (document.config.content as string).replace(" | footnotes", "") })
+      const before = getSchema(Object.values({ ...rest, document: OldDocument }))
+      for (const name of ["footnoteRef", "footnotes", "footnote"]) {
+        expect(before.nodes[name], name).toBeUndefined()
+        expect(getCoreSchema().nodes[name], name).toBeDefined()
+      }
+      expect(getCoreSchema().nodes.footnoteRef.isInline && getCoreSchema().nodes.footnoteRef.isAtom).toBe(true)
+      expect(schemaFingerprint(before)).not.toBe(core)
+      // Each piece on its own: a tab with the list but no reference would delete the references.
+      expect(schemaFingerprint(getSchema(Object.values({ ...rest, document, footnotes: footnotes.extend({}) , footnoteRef: footnoteRef.extend({ addAttributes: () => ({}) }) })))).not.toBe(core)
+      // "One list, last" isn't in the schema, on purpose (blocks-spec/footnotes.ts).
+      expect(getCoreSchema().topNodeType.spec.content).toMatch(/^\(.*\| footnotes\b.*\)\+$/)
+    })
+
     it("the inline nodes (#320) changed it, each on its own, and their attrs are in it", () => {
       // The schema as it was before #320: no mention, content link or date chip.
-      const { mention, contentLink, dateChip, ...rest } = schemaExtensions({ collaborating: true })
+      // A footnote's content names them (#422), so the old schema's notes can't.
+      const { mention, contentLink, dateChip, footnotes, ...others } = schemaExtensions({ collaborating: true })
+      const rest = { ...others, footnotes: footnotes.extend({ addExtensions: () => [Footnote.extend({ content: "text*" })] }) }
       const before = getSchema(Object.values(rest))
       for (const name of ["mention", "contentLink", "dateChip"]) {
         expect(before.nodes[name], name).toBeUndefined()

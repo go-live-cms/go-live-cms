@@ -318,7 +318,8 @@ export const MentionMenuExtension = Extension.create({
   },
 
   addExtensions() {
-    return [Suggestion.extend({ name: "mentionSuggestion" }).configure({ ...this.options.suggestion })]
+    // Before the blocks' own keys (a footnote's ↵ and Esc, #422): an open menu takes them first.
+    return [Suggestion.extend({ name: "mentionSuggestion", priority: 300 }).configure({ ...this.options.suggestion })]
   },
 })
 

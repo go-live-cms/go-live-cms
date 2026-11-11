@@ -116,6 +116,12 @@ export interface ContainerRule {
    */
   countNotInSchema?: boolean
   /**
+   * At most one per doc, at the top level, after every other block (the footnotes list, #422).
+   * Not in the content expressions, for the reason above: `nestingIssues` and the API refuse it
+   * in a stored doc, and the collab server repairs the fragment first (`repairFootnotesFragment`).
+   */
+  onePerDocLast?: boolean
+  /**
    * The content expression allows no blocks at all (`*`, #427), though `min` is 1 everywhere
    * else: a container with something of its own that an empty one must not cost. y-tiptap
    * deletes an element whose children fail the content check, for every peer, so two people
@@ -130,6 +136,8 @@ export interface ContainerRule {
  * The containers. Group (#414) is the first, Details (#421) the second, Gallery (#424) the
  * third; columns, column, cover, media & text and footnotes follow in their own issues
  * (#352's build order), each a row here.
+ *
+ * Footnotes (#422, `footnotes.ts`): the post's one list of notes, each a `footnote` block.
  *
  * Details' summary is a **part** (`detailsSummary`, rich text): a child node with no id,
  * always its first child, stored as the block's `attrs.summary` runs, never as a block
@@ -192,6 +200,14 @@ export const CONTAINERS = {
     synthesize: { type: "paragraph", role: "paragraph" },
     fillWhenEmptied: true,
   },
+  footnotes: {
+    node: "footnotes",
+    accepts: ["footnote"],
+    min: 1,
+    topLevel: true,
+    synthesize: { type: "footnote", role: "footnote-note" },
+    onePerDocLast: true,
+  },
   cover: {
     node: "cover",
     accepts: ["flow"],
@@ -242,6 +258,8 @@ export const BLOCK_NODE_NAMES: Readonly<Record<string, string>> = {
   // #426
   buttons: "buttons",
   spacer: "spacer",
+  // #422: only in a `footnotes` list, so not flow.
+  footnote: "footnote",
   ...Object.fromEntries(Object.entries(CONTAINERS).map(([type, rule]) => [type, rule.node])),
 }
 
@@ -390,6 +408,11 @@ export function synthesizedChildId(containerId: string, role: string): string {
   return `${containerId}-${role}`
 }
 
+/** A cover or media & text (#427) with no image to show isn't on the page, nor is what it holds. */
+export function isLeftOffPage(doc: unknown, block: { type?: unknown; attrs?: Record<string, unknown> }): boolean {
+  return (block.type === "cover" || block.type === "media_text") && (block.attrs?.mediaId == null || isMediaMissing(doc, block.attrs.mediaId))
+}
+
 /**
  * The ids of the blocks the public page renders, in reading order (#414, design 2.10):
  * `blocks_order`, and each container's children depth first, each block once. List items
@@ -407,8 +430,7 @@ export function blocksInReadingOrder(doc: DocLike | null | undefined): string[] 
     const block = Object.prototype.hasOwnProperty.call(blocks, id) ? blocks[id] : undefined
     if (!block || typeof block !== "object") return
     seen.add(id)
-    // A cover or media & text (#427) with no image to show isn't on the page, nor is what it holds.
-    if ((block.type === "cover" || block.type === "media_text") && (block.attrs?.mediaId == null || isMediaMissing(doc, block.attrs.mediaId))) return
+    if (isLeftOffPage(doc, block)) return
     out.push(id)
     if (isContainerType(block.type) && Array.isArray(block.children)) block.children.forEach(visit)
   }
@@ -418,7 +440,7 @@ export function blocksInReadingOrder(doc: DocLike | null | undefined): string[] 
 
 // ── Structure (design 2.3) ──────────────────────────────────────────────────────────
 
-interface DocLike {
+export interface DocLike {
   blocks_order?: unknown
   blocks?: unknown
 }
@@ -482,7 +504,8 @@ export interface NestingIssue {
  * 3. No cycles (a block can't be its own descendant).
  * 4. A container's children are of the types and in the count the table allows; a core
  *    block that is neither a container nor a list has no `children`; a container that only
- *    exists inside its parent (a `column`, #426) isn't in `blocks_order`.
+ *    exists inside its parent (a `column`, #426) isn't in `blocks_order`, nor is a `footnote`
+ *    (#422); a footnotes list is the only one in the doc and the last block of `blocks_order`.
  * An unreferenced block is not an error (restores and dropped blocks pass through such
  * states). `children` that isn't an array of strings is an error. Theme and unknown types
  * may have children (as before #414); rules 1–3 apply to them too.
@@ -511,8 +534,11 @@ export function nestingIssues(doc: unknown): NestingIssue[] {
   order.forEach((id, index) => {
     reference(id, null, ["blocks_order", index])
     // A `column` (#426) only exists inside its `columns`.
-    const rule = has(id) ? containerRule(blocks[id as string].type) : undefined
-    if (rule && !rule.topLevel) issues.push({ path: ["blocks_order", index], message: `a ${String(blocks[id as string].type)} can't be at the top level` })
+    const type = has(id) ? blocks[id as string].type : undefined
+    const rule = containerRule(type)
+    if ((rule && !rule.topLevel) || type === "footnote") issues.push({ path: ["blocks_order", index], message: `a ${String(type)} can't be at the top level` })
+    // The footnotes list (#422): being last is also what makes it the only one.
+    if (rule?.onePerDocLast && index !== order.length - 1) issues.push({ path: ["blocks_order", index], message: `a ${String(type)} must be the last block` })
   })
 
   const keys = Object.keys(blocks).sort()

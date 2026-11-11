@@ -982,6 +982,7 @@ These are always available and don't need registration:
 | `columns`      | Blocks side by side (`div.columns > div.column`, below) |
 | `buttons`      | Links styled as buttons (`div.buttons > a.btn.btn-primary`, `.btn-secondary`) |
 | `spacer`       | Empty space, a step of your spacing scale (`div.spacer`) |
+| `footnotes`    | The post's notes, at the end (`section.footnotes`, below), and `a.fn-ref` in the text |
 | `table`        | Rows and columns with an optional header row and caption (below) |
 | `video`        | A video from Media with the browser's player (`figure.video-block > video`), never autoplaying |
 | `audio`        | An audio file with the browser's player (`figure.audio-block > audio`) |
@@ -1031,6 +1032,21 @@ Make `.table-scroll` scroll sideways (`overflow-x: auto`) and give the `<table>`
 page; the box is focusable, so show its focus ring (the arrow keys scroll it). Without a
 caption the region is named "Table" (`aria-label`). Cells hold paragraphs only, rendered
 inline with `<br>` between them. The default theme's rules are in `styles/theme.css`.
+
+**Footnotes markup (#422).** The numbers come from the order of the references; a theme styles the two parts:
+
+```html
+<sup><a class="fn-ref" href="#fn-1" id="ref-1" aria-label="Footnote 1">1</a></sup>  <!-- in any text -->
+
+<section class="footnotes" aria-labelledby="fn-title">
+  <h2 id="fn-title">Footnotes</h2>
+  <ol>
+    <li id="fn-1">The note.<a class="fn-back" href="#ref-1" aria-label="Back to reference 1">↩</a></li>
+  </ol>
+</section>
+```
+
+Give `.fn-ref` and `.footnotes li` a `scroll-margin-top` if your header is sticky. The default theme's rules are in `styles/theme.css`.
 
 **Gallery markup (#424).** A theme lays out the grid; a block with no image left to show renders nothing:
 

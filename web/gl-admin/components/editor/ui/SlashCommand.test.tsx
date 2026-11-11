@@ -168,6 +168,8 @@ describe("the slash menu", () => {
     press("ArrowDown")
     expect(active()!.textContent).toBe("Details")
     press("ArrowDown")
+    expect(active()!.textContent).toBe("Footnote")
+    press("ArrowDown")
     expect(active()!.textContent).toBe("Image")
     // Gallery (#424), video, audio and file (#423), cover and media & text (#427), then Layout.
     for (const name of ["Gallery", "Video", "Audio", "File", "Cover", "Media & text"]) {

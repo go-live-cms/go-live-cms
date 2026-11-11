@@ -1,10 +1,11 @@
 import React from "react"
-import { blockAnchorId, blocksInReadingOrder, embedTargetOf, type BlockDocV1, type Block } from "@gl-admin/lib/blocks-spec"
+import { blockAnchorId, blocksInReadingOrder, embedTargetOf, footnoteIndex, type BlockDocV1, type Block } from "@gl-admin/lib/blocks-spec"
 import { blockRegistry } from "./blocks/registry"
 import { isThemeBlockType } from "@gl-admin/lib/blocks-spec/themeBlocks"
 import { renderContent, getBlockContent, isBlankParagraph } from "./blocks/utils/contentRenderer"
 import { ImageSizesContext, BLOCK_IMAGE_SIZES } from "./blocks/utils/responsiveImage"
 import { HeadingIdsContext, headingAnchors, type HeadingAnchor } from "./blocks/utils/headingAnchors"
+import { FootnotesContext } from "./blocks/utils/footnotes"
 // Browser-safe: the admin's revision preview renders this component too.
 import { log } from "../lib/log"
 
@@ -24,6 +25,12 @@ interface BlockRendererProps {
   headings?: HeadingAnchor[]
 }
 
+/** Whether this build draws `block`: its type has a component, and it isn't from a newer build of its theme. */
+function rendersBlock(block: Block): boolean {
+  if (!blockRegistry.getComponent(block.type)) return false
+  return !(isThemeBlockType(block.type) && block.version > (blockRegistry.get(block.type)?.version ?? 1))
+}
+
 /**
  * BlockRenderer - Thin orchestrator for rendering Block Spec v1 documents
  *
@@ -40,9 +47,13 @@ export default function BlockRenderer({ doc, imageSizes = BLOCK_IMAGE_SIZES, hea
   // image, list, quote or heading (TipTap's TrailingNode), and the author never typed it;
   // rendering it would add space at the bottom of every such post. Blank lines anywhere
   // else are the author's spacing and render as one line (ParagraphBlock, #306).
+  // The footnotes list (#422) is the last block; the blank line before it goes the same way.
+  const last = uniqueBlockIds[uniqueBlockIds.length - 1]
+  const list = (doc.blocks[last] as Block | undefined)?.type === "footnotes" ? uniqueBlockIds.pop() : undefined
   while (uniqueBlockIds.length > 0 && isBlankParagraph(doc.blocks[uniqueBlockIds[uniqueBlockIds.length - 1]] as Block)) {
     uniqueBlockIds.pop()
   }
+  if (list) uniqueBlockIds.push(list)
 
   // The script that builds an embed's player on click (#425), for a post that has one. It
   // is ours, on this site: nothing is asked of a provider until a reader clicks.
@@ -54,7 +65,9 @@ export default function BlockRenderer({ doc, imageSizes = BLOCK_IMAGE_SIZES, hea
   return (
     <ImageSizesContext.Provider value={imageSizes}>
       <HeadingIdsContext.Provider value={headingIds}>
-        <div className="block-content">{uniqueBlockIds.map((blockId) => renderBlock(blockId))}</div>
+        <FootnotesContext.Provider value={footnoteIndex(doc, (block) => rendersBlock(block as Block))}>
+          <div className="block-content">{uniqueBlockIds.map((blockId) => renderBlock(blockId))}</div>
+        </FootnotesContext.Provider>
         {hasEmbed && <script src={EMBED_LOADER_SRC} defer />}
       </HeadingIdsContext.Provider>
     </ImageSizesContext.Provider>
@@ -94,7 +107,7 @@ export function blockRendererFor(
     // A theme block written by a newer build of its theme than this one (e.g. after a
     // rollback, #376): its attrs may mean something this renderer doesn't know, so it
     // renders nothing, like a block of a removed theme. It stays in the stored doc.
-    if (isThemeBlockType(block.type) && block.version > (blockRegistry.get(block.type)?.version ?? 1)) return null
+    if (!rendersBlock(block)) return null
 
     // WordPress-style shared props - every component gets the same interface
     return (
