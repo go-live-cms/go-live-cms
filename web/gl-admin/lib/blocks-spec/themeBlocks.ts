@@ -17,6 +17,14 @@ export function isThemeBlockType(type: unknown): type is string {
   return typeof type === "string" && type.startsWith("theme:")
 }
 
+/**
+ * Whether `type` is a namespaced extension block (`theme:` or `plugin:`, #452), a block
+ * whose definition comes from outside core and may be missing from a build.
+ */
+export function isExtensionBlockType(type: string): boolean {
+  return type.startsWith("theme:") || type.startsWith("plugin:")
+}
+
 /** The theme slug in a theme block type (`theme:example/alert` → `example`), or null. */
 export function themeOfBlockType(type: string): string | null {
   return THEME_BLOCK_TYPE.exec(type)?.[1] ?? null

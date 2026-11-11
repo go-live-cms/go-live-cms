@@ -956,7 +956,7 @@ Read attrs through `themeBlockAttrs`: it applies defaults and ignores invalid va
 
 ### When a theme is removed
 
-Blocks of a theme that is no longer in the build are never deleted. The editor hides them (the post shows a hidden-blocks notice; the rest stays editable) and every save keeps them where they were; the API stores them unvalidated; the public page renders nothing for them. Reinstalling the theme brings them back.
+Blocks of a theme that is no longer in the build are never deleted. The editor hides them (the post shows a hidden-blocks notice; the rest stays editable) and every save keeps them where they were; the API stores them unvalidated; the public page renders nothing for them. Reinstalling the theme brings them back in place. This holds for posts that were already open before the theme was removed too: the collab server reloads such a post once without the blocks, and again once the theme is back (#453). A quote or list item with one of the theme's blocks inside it is hidden whole until then.
 
 ### Built-in Block Types
 

@@ -170,6 +170,45 @@ describe("theme blocks through the collab server's fragment bridge", () => {
     expect(() => validateBlockDoc(derived, { themeBlocks: themeBlockLookup(schema) })).not.toThrow()
   })
 
+  it("seeding makes no stand-in for a namespaced type (#453): a quote holding one is hidden whole; the store's reader keeps its stand-ins", () => {
+    const QUOTE = "blk-quote-0000001"
+    const nested = (type: string) => ({ type, attrs: { variant: "info" }, content: [{ type: "text", text: "Inside" }] })
+    const quoting = (type: string): BlockDocV1 => ({
+      doc_version: 1,
+      blocks_order: [PARA, QUOTE],
+      blocks: {
+        [PARA]: stored.blocks[PARA],
+        [QUOTE]: {
+          id: QUOTE,
+          type: "blockquote",
+          version: 2,
+          attrs: { pm: { type: "blockquote", content: [{ type: "paragraph", content: [{ type: "text", text: "Q" }] }, nested(type)] } },
+        } as BlockDocV1["blocks"][string],
+      },
+    })
+    const core = getCoreSchema()
+    for (const type of ["theme:gone/widget", "plugin:gone/widget"]) {
+      const doc = quoting(type)
+      const fragment = new Y.Doc().getXmlFragment(EDITOR_FRAGMENT)
+      const dropped = seedFragment(doc, fragment, core)
+      expect(dropped.entries).toEqual([{ id: QUOTE, parentId: null, afterId: PARA }])
+      expect(fragment.toArray().map((child) => (child as Y.XmlElement).nodeName)).toEqual(["paragraph"])
+      // The store still puts it back, as stored.
+      expect(fragmentToBlockDoc(fragment, core, { dropped }).blocks[QUOTE]).toEqual(doc.blocks[QUOTE])
+    }
+
+    // A pre-#376 custom type in the same place still gets its stand-in and stays in the fragment.
+    const fragment = new Y.Doc().getXmlFragment(EDITOR_FRAGMENT)
+    expect(seedFragment(quoting("sidenote"), fragment, core).entries).toEqual([])
+    expect((fragment.get(1) as Y.XmlElement).nodeName).toBe("blockquote")
+
+    // Reading a fragment that holds a namespaced node (stored state) still works, through a stand-in.
+    const live = new Y.Doc().getXmlFragment(EDITOR_FRAGMENT)
+    seedFragment(quoting(alert.type), live, schema)
+    const derived = fragmentToBlockDoc(live, core)
+    expect((derived.blocks[QUOTE].attrs as any).pm.content[1].type).toBe(alert.type)
+  })
+
   it("a server without the theme installed keeps the block too (core schema only)", () => {
     const ydoc = new Y.Doc()
     const fragment = ydoc.getXmlFragment(EDITOR_FRAGMENT)

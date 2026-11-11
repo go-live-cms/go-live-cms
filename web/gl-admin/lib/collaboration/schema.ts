@@ -204,8 +204,13 @@ const standInSchemas = new WeakMap<Schema, Map<string, Schema>>()
  *
  * Cached per base schema and stand-in set, so repeated stores of the same doc reuse one
  * schema.
+ *
+ * `skipNode` leaves node types out (no stand-in): a seed passes `isExtensionBlockType`
+ * (#453), so a block of an uninstalled theme or plugin can't be built, even inside a
+ * quote's or list item's `pm`, and is dropped and kept instead (#213). With a stand-in it
+ * would reach the fragment, which the editor can't bind (rule 10).
  */
-export function schemaWithStandIns(base: Schema, roots: unknown[]): Schema {
+export function schemaWithStandIns(base: Schema, roots: unknown[], skipNode?: (type: string) => boolean): Schema {
   const nodes = new Map<string, NodeStandIn>()
   const marks = new Map<string, Set<string>>()
 
@@ -224,7 +229,7 @@ export function schemaWithStandIns(base: Schema, roots: unknown[]): Schema {
     const childrenInline = known
       ? known.inlineContent
       : children.some((child) => child?.type === "text" || (child?.type ? base.nodes[child.type]?.isInline : false))
-    if (!known) {
+    if (!known && !skipNode?.(node.type)) {
       const entry = nodes.get(node.type) ?? { attrs: new Set<string>(), inline: inlineContext, content: null }
       Object.keys(node.attrs ?? {}).forEach((key) => entry.attrs.add(key))
       if (children.length > 0) entry.content ??= childrenInline ? "inline" : "block"
