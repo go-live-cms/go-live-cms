@@ -136,12 +136,15 @@ SELECT
     target.full_name AS target_full_name,
     subject.id AS subject_id,
     subject.username AS subject_username,
-    subject.full_name AS subject_full_name
+    subject.full_name AS subject_full_name,
+    pl.slug AS plugin_slug,
+    pl.name AS plugin_name
 FROM activity a
 LEFT JOIN users actor ON actor.id = a.actor_id
 LEFT JOIN posts p ON a.object_type = 'post' AND p.id = a.object_id
 LEFT JOIN media m ON a.object_type = 'media' AND m.id = a.object_id
 LEFT JOIN users target ON a.object_type = 'user' AND target.id = a.object_id
+LEFT JOIN plugins pl ON a.object_type = 'plugin' AND pl.id = a.object_id
 LEFT JOIN users subject ON a.verb LIKE 'access\_%'
     AND subject.id = CASE WHEN (a.payload->>'user_id') ~ '^[0-9]{1,18}$' THEN (a.payload->>'user_id')::bigint END
 WHERE ($1::bigint IS NULL OR a.id < $1::bigint)
@@ -195,6 +198,8 @@ type ListActivityRow struct {
 	SubjectID       sql.NullInt64   `json:"subject_id"`
 	SubjectUsername sql.NullString  `json:"subject_username"`
 	SubjectFullName sql.NullString  `json:"subject_full_name"`
+	PluginSlug      sql.NullString  `json:"plugin_slug"`
+	PluginName      sql.NullString  `json:"plugin_name"`
 }
 
 // Newest first, paged by id (before_id: the last id of the previous page). What a
@@ -208,7 +213,7 @@ type ListActivityRow struct {
 //     payload.user_id): who asked for or lost access isn't every contributor's
 //     business.
 //
-// Member, invitation and settings events are admin-only. Names and titles are
+// Member, invitation, settings and plugin events are admin-only. Names and titles are
 // joined now, never stored. object_type/object_id narrow it to one object.
 // subject_* is the member an access event is about (payload.user_id).
 // CASE, not AND: Postgres may evaluate the cast before a sibling condition.
@@ -248,6 +253,8 @@ func (q *Queries) ListActivity(ctx context.Context, arg ListActivityParams) ([]L
 			&i.SubjectID,
 			&i.SubjectUsername,
 			&i.SubjectFullName,
+			&i.PluginSlug,
+			&i.PluginName,
 		); err != nil {
 			return nil, err
 		}

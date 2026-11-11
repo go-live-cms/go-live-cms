@@ -14,6 +14,8 @@ const (
 	// moderators only post and media events).
 	ActivityObjectTerm     = "term"
 	ActivityObjectRedirect = "redirect"
+	// Plugins (#455): admin-only in the feed; object_id is plugins.id.
+	ActivityObjectPlugin = "plugin"
 )
 
 const (
@@ -91,4 +93,16 @@ const (
 	ActivityAccessGranted   = "access_granted"
 	ActivityAccessDeclined  = "access_declined"
 	ActivityAccessRevoked   = "access_revoked"
+
+	// Plugins (#455, docs/design/plugin-system.md section 2). An admin enables or
+	// disables one (payload: version); the startup scan, as the system (no actor),
+	// records the rest: installed (version, status; restored: true when a missing
+	// plugin came back), updated (previous_version, version, previous_status, status,
+	// reason "invalid_manifest", without previous_version, when plugin.json stopped validating) and missing
+	// (version).
+	ActivityPluginEnabled   = "plugin_enabled"
+	ActivityPluginDisabled  = "plugin_disabled"
+	ActivityPluginInstalled = "plugin_installed"
+	ActivityPluginUpdated   = "plugin_updated"
+	ActivityPluginMissing   = "plugin_missing"
 )

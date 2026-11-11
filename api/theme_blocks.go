@@ -25,15 +25,32 @@ import (
 // (web/gl-admin/lib/blocks-spec/themeBlocks.ts), so a valid edit is never refused here;
 // web/gl-admin/lib/blocks-spec/themeBlockVectors.json holds the cases both must agree on.
 //
-// A `theme:` block whose type is not in the manifest (its theme was removed) is kept as
-// it is, with only the generic sanitizer applied: refusing or dropping it would lose the
-// post's content. The public renderer renders nothing for it.
+// A `theme:` or `plugin:` block (#452) whose type is not in the manifest (its theme or
+// plugin was removed) is kept as it is, with only the generic sanitizer applied: refusing
+// or dropping it would lose the post's content. The public renderer renders nothing for it.
+// Plugin blocks' specs go into the same manifest (ThemeBlockManifest), so they get exactly
+// the checks theme blocks get.
 
 // themeBlockManifestPath is where the manifest sits relative to the working directory,
 // next to the themes the startup scan reads (ScanThemesDirectory).
 const themeBlockManifestPath = "web/themes/blocks.manifest.json"
 
-const themeBlockPrefix = "theme:"
+// Namespaced extension blocks (#452): a theme's (`theme:<slug>/<block>`, #376) or a
+// plugin's (`plugin:<slug>/<block>`, docs/design/plugin-system.md 5.1). No core type
+// contains `:`. Both are the same kind of block here: a type the manifest knows is
+// validated from its spec, and one it doesn't (its extension isn't in this build) is kept
+// as it is. The web's `isExtensionBlockType` (blocks-spec/themeBlocks.ts) is the same rule.
+var extensionBlockPrefixes = []string{"theme:", "plugin:"}
+
+// isExtensionBlockType reports whether blockType is a theme's or a plugin's block.
+func isExtensionBlockType(blockType string) bool {
+	for _, prefix := range extensionBlockPrefixes {
+		if strings.HasPrefix(blockType, prefix) {
+			return true
+		}
+	}
+	return false
+}
 
 // ThemeAttrSpec is one declared attribute (Block Spec `ThemeAttrSpec`).
 type ThemeAttrSpec struct {
@@ -79,7 +96,7 @@ func LoadThemeBlockManifest(path string) (ThemeBlockManifest, bool, error) {
 		return ThemeBlockManifest{}, true, fmt.Errorf("theme block manifest %s: unsupported manifest_version %d", path, manifest.ManifestVersion)
 	}
 	for blockType, spec := range manifest.Blocks {
-		if !strings.HasPrefix(blockType, themeBlockPrefix) || spec.Version < 1 {
+		if !isExtensionBlockType(blockType) || spec.Version < 1 {
 			return ThemeBlockManifest{}, true, fmt.Errorf("theme block manifest %s: bad entry %q", path, blockType)
 		}
 		for name, attr := range spec.Attrs {

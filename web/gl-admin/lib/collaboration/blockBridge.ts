@@ -38,7 +38,7 @@ import {
   type BlockID,
   type CaptionText,
 } from "../blocks-spec"
-import { attrProblem, isThemeBlockType, themeBlockSpecOf, type ThemeBlockSpec } from "../blocks-spec/themeBlocks"
+import { attrProblem, isExtensionBlockType, themeBlockSpecOf, type ThemeBlockSpec } from "../blocks-spec/themeBlocks"
 import {
   acceptsChild,
   BLOCK_NODE_NAMES,
@@ -595,14 +595,16 @@ function themeNodeToBlock(node: PMNode, id: BlockID, spec: ThemeBlockSpec): Bloc
 }
 
 /**
- * A stored theme block as node JSON for `schema`. An installed one is built from its
- * declared attrs (a stored pm's attrs are ignored) and its pm content, or its text. A
- * version newer than this build reads, or a theme block whose theme isn't installed,
- * throws, so the block is dropped: hidden from the editor and kept as stored (#213).
+ * A stored theme or plugin block as node JSON for `schema`. An installed one is built from
+ * its declared attrs (a stored pm's attrs are ignored) and its pm content, or its text. A
+ * version newer than this build reads, or a block whose theme or plugin isn't installed,
+ * throws, so the block is dropped: hidden from the editor and kept as stored (#213). A
+ * stand-in for the type (schemaWithStandIns, from the block's own pm) has no spec, so it
+ * never counts as installed.
  */
 function themeBlockToPM(block: Block, schema: Schema, baseAttrs: Record<string, unknown>): any {
   const spec = themeBlockSpecOf(schema.nodes[block.type])
-  if (!spec) throw new Error(`theme block type ${block.type} is not installed in this build`)
+  if (!spec) throw new Error(`extension block type ${block.type} is not installed in this build`)
   if (typeof block.version !== "number" || block.version > spec.version) {
     throw new Error(`${block.type} version ${block.version} is newer than this build reads (${spec.version})`)
   }
@@ -1314,7 +1316,9 @@ function blockToPMNode(block: Block, allBlocks: Record<BlockID, Block>, ctx: Con
       }
 
     default:
-      if (isThemeBlockType(block.type)) return themeBlockToPM(block, ctx.schema, baseAttrs)
+      // A theme or plugin block (#376, #452): built from its spec, or dropped and kept
+      // when its extension isn't in this build. Never through a stand-in.
+      if (isExtensionBlockType(block.type)) return themeBlockToPM(block, ctx.schema, baseAttrs)
       // Any other custom block (a type from before #376's namespaced theme blocks):
       // reconstruct from stored PM JSON (a stand-in keeps it, schemaWithStandIns).
       const customAttrs = block.attrs as Record<string, any>

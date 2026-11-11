@@ -308,7 +308,8 @@ a block version like a down migration: restore the pre-release backup, or roll f
   `api/theme_blocks.go` (`themeBlockPrefix`). `collab-server/build.mjs`'s leak check names the
   `themes/` path the same way. All of them become "a namespaced extension block". **This has to land
   first**: an unrecognised `plugin:` type falls into the pre-#376 stand-in path, seeds with a
-  stand-in, and the editor can't build it.
+  stand-in, and the editor can't build it. Done in #452: each of them asks
+  `isExtensionBlockType` (TypeScript and Go), and the leak check names `plugins/` too.
 - **`block.json` replaces `index.ts` for plugins:**
 
   ```json

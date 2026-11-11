@@ -13,6 +13,7 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { singleYjsInstance } from "./singleYjsInstance.mjs"
 import { importMetaGlob } from "./importMetaGlob.mjs"
+import { clientOnlyInputs, themeBlockInputs } from "./bundleChecks.mjs"
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const webRoot = path.resolve(here, "..")
@@ -49,10 +50,10 @@ if (yjsFiles.length !== 1) {
   console.error(`collab-server bundle must contain exactly one yjs build, found ${yjsFiles.length}: ${yjsFiles.join(", ")}`)
   process.exit(1)
 }
-// Theme blocks (#376): only their headless definitions belong here. A theme's editor.ts
-// (React node view) or render.tsx, or React itself, means a client-only module leaked in.
+// Theme and plugin blocks (#376, #452): only their headless definitions belong here
+// (bundleChecks.mjs says what leaked in).
 const inputs = Object.keys(result.metafile.inputs).map((input) => input.replaceAll("\\", "/"))
-const clientOnly = inputs.filter((input) => /node_modules\/(react|react-dom|@tiptap\/react)\//.test(input) || /themes\/[^/]+\/blocks\/.+\/(editor|render)\.[jt]sx?$/.test(input))
+const clientOnly = clientOnlyInputs(inputs)
 if (clientOnly.length > 0) {
   console.error(`collab-server bundle must not contain client-only modules, found: ${clientOnly.join(", ")}`)
   process.exit(1)
@@ -65,5 +66,5 @@ if (fromSrc.length > 0) {
   console.error(`collab-server bundle must not import web/src (the image doesn't ship it), found: ${fromSrc.join(", ")}`)
   process.exit(1)
 }
-const themeBlocks = inputs.filter((input) => /themes\/[^/]+\/blocks\/[^/]+\/index\.ts$/.test(input))
+const themeBlocks = themeBlockInputs(inputs)
 console.log(`collab-server bundle: ${path.relative(webRoot, outfile)} (yjs: ${yjsFiles[0]}; theme blocks: ${themeBlocks.length})`)

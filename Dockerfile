@@ -32,6 +32,10 @@ COPY db/migration ./migration
 # image bundles the same themes, so both images must come from the same commit.
 COPY web/themes ./web/themes
 
+# Plugins (#455) the same way: the startup scan registers web/plugins/*/plugin.json.
+# Installing a plugin means shipping it in this image (and web's, same commit).
+COPY web/plugins ./web/plugins
+
 EXPOSE 8080
 CMD ["/app/main"]
 ENTRYPOINT [ "/app/start.sh" ]

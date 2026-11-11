@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { isThemeBlockType, themeBlockIssues, type ThemeBlockLookup } from "./themeBlocks"
+import { isExtensionBlockType, themeBlockIssues, type ThemeBlockLookup } from "./themeBlocks"
 import { nestingIssues } from "./nesting"
 import { FILE_LABEL_MAX_LENGTH } from "./media"
 import {
@@ -1108,8 +1108,9 @@ export const zBlockDocV1 = z
 
 export interface ValidateOptions {
   /**
-   * The installed theme blocks (#376), e.g. `themeBlockLookup(schema)`. A block of one of
-   * them must also match its spec: a version this build reads, valid declared attrs.
+   * The installed extension blocks (theme #376, plugin #452), e.g. `themeBlockLookup(schema)`.
+   * A block of one of them must also match its spec: a version this build reads, valid
+   * declared attrs.
    */
   themeBlocks?: ThemeBlockLookup
 }
@@ -1124,7 +1125,7 @@ export function validateBlockDoc(doc: unknown, { themeBlocks }: ValidateOptions 
   const issues: z.ZodIssue[] = nestingIssues(doc).map((issue) => ({ code: z.ZodIssueCode.custom, ...issue }))
   if (themeBlocks) {
     for (const [key, block] of Object.entries((doc as BlockDocV1).blocks)) {
-      const spec = isThemeBlockType(block.type) ? themeBlocks(block.type) : undefined
+      const spec = isExtensionBlockType(block.type) ? themeBlocks(block.type) : undefined
       if (!spec) continue
       for (const issue of themeBlockIssues(spec, block)) {
         issues.push({ code: z.ZodIssueCode.custom, path: ["blocks", key, ...issue.path], message: issue.message })

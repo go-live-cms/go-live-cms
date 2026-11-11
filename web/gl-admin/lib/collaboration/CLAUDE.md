@@ -811,6 +811,19 @@ is a real block type for the editor, the collab server, the API and the public p
   renders nothing for it (`BlockRenderer`, logged once per type). Reinstalling the theme
   brings it back. An unknown type that isn't namespaced (pre-#376 data such as `alert`)
   still gets a stand-in, as before.
+- **Plugin blocks (#452, design `docs/design/plugin-system.md` 5.1):** `plugin:<slug>/<block>`
+  is the same kind of block in a second namespace, and **every check asks
+  `isExtensionBlockType` (`blocks-spec/themeBlocks.ts`), never `theme:` alone**: the
+  bridge's dispatch (`themeBlockToPM`: installed = the node type carries a spec, so a
+  stand-in never counts), `validateBlockDoc`, `BlockRenderer`, the catalog entry
+  (`plugin`, never `theme`) and Go's `isExtensionBlockType` (`api/theme_blocks.go`; the
+  manifest takes both). So an uninstalled plugin's block is dropped at seed and kept in
+  `meta.dropped`, never given a stand-in (one would put an element in the fragment that an
+  editor without the plugin can't build, rule 10). A new namespace goes in both predicates.
+  No plugin block is in the build yet (S6 adds `block.json`). Tests:
+  `blockBridge.pluginBlocks.test.ts`, `blocks-spec/extensionBlocks.test.ts`,
+  `collab-server/pluginBlocks.test.ts`, `BlockRenderer.pluginBlocks.test.tsx`, Go
+  `TestPluginBlocks`.
 - **Stored state with an uninstalled block (#453, design `docs/design/plugin-system.md`
   4.4).** The rule above used to hold only on a seed: a post with usable stored state loaded
   the uninstalled node as is, so rule 10's gate opened the whole post read-only.

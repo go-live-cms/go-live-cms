@@ -187,6 +187,79 @@ func TestLoadThemeBlockManifest(t *testing.T) {
 
 	manifest := loadRepoThemeBlocks(t)
 	require.Equal(t, 1, manifest.ManifestVersion)
+
+	// A plugin block's spec (#452) is a namespaced entry like a theme block's.
+	withPlugin, found, err := LoadThemeBlockManifest(write("plugin.json",
+		`{"manifest_version": 1, "blocks": {"plugin:reading-time/estimate": {"version": 1, "attrs": {"label": {"type": "string", "default": "min read"}}}}}`))
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Contains(t, withPlugin.Blocks, "plugin:reading-time/estimate")
+}
+
+// TestIsExtensionBlockType runs the cases shared with the web's predicate
+// (web/gl-admin/lib/blocks-spec/extensionBlockTypeVectors.json), so the API and the collab
+// server agree on which types are an extension's.
+func TestIsExtensionBlockType(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "web", "gl-admin", "lib", "blocks-spec", "extensionBlockTypeVectors.json"))
+	require.NoError(t, err)
+	var vectors struct {
+		Namespaced    []string `json:"namespaced"`
+		NotNamespaced []string `json:"not_namespaced"`
+	}
+	require.NoError(t, json.Unmarshal(raw, &vectors))
+	require.NotEmpty(t, vectors.Namespaced)
+	require.NotEmpty(t, vectors.NotNamespaced)
+	for _, blockType := range vectors.Namespaced {
+		require.True(t, isExtensionBlockType(blockType), blockType)
+	}
+	// Core types never contain `:`; a pre-#376 custom type isn't namespaced either.
+	for _, blockType := range vectors.NotNamespaced {
+		require.False(t, isExtensionBlockType(blockType), blockType)
+	}
+}
+
+// Plugin blocks (#452) get exactly what theme blocks get: validated from the manifest when
+// installed, kept as they are when their plugin isn't in the build.
+func TestPluginBlocks(t *testing.T) {
+	const pluginType = "plugin:reading-time/estimate"
+	maxLength := 12
+	manifest := ThemeBlockManifest{ManifestVersion: 1, Blocks: map[string]ThemeBlockSpec{
+		pluginType: {Version: 1, Attrs: map[string]ThemeAttrSpec{"label": {Type: "string", Default: "min read", MaxLength: &maxLength}}},
+	}}
+	block := func(blockType string, version int, attrs map[string]interface{}) map[string]interface{} {
+		return roundTrip(t, map[string]interface{}{"id": "blk-plugin-0001", "type": blockType, "version": version, "attrs": attrs})
+	}
+
+	t.Run("installed: undeclared attrs and pm attrs stripped", func(t *testing.T) {
+		doc := themeBlockDoc(map[string]interface{}{"blk-plugin-0001": block(pluginType, 1, map[string]interface{}{
+			"label": "minutes", "extra": "x", "text": "3 minutes",
+			"pm": map[string]interface{}{"type": pluginType, "attrs": map[string]interface{}{"label": "y"}},
+		})})
+		require.NoError(t, doc.prepareForStore(manifest))
+		attrs := doc.Blocks["blk-plugin-0001"].(map[string]interface{})["attrs"].(map[string]interface{})
+		require.Equal(t, "minutes", attrs["label"])
+		require.NotContains(t, attrs, "extra")
+		require.NotContains(t, attrs["pm"], "attrs")
+	})
+
+	t.Run("installed: an invalid value refuses the document", func(t *testing.T) {
+		doc := themeBlockDoc(map[string]interface{}{"blk-plugin-0001": block(pluginType, 1, map[string]interface{}{"label": "far too long a label"})})
+		require.ErrorContains(t, doc.prepareForStore(manifest), "attr label")
+	})
+
+	t.Run("installed: a newer version is kept as is", func(t *testing.T) {
+		doc := themeBlockDoc(map[string]interface{}{"blk-plugin-0001": block(pluginType, 2, map[string]interface{}{"label": "far too long a label"})})
+		require.NoError(t, doc.prepareForStore(manifest))
+		require.Equal(t, "far too long a label", doc.Blocks["blk-plugin-0001"].(map[string]interface{})["attrs"].(map[string]interface{})["label"])
+	})
+
+	t.Run("a block of a plugin that isn't installed is kept as is (only sanitized)", func(t *testing.T) {
+		doc := themeBlockDoc(map[string]interface{}{"blk-plugin-0001": block("plugin:gone/widget", 5, map[string]interface{}{"size": 4, "onclick": "x", "text": "kept"})})
+		require.NoError(t, doc.prepareForStore(manifest))
+		stored := doc.Blocks["blk-plugin-0001"].(map[string]interface{})
+		require.Equal(t, map[string]interface{}{"size": float64(4), "text": "kept"}, stored["attrs"])
+		require.Equal(t, float64(5), stored["version"])
+	})
 }
 
 // The collab server's store goes through the same checks (#376).

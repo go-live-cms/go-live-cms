@@ -78,6 +78,12 @@ export interface CatalogEntry {
   inline?: boolean
   /** Set on a theme block: offered only while that theme is active. */
   theme?: string
+  /**
+   * Set on a plugin block (#452): the plugin's slug. Never a theme's, so a plugin block is
+   * offered whichever theme is active; the enabled-plugins filter comes with the registry
+   * (docs/design/plugin-system.md 4.3).
+   */
+  plugin?: string
   /** False while the site has switched this block off (an embed provider off Allowed embeds, #425). */
   available?: () => boolean
   insert: (editor: Editor, range: InsertRange) => void

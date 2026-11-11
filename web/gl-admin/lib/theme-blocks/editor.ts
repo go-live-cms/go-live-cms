@@ -2,7 +2,7 @@ import type { ComponentType } from "react"
 import type { Node } from "@tiptap/core"
 import { ReactNodeViewRenderer, type ReactNodeViewProps } from "@tiptap/react"
 import type { BlockGroup, CatalogEntry } from "../../components/editor/blocks/catalog"
-import { themeOfBlockType } from "../blocks-spec/themeBlocks"
+import { pluginOfBlockType, themeOfBlockType } from "../blocks-spec/themeBlocks"
 import type { ThemeBlockDefinition } from "./define"
 
 // The admin-only half of a theme block (#376): its node with a React NodeView, and its
@@ -52,7 +52,10 @@ export function themeBlockEditor(definition: ThemeBlockDefinition, options: Them
       group,
       keywords: [...new Set([...(options.keywords ?? []), ...(options.aliases ?? [])])],
       icon: { glyph: options.icon },
+      // The block's extension (#452): a theme block follows the active theme, a plugin
+      // block never does (its type has no theme).
       theme: themeOfBlockType(definition.type) ?? undefined,
+      plugin: pluginOfBlockType(definition.type) ?? undefined,
       // The attrs come from the schema's defaults (the Block Spec's).
       insert: (editor, range) => {
         editor.chain().focus().deleteRange(range).insertContent({ type: definition.type }).run()
