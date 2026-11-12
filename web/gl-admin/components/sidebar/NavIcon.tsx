@@ -71,6 +71,14 @@ const PATHS: Record<NavIconName, ReactNode> = {
       <path d="M7 9h10M7 13h6M9 17h6" />
     </>
   ),
+  plugins: (
+    <>
+      <rect x="3" y="3" width="7" height="7" rx="1.5" />
+      <rect x="14" y="3" width="7" height="7" rx="1.5" />
+      <rect x="3" y="14" width="7" height="7" rx="1.5" />
+      <path d="M17.5 14v7M14 17.5h7" />
+    </>
+  ),
   settings: (
     <>
       <path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1" />

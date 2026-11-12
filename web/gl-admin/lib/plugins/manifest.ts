@@ -16,7 +16,9 @@ export const PLUGIN_API = { min: 1, max: 1 } as const
 export const PLUGIN_CAPABILITIES = ["posts:read", "media:read", "users:read", "network"] as const
 export type PluginCapability = (typeof PLUGIN_CAPABILITIES)[number]
 
-const GUARD_EVENT = "post.before_publish"
+// The publish guard (design 7.7).
+export const PLUGIN_GUARD_EVENT = "post.before_publish"
+const GUARD_EVENT = PLUGIN_GUARD_EVENT
 export const PLUGIN_HOOK_EVENTS = [
   "post.saved",
   "post.published",

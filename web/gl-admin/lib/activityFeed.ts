@@ -94,6 +94,13 @@ const MEDIA_VERBS: Record<string, string> = {
   deleted: "deleted",
 }
 
+const PLUGIN_VERBS: Record<string, string> = {
+  plugin_enabled: "enabled",
+  plugin_disabled: "disabled",
+  plugin_installed: "installed",
+  plugin_updated: "updated",
+}
+
 function objectPart(event: ActivityEvent): { verb: string; what: string; href: string | null } {
   const fallbackVerb = event.verb.replace(/_/g, " ")
   switch (event.object_type) {
@@ -139,6 +146,16 @@ function objectPart(event: ActivityEvent): { verb: string; what: string; href: s
       const taxonomy = typeof event.payload.taxonomy === "string" ? event.payload.taxonomy : ""
       const href = taxonomy ? `/taxonomies?type=${encodeURIComponent(taxonomy)}` : "/taxonomies"
       return { verb: "merged", what: taxonomy === "tag" ? "tags" : taxonomy === "category" ? "categories" : "terms", href }
+    }
+    // Plugins (#455, #457): admins only. The scan's events are the system's ("Someone").
+    case "plugin": {
+      const name = event.plugin?.name || "a plugin"
+      const href = event.plugin ? "/plugins" : null
+      const verb = PLUGIN_VERBS[event.verb]
+      if (event.verb === "plugin_settings_updated") return { verb: "updated the settings of", what: name, href }
+      if (event.verb === "plugin_data_deleted") return { verb: "deleted the data of", what: name, href }
+      if (event.verb === "plugin_missing") return { verb: "found", what: `${name} missing from the build`, href }
+      return { verb: verb ?? fallbackVerb, what: name, href }
     }
     case "redirect":
       if (event.verb === "redirect_created") return { verb: "added", what: "a redirect", href: "/settings#gl-settings-urls" }
