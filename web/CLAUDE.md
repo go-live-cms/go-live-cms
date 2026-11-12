@@ -105,7 +105,8 @@ are the most fragile part of the codebase. **Before editing anything under
 - **Plugins (#455):** `plugins/<slug>/plugin.json` (`plugins/README.md`). Nothing in the web build
   reads them yet (blocks are #456). `gl-admin/lib/plugins/manifest.ts` is the import-free twin of
   the API's validator; `pluginManifestVectors.json` is shared with the Go tests, and
-  `manifest.test.ts` validates every plugin in the repository.
+  `manifest.test.ts` validates every plugin in the repository. Server hooks (#458) are Go in
+  `plugins/<slug>/server/`, built into the API only (`api/CLAUDE.md`); the web build ignores them.
 - **`context.settings` (`src/lib/theme-settings.ts`, #451):** a theme's settings are rows keyed
   `theme:<slug>:<key>` in `extension_settings`, publicly readable, written with an admin's token.
   Never copy it for plugins, whose settings may be secret (`docs/design/plugin-system.md` section 6).

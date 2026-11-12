@@ -19,7 +19,7 @@ func (server *Server) listPlugins(c *gin.Context) {
 	}
 	rsp := make([]PluginResponse, 0, len(plugins))
 	for _, plugin := range plugins {
-		rsp = append(rsp, toPluginResponse(plugin, false))
+		rsp = append(rsp, server.toPluginResponse(plugin, false))
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"plugins":    rsp,
@@ -34,7 +34,7 @@ func (server *Server) getPlugin(c *gin.Context) {
 	if !ok {
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"plugin": toPluginResponse(plugin, true)})
+	c.JSON(http.StatusOK, gin.H{"plugin": server.toPluginResponse(plugin, true)})
 }
 
 // listEnabledPlugins is GET /plugins/enabled (content roles): the slugs of the plugins

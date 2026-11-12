@@ -237,6 +237,12 @@ type Config struct {
 	// process (another replica may still run it). Tests shorten it.
 	ScheduledPublishInterval time.Duration `mapstructure:"SCHEDULED_PUBLISH_INTERVAL"`
 
+	// PluginHooksInterval is how often the API drains the plugin event outbox and runs
+	// due server hooks (#458, api/plugin_hooks.go). 1s by default, so a hook runs about
+	// a second after the change it observes; 0 turns hooks off in this process
+	// (another replica may still run them). Events are still written while it is off.
+	PluginHooksInterval time.Duration `mapstructure:"PLUGIN_HOOKS_INTERVAL"`
+
 	// RateLimitExemptCIDRs is a comma-separated list of client IPs/CIDRs that
 	// skip the general limit (the auth limits still apply). Use it for trusted
 	// server-side callers that funnel many users through one address, such as
@@ -356,6 +362,7 @@ func LoadConfig(path string) (config Config, err error) {
 	viper.SetDefault("INVITATION_TTL", "72h")
 	viper.SetDefault("PASSWORD_RESET_TTL", "1h")
 	viper.SetDefault("SCHEDULED_PUBLISH_INTERVAL", "30s")
+	viper.SetDefault("PLUGIN_HOOKS_INTERVAL", "1s")
 
 	// Required, so deliberately no default. Bind it explicitly instead: viper's
 	// Unmarshal only sees AutomaticEnv values for keys it already knows from a
@@ -432,6 +439,10 @@ func LoadConfig(path string) (config Config, err error) {
 
 	if config.ScheduledPublishInterval < 0 {
 		return config, fmt.Errorf("SCHEDULED_PUBLISH_INTERVAL must be 0 (off) or a positive duration")
+	}
+
+	if config.PluginHooksInterval < 0 {
+		return config, fmt.Errorf("PLUGIN_HOOKS_INTERVAL must be 0 (off) or a positive duration")
 	}
 
 	if config.ActivityRetention < 0 {

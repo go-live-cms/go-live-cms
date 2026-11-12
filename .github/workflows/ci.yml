@@ -134,6 +134,12 @@ jobs:
             exit 1
           fi
 
+      # api/plugins_gen.go links every plugin's server hooks into the API (#458). It is
+      # generated from web/plugins and committed; this fails when it is out of date.
+      - name: gen-plugins --check
+        if: ${{ !cancelled() }}
+        run: go run ./cmd/gen-plugins --check
+
       # Runs even when vet/gofmt failed, so one run reports every finding.
       - name: golangci-lint
         if: ${{ !cancelled() }}

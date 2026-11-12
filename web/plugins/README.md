@@ -10,6 +10,7 @@ web/plugins/<slug>/
   plugin.json             # Required.
   README.md
   blocks/<Name>/          # One directory per name in "blocks".
+  server/*.go             # Go hooks, package server (#458). Linked by api/plugins_gen.go.
 ```
 
 ## plugin.json
@@ -67,3 +68,52 @@ plugin in this directory, so a plugin that fails fails CI.
   `plugin_installed`, `plugin_updated`, `plugin_missing` by the scan (the system).
 - A plugin is trusted code with the full authority of the process it runs in. Review it as you
   would core code.
+
+## Server hooks (#458)
+
+A plugin observes posts with Go code in `server/` (package `server`) that registers its hooks with
+`pluginsdk` (`pluginsdk/pluginsdk.go`, which imports nothing from `api/` or `db/`):
+
+```go
+package server
+
+import (
+	"context"
+
+	"github.com/go-live-cms/go-live-cms/pluginsdk"
+)
+
+func init() {
+	pluginsdk.Register("reading-time", pluginsdk.Plugin{
+		Observers: map[string]pluginsdk.Observer{
+			pluginsdk.EventPostPublished: func(ctx context.Context, host pluginsdk.Host, e pluginsdk.Event) error {
+				post, err := host.Posts().GetPublished(ctx, e.PostID) // needs "posts:read"
+				if err != nil {
+					return err
+				}
+				host.Log().Info("published", "post_id", post.ID)
+				return nil
+			},
+		},
+	})
+}
+```
+
+- **Link it:** run `go run ./cmd/gen-plugins` and commit `api/plugins_gen.go` (CI runs `--check`).
+  Go has no runtime loading, so hooks are compiled into the API image.
+- **Declare it:** every hook in Go must be in `server.hooks`, and every declared hook must be in Go.
+  If they differ the plugin is listed as `incompatible` (`incompatible_reason: "hooks"`) and can't
+  be enabled. A guard (`post.before_publish`) can't be implemented yet (#459).
+- **Events:** `post.saved` (created, a body store or a settings save; coalesced, so read the post
+  when the hook runs), `post.published` (also an Update; `ActorID` is who it's credited to),
+  `post.unpublished`, `post.trashed`, `post.restored`, `post.deleted` (the post is gone; `Data`
+  has `post_type`). The database writes them in the transaction of the change, and only while an
+  enabled plugin subscribes.
+- **How they run:** after the change committed, outside any transaction, as the system. At least
+  once (`Event.ID` is the idempotency key), in order per post. An error, panic or timeout
+  (`timeout_ms`, default 10s, at most 30s) is retried with backoff, at most 8 attempts, and
+  `plugin_hook_failed` goes to the activity log. Two run at a time per plugin; a hook that ignores
+  its context holds its slot until it returns. A hook can never fail, slow or roll back a publish.
+- **Read-only.** `Host` gives the plugin's settings, a logger, and a reader per declared capability
+  (`posts:read`, `media:read`, `users:read`; nil otherwise). Nothing writes a post: only the collab
+  server writes `block_doc`.
