@@ -259,7 +259,7 @@ func (server *Server) updatePluginSettings(c *gin.Context) {
 		sort.Strings(changed)
 		server.recordRequestActivity(c, activityEvent{
 			Verb: db.ActivityPluginSettingsUpdated, ObjectType: db.ActivityObjectPlugin, ObjectID: plugin.ID,
-			Payload: map[string]any{"fields": changed},
+			Payload: settingsActivityPayload(changed),
 		})
 	}
 
@@ -301,6 +301,25 @@ func respondPluginNotConfigurable(c *gin.Context, plugin db.Plugin) {
 		code, message = "plugin_missing", "the plugin is not in this build"
 	}
 	c.JSON(http.StatusConflict, gin.H{"error": message, "code": code})
+}
+
+// settingsActivityFieldsBudget keeps plugin_settings_updated's payload inside the
+// activity table's 1 KiB CHECK: a manifest allows 50 names of up to 64 characters.
+const settingsActivityFieldsBudget = 900
+
+// settingsActivityPayload is {"fields": names}, or, when the names wouldn't fit the
+// activity payload, the ones that do (sorted) plus {"more": how many were left out}.
+func settingsActivityPayload(names []string) map[string]any {
+	kept, size := []string{}, 0
+	for i, name := range names {
+		// A name costs its length plus quotes and a comma.
+		if size+len(name)+3 > settingsActivityFieldsBudget {
+			return map[string]any{"fields": kept, "more": len(names) - i}
+		}
+		kept = append(kept, name)
+		size += len(name) + 3
+	}
+	return map[string]any{"fields": kept}
 }
 
 // sameSettingValue reports whether a stored value equals a new one. Values are JSON

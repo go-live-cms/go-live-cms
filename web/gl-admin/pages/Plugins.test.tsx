@@ -284,4 +284,23 @@ describe("the settings panel", () => {
     expect(input("Links per post").value).toBe("50")
     expect(dialog()!.textContent).not.toContain("Saved")
   })
+
+  it("doesn't call a failed reload a failed delete", async () => {
+    await openSettings()
+    const error = vi.spyOn(toast, "error")
+    await click("Delete plugin data")
+    api.deletePluginData.mockResolvedValue({ deleted: 3 })
+    api.getPluginSettings.mockRejectedValue(new ApiError("Server error.", 500))
+    await click("Delete data")
+    expect(error).not.toHaveBeenCalled()
+    expect(dialog()!.textContent).toContain("Couldn't load the settings")
+  })
+
+  it("keeps typed values when the scrim is clicked", async () => {
+    await openSettings()
+    type(input("Report title"), "Dead links")
+    const overlay = document.querySelector(".gl-drawer-overlay")!
+    await act(async () => overlay.dispatchEvent(new MouseEvent("mousedown", { bubbles: true })))
+    expect(input("Report title").value).toBe("Dead links")
+  })
 })

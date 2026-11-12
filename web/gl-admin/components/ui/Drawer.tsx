@@ -18,6 +18,8 @@ type DrawerProps = {
   // No header: `title` only names the dialog, the content fills the panel, and the
   // close button floats on the scrim beside it (the phone-width sidebar).
   bare?: boolean
+  // Clicking the scrim closes; turn off when closing would lose typed input (as on Modal).
+  closeOnBackdrop?: boolean
   // Names the close button ("Close menu").
   closeLabel?: string
   id?: string
@@ -37,6 +39,7 @@ export default function Drawer({
   initialFocus,
   bare = false,
   closeLabel = "Close",
+  closeOnBackdrop = true,
   id: givenId,
   className = "",
 }: DrawerProps) {
@@ -55,7 +58,7 @@ export default function Drawer({
     <div
       className={`gl-drawer-overlay gl-drawer-overlay--${side}`}
       onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose()
+        if (closeOnBackdrop && e.target === e.currentTarget) onClose()
       }}
     >
       <div

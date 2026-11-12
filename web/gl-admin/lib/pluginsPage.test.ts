@@ -125,6 +125,13 @@ describe("the settings draft", () => {
     expect(settingsChanges(settings, { note: "" })).toEqual({})
   })
 
+  it("doesn't refuse an enum field that has no default and was never set", () => {
+    const settings: PluginSettings = { fields: [{ name: "mode", type: "string", enum: ["a", "b"] }, { name: "on", type: "boolean" }], values: {} }
+    const draft = { ...initialDraft(settings), on: true }
+    expect(draftProblems(settings, draft)).toEqual({})
+    expect(settingsChanges(settings, draft)).toEqual({ on: true })
+  })
+
   it("sends only what changed", () => {
     const draft = initialDraft(SETTINGS)
     expect(settingsChanges(SETTINGS, draft)).toEqual({})

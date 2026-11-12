@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -278,4 +279,22 @@ func TestDeletePluginSettings(t *testing.T) {
 	requireStatus(t, recorder, http.StatusOK)
 	require.JSONEq(t, `{"deleted":0}`, recorder.Body.String())
 	require.Len(t, rec.verbs(), 1)
+}
+
+func TestSettingsActivityPayloadFitsTheActivityCheck(t *testing.T) {
+	require.Equal(t, map[string]any{"fields": []string{"a", "b"}}, settingsActivityPayload([]string{"a", "b"}))
+
+	// The manifest's worst case: 50 names of 64 characters.
+	names := make([]string, pluginSettingsMax)
+	for i := range names {
+		names[i] = fmt.Sprintf("f%02d_%s", i, strings.Repeat("x", 60))
+	}
+	payload := settingsActivityPayload(names)
+	raw, err := json.Marshal(payload)
+	require.NoError(t, err)
+	require.LessOrEqual(t, len(raw), 1024, "activity_payload_small_object")
+	kept := payload["fields"].([]string)
+	require.NotEmpty(t, kept)
+	require.Equal(t, names[:len(kept)], kept)
+	require.Equal(t, len(names)-len(kept), payload["more"])
 }

@@ -75,6 +75,8 @@ export function pluginConflictMessage(code: string | null | undefined): string |
       return "This plugin is no longer in this build."
     case "plugin_incompatible":
       return "This plugin isn’t compatible with this version of GoLive."
+    case "plugin_not_found":
+      return "This plugin is no longer registered."
     case "plugin_changed":
       return "This plugin changed meanwhile. Try again."
     default:
@@ -151,7 +153,8 @@ export function fieldProblem(field: PluginSettingField, draft: FieldDraft | unde
   if (field.type === "boolean") return null
   const text = typeof draft === "string" ? draft : ""
   if (field.type === "string") {
-    if (field.enum && !field.enum.includes(text)) return "Choose one of the options."
+    // "" is unset (a field with no default): the default applies, nothing to refuse.
+    if (field.enum && text !== "" && !field.enum.includes(text)) return "Choose one of the options."
     if (field.maxLength !== undefined && chars(text) > field.maxLength) return `Use at most ${field.maxLength} characters.`
     return null
   }

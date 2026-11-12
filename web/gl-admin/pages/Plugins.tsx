@@ -93,6 +93,7 @@ const PluginsPage = () => {
       toast.error(`Couldn't ${enable ? "enable" : "disable"} ${plugin.name}. ${conflict ?? errorMessage(error)}`)
       if (conflict) {
         setEnabling(null)
+        setDisabling(null)
         load(true)
       }
     } finally {
@@ -351,14 +352,18 @@ function SettingsPanel({ plugin, onClose }: { plugin: Plugin; onClose: () => voi
     setDeleting(true)
     try {
       await deletePluginData(plugin.slug)
-      toast.success(`${plugin.name}’s data was deleted`)
-      setConfirmDelete(false)
-      apply(await getPluginSettings(plugin.slug))
     } catch (error) {
       toast.error(`Couldn't delete the data. ${errorMessage(error)}`)
-    } finally {
       setDeleting(false)
+      return
     }
+    toast.success(`${plugin.name}’s data was deleted`)
+    setConfirmDelete(false)
+    setDeleting(false)
+    // The defaults apply again; a failed reload shows the panel's own error state, never
+    // "couldn't delete", since the data is gone.
+    setSettings(null)
+    load()
   }
 
   const set = (name: string, value: FieldDraft) => setDraft((d) => ({ ...d, [name]: value }))
@@ -371,6 +376,7 @@ function SettingsPanel({ plugin, onClose }: { plugin: Plugin; onClose: () => voi
         title={`${plugin.name} settings`}
         width={440}
         className="gl-plugin-settings"
+        closeOnBackdrop={false}
         footer={
           <div className="gl-plugins__footer">
             <Button variant="secondary" onClick={onClose} disabled={saving}>
@@ -525,7 +531,7 @@ function SecretField({ id, field, value, error, onChange }: { id: string; field:
         type="password"
         unmasked
         autoComplete="off"
-        hint={field.description ?? (draft.set ? "Leave it empty to keep the saved one." : "Once saved, it can be replaced but never shown again.")}
+        hint={[field.description, draft.set ? "Leave it empty to keep the saved one." : "Once saved, it can be replaced but never shown again."].filter(Boolean).join(" ")}
         error={error}
         value={draft.value}
         onChange={(e) => onChange({ ...draft, value: e.currentTarget.value })}
