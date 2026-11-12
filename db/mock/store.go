@@ -1472,6 +1472,36 @@ func (mr *MockStoreMockRecorder) DeleteMenuItems(arg0, arg1 interface{}) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteMenuItems", reflect.TypeOf((*MockStore)(nil).DeleteMenuItems), arg0, arg1)
 }
 
+// DeletePluginSetting mocks base method.
+func (m *MockStore) DeletePluginSetting(arg0 context.Context, arg1 db.DeletePluginSettingParams) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeletePluginSetting", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DeletePluginSetting indicates an expected call of DeletePluginSetting.
+func (mr *MockStoreMockRecorder) DeletePluginSetting(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePluginSetting", reflect.TypeOf((*MockStore)(nil).DeletePluginSetting), arg0, arg1)
+}
+
+// DeletePluginSettings mocks base method.
+func (m *MockStore) DeletePluginSettings(arg0 context.Context, arg1 string) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeletePluginSettings", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DeletePluginSettings indicates an expected call of DeletePluginSettings.
+func (mr *MockStoreMockRecorder) DeletePluginSettings(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePluginSettings", reflect.TypeOf((*MockStore)(nil).DeletePluginSettings), arg0, arg1)
+}
+
 // DeletePost mocks base method.
 func (m *MockStore) DeletePost(arg0 context.Context, arg1 int64) error {
 	m.ctrl.T.Helper()
@@ -3771,6 +3801,21 @@ func (mr *MockStoreMockRecorder) ListPendingPostAccessRequests(arg0, arg1 interf
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPendingPostAccessRequests", reflect.TypeOf((*MockStore)(nil).ListPendingPostAccessRequests), arg0, arg1)
 }
 
+// ListPluginSettings mocks base method.
+func (m *MockStore) ListPluginSettings(arg0 context.Context, arg1 string) ([]db.ExtensionSetting, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListPluginSettings", arg0, arg1)
+	ret0, _ := ret[0].([]db.ExtensionSetting)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListPluginSettings indicates an expected call of ListPluginSettings.
+func (mr *MockStoreMockRecorder) ListPluginSettings(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPluginSettings", reflect.TypeOf((*MockStore)(nil).ListPluginSettings), arg0, arg1)
+}
+
 // ListPlugins mocks base method.
 func (m *MockStore) ListPlugins(arg0 context.Context) ([]db.Plugin, error) {
 	m.ctrl.T.Helper()
@@ -5403,6 +5448,20 @@ func (m *MockStore) SetMediaVariantsTx(arg0 context.Context, arg1 db.SetMediaVar
 func (mr *MockStoreMockRecorder) SetMediaVariantsTx(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetMediaVariantsTx", reflect.TypeOf((*MockStore)(nil).SetMediaVariantsTx), arg0, arg1)
+}
+
+// SetPluginSettingsTx mocks base method.
+func (m *MockStore) SetPluginSettingsTx(arg0 context.Context, arg1 db.SetPluginSettingsTxParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetPluginSettingsTx", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetPluginSettingsTx indicates an expected call of SetPluginSettingsTx.
+func (mr *MockStoreMockRecorder) SetPluginSettingsTx(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetPluginSettingsTx", reflect.TypeOf((*MockStore)(nil).SetPluginSettingsTx), arg0, arg1)
 }
 
 // SetPostAuthorsTx mocks base method.

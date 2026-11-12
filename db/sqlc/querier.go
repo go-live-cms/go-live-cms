@@ -185,6 +185,9 @@ type Querier interface {
 	DeleteMediaPosts(ctx context.Context, mediaID int64) error
 	DeleteMenu(ctx context.Context, id int64) (int64, error)
 	DeleteMenuItems(ctx context.Context, menuID int64) error
+	DeletePluginSetting(ctx context.Context, arg DeletePluginSettingParams) (int64, error)
+	// "Delete plugin data" (section 4.4): every row of this plugin, no other.
+	DeletePluginSettings(ctx context.Context, extensionID string) (int64, error)
 	DeletePost(ctx context.Context, id int64) error
 	// After ReassignPostBylines: @user_id's credit left on @post_ids (the new owner was
 	// already credited there, so it couldn't take their place). Never empties a byline:
@@ -518,6 +521,10 @@ type Querier interface {
 	ListPendingAccessRequestsForReviewer(ctx context.Context, arg ListPendingAccessRequestsForReviewerParams) ([]ListPendingAccessRequestsForReviewerRow, error)
 	// A post's open requests with who asked, oldest first (the editor's notice).
 	ListPendingPostAccessRequests(ctx context.Context, postID int64) ([]ListPendingPostAccessRequestsRow, error)
+	// Plugin settings (#457, docs/design/plugin-system.md section 6): rows keyed
+	// plugin:<slug>:<name>, read and written only through the admin-only
+	// /plugins/:slug/settings routes.
+	ListPluginSettings(ctx context.Context, extensionID string) ([]ExtensionSetting, error)
 	// The plugin registry (#455, 000054). The startup scan writes through the
 	// *Discovered* / Mark* queries, the admin routes through Enable/Disable. Each write
 	// is one conditional statement that returns a row only when it changed something,

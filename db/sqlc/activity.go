@@ -105,4 +105,9 @@ const (
 	ActivityPluginInstalled = "plugin_installed"
 	ActivityPluginUpdated   = "plugin_updated"
 	ActivityPluginMissing   = "plugin_missing"
+	// An admin saving a plugin's settings (#457): payload fields = the names of the
+	// fields that changed, never their values (secrets among them). Delete plugin
+	// data: payload count = the rows removed.
+	ActivityPluginSettingsUpdated = "plugin_settings_updated"
+	ActivityPluginDataDeleted     = "plugin_data_deleted"
 )

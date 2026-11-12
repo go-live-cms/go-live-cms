@@ -96,6 +96,8 @@ type Store interface {
 
 	SaveMenuTx(ctx context.Context, arg SaveMenuTxParams) (Menu, error)
 	ReplaceMenuItemsTx(ctx context.Context, arg ReplaceMenuItemsTxParams) ([]MenuItem, error)
+	// plugin settings (#457)
+	SetPluginSettingsTx(ctx context.Context, arg SetPluginSettingsTxParams) error
 
 	ExecTx(ctx context.Context, fn func(*Queries) error) error
 

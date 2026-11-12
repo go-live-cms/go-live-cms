@@ -19,5 +19,9 @@ func (server *Server) registerPluginRoutes(v1 *gin.RouterGroup) {
 		admin.GET("/:slug", server.getPlugin)
 		admin.POST("/:slug/enable", server.enablePlugin)
 		admin.POST("/:slug/disable", server.disablePlugin)
+		// Settings (#457, plugins_settings.go). DELETE is "Delete plugin data".
+		admin.GET("/:slug/settings", server.getPluginSettings)
+		admin.PUT("/:slug/settings", server.updatePluginSettings)
+		admin.DELETE("/:slug/settings", server.deletePluginSettings)
 	}
 }
