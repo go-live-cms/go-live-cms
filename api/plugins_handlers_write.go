@@ -20,11 +20,11 @@ func (server *Server) enablePlugin(c *gin.Context) {
 		return
 	}
 	if plugin.Status != PluginStatusInstalled {
-		respondPluginNotEnableable(c, plugin)
+		server.respondPluginNotEnableable(c, plugin)
 		return
 	}
 	if plugin.Enabled {
-		c.JSON(http.StatusOK, gin.H{"plugin": toPluginResponse(plugin, false)})
+		c.JSON(http.StatusOK, gin.H{"plugin": server.toPluginResponse(plugin, false)})
 		return
 	}
 
@@ -47,7 +47,7 @@ func (server *Server) enablePlugin(c *gin.Context) {
 		Verb: db.ActivityPluginEnabled, ObjectType: db.ActivityObjectPlugin, ObjectID: enabled.ID,
 		Payload: map[string]any{"version": enabled.Version},
 	})
-	c.JSON(http.StatusOK, gin.H{"plugin": toPluginResponse(enabled, false)})
+	c.JSON(http.StatusOK, gin.H{"plugin": server.toPluginResponse(enabled, false)})
 }
 
 // disablePlugin is POST /plugins/:slug/disable (admin), in any status: it's how an
@@ -60,7 +60,7 @@ func (server *Server) disablePlugin(c *gin.Context) {
 		return
 	}
 	if !plugin.Enabled {
-		c.JSON(http.StatusOK, gin.H{"plugin": toPluginResponse(plugin, false)})
+		c.JSON(http.StatusOK, gin.H{"plugin": server.toPluginResponse(plugin, false)})
 		return
 	}
 	disabled, err := server.store.DisablePlugin(c.Request.Context(), plugin.Slug)
@@ -76,7 +76,7 @@ func (server *Server) disablePlugin(c *gin.Context) {
 		Verb: db.ActivityPluginDisabled, ObjectType: db.ActivityObjectPlugin, ObjectID: disabled.ID,
 		Payload: map[string]any{"version": disabled.Version},
 	})
-	c.JSON(http.StatusOK, gin.H{"plugin": toPluginResponse(disabled, false)})
+	c.JSON(http.StatusOK, gin.H{"plugin": server.toPluginResponse(disabled, false)})
 }
 
 // respondPluginRaced answers an enable or disable whose conditional update matched no
@@ -93,14 +93,14 @@ func (server *Server) respondPluginRaced(c *gin.Context, slug string, enabling b
 		return
 	}
 	if enabling && !plugin.Enabled {
-		respondPluginNotEnableable(c, plugin)
+		server.respondPluginNotEnableable(c, plugin)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"plugin": toPluginResponse(plugin, false)})
+	c.JSON(http.StatusOK, gin.H{"plugin": server.toPluginResponse(plugin, false)})
 }
 
-func respondPluginNotEnableable(c *gin.Context, plugin db.Plugin) {
-	rsp := gin.H{"plugin": toPluginResponse(plugin, false)}
+func (server *Server) respondPluginNotEnableable(c *gin.Context, plugin db.Plugin) {
+	rsp := gin.H{"plugin": server.toPluginResponse(plugin, false)}
 	switch plugin.Status {
 	case PluginStatusInstalled:
 		// Only after a lost race: it was enabled and disabled again meanwhile.

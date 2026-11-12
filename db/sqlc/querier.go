@@ -38,6 +38,14 @@ type Querier interface {
 	// exclude_id skips the post being edited; pass 0 when creating.
 	CheckSlugExists(ctx context.Context, arg CheckSlugExistsParams) (bool, error)
 	CheckURLExists(ctx context.Context, url string) (bool, error)
+	// Takes up to max_runs due runs of one plugin, for the events this process has a hook
+	// for, and leases them: status running, next_attempt_at lease_seconds ahead (the
+	// fencing token the record queries check). A running run whose lease has passed (its
+	// process died) is due again. A run is not due while an earlier run of the same plugin
+	// for the same post is unfinished, so each plugin sees a post's events in order (7.5).
+	// FOR UPDATE SKIP LOCKED keeps replicas apart; the lock ends with the statement, never
+	// held across a hook.
+	ClaimDuePluginHookRuns(ctx context.Context, arg ClaimDuePluginHookRunsParams) ([]ClaimDuePluginHookRunsRow, error)
 	// Claims up to max_rows due pending reminders for this replica (FOR UPDATE SKIP LOCKED,
 	// then a lease, as ClaimDueScheduledPosts). claimed_until is the claim's fencing token.
 	ClaimDueReminders(ctx context.Context, arg ClaimDueRemindersParams) ([]ClaimDueRemindersRow, error)
@@ -135,6 +143,9 @@ type Querier interface {
 	CreateMenu(ctx context.Context, arg CreateMenuParams) (Menu, error)
 	CreateMenuItem(ctx context.Context, arg CreateMenuItemParams) (MenuItem, error)
 	CreatePasswordResetToken(ctx context.Context, arg CreatePasswordResetTokenParams) (PasswordResetToken, error)
+	// plugin_hook_failed (#324), as the system: at most one per plugin per window, so a
+	// plugin failing on every save can't flood the log. 0 rows: one is in the window.
+	CreatePluginHookFailedActivity(ctx context.Context, arg CreatePluginHookFailedActivityParams) (int64, error)
 	// A new open request. No row: the member's last request for this post was
 	// declined less than cooldown_seconds ago. A second open request breaks the
 	// post_access_requests_one_open index (a unique violation).
@@ -180,11 +191,17 @@ type Querier interface {
 	DeleteAllPostMeta(ctx context.Context, postID int64) error
 	DeleteAllThemeSettings(ctx context.Context, themeID int64) error
 	DeleteExtensionSettingsByExtension(ctx context.Context, arg DeleteExtensionSettingsByExtensionParams) error
+	// Retention: up to batch_size runs with this status that finished before cutoff.
+	DeleteFinishedPluginHookRuns(ctx context.Context, arg DeleteFinishedPluginHookRunsParams) (int64, error)
 	DeleteMedia(ctx context.Context, id int64) error
 	DeleteMediaByUserID(ctx context.Context, userID int64) error
 	DeleteMediaPosts(ctx context.Context, mediaID int64) error
 	DeleteMenu(ctx context.Context, id int64) (int64, error)
 	DeleteMenuItems(ctx context.Context, menuID int64) error
+	// Plugin settings (#457, docs/design/plugin-system.md section 6): rows keyed
+	// plugin:<slug>:<name>, written only through the admin-only
+	// /plugins/:slug/settings routes. Read with ListPluginExtensionSettings
+	// (plugin_hooks.sql), which the hook host shares.
 	DeletePluginSetting(ctx context.Context, arg DeletePluginSettingParams) (int64, error)
 	// "Delete plugin data" (section 4.4): every row of this plugin, no other.
 	DeletePluginSettings(ctx context.Context, extensionID string) (int64, error)
@@ -206,6 +223,8 @@ type Querier interface {
 	// A newer signup for the address, or its account being created, ends every
 	// other pending link for it.
 	DeleteSignupRequestsByEmail(ctx context.Context, email string) error
+	// Retention: up to batch_size fanned-out events with no runs left.
+	DeleteSpentPluginEvents(ctx context.Context, batchSize int32) (int64, error)
 	// A store's reminders replace the post's pending ones: a pending row whose chip is gone
 	// (removed, or moved to another day or time: keys are "<block_id> <YYYY-MM-DD> <HH:MM>") is
 	// deleted. Sent, skipped and failed rows stay, so a chip never fires twice. Runs inside
@@ -232,6 +251,16 @@ type Querier interface {
 	// A post of type "post" without a category gets the default one (Uncategorized). The
 	// other types may have none. Called by every writer of a post's terms.
 	EnsureDefaultCategory(ctx context.Context, postIds []int64) (int64, error)
+	// Writes the runs of the oldest events not fanned out yet: one per plugin enabled and
+	// subscribed now. A post.saved gets no run for a plugin that already has a pending
+	// post.saved run for that post: the hook reads the post when it runs, so one is enough
+	// and a slow plugin can't build a backlog of saves. An event that gets no run at all
+	// is deleted.
+	//
+	// One replica at a time (a transaction-level advisory lock; the others skip the
+	// round), so events are fanned out in id order and a later event's run never exists
+	// before an earlier one's for the same post. locked = false: another replica holds it.
+	FanOutPluginEvents(ctx context.Context, maxEvents int32) (FanOutPluginEventsRow, error)
 	// Ends a claimed reminder (sent, skipped, or failed for good), only under this claim.
 	FinishReminder(ctx context.Context, arg FinishReminderParams) (int64, error)
 	GetActiveTheme(ctx context.Context) (Theme, error)
@@ -470,6 +499,12 @@ type Querier interface {
 	// scheduler keeps retrying; a success or a schedule change clears it). viewer_id
 	// 0 = every post, else the viewer's own.
 	ListFailedScheduledPosts(ctx context.Context, arg ListFailedScheduledPostsParams) ([]ListFailedScheduledPostsRow, error)
+	// Server hooks (#458, 000055, docs/design/plugin-system.md 7.4 to 7.6). The posts
+	// trigger writes plugin_events; RunPluginHooks (api/plugin_hooks.go) fans each event
+	// out to one plugin_hook_runs row per subscribed plugin, claims due runs, runs the
+	// hooks outside any transaction and records the result here.
+	// The plugins whose hooks may run: enabled, in this build, and declaring a hook.
+	ListHookPlugins(ctx context.Context) ([]ListHookPluginsRow, error)
 	// Pages through image media by id for the variant backfill. With
 	// only_missing, rows that already have variants are skipped, and so are
 	// images whose known long edge is at most min_long_edge (they never get any;
@@ -521,10 +556,9 @@ type Querier interface {
 	ListPendingAccessRequestsForReviewer(ctx context.Context, arg ListPendingAccessRequestsForReviewerParams) ([]ListPendingAccessRequestsForReviewerRow, error)
 	// A post's open requests with who asked, oldest first (the editor's notice).
 	ListPendingPostAccessRequests(ctx context.Context, postID int64) ([]ListPendingPostAccessRequestsRow, error)
-	// Plugin settings (#457, docs/design/plugin-system.md section 6): rows keyed
-	// plugin:<slug>:<name>, read and written only through the admin-only
-	// /plugins/:slug/settings routes.
-	ListPluginSettings(ctx context.Context, extensionID string) ([]ExtensionSetting, error)
+	// A plugin's stored settings (extension_settings, extension_type 'plugin'), for
+	// pluginsdk.Host.Settings.
+	ListPluginExtensionSettings(ctx context.Context, slug string) ([]ListPluginExtensionSettingsRow, error)
 	// The plugin registry (#455, 000054). The startup scan writes through the
 	// *Discovered* / Mark* queries, the admin routes through Enable/Disable. Each write
 	// is one conditional statement that returns a row only when it changed something,
@@ -722,6 +756,12 @@ type Querier interface {
 	// A merge (#331): the source's posts get the target, unless they have it already (the
 	// leftover links go with the source term).
 	ReassignTermPosts(ctx context.Context, arg ReassignTermPostsParams) (int64, error)
+	// The hook returned nil. 0 rows: the claim was lost (its lease ran out and another
+	// replica took the run), so this result isn't recorded.
+	RecordPluginHookRunDone(ctx context.Context, arg RecordPluginHookRunDoneParams) (int64, error)
+	// The hook failed, panicked or timed out: pending again after retry_after_seconds, or
+	// failed for good once it has had max_attempts. No row: the claim was lost.
+	RecordPluginHookRunFailure(ctx context.Context, arg RecordPluginHookRunFailureParams) (RecordPluginHookRunFailureRow, error)
 	// Adds the members a store mentions that the ledger doesn't have for this post (parallel
 	// arrays, one entry per member: the block, the member, who typed it, 0 = nobody known) and
 	// returns only the rows it inserted: a member already recorded is never notified again. A member who no longer exists is left out.
@@ -865,6 +905,11 @@ type Querier interface {
 	SetUserInvitationAcceptedUser(ctx context.Context, arg SetUserInvitationAcceptedUserParams) error
 	SetUserPassword(ctx context.Context, arg SetUserPasswordParams) (User, error)
 	SetUserRole(ctx context.Context, arg SetUserRoleParams) (User, error)
+	// Runs that will never run: their plugin was disabled, removed from the build or became
+	// incompatible, or an upgrade dropped the hook for their event. Skipped, so they don't
+	// hold the plugin's later runs for the same post (the claim's ordering check) or stay
+	// pending forever. A run in flight (a live lease) is left to finish.
+	SkipInactivePluginHookRuns(ctx context.Context) (int64, error)
 	// Keeps the row so replies keep their place; the body goes.
 	SoftDeletePostComment(ctx context.Context, id int64) (PostComment, error)
 	// Makes the post's content image links (order > 0) match the doc's media

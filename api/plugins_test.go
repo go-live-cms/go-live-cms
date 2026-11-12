@@ -15,6 +15,7 @@ import (
 
 	mockdb "github.com/go-live-cms/go-live-cms/db/mock"
 	db "github.com/go-live-cms/go-live-cms/db/sqlc"
+	"github.com/go-live-cms/go-live-cms/pluginsdk"
 )
 
 // The plugin registry's routes and startup sync (#455) on a mock store. The same flows
@@ -113,6 +114,9 @@ func TestListPlugins(t *testing.T) {
 	incompatible := fixturePlugin("future", PluginStatusIncompatible, false)
 	incompatible.Manifest = json.RawMessage(`{"plugin_api": 9, "id": "future"}`)
 	invalid := fixturePlugin("broken", PluginStatusIncompatible, true)
+	// Its code still has the hook its last valid plugin.json declares (#458), so the
+	// manifest is what's wrong, not the hooks.
+	server.pluginRegistry = pluginHookRegistry{"broken": observing(pluginsdk.EventPostSaved)}
 	store.EXPECT().ListPlugins(gomock.Any()).Return([]db.Plugin{
 		fixturePlugin("alpha", PluginStatusInstalled, true),
 		fixturePlugin("gone", PluginStatusMissing, true),

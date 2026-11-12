@@ -41,9 +41,10 @@ export function statusNote(plugin: Pick<Plugin, "status" | "incompatible_reason"
       : "Missing from this build. Its settings are kept until it comes back."
   }
   if (plugin.status === "incompatible") {
-    return plugin.incompatible_reason === "invalid_manifest"
-      ? "Its plugin.json no longer validates, so it can’t be enabled here."
-      : "Written for a different plugin version, so it can’t be enabled here."
+    if (plugin.incompatible_reason === "invalid_manifest") return "Its plugin.json no longer validates, so it can’t be enabled here."
+    // #458: the Go hooks in this build and plugin.json's server.hooks disagree.
+    if (plugin.incompatible_reason === "hooks") return "Its server code doesn’t match what its plugin.json declares, so it can’t be enabled here."
+    return "Written for a different plugin version, so it can’t be enabled here."
   }
   return null
 }

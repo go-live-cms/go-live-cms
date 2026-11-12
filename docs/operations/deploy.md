@@ -139,6 +139,13 @@ Any Linux VM with Docker Engine + the Compose plugin (v2.20+, for `up --wait`), 
    configured here. CI's "CD .env covers compose.yaml" job (`scripts/deploy/check-env.sh`)
    fails if `compose.yaml` starts reading a variable this list doesn't cover.
 
+   The API's background loops use their defaults in every replica, and claims keep the
+   replicas apart: `SCHEDULED_PUBLISH_INTERVAL` (30s, scheduled publishing and updates),
+   `PLUGIN_HOOKS_INTERVAL` (1s, plugin server hooks, #458) and `ACTIVITY_RETENTION`
+   (2160h). Each is in `example.app.env`; `0` turns a loop off in that process. To change
+   one in production, add it to the api service's `environment:` in `compose.yaml` (and,
+   if it comes from the `.env`, to CD's list above).
+
    **Choosing an SMTP provider.** The site is invite-only, so the first admin can't add
    anyone without working mail, and the API refuses to start in release mode without
    `SMTP_HOST` and `MAIL_FROM`. Any transactional email service with SMTP works (Amazon

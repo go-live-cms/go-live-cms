@@ -70,6 +70,7 @@ describe("what a row shows", () => {
     expect(statusNote(plugin({ status: "missing" }))).toContain("settings are kept")
     expect(statusNote(plugin({ status: "incompatible", incompatible_reason: "plugin_api" }))).toContain("different plugin version")
     expect(statusNote(plugin({ status: "incompatible", incompatible_reason: "invalid_manifest" }))).toContain("plugin.json")
+    expect(statusNote(plugin({ status: "incompatible", incompatible_reason: "hooks" }))).toContain("server code")
   })
 
   it("offers what the API allows", () => {

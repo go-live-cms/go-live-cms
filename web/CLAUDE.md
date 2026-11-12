@@ -118,6 +118,8 @@ are the most fragile part of the codebase. **Before editing anything under
   (never `ThemeSettingsImpl`). Hidden until their issues: upload/delete (installing is the
   image), "Update to x.y" (#332), the disable dialog's "Used in N posts" (#456's usage route;
   `disableSummary` takes the count). Home's feed reads the `plugin_*` verbs, linking here.
+  `manifest.test.ts` validates every plugin in the repository. Server hooks (#458) are Go in
+  `plugins/<slug>/server/`, built into the API only (`api/CLAUDE.md`); the web build ignores them.
 - **`context.settings` (`src/lib/theme-settings.ts`, #451):** a theme's settings are rows keyed
   `theme:<slug>:<key>` in `extension_settings`, publicly readable, written with an admin's token.
   Never copy it for plugins, whose settings may be secret (`docs/design/plugin-system.md` section 6).

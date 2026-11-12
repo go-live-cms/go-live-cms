@@ -68,6 +68,14 @@ func main() {
 		server.RunScheduledPublishing(ctx, config.ScheduledPublishInterval)
 	}()
 
+	// Plugin server hooks (#458): every replica drains the event outbox; claims keep
+	// them apart. Shutdown waits for the runs in flight to be recorded.
+	hooksDone := make(chan struct{})
+	go func() {
+		defer close(hooksDone)
+		server.RunPluginHooks(ctx, config.PluginHooksInterval)
+	}()
+
 	// Activity log retention (#324): every replica prunes; deleting is idempotent.
 	go server.RunActivityRetention(ctx, config.ActivityRetention)
 
@@ -88,6 +96,7 @@ func main() {
 		fatal("cannot start server", err)
 	}
 	<-schedulerDone
+	<-hooksDone
 	slog.Info("API stopped")
 }
 

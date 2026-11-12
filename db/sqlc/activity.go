@@ -110,4 +110,8 @@ const (
 	// data: payload count = the rows removed.
 	ActivityPluginSettingsUpdated = "plugin_settings_updated"
 	ActivityPluginDataDeleted     = "plugin_data_deleted"
+	// A server hook (#458) failed an attempt: an error, a panic or a timeout. As the
+	// system, at most one per plugin per 10 minutes (CreatePluginHookFailedActivity);
+	// payload: event, event_id, attempts, final (true once it won't be retried).
+	ActivityPluginHookFailed = "plugin_hook_failed"
 )

@@ -244,6 +244,21 @@ func (mr *MockStoreMockRecorder) CheckURLExists(arg0, arg1 interface{}) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckURLExists", reflect.TypeOf((*MockStore)(nil).CheckURLExists), arg0, arg1)
 }
 
+// ClaimDuePluginHookRuns mocks base method.
+func (m *MockStore) ClaimDuePluginHookRuns(arg0 context.Context, arg1 db.ClaimDuePluginHookRunsParams) ([]db.ClaimDuePluginHookRunsRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ClaimDuePluginHookRuns", arg0, arg1)
+	ret0, _ := ret[0].([]db.ClaimDuePluginHookRunsRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ClaimDuePluginHookRuns indicates an expected call of ClaimDuePluginHookRuns.
+func (mr *MockStoreMockRecorder) ClaimDuePluginHookRuns(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClaimDuePluginHookRuns", reflect.TypeOf((*MockStore)(nil).ClaimDuePluginHookRuns), arg0, arg1)
+}
+
 // ClaimDueReminders mocks base method.
 func (m *MockStore) ClaimDueReminders(arg0 context.Context, arg1 db.ClaimDueRemindersParams) ([]db.ClaimDueRemindersRow, error) {
 	m.ctrl.T.Helper()
@@ -912,6 +927,21 @@ func (mr *MockStoreMockRecorder) CreatePasswordResetToken(arg0, arg1 interface{}
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreatePasswordResetToken", reflect.TypeOf((*MockStore)(nil).CreatePasswordResetToken), arg0, arg1)
 }
 
+// CreatePluginHookFailedActivity mocks base method.
+func (m *MockStore) CreatePluginHookFailedActivity(arg0 context.Context, arg1 db.CreatePluginHookFailedActivityParams) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreatePluginHookFailedActivity", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreatePluginHookFailedActivity indicates an expected call of CreatePluginHookFailedActivity.
+func (mr *MockStoreMockRecorder) CreatePluginHookFailedActivity(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreatePluginHookFailedActivity", reflect.TypeOf((*MockStore)(nil).CreatePluginHookFailedActivity), arg0, arg1)
+}
+
 // CreatePostAccessRequest mocks base method.
 func (m *MockStore) CreatePostAccessRequest(arg0 context.Context, arg1 db.CreatePostAccessRequestParams) (db.PostAccessRequest, error) {
 	m.ctrl.T.Helper()
@@ -1387,6 +1417,21 @@ func (mr *MockStoreMockRecorder) DeleteExtensionSettingsByExtension(arg0, arg1 i
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteExtensionSettingsByExtension", reflect.TypeOf((*MockStore)(nil).DeleteExtensionSettingsByExtension), arg0, arg1)
 }
 
+// DeleteFinishedPluginHookRuns mocks base method.
+func (m *MockStore) DeleteFinishedPluginHookRuns(arg0 context.Context, arg1 db.DeleteFinishedPluginHookRunsParams) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteFinishedPluginHookRuns", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DeleteFinishedPluginHookRuns indicates an expected call of DeleteFinishedPluginHookRuns.
+func (mr *MockStoreMockRecorder) DeleteFinishedPluginHookRuns(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteFinishedPluginHookRuns", reflect.TypeOf((*MockStore)(nil).DeleteFinishedPluginHookRuns), arg0, arg1)
+}
+
 // DeleteMedia mocks base method.
 func (m *MockStore) DeleteMedia(arg0 context.Context, arg1 int64) error {
 	m.ctrl.T.Helper()
@@ -1717,6 +1762,21 @@ func (mr *MockStoreMockRecorder) DeleteSignupRequestsByEmail(arg0, arg1 interfac
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSignupRequestsByEmail", reflect.TypeOf((*MockStore)(nil).DeleteSignupRequestsByEmail), arg0, arg1)
 }
 
+// DeleteSpentPluginEvents mocks base method.
+func (m *MockStore) DeleteSpentPluginEvents(arg0 context.Context, arg1 int32) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteSpentPluginEvents", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DeleteSpentPluginEvents indicates an expected call of DeleteSpentPluginEvents.
+func (mr *MockStoreMockRecorder) DeleteSpentPluginEvents(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSpentPluginEvents", reflect.TypeOf((*MockStore)(nil).DeleteSpentPluginEvents), arg0, arg1)
+}
+
 // DeleteStalePostReminders mocks base method.
 func (m *MockStore) DeleteStalePostReminders(arg0 context.Context, arg1 db.DeleteStalePostRemindersParams) error {
 	m.ctrl.T.Helper()
@@ -1974,6 +2034,21 @@ func (m *MockStore) ExecTx(arg0 context.Context, arg1 func(*db.Queries) error) e
 func (mr *MockStoreMockRecorder) ExecTx(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecTx", reflect.TypeOf((*MockStore)(nil).ExecTx), arg0, arg1)
+}
+
+// FanOutPluginEvents mocks base method.
+func (m *MockStore) FanOutPluginEvents(arg0 context.Context, arg1 int32) (db.FanOutPluginEventsRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FanOutPluginEvents", arg0, arg1)
+	ret0, _ := ret[0].(db.FanOutPluginEventsRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FanOutPluginEvents indicates an expected call of FanOutPluginEvents.
+func (mr *MockStoreMockRecorder) FanOutPluginEvents(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FanOutPluginEvents", reflect.TypeOf((*MockStore)(nil).FanOutPluginEvents), arg0, arg1)
 }
 
 // FinishReminder mocks base method.
@@ -3606,6 +3681,21 @@ func (mr *MockStoreMockRecorder) ListFailedScheduledPosts(arg0, arg1 interface{}
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListFailedScheduledPosts", reflect.TypeOf((*MockStore)(nil).ListFailedScheduledPosts), arg0, arg1)
 }
 
+// ListHookPlugins mocks base method.
+func (m *MockStore) ListHookPlugins(arg0 context.Context) ([]db.ListHookPluginsRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListHookPlugins", arg0)
+	ret0, _ := ret[0].([]db.ListHookPluginsRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListHookPlugins indicates an expected call of ListHookPlugins.
+func (mr *MockStoreMockRecorder) ListHookPlugins(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListHookPlugins", reflect.TypeOf((*MockStore)(nil).ListHookPlugins), arg0)
+}
+
 // ListImageMediaAfter mocks base method.
 func (m *MockStore) ListImageMediaAfter(arg0 context.Context, arg1 db.ListImageMediaAfterParams) ([]db.Medium, error) {
 	m.ctrl.T.Helper()
@@ -3801,19 +3891,19 @@ func (mr *MockStoreMockRecorder) ListPendingPostAccessRequests(arg0, arg1 interf
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPendingPostAccessRequests", reflect.TypeOf((*MockStore)(nil).ListPendingPostAccessRequests), arg0, arg1)
 }
 
-// ListPluginSettings mocks base method.
-func (m *MockStore) ListPluginSettings(arg0 context.Context, arg1 string) ([]db.ExtensionSetting, error) {
+// ListPluginExtensionSettings mocks base method.
+func (m *MockStore) ListPluginExtensionSettings(arg0 context.Context, arg1 string) ([]db.ListPluginExtensionSettingsRow, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListPluginSettings", arg0, arg1)
-	ret0, _ := ret[0].([]db.ExtensionSetting)
+	ret := m.ctrl.Call(m, "ListPluginExtensionSettings", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListPluginExtensionSettingsRow)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// ListPluginSettings indicates an expected call of ListPluginSettings.
-func (mr *MockStoreMockRecorder) ListPluginSettings(arg0, arg1 interface{}) *gomock.Call {
+// ListPluginExtensionSettings indicates an expected call of ListPluginExtensionSettings.
+func (mr *MockStoreMockRecorder) ListPluginExtensionSettings(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPluginSettings", reflect.TypeOf((*MockStore)(nil).ListPluginSettings), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPluginExtensionSettings", reflect.TypeOf((*MockStore)(nil).ListPluginExtensionSettings), arg0, arg1)
 }
 
 // ListPlugins mocks base method.
@@ -4768,6 +4858,36 @@ func (mr *MockStoreMockRecorder) ReassignTermPosts(arg0, arg1 interface{}) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReassignTermPosts", reflect.TypeOf((*MockStore)(nil).ReassignTermPosts), arg0, arg1)
 }
 
+// RecordPluginHookRunDone mocks base method.
+func (m *MockStore) RecordPluginHookRunDone(arg0 context.Context, arg1 db.RecordPluginHookRunDoneParams) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RecordPluginHookRunDone", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RecordPluginHookRunDone indicates an expected call of RecordPluginHookRunDone.
+func (mr *MockStoreMockRecorder) RecordPluginHookRunDone(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RecordPluginHookRunDone", reflect.TypeOf((*MockStore)(nil).RecordPluginHookRunDone), arg0, arg1)
+}
+
+// RecordPluginHookRunFailure mocks base method.
+func (m *MockStore) RecordPluginHookRunFailure(arg0 context.Context, arg1 db.RecordPluginHookRunFailureParams) (db.RecordPluginHookRunFailureRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RecordPluginHookRunFailure", arg0, arg1)
+	ret0, _ := ret[0].(db.RecordPluginHookRunFailureRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RecordPluginHookRunFailure indicates an expected call of RecordPluginHookRunFailure.
+func (mr *MockStoreMockRecorder) RecordPluginHookRunFailure(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RecordPluginHookRunFailure", reflect.TypeOf((*MockStore)(nil).RecordPluginHookRunFailure), arg0, arg1)
+}
+
 // RecordPostMentions mocks base method.
 func (m *MockStore) RecordPostMentions(arg0 context.Context, arg1 db.RecordPostMentionsParams) ([]db.RecordPostMentionsRow, error) {
 	m.ctrl.T.Helper()
@@ -5665,6 +5785,21 @@ func (m *MockStore) SignOutOtherSessionsTx(arg0 context.Context, arg1 db.SignOut
 func (mr *MockStoreMockRecorder) SignOutOtherSessionsTx(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SignOutOtherSessionsTx", reflect.TypeOf((*MockStore)(nil).SignOutOtherSessionsTx), arg0, arg1)
+}
+
+// SkipInactivePluginHookRuns mocks base method.
+func (m *MockStore) SkipInactivePluginHookRuns(arg0 context.Context) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SkipInactivePluginHookRuns", arg0)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SkipInactivePluginHookRuns indicates an expected call of SkipInactivePluginHookRuns.
+func (mr *MockStoreMockRecorder) SkipInactivePluginHookRuns(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SkipInactivePluginHookRuns", reflect.TypeOf((*MockStore)(nil).SkipInactivePluginHookRuns), arg0)
 }
 
 // SoftDeletePostComment mocks base method.

@@ -70,7 +70,7 @@ func TestPluginSettingsFlow(t *testing.T) {
 	// A value outside the manifest's rules is refused and nothing is written.
 	bad := as(t, server, admin, http.MethodPut, path, map[string]any{"values": map[string]any{"words_per_minute": 10, "style": "long"}})
 	requireStatus(t, bad, http.StatusBadRequest)
-	stored, err := store.ListPluginSettings(ctx, slug)
+	stored, err := store.ListPluginExtensionSettings(ctx, slug)
 	require.NoError(t, err)
 	require.Empty(t, stored)
 
@@ -82,14 +82,16 @@ func TestPluginSettingsFlow(t *testing.T) {
 	requireStatus(t, recorder, http.StatusOK)
 	require.NotContains(t, recorder.Body.String(), secret)
 
-	stored, err = store.ListPluginSettings(ctx, slug)
+	stored, err = store.ListPluginExtensionSettings(ctx, slug)
 	require.NoError(t, err)
 	keys := map[string]string{}
 	for _, setting := range stored {
-		require.Equal(t, "plugin", setting.ExtensionType)
-		require.Equal(t, slug, setting.ExtensionID)
 		keys[setting.Key] = string(setting.Value)
 	}
+	var wrongKind int
+	require.NoError(t, conn.QueryRow(`SELECT count(*) FROM extension_settings
+		WHERE key LIKE $1 AND (extension_type <> 'plugin' OR extension_id <> $2)`, "plugin:"+slug+":%", slug).Scan(&wrongKind))
+	require.Zero(t, wrongKind, "every row is extension_type plugin, extension_id the slug")
 	require.Equal(t, map[string]string{
 		"plugin:" + slug + ":api_key":          `"` + secret + `"`,
 		"plugin:" + slug + ":show_icon":        `false`,
@@ -136,10 +138,10 @@ func TestPluginSettingsFlow(t *testing.T) {
 	recorder = as(t, server, admin, http.MethodDelete, path, nil)
 	requireStatus(t, recorder, http.StatusOK)
 	require.JSONEq(t, `{"deleted":3}`, recorder.Body.String())
-	stored, err = store.ListPluginSettings(ctx, slug)
+	stored, err = store.ListPluginExtensionSettings(ctx, slug)
 	require.NoError(t, err)
 	require.Empty(t, stored)
-	neighbour, err := store.ListPluginSettings(ctx, other)
+	neighbour, err := store.ListPluginExtensionSettings(ctx, other)
 	require.NoError(t, err)
 	require.Len(t, neighbour, 1)
 	theme, err := store.GetThemeExtensionSetting(ctx, themeKey)

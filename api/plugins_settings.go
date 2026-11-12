@@ -87,7 +87,7 @@ func pluginSettingProblem(spec PluginSettingSpec, value any) string {
 // field; such a value reads as unset, like a block attr that no longer validates).
 // present names every declared field that has a row, valid or not.
 func (server *Server) storedPluginSettings(c *gin.Context, plugin db.Plugin, manifest PluginManifest) (stored map[string]json.RawMessage, present map[string]bool, err error) {
-	rows, err := server.store.ListPluginSettings(c.Request.Context(), plugin.Slug)
+	rows, err := server.store.ListPluginExtensionSettings(c.Request.Context(), plugin.Slug)
 	if err != nil {
 		return nil, nil, err
 	}

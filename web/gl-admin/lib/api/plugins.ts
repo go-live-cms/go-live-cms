@@ -16,9 +16,10 @@ export interface Plugin {
   description: string
   // installed | missing (gone from the build, row kept) | incompatible.
   status: PluginStatus
-  // For an incompatible plugin: outside core's plugin_api range, or plugin.json stopped
-  // validating (the fields are then from its last valid one).
-  incompatible_reason?: "plugin_api" | "invalid_manifest"
+  // For an incompatible plugin: outside core's plugin_api range, its Go hooks differ from
+  // plugin.json's server.hooks (#458), or plugin.json stopped validating (the fields are
+  // then from its last valid one).
+  incompatible_reason?: "plugin_api" | "hooks" | "invalid_manifest"
   // The admin's choice, kept while missing or incompatible; `active` is whether it
   // applies now (enabled and installed).
   enabled: boolean

@@ -37,9 +37,9 @@ func settingsFixturePlugin(status string) db.Plugin {
 	return plugin
 }
 
-func settingRow(name, value string) db.ExtensionSetting {
-	return db.ExtensionSetting{
-		Key: pluginSettingKey("checker", name), Value: json.RawMessage(value), ExtensionType: "plugin", ExtensionID: "checker",
+func settingRow(name, value string) db.ListPluginExtensionSettingsRow {
+	return db.ListPluginExtensionSettingsRow{
+		Key: pluginSettingKey("checker", name), Value: json.RawMessage(value),
 	}
 }
 
@@ -66,14 +66,14 @@ func TestGetPluginSettings(t *testing.T) {
 	store := mockdb.NewMockStore(gomock.NewController(t))
 	server := newTestServer(t, store)
 	store.EXPECT().GetPluginBySlug(gomock.Any(), "checker").Return(settingsFixturePlugin(PluginStatusInstalled), nil)
-	store.EXPECT().ListPluginSettings(gomock.Any(), "checker").Return([]db.ExtensionSetting{
+	store.EXPECT().ListPluginExtensionSettings(gomock.Any(), "checker").Return([]db.ListPluginExtensionSettingsRow{
 		settingRow("api_key", `"`+settingsFixtureSecret+`"`),
 		settingRow("per_post", `120`),
 		// No longer valid for the manifest (an upgrade narrowed it): reads as unset.
 		settingRow("frequency", `"hourly"`),
 		// Not a declared field, and a row that isn't keyed like ours: both left out.
 		settingRow("retired", `1`),
-		{Key: "legacy-key", Value: json.RawMessage(`"x"`), ExtensionType: "plugin", ExtensionID: "checker"},
+		{Key: "legacy-key", Value: json.RawMessage(`"x"`)},
 	}, nil)
 
 	recorder := pluginRequest(t, server, store, &pluginAdmin, http.MethodGet, "/api/v1/plugins/checker/settings")
@@ -100,7 +100,7 @@ func TestGetPluginSettingsUnsetSecret(t *testing.T) {
 	server := newTestServer(t, store)
 	// Missing from the build: its settings are still readable (kept, section 4.4).
 	store.EXPECT().GetPluginBySlug(gomock.Any(), "checker").Return(settingsFixturePlugin(PluginStatusMissing), nil)
-	store.EXPECT().ListPluginSettings(gomock.Any(), "checker").Return(nil, nil)
+	store.EXPECT().ListPluginExtensionSettings(gomock.Any(), "checker").Return(nil, nil)
 
 	recorder := pluginRequest(t, server, store, &pluginAdmin, http.MethodGet, "/api/v1/plugins/checker/settings")
 	requireStatus(t, recorder, http.StatusOK)
@@ -201,7 +201,7 @@ func TestUpdatePluginSettings(t *testing.T) {
 	server := newTestServer(t, store)
 	store.EXPECT().GetPluginBySlug(gomock.Any(), "checker").Return(settingsFixturePlugin(PluginStatusInstalled), nil)
 	gomock.InOrder(
-		store.EXPECT().ListPluginSettings(gomock.Any(), "checker").Return([]db.ExtensionSetting{
+		store.EXPECT().ListPluginExtensionSettings(gomock.Any(), "checker").Return([]db.ListPluginExtensionSettingsRow{
 			settingRow("per_post", `120`),
 			settingRow("skip_own", `true`),
 			settingRow("title", `"Old title"`),
@@ -214,7 +214,7 @@ func TestUpdatePluginSettings(t *testing.T) {
 			},
 			Clear: []string{"plugin:checker:title"},
 		}).Return(nil),
-		store.EXPECT().ListPluginSettings(gomock.Any(), "checker").Return([]db.ExtensionSetting{
+		store.EXPECT().ListPluginExtensionSettings(gomock.Any(), "checker").Return([]db.ListPluginExtensionSettingsRow{
 			settingRow("api_key", `"`+settingsFixtureSecret+`"`),
 			settingRow("frequency", `"weekly"`),
 			settingRow("per_post", `120`),
@@ -248,7 +248,7 @@ func TestUpdatePluginSettingsNothingChanged(t *testing.T) {
 	store := mockdb.NewMockStore(gomock.NewController(t))
 	server := newTestServer(t, store)
 	store.EXPECT().GetPluginBySlug(gomock.Any(), "checker").Return(settingsFixturePlugin(PluginStatusInstalled), nil)
-	store.EXPECT().ListPluginSettings(gomock.Any(), "checker").Times(2).Return([]db.ExtensionSetting{settingRow("per_post", `120`)}, nil)
+	store.EXPECT().ListPluginExtensionSettings(gomock.Any(), "checker").Times(2).Return([]db.ListPluginExtensionSettingsRow{settingRow("per_post", `120`)}, nil)
 	store.EXPECT().SetPluginSettingsTx(gomock.Any(), gomock.Any()).Times(0)
 
 	// The same value, and clearing a field that was never set.

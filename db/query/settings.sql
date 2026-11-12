@@ -65,13 +65,9 @@ DELETE FROM extension_settings
 WHERE extension_type = $1 AND extension_id = $2;
 
 -- Plugin settings (#457, docs/design/plugin-system.md section 6): rows keyed
--- plugin:<slug>:<name>, read and written only through the admin-only
--- /plugins/:slug/settings routes.
-
--- name: ListPluginSettings :many
-SELECT * FROM extension_settings
-WHERE extension_type = 'plugin' AND extension_id = $1
-ORDER BY key;
+-- plugin:<slug>:<name>, written only through the admin-only
+-- /plugins/:slug/settings routes. Read with ListPluginExtensionSettings
+-- (plugin_hooks.sql), which the hook host shares.
 
 -- name: DeletePluginSetting :execrows
 DELETE FROM extension_settings
