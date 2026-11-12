@@ -6,7 +6,7 @@ import { OpenLinkModal } from "../extensions/OpenLinkModal"
 import { slashCommandManager } from "./slashCommandManager"
 import { getCursorCoords } from "./cursorCoords"
 import { CursorAwareness } from "./cursorAwareness"
-import { getActiveTheme, menuEntries, slotAcceptsAt, type CatalogEntry } from "../blocks/catalog"
+import { getActiveTheme, getEnabledPlugins, menuEntries, slotAcceptsAt, type CatalogEntry } from "../blocks/catalog"
 import { SlashCommandExtension } from "../ui/SlashCommand"
 import { PasteSanitizer } from "../extensions/PasteSanitizer"
 import { InlineNodeViews } from "../extensions/InlineNodeViews"
@@ -27,6 +27,7 @@ import { EmptyContainerFill } from "../extensions/CoverMediaBlocks"
 import { authManager } from "@gl-admin/lib/auth"
 import { tiptapExtensionRegistry } from "./extensionRegistry"
 import { installedThemeBlockEditors } from "@gl-admin/lib/theme-blocks/editorBlocks"
+import { pluginBlockExtensions } from "@gl-admin/lib/plugins/editorBlocks"
 import { schemaExtensions } from "@gl-admin/lib/collaboration/schema"
 
 const headingLabel = (lvl?: number) => {
@@ -49,7 +50,7 @@ export const DETAILS_CONTENT_HINT = "Hidden content. Type / to add blocks."
 
 const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkModalOpen }) => {
   return () => {
-    let slashEntries: { role: string | null; theme: string; entries: CatalogEntry[] } | null = null
+    let slashEntries: { role: string | null; theme: string; plugins: ReadonlySet<string>; entries: CatalogEntry[] } | null = null
     // The schema-defining extensions are shared with the collab server
     // (lib/collaboration/schema.ts, #206). Collaboration ships its own Yjs-aware
     // undo/redo (with Mod-z / Mod-y / Shift-Mod-z keymaps), so StarterKit's bundled
@@ -217,8 +218,10 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
           items: ({ editor }: { editor: any }) => {
             const role = authManager.getState().user?.role ?? null
             const theme = getActiveTheme()
-            if (!slashEntries || slashEntries.role !== role || slashEntries.theme !== theme) {
-              slashEntries = { role, theme, entries: menuEntries({ role, theme }) }
+            // The enabled plugins (#456): a new Set on every change, so identity is the key.
+            const plugins = getEnabledPlugins()
+            if (!slashEntries || slashEntries.role !== role || slashEntries.theme !== theme || slashEntries.plugins !== plugins) {
+              slashEntries = { role, theme, plugins, entries: menuEntries({ role, theme, plugins }) }
             }
             return slashEntries.entries.filter(slotAcceptsAt(editor))
           },
@@ -263,10 +266,16 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
       }
     }
 
-    // Every installed theme block (#376), whichever theme is active: the collab server's
-    // schema has them all (getInstalledCollabSchema), so the editor must too, or a block
-    // of an inactive theme would trip the schema gate (rule 10). Then any extras.
-    baseExtensions.push(...installedThemeBlockEditors.map((block) => block.extension), ...tiptapExtensionRegistry.getAll())
+    // Every installed theme block (#376), whichever theme is active, then every installed
+    // plugin block (#456), enabled or not: the collab server's schema has them all, in this
+    // order (installedExtensionBlockNodes), so the editor must too, or a block of an
+    // inactive theme or a disabled plugin would trip the schema gate (rule 10) and the
+    // fingerprint would differ (#416). Then any extras.
+    baseExtensions.push(
+      ...installedThemeBlockEditors.map((block) => block.extension),
+      ...pluginBlockExtensions(),
+      ...tiptapExtensionRegistry.getAll()
+    )
 
     return baseExtensions
   }

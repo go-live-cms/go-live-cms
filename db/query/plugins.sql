@@ -102,3 +102,24 @@ SET enabled = false,
 WHERE slug = @slug
   AND enabled
 RETURNING *;
+
+-- name: ListPostsUsingPluginBlocks :many
+-- The posts whose working copy or published snapshot holds a block of one plugin (#456,
+-- design 4.3): any node whose type starts with type_prefix (`plugin:<slug>/`), in the
+-- flat blocks map or nested in a block's pm (a plugin block may sit in a quote). Every
+-- status, the trash included: a trashed post still holds the block and may come back.
+-- A full scan: admin-only and rare, so no index. `total` counts every match; the rows
+-- stop at row_limit, most recently changed first.
+SELECT p.id, p.title, p.post_type, p.post_status, p.changed_at,
+       jsonb_path_exists(p.block_doc, '$.blocks.*.** ? (@.type starts with $prefix)',
+                         jsonb_build_object('prefix', @type_prefix::text))::boolean AS in_working_copy,
+       COALESCE(jsonb_path_exists(p.published_block_doc, '$.blocks.*.** ? (@.type starts with $prefix)',
+                                  jsonb_build_object('prefix', @type_prefix::text)), false)::boolean AS in_published,
+       COUNT(*) OVER ()::bigint AS total
+FROM posts p
+WHERE jsonb_path_exists(p.block_doc, '$.blocks.*.** ? (@.type starts with $prefix)',
+                        jsonb_build_object('prefix', @type_prefix::text))
+   OR COALESCE(jsonb_path_exists(p.published_block_doc, '$.blocks.*.** ? (@.type starts with $prefix)',
+                                 jsonb_build_object('prefix', @type_prefix::text)), false)
+ORDER BY p.changed_at DESC, p.id DESC
+LIMIT @row_limit::int;

@@ -244,8 +244,8 @@ that removes data is "Delete plugin data" on the Plugins page, which removes onl
 **Why a disabled plugin's block keeps rendering.** Disable is the action an admin takes to stop
 a misbehaving hook. It must not change published pages as a side effect, and it matches the theme
 precedent, where every installed block works whichever theme is active. An admin who wants the
-block off the site removes it from the posts, using the usage list. What a renderer that throws
-should do is an open question (section 11).
+block off the site removes it from the posts, using the usage list. A renderer that throws
+hides its own block only (#456, section 11).
 
 **Removal, and problem 1 from section 1.1.** A seed already does the right thing:
 `blockDocToPMWithReport` drops an unbuildable namespaced block, `meta.dropped` keeps it byte for
@@ -829,9 +829,10 @@ Not filed yet. Priorities are suggestions.
 
 ## 11. Open questions
 
-- **A throwing renderer.** `BlockRenderer` has no error boundary, so one bad plugin renderer fails
-  the page. Worth a per-block boundary in S6, or left to review since the code ships in the
-  repository?
+- **A throwing renderer.** Decided in #456: a per-block safeguard. On the public site and in the
+  preview, each plugin block renders inside `PluginBlockBoundary`; a renderer that throws renders
+  nothing for that block (no error text), is logged with the plugin, type and error, and the rest
+  of the page renders. Theme and core blocks are unchanged.
 - **`post.saved` scope.** It covers settings saves as well as body stores. Should those be a
   separate `post.settings_saved`, so a search-index plugin can ignore one or the other?
 - **Disabled and public rendering.** Section 4.4 keeps rendering. If a real plugin needs "off means

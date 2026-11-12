@@ -9,6 +9,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"time"
 
 	"github.com/lib/pq"
 )
@@ -232,6 +233,76 @@ func (q *Queries) ListPlugins(ctx context.Context) ([]Plugin, error) {
 			&i.EnabledBy,
 			&i.InstalledAt,
 			&i.ChangedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPostsUsingPluginBlocks = `-- name: ListPostsUsingPluginBlocks :many
+SELECT p.id, p.title, p.post_type, p.post_status, p.changed_at,
+       jsonb_path_exists(p.block_doc, '$.blocks.*.** ? (@.type starts with $prefix)',
+                         jsonb_build_object('prefix', $1::text))::boolean AS in_working_copy,
+       COALESCE(jsonb_path_exists(p.published_block_doc, '$.blocks.*.** ? (@.type starts with $prefix)',
+                                  jsonb_build_object('prefix', $1::text)), false)::boolean AS in_published,
+       COUNT(*) OVER ()::bigint AS total
+FROM posts p
+WHERE jsonb_path_exists(p.block_doc, '$.blocks.*.** ? (@.type starts with $prefix)',
+                        jsonb_build_object('prefix', $1::text))
+   OR COALESCE(jsonb_path_exists(p.published_block_doc, '$.blocks.*.** ? (@.type starts with $prefix)',
+                                 jsonb_build_object('prefix', $1::text)), false)
+ORDER BY p.changed_at DESC, p.id DESC
+LIMIT $2::int
+`
+
+type ListPostsUsingPluginBlocksParams struct {
+	TypePrefix string `json:"type_prefix"`
+	RowLimit   int32  `json:"row_limit"`
+}
+
+type ListPostsUsingPluginBlocksRow struct {
+	ID            int64     `json:"id"`
+	Title         string    `json:"title"`
+	PostType      string    `json:"post_type"`
+	PostStatus    string    `json:"post_status"`
+	ChangedAt     time.Time `json:"changed_at"`
+	InWorkingCopy bool      `json:"in_working_copy"`
+	InPublished   bool      `json:"in_published"`
+	Total         int64     `json:"total"`
+}
+
+// The posts whose working copy or published snapshot holds a block of one plugin (#456,
+// design 4.3): any node whose type starts with type_prefix (`plugin:<slug>/`), in the
+// flat blocks map or nested in a block's pm (a plugin block may sit in a quote). Every
+// status, the trash included: a trashed post still holds the block and may come back.
+// A full scan: admin-only and rare, so no index. `total` counts every match; the rows
+// stop at row_limit, most recently changed first.
+func (q *Queries) ListPostsUsingPluginBlocks(ctx context.Context, arg ListPostsUsingPluginBlocksParams) ([]ListPostsUsingPluginBlocksRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPostsUsingPluginBlocks, arg.TypePrefix, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPostsUsingPluginBlocksRow{}
+	for rows.Next() {
+		var i ListPostsUsingPluginBlocksRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.PostType,
+			&i.PostStatus,
+			&i.ChangedAt,
+			&i.InWorkingCopy,
+			&i.InPublished,
+			&i.Total,
 		); err != nil {
 			return nil, err
 		}

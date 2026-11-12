@@ -13,7 +13,7 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { singleYjsInstance } from "./singleYjsInstance.mjs"
 import { importMetaGlob } from "./importMetaGlob.mjs"
-import { clientOnlyInputs, themeBlockInputs } from "./bundleChecks.mjs"
+import { clientOnlyInputs, pluginBlockInputs, pluginCodeInputs, themeBlockInputs } from "./bundleChecks.mjs"
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const webRoot = path.resolve(here, "..")
@@ -39,8 +39,9 @@ const result = await esbuild.build({
   banner: {
     js: 'import { createRequire as __glCreateRequire } from "node:module"; const require = __glCreateRequire(import.meta.url);',
   },
-  // importMetaGlob: the installed theme blocks' headless index.ts files (#376), the same
-  // glob Vite resolves for the admin and the SSR server.
+  // importMetaGlob: the installed theme blocks' headless index.ts files (#376) and the
+  // plugins' plugin.json and block.json (#456), the same globs Vite resolves for the admin
+  // and the SSR server.
   plugins: [singleYjsInstance, importMetaGlob],
   logLevel: "warning",
 })
@@ -58,7 +59,7 @@ if (clientOnly.length > 0) {
   console.error(`collab-server bundle must not contain client-only modules, found: ${clientOnly.join(", ")}`)
   process.exit(1)
 }
-// The image ships collab-server/, gl-admin/ and themes/ only (its Dockerfile): a module from
+// The image ships collab-server/, gl-admin/, themes/ and plugins/ only (its Dockerfile): a module from
 // web/src (the public site) would build here and then fail in the Docker build (#320).
 const srcRoot = path.join(webRoot, "src") + path.sep
 const fromSrc = inputs.filter((input) => path.resolve(webRoot, input).startsWith(srcRoot))
@@ -66,5 +67,15 @@ if (fromSrc.length > 0) {
   console.error(`collab-server bundle must not import web/src (the image doesn't ship it), found: ${fromSrc.join(", ")}`)
   process.exit(1)
 }
+// Plugins (#456, rule 13): block.json and plugin.json only, never a plugin's code.
+const webRelative = inputs.map((input) => path.relative(webRoot, path.resolve(input)).replaceAll("\\", "/"))
+const pluginCode = pluginCodeInputs(webRelative)
+if (pluginCode.length > 0) {
+  console.error(`collab-server bundle must not contain plugin code (block.json only), found: ${pluginCode.join(", ")}`)
+  process.exit(1)
+}
 const themeBlocks = themeBlockInputs(inputs)
-console.log(`collab-server bundle: ${path.relative(webRoot, outfile)} (yjs: ${yjsFiles[0]}; theme blocks: ${themeBlocks.length})`)
+const pluginBlocks = pluginBlockInputs(webRelative)
+console.log(
+  `collab-server bundle: ${path.relative(webRoot, outfile)} (yjs: ${yjsFiles[0]}; theme blocks: ${themeBlocks.length}; plugin blocks: ${pluginBlocks.length})`,
+)

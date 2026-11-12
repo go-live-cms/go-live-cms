@@ -1,5 +1,6 @@
 import type { Editor } from "@tiptap/core"
 import { installedThemeBlockEditors } from "@gl-admin/lib/theme-blocks/editorBlocks"
+import { installedPluginBlockEditors } from "@gl-admin/lib/plugins/editorBlocks"
 import { holderAcceptsType } from "../utils/blockTree"
 import { createImagePlaceholder } from "./mediaBlocks"
 import { openTableSizePicker } from "../ui/TableSizePicker"
@@ -14,8 +15,9 @@ import { currentAllowedEmbeds } from "@gl-admin/lib/editorSettings"
 // The block catalog (#415, docs/design/block-library.md 3.1): every block the editor can
 // insert, in one list. The slash menu, the + menu in the gutter, Turn into (turnInto.ts)
 // and the block-type toolbar all read it. It holds the core blocks and every installed
-// theme block; `menuEntries` decides which ones a menu offers (the role gate, the active
-// theme, and the container slot's nesting table, #414: `slotAcceptsAt`).
+// theme and plugin block; `menuEntries` decides which ones a menu offers (the role gate, the
+// active theme, the enabled plugins, #456, and the container slot's nesting table, #414:
+// `slotAcceptsAt`).
 //
 // Adding a block = one entry in CORE_BLOCKS, in its group, in the order the menus show it.
 // Only `id`, `type`, `name`, `group`, `icon` and `insert` are required:
@@ -80,8 +82,8 @@ export interface CatalogEntry {
   theme?: string
   /**
    * Set on a plugin block (#452): the plugin's slug. Never a theme's, so a plugin block is
-   * offered whichever theme is active; the enabled-plugins filter comes with the registry
-   * (docs/design/plugin-system.md 4.3).
+   * offered whichever theme is active, and only while its plugin is enabled (#456,
+   * docs/design/plugin-system.md 4.3: `MenuContext.plugins`).
    */
   plugin?: string
   /** False while the site has switched this block off (an embed provider off Allowed embeds, #425). */
@@ -491,9 +493,13 @@ export const CORE_BLOCKS: readonly CatalogEntry[] = [
   },
 ]
 
-/** The whole catalog: the core blocks, then every installed theme block (lib/theme-blocks). */
+/** The whole catalog: the core blocks, then every installed theme block (lib/theme-blocks), then every installed plugin block (lib/plugins). */
 export function catalogEntries(): CatalogEntry[] {
-  return [...CORE_BLOCKS, ...installedThemeBlockEditors.map((editor) => editor.entry)]
+  return [
+    ...CORE_BLOCKS,
+    ...installedThemeBlockEditors.map((editor) => editor.entry),
+    ...installedPluginBlockEditors.map((editor) => editor.entry),
+  ]
 }
 
 // --- Who sees what -----------------------------------------------------------------
@@ -520,17 +526,26 @@ export interface MenuContext {
   role?: string | null
   /** The active theme's slug: only its theme blocks are offered. */
   theme?: string | null
+  /**
+   * The enabled plugins' slugs (#456, `GET /plugins/enabled`): only their blocks are offered.
+   * Default: the list ThemeProvider last read (`getEnabledPlugins`), empty until a read
+   * succeeds, so a failed read offers none. Existing blocks still edit: the schema is every
+   * installed plugin's, enabled or not (design 5.3).
+   */
+  plugins?: ReadonlySet<string>
   /** The slot being inserted into accepts this block (#414's nesting table). */
   accepts?: (entry: CatalogEntry) => boolean
 }
 
 /** The entries a menu offers in `context`, in catalog order. */
 export function menuEntries(context: MenuContext, entries: readonly CatalogEntry[] = catalogEntries()): CatalogEntry[] {
+  const plugins = context.plugins ?? enabledPlugins
   return entries.filter(
     (entry) =>
       canInsert(entry, context.role) &&
       (entry.available?.() ?? true) &&
       (!entry.theme || entry.theme === (context.theme ?? "default")) &&
+      (!entry.plugin || plugins.has(entry.plugin)) &&
       (context.accepts?.(entry) ?? true)
   )
 }
@@ -564,6 +579,21 @@ export function setActiveTheme(slug: string) {
 
 export function getActiveTheme(): string {
   return activeTheme
+}
+
+// The enabled plugins (#456, docs/design/plugin-system.md 4.3), set by ThemeProvider from
+// `GET /plugins/enabled` when the admin loads and again when the tab becomes visible. Only
+// their blocks are offered; every installed plugin block stays in the editor's schema. Empty
+// until a read succeeds, and after a failed one: a failed read offers no plugin block.
+let enabledPlugins: ReadonlySet<string> = new Set()
+
+/** Replaces the enabled list (always with a new Set, so callers can cache by identity). */
+export function setEnabledPlugins(slugs: Iterable<string>) {
+  enabledPlugins = new Set(slugs)
+}
+
+export function getEnabledPlugins(): ReadonlySet<string> {
+  return enabledPlugins
 }
 
 // --- Search ------------------------------------------------------------------------

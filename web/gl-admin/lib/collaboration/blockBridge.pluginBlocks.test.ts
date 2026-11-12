@@ -22,8 +22,8 @@ const EST = "blk-plugin-est001"
 const GROUP = "blk-group-0000001"
 const ALERT = "blk-alert-0000001"
 
-// No plugin is in the build yet (S6 adds block.json). One defined the way a theme block is,
-// for the schema an installed plugin block will give.
+// The example plugin's block, defined here on its own (its block.json in the build, #456, has
+// the same spec), so a schema with it alone, or without it, can be built for each case.
 const estimate = defineThemeBlock({
   type: "plugin:reading-time/estimate",
   version: 1,
@@ -176,6 +176,9 @@ describe("an installed plugin block", () => {
     const dropsWith = (schema: ReturnType<typeof getCollabSchema>) => blockDocToPMWithReport(mixed, schema).dropped.map((entry) => entry.id)
     expect(dropsWith(getCollabSchema([...installedThemeBlocks.map((block) => block.node), estimate.node]))).toEqual([])
     expect(dropsWith(withPlugin)).toEqual([ALERT])
-    expect(dropsWith(getInstalledCollabSchema())).toEqual([EST])
+    // The build installs the example plugin (#456), whose block this test reuses: the
+    // installed schema has both, a schema of the core types alone has neither.
+    expect(dropsWith(getInstalledCollabSchema())).toEqual([])
+    expect(dropsWith(getCollabSchema([]))).toEqual([ALERT, EST])
   })
 })

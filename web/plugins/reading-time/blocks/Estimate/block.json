@@ -1,0 +1,9 @@
+{
+  "type": "plugin:reading-time/estimate",
+  "version": 1,
+  "title": "Reading time",
+  "content": "",
+  "attrs": {
+    "label": { "type": "string", "default": "min read", "maxLength": 40 }
+  }
+}

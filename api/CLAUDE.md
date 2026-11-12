@@ -1337,6 +1337,17 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   name}`): `plugin_enabled`/`plugin_disabled` (the admin, `{version}`); the scan as the system:
   `plugin_installed` (`{version, status}`, `restored: true` on a return), `plugin_updated`
   (versions and statuses, `reason: invalid_manifest`), `plugin_missing`.
+- **Content blocks (#456, `plugin_blocks.go`):** the scan reads each declared block's
+  `blocks/<Name>/block.json` (`ValidatePluginBlockJSON`, twin of the web's `blockJson.ts`,
+  `pluginBlockVectors.json`; type = `plugin:<slug>/<name lowercased>`) for a plugin whose plugin_api
+  is core's; a missing, invalid or undeclared one makes the plugin invalid (`incompatible`, like a
+  bad plugin.json). `NewServer` merges the loaded plugins' specs into `server.themeBlocks`
+  (`mergePluginBlockSpecs`), so `applyThemeBlocks` validates them: installed, whatever is enabled.
+  **`GET /plugins/:slug/usage`** (admin; any status, unknown slug 404) → `{slug, count, posts:
+  [{id, title, post_type, post_status, in_working_copy, in_published, changed_at}], truncated}`:
+  `ListPostsUsingPluginBlocks` (jsonpath `$.blocks.*.** ? (@.type starts with "plugin:<slug>/")`
+  over `block_doc` and `published_block_doc`, so a block in a quote's pm counts; trash included;
+  ≤100 rows, `count` all). The Plugins page's disable confirmation reads `count`.
 - Tests: `plugins_manifest_test.go` (vectors, hash, scan), `plugins_test.go` (routes, roles,
   races on a mock), `plugins_sync_test.go` (sync decisions on an in-memory table),
   `plugins_db_test.go` (the acceptance list against the real database). The scan is global, so

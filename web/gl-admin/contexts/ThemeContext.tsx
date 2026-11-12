@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from "react"
 import { setActiveTheme } from "../components/editor/blocks/catalog"
+import { watchEnabledPlugins } from "../lib/enabledPlugins"
 
 interface ThemeContextValue {
   isThemeLoaded: boolean
@@ -65,8 +66,13 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     loadTheme()
 
+    // The enabled plugins (#456): only their blocks are offered in the block menus, like
+    // the active theme's. Read now and whenever the tab becomes visible again.
+    const stopWatchingPlugins = watchEnabledPlugins()
+
     return () => {
       cancelled = true
+      stopWatchingPlugins()
     }
   }, [])
 

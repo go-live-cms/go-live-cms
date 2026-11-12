@@ -1,7 +1,8 @@
 import React from "react"
 import { blockAnchorId, blocksInReadingOrder, embedTargetOf, footnoteIndex, type BlockDocV1, type Block } from "@gl-admin/lib/blocks-spec"
 import { blockRegistry } from "./blocks/registry"
-import { isExtensionBlockType } from "@gl-admin/lib/blocks-spec/themeBlocks"
+import { isExtensionBlockType, pluginOfBlockType } from "@gl-admin/lib/blocks-spec/themeBlocks"
+import { PluginBlockBoundary } from "./blocks/PluginBlockBoundary"
 import { renderContent, getBlockContent, isBlankParagraph } from "./blocks/utils/contentRenderer"
 import { ImageSizesContext, BLOCK_IMAGE_SIZES } from "./blocks/utils/responsiveImage"
 import { HeadingIdsContext, headingAnchors, type HeadingAnchor } from "./blocks/utils/headingAnchors"
@@ -110,7 +111,7 @@ export function blockRendererFor(
     if (!rendersBlock(block)) return null
 
     // WordPress-style shared props - every component gets the same interface
-    return (
+    const element = (
       <Component
         key={block.id}
         block={block}
@@ -120,6 +121,14 @@ export function blockRendererFor(
         renderBlock={renderBlock}
         anchorId={topLevel ? (blockAnchorId(block.id) ?? undefined) : undefined}
       />
+    )
+    // A plugin's renderer that throws hides its own block only, logged, never the page
+    // (#456, PluginBlockBoundary). Theme and core blocks render as they always have.
+    if (pluginOfBlockType(block.type) === null) return element
+    return (
+      <PluginBlockBoundary key={block.id} type={block.type} blockId={block.id}>
+        {element}
+      </PluginBlockBoundary>
     )
   }
   const renderBlock = (blockId: string) => render(blockId, false)

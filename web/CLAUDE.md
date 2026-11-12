@@ -102,10 +102,22 @@ are the most fragile part of the codebase. **Before editing anything under
   `functions.ts` through `import.meta.glob` maps (`THEME_CONFIGS`, `THEME_FUNCTIONS`), and
   layouts through globs too, all resolved by Vite when the image is built. A theme added
   later has no entry (logged as "not in this build"). The API image ships `web/themes` too, for its startup scan.
-- **Plugins (#455):** `plugins/<slug>/plugin.json` (`plugins/README.md`). Nothing in the web build
-  reads them yet (blocks are #456). `gl-admin/lib/plugins/manifest.ts` is the import-free twin of
-  the API's validator; `pluginManifestVectors.json` is shared with the Go tests, and
-  `manifest.test.ts` validates every plugin in the repository.
+- **Plugins (#455):** `plugins/<slug>/plugin.json` (`plugins/README.md`). `gl-admin/lib/plugins/manifest.ts`
+  is the import-free twin of the API's validator; `pluginManifestVectors.json` is shared with the Go
+  tests, and `manifest.test.ts` validates every plugin in the repository.
+- **Plugin blocks (#456):** `plugins/<slug>/blocks/<Name>/` with `block.json` (data: the inputs of
+  `defineThemeBlock`; `lib/plugins/blockJson.ts`, vectors shared with Go), `editor.ts`
+  (`pluginBlockEditor`) and `render.tsx`. Globs: `lib/plugins/blocks.ts` (plugin.json + block.json,
+  also bundled by collab), `lib/plugins/editorBlocks.ts`, `src/components/blocks/registry.ts`. The
+  schema is theme blocks then plugin blocks, by type (`installedExtensionBlockNodes`), whatever is
+  enabled; the menus offer an enabled plugin's blocks only (`setEnabledPlugins`, from `GET
+  /plugins/enabled` through `ThemeProvider` → `lib/enabledPlugins.ts`, on load and on return to
+  the tab; a failed read offers none). **On the page every plugin block renders inside
+  `PluginBlockBoundary`**: a renderer that throws renders nothing, logged
+  `plugin_block_render_failed` (plugin, type, block id, error). SSR has no React error boundaries,
+  so the server renders the block on its own first through a probe (`react-dom/server`), registered
+  by the middleware (`src/lib/pluginBlockProbe.ts`) to keep it out of the admin bundle; in a browser
+  it's a class boundary. Theme and core blocks don't go through it. `reading-time` is the example.
 - **`context.settings` (`src/lib/theme-settings.ts`, #451):** a theme's settings are rows keyed
   `theme:<slug>:<key>` in `extension_settings`, publicly readable, written with an admin's token.
   Never copy it for plugins, whose settings may be secret (`docs/design/plugin-system.md` section 6).

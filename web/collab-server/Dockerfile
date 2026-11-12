@@ -15,6 +15,10 @@ COPY gl-admin ./gl-admin
 # The installed themes' block definitions (themes/*/blocks/*/index.ts, #376) are bundled;
 # adding or changing a theme block means rebuilding this image.
 COPY themes ./themes
+# The plugins' plugin.json and block.json (#456): data only, never a plugin's code (build.mjs
+# fails on any other plugin file in the bundle). Installing, upgrading or removing a plugin
+# with blocks means rebuilding this image.
+COPY plugins ./plugins
 RUN node collab-server/build.mjs /out/server.mjs
 
 FROM node:24-alpine

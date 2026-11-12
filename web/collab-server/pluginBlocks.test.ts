@@ -49,3 +49,45 @@ describe("a seed with an uninstalled plugin block", () => {
     expect(decision.blockDoc.blocks[GONE]).toEqual(gone)
   })
 })
+
+// #456: the example plugin's block is installed in this build (its block.json), so the
+// server seeds it into the fragment and stores it validated from its spec, enabled or not:
+// the collab server never reads the enabled list.
+describe("an installed plugin block", () => {
+  const ESTIMATE = "blk-estimate-00001"
+  const estimateDoc = (attrs: Record<string, unknown>): BlockDocV1 => ({
+    doc_version: 1,
+    blocks_order: [PARA, ESTIMATE],
+    blocks: {
+      [PARA]: { id: PARA, type: "paragraph", version: 1, attrs: { text: "Intro" } },
+      [ESTIMATE]: { id: ESTIMATE, type: "plugin:reading-time/estimate", version: 1, attrs },
+    },
+  })
+
+  it("is in the schema with its spec", () => {
+    expect(schema.nodes["plugin:reading-time/estimate"]).toBeDefined()
+  })
+
+  it("seeds into the fragment and stores back with its declared attrs", () => {
+    const doc = new Y.Doc()
+    const outcome = loadIntoDoc(doc, { block_doc: estimateDoc({ label: "minutes" }), block_revision: 1, ydoc_state: null, epoch: null }, schema, () => "epoch-1")
+    expect(outcome).toMatchObject({ kind: "seeded", dropped: 0 })
+    const nodes = doc.getXmlFragment(EDITOR_FRAGMENT).toArray() as Y.XmlElement[]
+    expect(nodes.map((child) => child.nodeName)).toEqual(["paragraph", "plugin:reading-time/estimate"])
+    expect(nodes[1].getAttribute("label")).toBe("minutes")
+
+    appendParagraph(doc, "More")
+    const { decision } = prepareStore(doc, schema, { previous: estimateDoc({ label: "minutes" }), clientEdited: true, lastEditorId: "1" })
+    if (!decision.write) throw new Error(`expected a write, got ${decision.reason}`)
+    expect(decision.blockDoc.blocks[ESTIMATE]).toMatchObject({ type: "plugin:reading-time/estimate", version: 1, attrs: { label: "minutes" } })
+  })
+
+  it("a value its spec doesn't allow costs the attr (the default applies), never the store", () => {
+    const doc = new Y.Doc()
+    loadIntoDoc(doc, { block_doc: estimateDoc({ label: "x".repeat(41) }), block_revision: 1, ydoc_state: null, epoch: null }, schema, () => "epoch-1")
+    appendParagraph(doc, "More")
+    const { decision } = prepareStore(doc, schema, { previous: estimateDoc({}), clientEdited: true, lastEditorId: "1" })
+    if (!decision.write) throw new Error(`expected a write, got ${decision.reason}`)
+    expect((decision.blockDoc.blocks[ESTIMATE].attrs as { label?: unknown }).label).not.toBe("x".repeat(41))
+  })
+})

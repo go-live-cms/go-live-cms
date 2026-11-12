@@ -31,6 +31,7 @@ import { errorMessage, logEvent } from "./logsafe"
 import { yjsInstanceIsShared } from "./probe"
 import { createCollabServer } from "./server"
 import { installedThemeBlocks } from "../gl-admin/lib/theme-blocks/installed"
+import { installedPluginBlocks } from "../gl-admin/lib/plugins/blocks"
 
 function fatal(message: string): never {
   logEvent("error", "collab_startup_failed", { error: message })
@@ -116,6 +117,8 @@ logEvent("info", "collab_listening", {
   yjs_single_instance: true,
   // The theme blocks this bundle was built with (#376); process.test.ts checks the list.
   theme_blocks: installedThemeBlocks.map((block) => block.type),
+  // The plugin blocks, from their block.json (#456): every installed plugin's, enabled or not.
+  plugin_blocks: installedPluginBlocks.map((block) => block.type),
   // What editors must send to connect (#416); process.test.ts checks it is the admin's.
   schema_fingerprint: collab.schemaFingerprint,
 })

@@ -1,15 +1,18 @@
 # Plugins
 
 Each directory here is one plugin: `web/plugins/<slug>/`, with a `plugin.json`. The design is
-`docs/design/plugin-system.md`; this phase (#455) is the registry: the manifest, the scan, and
-enable/disable. Content blocks (`blocks/<Name>/block.json`, #456), settings (#457) and server
-hooks (#458) build on it.
+`docs/design/plugin-system.md`. The registry (#455): the manifest, the scan, and enable/disable.
+Content blocks (#456): `blocks/<Name>/`, below. Settings (#457) and server hooks (#458) build on it.
+`reading-time/` is the example plugin.
 
 ```
 web/plugins/<slug>/
   plugin.json             # Required.
   README.md
   blocks/<Name>/          # One directory per name in "blocks".
+    block.json            # The block's definition. Data only.
+    editor.ts             # Admin only: node view + menu entry.
+    render.tsx            # The public renderer.
 ```
 
 ## plugin.json
@@ -55,6 +58,53 @@ Unknown fields are refused, at every level. One validator in Go (`api/plugins_ma
 TypeScript twin (`web/gl-admin/lib/plugins/manifest.ts`) share their cases
 (`web/gl-admin/lib/plugins/pluginManifestVectors.json`), and both test suites validate every
 plugin in this directory, so a plugin that fails fails CI.
+
+## Content blocks (#456)
+
+A block is `blocks/<Name>/`, listed in plugin.json's `blocks`. Its type, also its ProseMirror node
+and Yjs element name, is **`plugin:<id>/<name in lowercase>`** (`blocks/Estimate/` of
+`reading-time` is `plugin:reading-time/estimate`).
+
+```json
+{ "type": "plugin:reading-time/estimate", "version": 1, "title": "Reading time",
+  "content": "", "attrs": { "label": { "type": "string", "default": "min read", "maxLength": 40 } } }
+```
+
+**`block.json`** holds exactly what a theme block's `defineThemeBlock` takes (`themes/README.md`,
+"Custom Blocks"), as data: `type`, `version` (1 to 1000000), `title` (≤100), optional `content`
+(a content expression over text and text blocks only, `inline` `text` `hardBreak` `paragraph`
+`heading` `codeBlock` `horizontalRule`; default `inline*`, `""` = a leaf), `marks` and `attrs`
+(`string` with `default`, `enum`, `maxLength`; `number` with `default`, `enum`, `integer`,
+`minimum`, `maximum`; `boolean` with `default`; names not `pm`, `text` or `on…`). Unknown
+fields are refused. One validator in Go (`api/plugin_blocks.go`) and its twin
+(`web/gl-admin/lib/plugins/blockJson.ts`) share `pluginBlockVectors.json`.
+
+Why JSON: the collab server bundles `block.json` and nothing else of a plugin (its build fails on
+any other plugin file), and the API validates stored blocks from the same file without running
+anything.
+
+**`editor.ts`** default-exports `pluginBlockEditor(block, { nodeView, icon, group?, keywords? })`
+(`@gl-admin/lib/plugins/editor`), importing its own `block.json`: a React node view and a block
+menu entry, nothing else (no schema, no ProseMirror plugin). **`render.tsx`** default-exports the
+public component (`BlockComponentProps`); read attrs with
+`themeBlockAttrs(pluginBlockSpec(block), block.attrs)`. A renderer that throws renders nothing for
+its block, logged as `plugin_block_render_failed`; keep it a pure function of its props (on the
+server it renders twice).
+
+What each state of the plugin does to its blocks (`docs/design/plugin-system.md` 4.4):
+
+| | Enabled | Disabled | Removed from the build | Back in the build |
+|---|---|---|---|---|
+| In the editor and collab schema | yes | **yes** | no | yes |
+| An existing block in the editor | edits | **edits** | hidden, kept | restored in place |
+| Offered in the block menus | yes | no | no | if enabled |
+| API on store | validated | validated | kept as is | validated |
+| Public page | renders | **renders** | nothing | renders |
+
+The schema is what is **installed**, never what is enabled, so enabling or disabling changes no
+schema fingerprint and restarts nothing. Adding, changing or removing a block means rebuilding
+the web, collab and api images from one commit. `GET /api/v1/plugins/<id>/usage` (admins) lists
+the posts whose working copy or published page holds one of the plugin's blocks.
 
 ## Lifecycle
 

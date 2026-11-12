@@ -562,6 +562,13 @@ type Querier interface {
 	// changed_at sorts as GREATEST(changed_at, created_at): never-updated posts
 	// keep the 0001-01-01 sentinel and rank by creation time instead.
 	ListPosts(ctx context.Context, arg ListPostsParams) ([]ListPostsRow, error)
+	// The posts whose working copy or published snapshot holds a block of one plugin (#456,
+	// design 4.3): any node whose type starts with type_prefix (`plugin:<slug>/`), in the
+	// flat blocks map or nested in a block's pm (a plugin block may sit in a quote). Every
+	// status, the trash included: a trashed post still holds the block and may come back.
+	// A full scan: admin-only and rare, so no index. `total` counts every match; the rows
+	// stop at row_limit, most recently changed first.
+	ListPostsUsingPluginBlocks(ctx context.Context, arg ListPostsUsingPluginBlocksParams) ([]ListPostsUsingPluginBlocksRow, error)
 	// Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
 	// of these pairs; anything else falls through to the id tiebreaker.
 	// changed_at sorts as GREATEST(changed_at, created_at): never-updated posts
