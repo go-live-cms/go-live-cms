@@ -206,6 +206,7 @@ func TestPluginHostSettings(t *testing.T) {
 		Settings: map[string]PluginSettingSpec{
 			"words_per_minute": {ThemeAttrSpec: ThemeAttrSpec{Type: "number", Default: float64(200)}},
 			"label":            {ThemeAttrSpec: ThemeAttrSpec{Type: "string"}},
+			"mode":             {ThemeAttrSpec: ThemeAttrSpec{Type: "string", Enum: []any{"short", "long"}, Default: "short"}},
 			"show":             {ThemeAttrSpec: ThemeAttrSpec{Type: "boolean", Default: true}},
 		},
 	}}}
@@ -215,10 +216,12 @@ func TestPluginHostSettings(t *testing.T) {
 		{Key: "plugin:rt:undeclared", Value: json.RawMessage(`1`)},
 		{Key: "plugin:other:show", Value: json.RawMessage(`false`)},
 		{Key: "plugin:rt:show", Value: json.RawMessage(`not json`)},
+		// No longer in the enum (an upgrade narrowed it): the default applies, as on the page.
+		{Key: "plugin:rt:mode", Value: json.RawMessage(`"medium"`)},
 	}, nil)
 	settings, err := host.Settings(context.Background())
 	require.NoError(t, err)
-	require.Equal(t, map[string]any{"words_per_minute": float64(250), "label": "min read", "show": true}, settings)
+	require.Equal(t, map[string]any{"words_per_minute": float64(250), "label": "min read", "show": true, "mode": "short"}, settings)
 
 	store.EXPECT().ListPluginExtensionSettings(gomock.Any(), "rt").Return(nil, errors.New("down"))
 	_, err = host.Settings(context.Background())

@@ -107,6 +107,20 @@ describe("describeActivity", () => {
     expect(describeActivity(event({ verb: "access_granted", subject: kenji }), 99, now).href).toBe("/content/edit/10")
   })
 
+  // #455, #457: linked to the Plugins page; the scan's events have no actor.
+  it("reads plugin events", () => {
+    const plugin = { id: 3, slug: "reading-time", name: "Reading time" }
+    const base = { object_type: "plugin", post: undefined, plugin }
+    expect(line({ ...base, verb: "plugin_enabled" })).toBe("Ana Costa enabled Reading time")
+    expect(line({ ...base, verb: "plugin_settings_updated", payload: { fields: ["api_key"] } })).toBe("Ana Costa updated the settings of Reading time")
+    expect(line({ ...base, verb: "plugin_data_deleted", payload: { count: 2 } })).toBe("Ana Costa deleted the data of Reading time")
+    expect(line({ ...base, verb: "plugin_missing", actor: null })).toBe("Someone found Reading time missing from the build")
+    expect(describeActivity(event({ ...base, verb: "plugin_disabled" }), 99, now).href).toBe("/plugins")
+    const gone = describeActivity(event({ ...base, plugin: undefined, verb: "plugin_installed", actor: null }), 99, now)
+    expect(`${gone.who} ${gone.verb} ${gone.what}`).toBe("Someone installed a plugin")
+    expect(gone.href).toBeNull()
+  })
+
   it("passes an unknown verb through (later features add their own)", () => {
     expect(line({ verb: "bookmarked" })).toBe("Ana Costa bookmarked October changelog")
     expect(line({ object_type: "comment", verb: "commented" })).toBe("Ana Costa commented")

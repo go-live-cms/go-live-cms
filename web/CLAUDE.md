@@ -106,6 +106,19 @@ are the most fragile part of the codebase. **Before editing anything under
   is the import-free twin of the API's validator; `pluginManifestVectors.json` is shared with the Go
   tests, and `manifest.test.ts` validates every plugin in the repository. Server hooks (#458) are Go in
   `plugins/<slug>/server/`, built into the API only (`api/CLAUDE.md`); the web build ignores them.
+- **Plugins page (#11, #457; the canvas's "Plugins" board):** `pages/Plugins.tsx` at `/plugins`
+  (admins: `AdminOnly` in `app.tsx`, Workspace › Plugins in `nav.ts`). One list (name, version,
+  author, description, the status pill, declared capabilities plus "Can block publishing" for a
+  `post.before_publish` hook), Enable (the trust warning and what it declares) and Disable (what
+  it affects: blocks, server features, settings) behind dialogs, and Settings, a `Drawer` built
+  from the manifest's fields (text, `enum` select, number, switch, secret: "Saved" + Replace,
+  never the value) with **Delete plugin data** (asks first). Rules, wording and the form's draft
+  (only changed fields are sent; a cleared number sends null; a secret only when one is typed)
+  are `lib/pluginsPage.ts` (tested); the client is `lib/api/plugins.ts`, its own and admin-only
+  (never `ThemeSettingsImpl`). The disable dialog of a plugin with blocks leads with "Used in N
+  posts" (`getPluginUsage`, #456's `GET /plugins/:slug/usage`, read when it opens; a failed read
+  leaves the number out). Hidden until their issues: upload/delete (installing is the image) and
+  "Update to x.y" (#332). Home's feed reads the `plugin_*` verbs, linking here.
 - **Plugin blocks (#456):** `plugins/<slug>/blocks/<Name>/` with `block.json` (data: the inputs of
   `defineThemeBlock`; `lib/plugins/blockJson.ts`, vectors shared with Go), `editor.ts`
   (`pluginBlockEditor`) and `render.tsx`. Globs: `lib/plugins/blocks.ts` (plugin.json + block.json,

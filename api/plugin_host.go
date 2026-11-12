@@ -54,7 +54,9 @@ func (h *pluginHost) Users() pluginsdk.UserReader {
 // Settings are plugin.json's defaults, overlaid with the values stored for the
 // plugin in extension_settings (extension_type 'plugin', key
 // plugin:<slug>:<field>, as 000052 named theme keys). A stored key the manifest
-// doesn't declare is left out.
+// doesn't declare is left out, and so is a value the manifest no longer accepts (an
+// upgrade narrowed the field): the default applies, as the Plugins page shows it
+// (storedPluginSettings, #457).
 func (h *pluginHost) Settings(ctx context.Context) (map[string]any, error) {
 	settings := map[string]any{}
 	for field, spec := range h.plugin.manifest.Settings {
@@ -72,11 +74,12 @@ func (h *pluginHost) Settings(ctx context.Context) (map[string]any, error) {
 		if !ok {
 			continue
 		}
-		if _, declared := h.plugin.manifest.Settings[field]; !declared {
+		spec, declared := h.plugin.manifest.Settings[field]
+		if !declared {
 			continue
 		}
 		var value any
-		if err := json.Unmarshal(row.Value, &value); err != nil {
+		if err := json.Unmarshal(row.Value, &value); err != nil || pluginSettingProblem(spec, value) != "" {
 			continue
 		}
 		settings[field] = value

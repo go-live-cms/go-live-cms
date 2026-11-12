@@ -1,0 +1,242 @@
+// Plugins (#11, the canvas's "Plugins" board): one bordered list of plugins, the
+// enable and disable dialogs, and the settings side panel (#457). Page layout comes
+// from workspace.scss.
+
+.gl-plugins {
+  &__list {
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg);
+    display: flex;
+    flex-direction: column;
+    list-style: none;
+    margin: 0;
+    overflow: hidden;
+    padding: 0;
+  }
+
+  &__footer {
+    display: flex;
+    gap: var(--space-2);
+    justify-content: flex-end;
+    width: 100%;
+  }
+
+  &__dialog {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    margin: 0;
+
+    p {
+      margin: 0;
+    }
+  }
+
+  &__declared {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+
+    h3 {
+      font-size: var(--type-label);
+      font-weight: 500;
+      line-height: var(--type-label-lh);
+      margin: 0;
+    }
+
+    ul {
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      display: flex;
+      flex-direction: column;
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    li {
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      padding: 10px var(--space-3);
+
+      &:last-child {
+        border-bottom: 0;
+      }
+    }
+
+    p {
+      font-size: var(--type-footnote);
+      line-height: var(--type-footnote-lh);
+    }
+  }
+
+  &__declared-name {
+    font-weight: 500;
+  }
+
+  &__declared-desc {
+    color: var(--text-secondary);
+    font-size: var(--type-footnote);
+    line-height: var(--type-footnote-lh);
+  }
+}
+
+.gl-plugin {
+  align-items: flex-start;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  padding: 14px var(--space-4);
+
+  &:last-child {
+    border-bottom: 0;
+  }
+
+  &--skeleton {
+    align-items: center;
+    min-height: 56px;
+  }
+
+  &__body {
+    display: flex;
+    flex: 1 1 280px;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  &__title {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+
+    h2 {
+      font-size: 15px;
+      font-weight: 600;
+      line-height: 22px;
+      margin: 0;
+      overflow-wrap: anywhere;
+    }
+  }
+
+  &__version {
+    color: var(--text-secondary);
+    font-size: var(--type-footnote);
+  }
+
+  &__description {
+    color: var(--text-secondary);
+    font-size: var(--type-label);
+    line-height: var(--type-label-lh);
+    margin: 0;
+  }
+
+  &__meta {
+    align-items: center;
+    color: var(--text-secondary);
+    display: flex;
+    flex-wrap: wrap;
+    font-size: var(--type-footnote);
+    gap: 6px;
+    line-height: var(--type-footnote-lh);
+  }
+
+  &__caps {
+    display: contents;
+    list-style: none;
+  }
+
+  &__cap {
+    align-items: center;
+    background: var(--background-active);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    display: inline-flex;
+    height: 20px;
+    padding: 0 6px;
+  }
+
+  &__actions {
+    display: flex;
+    flex: none;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    padding-top: 2px;
+  }
+}
+
+.gl-plugin-settings {
+  &__form {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    min-height: 100%;
+  }
+
+  &__number {
+    max-width: 160px;
+  }
+
+  &__secret {
+    align-items: flex-start;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+
+    > .gl-input {
+      align-self: stretch;
+    }
+  }
+
+  &__label {
+    font-size: var(--type-label);
+    font-weight: 500;
+    line-height: var(--type-label-lh);
+  }
+
+  &__saved {
+    align-items: center;
+    align-self: stretch;
+    background: var(--background-subtle);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    box-sizing: border-box;
+    display: flex;
+    gap: var(--space-2);
+    height: 36px;
+    padding: 0 2px 0 10px;
+
+    > span {
+      color: var(--text-secondary);
+      flex: 1;
+    }
+  }
+
+  &__hint {
+    font-size: var(--type-footnote);
+    line-height: var(--type-footnote-lh);
+  }
+
+  &__danger {
+    align-items: flex-start;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-top: auto;
+    padding-top: 14px;
+
+    > span {
+      font-size: var(--type-footnote);
+      line-height: var(--type-footnote-lh);
+    }
+  }
+
+  &__delete.gl-button {
+    color: var(--danger-text);
+    margin-left: calc(-1 * var(--space-2));
+  }
+}

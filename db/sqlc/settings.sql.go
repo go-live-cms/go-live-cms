@@ -28,6 +28,43 @@ func (q *Queries) DeleteExtensionSettingsByExtension(ctx context.Context, arg De
 	return err
 }
 
+const deletePluginSetting = `-- name: DeletePluginSetting :execrows
+
+DELETE FROM extension_settings
+WHERE key = $1 AND extension_type = 'plugin' AND extension_id = $2
+`
+
+type DeletePluginSettingParams struct {
+	Key         string `json:"key"`
+	ExtensionID string `json:"extension_id"`
+}
+
+// Plugin settings (#457, docs/design/plugin-system.md section 6): rows keyed
+// plugin:<slug>:<name>, written only through the admin-only
+// /plugins/:slug/settings routes. Read with ListPluginExtensionSettings
+// (plugin_hooks.sql), which the hook host shares.
+func (q *Queries) DeletePluginSetting(ctx context.Context, arg DeletePluginSettingParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deletePluginSetting, arg.Key, arg.ExtensionID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const deletePluginSettings = `-- name: DeletePluginSettings :execrows
+DELETE FROM extension_settings
+WHERE extension_type = 'plugin' AND extension_id = $1
+`
+
+// "Delete plugin data" (section 4.4): every row of this plugin, no other.
+func (q *Queries) DeletePluginSettings(ctx context.Context, extensionID string) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deletePluginSettings, extensionID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const deleteThemeExtensionSetting = `-- name: DeleteThemeExtensionSetting :execrows
 DELETE FROM extension_settings
 WHERE key = $1 AND extension_type = 'theme'

@@ -67,6 +67,10 @@ var pluginRoutes = map[string]string{
 	"POST /api/v1/plugins/:slug/enable":  "requireSiteAdmin",
 	"POST /api/v1/plugins/:slug/disable": "requireSiteAdmin",
 	"GET /api/v1/plugins/enabled":        "content roles: slugs only",
+	// #457: settings are admin-only, secrets included.
+	"GET /api/v1/plugins/:slug/settings":    "requireSiteAdmin",
+	"PUT /api/v1/plugins/:slug/settings":    "requireSiteAdmin",
+	"DELETE /api/v1/plugins/:slug/settings": "requireSiteAdmin",
 }
 
 func TestPluginRoutesRequireRole(t *testing.T) {
