@@ -1343,6 +1343,48 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   DB tests sync through `syncPlugins` with every row that isn't theirs kept present (the local
   test database may be the dev stack's), and plugin tests stay out of `db/sqlc`.
 
+## Plugin server hooks (#458, `000055`, `plugin_hooks.go`, `plugin_host.go`, design 7.1–7.6, 7.8)
+
+- **Events come from one trigger on `posts`** (`posts_plugin_events`, `golive_post_plugin_events`),
+  never from Go: `post.saved` (INSERT or `changed_at` moved), `post.published` (000044's condition
+  plus an INSERT as published; actor = the new version's `created_by`, NULL through PUT/POST),
+  `post.unpublished`, `post.trashed`, `post.restored`, `post.deleted` (carries `post_type`). So every
+  publish path (button, bulk, scheduler, scheduled update, `post_status` through PUT or POST) writes
+  one, in its own transaction, and a new path needs nothing. The insert is filtered by
+  `golive_plugin_event_subscribed` (an enabled, installed plugin's manifest declares the hook): **no
+  subscriber, no row**. `ON CONFLICT DO NOTHING` against `plugin_events_one_pending_save` (one
+  unfanned `post.saved` per post) and `plugin_events_one_publish` (one `post.published` per post and
+  `txid`). Settings saves and body stores are the same `post.saved` (section 11's default).
+- **Outbox:** `plugin_events` (no FK on `post_id`; `data` ids and small facts) → `plugin_hook_runs`
+  (per event and plugin; `post_id`/`event` copied for the ordering index; `next_attempt_at` is the
+  due time and, while running, the lease = fencing token; `finished_at` for retention).
+- **`RunPluginHooks`** (main.go, every replica, `PLUGIN_HOOKS_INTERVAL` 1s, 0 = off, idles 30s
+  while no plugin with hooks is active here): `FanOutPluginEvents` (one statement, a
+  `pg_try_advisory_xact_lock` so one replica fans out, in id order; runs only for plugins subscribed
+  **now**; a `post.saved` gets no run if that plugin already has a pending save run for the post; an
+  event with no run is deleted) → `SkipInactivePluginHookRuns` (disabled/missing/incompatible, or a hook an upgrade dropped; every 30s) →
+  per plugin registered in this build, `ClaimDuePluginHookRuns` up to its free slots (2 per plugin,
+  8 overall, held until the hook goroutine returns), `FOR UPDATE SKIP LOCKED`, 2-minute lease, never
+  while an earlier run of the same plugin and post is unfinished → each hook on its own goroutine
+  with `timeout_ms` (10s default, 30s max) and recovery → `RecordPluginHookRunDone` /
+  `RecordPluginHookRunFailure` under the claim (scheduler backoff, 8 attempts, then `failed`;
+  `last_error` ≤1000) and `plugin_hook_failed` (system actor, one per plugin per 10 min, a final failure always). Shutdown
+  waits for runs in flight. Prune hourly: done/skipped 7 days, failed 30, spent events.
+- **Go contract:** `pluginsdk/` (imports only the standard library; tested): `Event`, `Host`
+  (`Settings` = manifest defaults + `extension_settings` keys `plugin:<slug>:<field>`; `Posts`/
+  `Media`/`Users` nil unless declared; `Log`), `Plugin{Observers}`, `Register` from `init()`.
+  #459 adds guards as a new `Plugin` field. Readers are read-only: no hook writes `block_doc`
+  (rule 11). `server.pluginRegistry` = `pluginsdk.Registered()`, filled by
+  **`api/plugins_gen.go`** (blank imports of `web/plugins/*/server`, `go run ./cmd/gen-plugins`,
+  committed, `--check` in CI's Go lint job). The scan compares it with each `plugin.json`
+  (`pluginHooksMismatch`, the guard included): a difference either way → `incompatible`, reason
+  `hooks` in the response.
+- Tests: `plugin_hooks_test.go` (mismatch, timeouts, slots, panics, Host on a mock) and
+  `plugin_hooks_db_test.go` (real DB: no subscriber writes nothing; one `post.published` per publish
+  path in the version's transaction, a rollback writes none; order and retry; giving up; the lease;
+  panics and hung hooks; skips; save backlog; pruning; drift; the loop). Dispatcher tests loop
+  `roundsUntil` their own run: on a shared database other tests' events reach the same plugin first.
+
 ## Gotchas
 
 - **Themes are discovered from disk** on startup (`ScanThemesDirectory("web/themes")`,

@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -185,6 +186,11 @@ func (server *Server) syncPlugins(ctx context.Context, plugins []DiscoveredPlugi
 		present = append(present, plugin.Slug)
 		server.syncDiscoveredPlugin(ctx, plugin)
 	}
+	for slug := range server.pluginRegistry {
+		if !slices.Contains(present, slug) {
+			server.logger.Warn("plugin_code_without_directory", "plugin", slug)
+		}
+	}
 
 	missing, err := server.store.MarkMissingPlugins(ctx, present)
 	if err != nil {
@@ -225,6 +231,11 @@ func (server *Server) syncDiscoveredPlugin(ctx context.Context, plugin Discovere
 	if !pluginAPICompatible(manifest.PluginAPI) {
 		status = PluginStatusIncompatible
 		log.Warn("plugin_incompatible", "plugin_api", manifest.PluginAPI, "plugin_api_min", PluginAPIMin, "plugin_api_max", PluginAPIMax)
+	} else if mismatch := server.pluginHooksMismatch(plugin.Slug, manifest); mismatch != "" {
+		// Server hooks (#458): the Go code and plugin.json must declare the same hooks,
+		// so neither can drift silently. Its hooks don't run, and it can't be enabled.
+		status = PluginStatusIncompatible
+		log.Warn("plugin_incompatible", "reason", "hooks", "detail", mismatch)
 	}
 
 	inserted, err := server.store.InsertDiscoveredPlugin(ctx, db.InsertDiscoveredPluginParams{
