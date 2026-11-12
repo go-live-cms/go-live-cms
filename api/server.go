@@ -248,6 +248,11 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 			if err := server.SyncPluginsToDatabase(server.ctx, discoveredPlugins); err != nil {
 				server.logger.Warn("failed to sync plugins", "error", err)
 			}
+			// Plugin blocks (#456): every installed plugin's block.json, enabled or not
+			// (design 5.3), validated on store exactly like theme blocks.
+			merged, pluginBlocks := mergePluginBlockSpecs(server.themeBlocks, discoveredPlugins)
+			server.themeBlocks = merged
+			server.logger.Info("loaded plugin blocks", "plugin_blocks", pluginBlocks)
 		}
 	}
 

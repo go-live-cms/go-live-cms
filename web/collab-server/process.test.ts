@@ -29,6 +29,7 @@ import {
 import { canonical } from "../gl-admin/lib/collaboration/fragmentBridge.fixtures"
 import { EDITOR_FRAGMENT } from "../gl-admin/lib/collaboration/fragmentBridge"
 import { installedThemeBlocks } from "../gl-admin/lib/theme-blocks/installed"
+import { installedPluginBlocks } from "../gl-admin/lib/plugins/blocks"
 import * as Y from "yjs"
 
 const run = promisify(execFile)
@@ -180,6 +181,12 @@ describe("the bundled server process", () => {
     expect(listening.theme_blocks).toContain("theme:example/alert")
   })
 
+  it("was built with every installed plugin block, from block.json alone (#456)", () => {
+    const listening = JSON.parse(stdout.split("\n").find((l) => l.includes('"collab_listening"'))!)
+    expect(listening.plugin_blocks).toEqual(installedPluginBlocks.map((block) => block.type))
+    expect(listening.plugin_blocks).toContain("plugin:reading-time/estimate")
+  })
+
   it("flush requires the secret, and stores the live doc through the API", async () => {
     const editor = open("2")
     await editor.outcome
@@ -192,6 +199,11 @@ describe("the bundled server process", () => {
       alert.setAttribute("data-block-id", "blk-flush-alert-1")
       alert.setAttribute("variant", "error")
       alert.insert(0, [new Y.XmlText("Careful")])
+      // A plugin block (#456): the bundle knows it from its block.json.
+      const estimate = new Y.XmlElement("plugin:reading-time/estimate")
+      fragment.insert(fragment.length, [estimate])
+      estimate.setAttribute("data-block-id", "blk-flush-estimate1")
+      estimate.setAttribute("label", "minutes")
     })
     await new Promise((resolve) => setTimeout(resolve, 300))
 
@@ -206,6 +218,11 @@ describe("the bundled server process", () => {
       type: "theme:example/alert",
       version: 1,
       attrs: { variant: "error", text: "Careful" },
+    })
+    expect(api.posts.get("12")!.block_doc!.blocks["blk-flush-estimate1"]).toMatchObject({
+      type: "plugin:reading-time/estimate",
+      version: 1,
+      attrs: { label: "minutes" },
     })
     expect((await fetch(`${internalUrl}/healthz`)).status).toBe(200)
   })

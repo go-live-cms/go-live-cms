@@ -16,6 +16,8 @@ import { SERVER_MEDIA_URL } from "../../gl-admin/lib/server-api-url"
 import { hocuspocusUrl } from "../../gl-admin/lib/collaboration/backend"
 import { log } from "../lib/log"
 import { requestIdFrom, runWithLogContext } from "./requestContext"
+// A plugin block whose renderer throws renders nothing instead of failing the page (#456).
+import "../lib/pluginBlockProbe"
 
 // Themes are bundled at build time (#272): Vite resolves these globs when the image is
 // built (lazily: nothing loads until called), so a theme copied in later has no entry.

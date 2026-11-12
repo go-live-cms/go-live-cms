@@ -6,10 +6,12 @@ import os from "node:os"
 import path from "node:path"
 import { pathToFileURL } from "node:url"
 import { importMetaGlob } from "../../../collab-server/importMetaGlob.mjs"
-import { manifestText, themeBlockManifest } from "../blocks-spec/themeBlocks"
+import { manifestText, pluginOfBlockType, themeBlockManifest } from "../blocks-spec/themeBlocks"
 import { installedThemeBlocks, installedThemeBlockSpecs } from "./installed"
 import { installedThemeBlockEditors } from "./editorBlocks"
 import { blockRegistry } from "../../../src/components/blocks/registry"
+import { installedPluginBlocks } from "../plugins/blocks"
+import { installedPluginBlockEditors } from "../plugins/editorBlocks"
 
 // #376: fails if a bundled theme has a block the production build can't load. Every
 // production consumer resolves theme blocks when its image is built: the admin and SSR
@@ -20,6 +22,7 @@ import { blockRegistry } from "../../../src/components/blocks/registry"
 
 const webRoot = path.resolve(__dirname, "../../..")
 const themesDir = path.join(webRoot, "themes")
+const pluginsDir = path.join(webRoot, "plugins")
 
 const blockDirs = (): string[] =>
   readdirSync(themesDir, { withFileTypes: true })
@@ -28,6 +31,17 @@ const blockDirs = (): string[] =>
       readdirSync(path.join(themesDir, theme.name, "blocks"), { withFileTypes: true })
         .filter((block) => block.isDirectory())
         .map((block) => `${theme.name}/${block.name}`),
+    )
+    .sort()
+
+/** Every plugins/<slug>/blocks/<Name>/ on disk, as `<slug>/<Name>` (#456). */
+const pluginBlockDirs = (): string[] =>
+  readdirSync(pluginsDir, { withFileTypes: true })
+    .filter((plugin) => plugin.isDirectory() && existsSync(path.join(pluginsDir, plugin.name, "blocks")))
+    .flatMap((plugin) =>
+      readdirSync(path.join(pluginsDir, plugin.name, "blocks"), { withFileTypes: true })
+        .filter((block) => block.isDirectory())
+        .map((block) => `${plugin.name}/${block.name}`),
     )
     .sort()
 
@@ -90,7 +104,9 @@ describe("bundled theme blocks are loadable in production (#376)", () => {
           contents: `
             import { installedThemeBlocks } from "@gl-admin/lib/theme-blocks/installed"
             import { getInstalledCollabSchema } from "@gl-admin/lib/theme-blocks/collabSchema"
+            import { installedPluginBlocks } from "@gl-admin/lib/plugins/blocks"
             export const types = installedThemeBlocks.map((block) => block.type)
+            export const pluginTypes = installedPluginBlocks.map((block) => block.type)
             export const nodes = Object.keys(getInstalledCollabSchema().nodes)
           `,
           resolveDir: webRoot,
@@ -108,11 +124,19 @@ describe("bundled theme blocks are loadable in production (#376)", () => {
       const inputs = Object.keys(result.metafile.inputs).map((input) => input.replaceAll("\\", "/"))
       expect(inputs.filter((input) => /node_modules\/(react|react-dom|@tiptap\/react)\//.test(input))).toEqual([])
       expect(inputs.filter((input) => /themes\/[^/]+\/blocks\/.+\/(editor|render)\./.test(input))).toEqual([])
+      // Plugins (#456, rule 13): their plugin.json and block.json, and no plugin code at all.
+      const pluginFiles = inputs
+        .map((input) => path.relative(webRoot, path.resolve(input)).replaceAll("\\", "/"))
+        .filter((input) => input.startsWith("plugins/"))
+      expect(pluginFiles.length).toBeGreaterThan(0)
+      expect(pluginFiles.filter((input) => !input.endsWith(".json"))).toEqual([])
 
       const bundled = await import(pathToFileURL(outfile).href)
       const types = installedThemeBlocks.map((block) => block.type)
       expect(bundled.types).toEqual(types)
       for (const type of types) expect(bundled.nodes).toContain(type)
+      expect(bundled.pluginTypes).toEqual(installedPluginBlocks.map((block) => block.type))
+      for (const type of bundled.pluginTypes) expect(bundled.nodes).toContain(type)
     } finally {
       await fs.rm(out, { recursive: true, force: true })
     }
@@ -121,5 +145,31 @@ describe("bundled theme blocks are loadable in production (#376)", () => {
   it("themes/blocks.manifest.json (the API's copy) is up to date: run `npm run themes:manifest`", () => {
     const manifest = readFileSync(path.join(themesDir, "blocks.manifest.json"), "utf8")
     expect(manifest).toBe(manifestText(themeBlockManifest(installedThemeBlockSpecs())))
+  })
+})
+
+// #456: the same for plugin blocks. Every consumer reads block.json (the collab bundle and
+// the API nothing else of a plugin's); the admin adds editor.ts, the SSR server render.tsx.
+describe("bundled plugin blocks are loadable in production (#456)", () => {
+  it("the example plugin has a block, so this test checks something", () => {
+    expect(pluginBlockDirs()).toContain("reading-time/Estimate")
+  })
+
+  it("every plugins/<slug>/blocks/<Name>/ has block.json, editor.ts and render.tsx, and no index.ts", () => {
+    for (const dir of pluginBlockDirs()) {
+      const [slug, name] = dir.split("/")
+      for (const file of ["block.json", "editor.ts", "render.tsx"]) {
+        expect(existsSync(path.join(pluginsDir, slug, "blocks", name, file)), `${dir} ${file}`).toBe(true)
+      }
+      expect(existsSync(path.join(pluginsDir, slug, "blocks", name, "index.ts")), `${dir} index.ts (plugins use block.json)`).toBe(false)
+    }
+  })
+
+  it("the build resolves every block directory: definition, editor and public renderer", () => {
+    expect(installedPluginBlocks.map((block) => block.dir).sort()).toEqual(pluginBlockDirs())
+    const types = installedPluginBlocks.map((block) => block.type)
+    expect(installedPluginBlockEditors.map((editor) => editor.type)).toEqual(types)
+    for (const editor of installedPluginBlockEditors) expect(editor.entry.plugin, editor.type).toBe(pluginOfBlockType(editor.type))
+    for (const type of types) expect(blockRegistry.has(type), `${type} public renderer`).toBe(true)
   })
 })

@@ -5,6 +5,7 @@ import {
   disablePlugin,
   enablePlugin,
   getPluginSettings,
+  getPluginUsage,
   listPlugins,
   updatePluginSettings,
   type Plugin,
@@ -49,8 +50,8 @@ import "@gl-admin/assets/styles/pages/plugins.scss"
 // confirmations, and the settings panel built from the manifest (#457).
 //
 // Hidden until their issues land: upload and delete (installing is shipping in the
-// image), "Update to x.y" (#332), and the disable dialog's "Used in N posts" (#456's
-// GET /plugins/:slug/usage).
+// image) and "Update to x.y" (#332). The disable dialog's "Used in N posts" is #456's
+// GET /plugins/:slug/usage, read when the dialog opens for a plugin with blocks.
 
 const PluginsPage = () => {
   const { baseTitle } = useGoLive()
@@ -263,7 +264,21 @@ function EnableDialog({ plugin, busy, onCancel, onConfirm }: ConfirmProps) {
 }
 
 function DisableDialog({ plugin, busy, onCancel, onConfirm }: ConfirmProps) {
-  const summary = disableSummary(plugin)
+  // How many posts hold its blocks (#456). Only a plugin with blocks has any; until the
+  // answer arrives, or if it fails, the dialog says the rest without a number.
+  const [usedIn, setUsedIn] = useState<number | null>(null)
+  const hasBlocks = plugin.blocks.length > 0
+  useEffect(() => {
+    if (!hasBlocks) return
+    const controller = new AbortController()
+    getPluginUsage(plugin.slug, controller.signal)
+      .then((usage) => {
+        if (!controller.signal.aborted && typeof usage?.count === "number") setUsedIn(usage.count)
+      })
+      .catch(() => {})
+    return () => controller.abort()
+  }, [plugin.slug, hasBlocks])
+  const summary = disableSummary(plugin, usedIn)
   return (
     <Modal
       isOpen

@@ -606,6 +606,17 @@ func loadPluginDir(slug, dir string) DiscoveredPlugin {
 			return plugin
 		}
 	}
+	// Blocks (#456): only for a plugin_api core implements, as the web build reads them
+	// (lib/plugins/blocks.ts); another contract's block.json may be in a format this build
+	// doesn't know, and that plugin is incompatible anyway.
+	if pluginAPICompatible(manifest.PluginAPI) {
+		specs, err := loadPluginBlocks(slug, dir, manifest.Blocks)
+		if err != nil {
+			plugin.Err = err
+			return plugin
+		}
+		plugin.BlockSpecs = specs
+	}
 	plugin.Manifest = manifest
 	plugin.ManifestJSON = normalized
 	return plugin

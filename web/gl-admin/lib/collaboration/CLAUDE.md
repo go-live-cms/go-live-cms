@@ -820,10 +820,25 @@ is a real block type for the editor, the collab server, the API and the public p
   manifest takes both). So an uninstalled plugin's block is dropped at seed and kept in
   `meta.dropped`, never given a stand-in (one would put an element in the fragment that an
   editor without the plugin can't build, rule 10). A new namespace goes in both predicates.
-  No plugin block is in the build yet (S6 adds `block.json`). Tests:
+  Tests:
   `blockBridge.pluginBlocks.test.ts`, `blocks-spec/extensionBlocks.test.ts`,
   `collab-server/pluginBlocks.test.ts`, `BlockRenderer.pluginBlocks.test.tsx`, Go
   `TestPluginBlocks`.
+- **Installed plugin blocks (#456, design `docs/design/plugin-system.md` 5.1-5.6).** A plugin block
+  is `plugins/<slug>/blocks/<Name>/block.json`: the inputs of `defineThemeBlock` as **data**, built
+  by `defineExtensionBlock` (`theme-blocks/define.ts`) into the same kind of node a theme block is
+  (spec on the NodeSpec, so the bridge, `themeBlockLookup` and the store's validation need nothing
+  new). `lib/plugins/blocks.ts` globs plugin.json + block.json (`importMetaGlob` for the collab
+  bundle), so **no plugin JavaScript is in the collab bundle** (rule 13; `build.mjs` fails on any
+  plugin file that isn't JSON). **One list drives the schema:** `installedExtensionBlockNodes()`
+  (`theme-blocks/collabSchema.ts`), theme blocks then plugin blocks, each sorted by type; the
+  editor's `extensions.ts` pushes theme editors then `pluginBlockExtensions()` in that order (node
+  order is in the fingerprint). **Installed, never enabled** (design 5.3): enabling or disabling
+  changes no schema or fingerprint (`schema.test.ts` pins it); only `menuEntries` reads the
+  enabled list. `pluginBlockEditor` (`lib/plugins/editor.ts`) adds a node view and a catalog entry
+  to the installed node, nothing else (rule 7). A plugin whose plugin_api isn't core's has no blocks
+  installed (same rule in Go). Tests: `lib/plugins/blockJson.test.ts`, `schema.test.ts`,
+  `themeBlocks.loadable.test.ts`, `collab-server/pluginBlocks.test.ts`, `process.test.ts`.
 - **Stored state with an uninstalled block (#453, design `docs/design/plugin-system.md`
   4.4).** The rule above used to hold only on a seed: a post with usable stored state loaded
   the uninstalled node as is, so rule 10's gate opened the whole post read-only.

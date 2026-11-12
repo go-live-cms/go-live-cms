@@ -1,0 +1,10 @@
+{
+  "manifest_version": 1,
+  "id": "reading-time",
+  "name": "Reading time",
+  "version": "1.0.0",
+  "author": "GoLive",
+  "description": "An example plugin: a block that shows a post's estimated reading time.",
+  "plugin_api": 1,
+  "blocks": ["Estimate"]
+}

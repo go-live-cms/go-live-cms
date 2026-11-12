@@ -99,3 +99,28 @@ export function defineThemeBlock(input: ThemeBlockInput): ThemeBlockDefinition {
 
   return { ...spec, title, node, content }
 }
+
+/**
+ * A plugin block's definition from its block.json (#456, docs/design/plugin-system.md 5.1):
+ * `defineThemeBlock` minus the TypeScript import. The JSON holds exactly its inputs, checked
+ * first by `validatePluginBlockJson` (lib/plugins/blockJson.ts, the API's rules); missing
+ * `attrs` means none. The node and spec are built the same way, so a plugin block is the
+ * same kind of node as a theme block everywhere downstream.
+ */
+export function defineExtensionBlock(json: {
+  type: string
+  version: number
+  title: string
+  content?: string
+  marks?: string
+  attrs?: ThemeBlockSpec["attrs"]
+}): ThemeBlockDefinition {
+  return defineThemeBlock({
+    type: json.type,
+    version: json.version,
+    title: json.title,
+    attrs: json.attrs ?? {},
+    ...(json.content !== undefined ? { content: json.content } : {}),
+    ...(json.marks !== undefined ? { marks: json.marks } : {}),
+  })
+}

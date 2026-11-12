@@ -1,7 +1,8 @@
 import React from "react"
 import { blockAnchorId, blocksInReadingOrder, embedTargetOf, footnoteIndex, type BlockDocV1, type Block } from "@gl-admin/lib/blocks-spec"
 import { blockRegistry } from "./blocks/registry"
-import { isExtensionBlockType } from "@gl-admin/lib/blocks-spec/themeBlocks"
+import { isExtensionBlockType, pluginOfBlockType } from "@gl-admin/lib/blocks-spec/themeBlocks"
+import { PluginBlockBoundary, PluginBlockChecksContext, probePluginBlocks } from "./blocks/PluginBlockBoundary"
 import { renderContent, getBlockContent, isBlankParagraph } from "./blocks/utils/contentRenderer"
 import { ImageSizesContext, BLOCK_IMAGE_SIZES } from "./blocks/utils/responsiveImage"
 import { HeadingIdsContext, headingAnchors, type HeadingAnchor } from "./blocks/utils/headingAnchors"
@@ -57,16 +58,30 @@ export default function BlockRenderer({ doc, imageSizes = BLOCK_IMAGE_SIZES, hea
 
   // The script that builds an embed's player on click (#425), for a post that has one. It
   // is ours, on this site: nothing is asked of a provider until a reader clicks.
-  const hasEmbed = blocksInReadingOrder(doc).some((id) => {
+  const readingOrder = blocksInReadingOrder(doc)
+  const hasEmbed = readingOrder.some((id) => {
     const block = doc.blocks[id] as Block | undefined
     return block?.type === "embed" && embedTargetOf(block.attrs) !== null
   })
 
+  // On the server, every plugin block is rendered on its own first (#456): one whose renderer
+  // throws is left out, and so are its footnote references (no number, no back link to an
+  // anchor that isn't on the page). null in a browser, where each block's boundary catches.
+  const unguarded = blockRendererFor(doc, { guard: false })
+  const failedPluginBlocks = probePluginBlocks(
+    readingOrder.map((id) => doc.blocks[id] as Block).filter((block) => !!block && rendersBlock(block)),
+    unguarded,
+    { imageSizes, headingIds },
+  )
+  const footnotes = footnoteIndex(doc, (block) => rendersBlock(block as Block) && !failedPluginBlocks?.has((block as Block).id))
+
   return (
     <ImageSizesContext.Provider value={imageSizes}>
       <HeadingIdsContext.Provider value={headingIds}>
-        <FootnotesContext.Provider value={footnoteIndex(doc, (block) => rendersBlock(block as Block))}>
-          <div className="block-content">{uniqueBlockIds.map((blockId) => renderBlock(blockId))}</div>
+        <FootnotesContext.Provider value={footnotes}>
+          <PluginBlockChecksContext.Provider value={failedPluginBlocks}>
+            <div className="block-content">{uniqueBlockIds.map((blockId) => renderBlock(blockId))}</div>
+          </PluginBlockChecksContext.Provider>
         </FootnotesContext.Provider>
         {hasEmbed && <script src={EMBED_LOADER_SRC} defer />}
       </HeadingIdsContext.Provider>
@@ -80,10 +95,12 @@ export default function BlockRenderer({ doc, imageSizes = BLOCK_IMAGE_SIZES, hea
  * comparison (#355) renders blocks one at a time with it. With `anchors`, the block it
  * returns renders with its `b-<id>` element id (#356, "Copy link to block"): the public
  * page's top-level blocks; their children (rendered through `renderBlock`) get none.
+ * `guard: false` leaves a plugin block's element without its PluginBlockBoundary (for
+ * BlockRenderer's server probe, #456).
  */
 export function blockRendererFor(
   doc: BlockDocV1,
-  { anchors = false }: { anchors?: boolean } = {},
+  { anchors = false, guard = true }: { anchors?: boolean; guard?: boolean } = {},
 ): (blockId: string) => React.ReactElement | null {
   const render = (blockId: string, topLevel: boolean): React.ReactElement | null => {
     const block = doc.blocks[blockId] as Block
@@ -110,7 +127,7 @@ export function blockRendererFor(
     if (!rendersBlock(block)) return null
 
     // WordPress-style shared props - every component gets the same interface
-    return (
+    const element = (
       <Component
         key={block.id}
         block={block}
@@ -120,6 +137,14 @@ export function blockRendererFor(
         renderBlock={renderBlock}
         anchorId={topLevel ? (blockAnchorId(block.id) ?? undefined) : undefined}
       />
+    )
+    // A plugin's renderer that throws hides its own block only, logged, never the page
+    // (#456, PluginBlockBoundary). Theme and core blocks render as they always have.
+    if (!guard || pluginOfBlockType(block.type) === null) return element
+    return (
+      <PluginBlockBoundary key={block.id} type={block.type} blockId={block.id}>
+        {element}
+      </PluginBlockBoundary>
     )
   }
   const renderBlock = (blockId: string) => render(blockId, false)

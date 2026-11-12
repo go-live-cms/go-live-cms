@@ -4,7 +4,8 @@ import "github.com/gin-gonic/gin"
 
 // registerPluginRoutes registers the plugin registry (#455, docs/design/plugin-system.md
 // section 4.3). A plugin is trusted code with the process's authority (section 2), so
-// everything but the enabled list is for site admins. GET /plugins/enabled is what the
+// everything but the enabled list is for site admins (GET /plugins/:slug/usage, #456, is
+// what the Plugins page's disable confirmation counts). GET /plugins/enabled is what the
 // block menus read: any content role, slugs only.
 //
 // /plugins/enabled is a static route beside /plugins/:slug, which is why `enabled` is
@@ -17,6 +18,7 @@ func (server *Server) registerPluginRoutes(v1 *gin.RouterGroup) {
 		admin := plugins.Group("", requireSiteAdmin(server))
 		admin.GET("", server.listPlugins)
 		admin.GET("/:slug", server.getPlugin)
+		admin.GET("/:slug/usage", server.getPluginUsage)
 		admin.POST("/:slug/enable", server.enablePlugin)
 		admin.POST("/:slug/disable", server.disablePlugin)
 		// Settings (#457, plugins_settings.go). DELETE is "Delete plugin data".

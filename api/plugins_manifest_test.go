@@ -204,7 +204,7 @@ func TestPluginContentHash(t *testing.T) {
 
 func TestScanPluginsDirectory(t *testing.T) {
 	root := t.TempDir()
-	writePlugin(t, root, "good", pluginJSON("good", "1.0.0", 1, `"blocks":["Note"]`), map[string]string{"blocks/Note/block.json": "{}"})
+	writePlugin(t, root, "good", pluginJSON("good", "1.0.0", 1, `"blocks":["Note"]`), map[string]string{"blocks/Note/block.json": noteBlockJSON("good")})
 	writePlugin(t, root, "future", pluginJSON("future", "3.0.0", 99, ""), nil)
 	writePlugin(t, root, "wrong-id", pluginJSON("other", "1.0.0", 1, ""), nil)
 	writePlugin(t, root, "no-block-dir", pluginJSON("no-block-dir", "1.0.0", 1, `"blocks":["Missing"]`), nil)

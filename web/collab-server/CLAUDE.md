@@ -28,8 +28,8 @@ rollback. Guards, reseeding and verification: `docs/operations/collab-cutover.md
 | `logsafe.ts` | `logEvent`, `requestIdFrom`, `docNameForLog`, `clientContextForLog`. |
 | `env.ts` | `readEnv`, `readSecretEnv` (`<NAME>_FILE`, #158) for `main.ts`. |
 | `probe.ts`, `build.mjs`, `singleYjsInstance.mjs`, `main.ts` | Single-instance probe, esbuild bundle and its yjs plugin, entry point. |
-| `importMetaGlob.mjs` | esbuild plugin: Vite's eager `import.meta.glob` (the installed theme blocks, #376). |
-| `bundleChecks.mjs` | What `build.mjs` refuses in the bundle (a theme's or plugin's `editor`/`render`, React). |
+| `importMetaGlob.mjs` | esbuild plugin: Vite's eager `import.meta.glob` (the installed theme blocks, #376; plugins' JSON, #456). |
+| `bundleChecks.mjs` | What `build.mjs` refuses in the bundle (a theme's or plugin's `editor`/`render`, any plugin file that isn't JSON, React). |
 
 ## Theme blocks (#376)
 
@@ -48,7 +48,11 @@ the same rules as the API, and `collab_listening` logs `theme_blocks` (checked b
 that isn't in the bundle are dropped at seed and kept in `meta.dropped`, and so are a
 plugin's (`plugin:<slug>/<block>`, #452; `pluginBlocks.test.ts`). The editor/render leak
 check covers `plugins/` too (`bundleChecks.mjs`, tested by `bundleChecks.test.ts`). A stored state that still holds
-one of either is reseeded once (#453). Details:
+one of either is reseeded once (#453). **Installed plugin blocks (#456)** come from
+`plugins/*/blocks/*/block.json` only (the Dockerfile copies `plugins/`; `build.mjs` fails on any
+plugin file that isn't JSON, `pluginCodeInputs`), sit after the theme blocks in the schema, and are
+validated by the store like theme blocks; `collab_listening` logs `plugin_blocks`. The server never
+reads which plugins are enabled. Details:
 `gl-admin/lib/collaboration/CLAUDE.md`, "Theme blocks".
 
 Tests: `npx vitest run --project collab-server` (from `web/`; plain Node env).

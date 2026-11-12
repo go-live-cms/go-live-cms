@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { clientOnlyInputs, themeBlockInputs } from "./bundleChecks.mjs"
+import { clientOnlyInputs, pluginBlockInputs, pluginCodeInputs, themeBlockInputs } from "./bundleChecks.mjs"
 
 // build.mjs fails the collab bundle on these (#376); plugin blocks are checked the same
 // way as theme blocks (#452).
@@ -35,5 +35,24 @@ describe("collab bundle checks", () => {
     expect(themeBlockInputs(["themes/example/blocks/Alert/index.ts", "themes/example/blocks/Alert/editor.ts", "gl-admin/lib/index.ts"])).toEqual([
       "themes/example/blocks/Alert/index.ts",
     ])
+  })
+
+  // #456, rule 13: a plugin reaches the bundle as JSON only (inputs relative to web/).
+  it("refuses any plugin file that isn't JSON, and counts the block.json files", () => {
+    const inputs = [
+      "plugins/reading-time/plugin.json",
+      "plugins/reading-time/blocks/Estimate/block.json",
+      "plugins/reading-time/blocks/Estimate/readingTime.ts",
+      "plugins/reading-time/server/hooks.go",
+      "plugins/reading-time/index.mjs",
+      "gl-admin/lib/plugins/blocks.ts",
+      "gl-admin/lib/plugins/pluginBlockVectors.json",
+    ]
+    expect(pluginCodeInputs(inputs)).toEqual([
+      "plugins/reading-time/blocks/Estimate/readingTime.ts",
+      "plugins/reading-time/server/hooks.go",
+      "plugins/reading-time/index.mjs",
+    ])
+    expect(pluginBlockInputs(inputs)).toEqual(["plugins/reading-time/blocks/Estimate/block.json"])
   })
 })

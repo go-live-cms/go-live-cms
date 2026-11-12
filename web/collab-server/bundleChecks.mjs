@@ -14,3 +14,16 @@ export const clientOnlyInputs = (inputs) =>
 
 /** The installed theme blocks' headless definitions in the bundle (counted in the build's log line). */
 export const themeBlockInputs = (inputs) => inputs.filter((input) => /(^|\/)themes\/[^/]+\/blocks\/[^/]+\/index\.ts$/.test(input))
+
+// Plugins (#456, rule 13): the collab server reads a plugin's block.json and plugin.json and
+// nothing else, so no plugin JavaScript can change the bundle's module graph. Inputs here are
+// relative to web/ (build.mjs resolves them), so web/gl-admin/lib/plugins/ doesn't count.
+const PLUGIN_FILE = /^plugins\//
+
+/** The plugin files in the bundle that aren't JSON: always a leak. */
+export const pluginCodeInputs = (webRelativeInputs) =>
+  webRelativeInputs.filter((input) => PLUGIN_FILE.test(input) && !/\.json$/.test(input))
+
+/** The installed plugin blocks' block.json files in the bundle (counted in the build's log line). */
+export const pluginBlockInputs = (webRelativeInputs) =>
+  webRelativeInputs.filter((input) => /^plugins\/[^/]+\/blocks\/[^/]+\/block\.json$/.test(input))

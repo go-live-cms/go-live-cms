@@ -10,6 +10,7 @@ const api = vi.hoisted(() => ({
   listPlugins: vi.fn(),
   enablePlugin: vi.fn(),
   disablePlugin: vi.fn(),
+  getPluginUsage: vi.fn(),
   getPluginSettings: vi.fn(),
   updatePluginSettings: vi.fn(),
   deletePluginData: vi.fn(),
@@ -116,6 +117,7 @@ beforeEach(() => {
   for (const fn of Object.values(api)) fn.mockReset()
   api.listPlugins.mockResolvedValue({ plugins: PLUGINS, count: PLUGINS.length, plugin_api: { min: 1, max: 1 } })
   api.getPluginSettings.mockResolvedValue(SETTINGS)
+  api.getPluginUsage.mockResolvedValue({ slug: "link-checker", count: 3, posts: [], truncated: false })
 })
 
 afterEach(() => {
@@ -197,8 +199,9 @@ describe("enable and disable", () => {
     expect(text).toContain("they still edit and still show on your site")
     expect(text).toContain("won’t be offered in the block menus")
     expect(text).toContain("Its server features stop running. Its settings are kept.")
-    // The usage count waits for #456.
-    expect(text).not.toMatch(/Used in/)
+    // How many posts hold its blocks (#456's GET /plugins/:slug/usage).
+    expect(api.getPluginUsage).toHaveBeenCalledWith("link-checker", expect.any(AbortSignal))
+    expect(text).toContain("Used in 3 posts.")
 
     api.disablePlugin.mockResolvedValue({ ...PLUGINS[0], enabled: false, active: false })
     await click("Disable plugin")
@@ -302,5 +305,31 @@ describe("the settings panel", () => {
     const overlay = document.querySelector(".gl-drawer-overlay")!
     await act(async () => overlay.dispatchEvent(new MouseEvent("mousedown", { bubbles: true })))
     expect(input("Report title").value).toBe("Dead links")
+  })
+})
+
+describe("the disable dialog's usage count (#456)", () => {
+  it("says the rest without a number when the count can't be read", async () => {
+    api.getPluginUsage.mockRejectedValue(new ApiError("Server error.", 500, null, null))
+    await render()
+    await click("Disable Link checker")
+    const text = dialog()!.textContent!
+    expect(text).toContain("they still edit and still show on your site")
+    expect(text).not.toMatch(/Used in/)
+  })
+
+  it("doesn't ask for a plugin without blocks", async () => {
+    api.listPlugins.mockResolvedValue({ plugins: [{ ...PLUGINS[1], enabled: true, active: true }], count: 1, plugin_api: { min: 1, max: 1 } })
+    await render()
+    await click("Disable Publish checklist")
+    expect(dialog()!.textContent).toContain("Disable Publish checklist?")
+    expect(api.getPluginUsage).not.toHaveBeenCalled()
+  })
+
+  it("says one post in the singular", async () => {
+    api.getPluginUsage.mockResolvedValue({ slug: "link-checker", count: 1, posts: [], truncated: false })
+    await render()
+    await click("Disable Link checker")
+    expect(dialog()!.textContent).toContain("Used in 1 post.")
   })
 })

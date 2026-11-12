@@ -63,6 +63,7 @@ func pluginRequest(t *testing.T, server *Server, store *mockdb.MockStore, caller
 var pluginRoutes = map[string]string{
 	"GET /api/v1/plugins":                "requireSiteAdmin",
 	"GET /api/v1/plugins/:slug":          "requireSiteAdmin",
+	"GET /api/v1/plugins/:slug/usage":    "requireSiteAdmin",
 	"POST /api/v1/plugins/:slug/enable":  "requireSiteAdmin",
 	"POST /api/v1/plugins/:slug/disable": "requireSiteAdmin",
 	"GET /api/v1/plugins/enabled":        "content roles: slugs only",

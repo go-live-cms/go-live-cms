@@ -58,6 +58,29 @@ export async function disablePlugin(slug: string): Promise<Plugin> {
   return rsp.plugin
 }
 
+/** One post holding a plugin's blocks (GET /plugins/:slug/usage, #456). */
+export interface PluginUsagePost {
+  id: number
+  title: string
+  post_type: string
+  post_status: string
+  in_working_copy: boolean
+  in_published: boolean
+  changed_at: string
+}
+
+/** The posts whose working copy or published page holds the plugin's blocks: `count` is all of them, `posts` the latest 100. */
+export interface PluginUsage {
+  slug: string
+  count: number
+  posts: PluginUsagePost[]
+  truncated: boolean
+}
+
+export async function getPluginUsage(slug: string, signal?: AbortSignal): Promise<PluginUsage> {
+  return apiCall(`${pluginPath(slug)}/usage`, { signal })
+}
+
 // One field of the settings form: the manifest's spec and its name. `default` is null
 // when the manifest declares none.
 export type PluginSettingField = Omit<PluginSettingSpec, "default"> & { name: string; default?: PluginSettingSpec["default"] | null }

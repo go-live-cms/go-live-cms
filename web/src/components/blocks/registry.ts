@@ -1,5 +1,6 @@
 import type { BlockConfig, BlockComponent } from "./types"
 import { blockPathParts, installedThemeBlocks, type InstalledThemeBlock } from "@gl-admin/lib/theme-blocks/installed"
+import { installedPluginBlocks, pluginBlockPathParts, type InstalledPluginBlock } from "@gl-admin/lib/plugins/blocks"
 // Browser-safe: the admin loads this module too (the revision preview renders blocks).
 import { log } from "../../lib/log"
 
@@ -115,5 +116,47 @@ export function themeBlockConfigs(
 }
 
 themeBlockConfigs(themeRenderers).forEach((config) => blockRegistry.register(config))
+
+// Plugin blocks (#456, docs/design/plugin-system.md 5.2): every installed plugin block's
+// public renderer (plugins/<slug>/blocks/<Name>/render.tsx), resolved when the image is
+// built. Registered whether the plugin is enabled or not (design 4.4: disabling must not
+// change published pages); a block of a plugin that isn't in this build renders nothing
+// (BlockRenderer), and one whose renderer throws renders nothing either
+// (PluginBlockBoundary).
+const pluginRenderers = import.meta.glob<{ default?: BlockComponent }>("../../../plugins/*/blocks/*/render.tsx", {
+  eager: true,
+})
+
+/**
+ * The BlockConfigs for `renderers` (a glob of the plugin blocks' render.tsx): each must sit
+ * next to an installed block.json and default-export a component. A renderer of a plugin
+ * that isn't installed (plugin_api outside core's range) is left out. Throws otherwise;
+ * themeBlocks.loadable.test.ts runs it over the repository's plugins.
+ */
+export function pluginBlockConfigs(
+  renderers: Record<string, { default?: BlockComponent }>,
+  definitions: InstalledPluginBlock[] = installedPluginBlocks,
+): BlockConfig[] {
+  const configs: BlockConfig[] = []
+  for (const [path, module] of Object.entries(renderers)) {
+    const parts = pluginBlockPathParts(path)
+    if (!parts) throw new Error(`plugin block ${path}: not under plugins/<slug>/blocks/<Name>/`)
+    if (!definitions.some((d) => d.plugin === parts.slug)) continue
+    const definition = definitions.find((d) => d.dir === `${parts.slug}/${parts.dir}`)
+    if (!definition) throw new Error(`plugin block ${path}: no block.json in the same directory`)
+    if (typeof module.default !== "function") throw new Error(`plugin block ${path}: render.tsx must default-export a component`)
+    configs.push({
+      type: definition.type,
+      version: definition.version,
+      name: definition.title,
+      category: "widgets",
+      icon: "",
+      component: module.default,
+    })
+  }
+  return configs
+}
+
+pluginBlockConfigs(pluginRenderers).forEach((config) => blockRegistry.register(config))
 
 export default blockRegistry

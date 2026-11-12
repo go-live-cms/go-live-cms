@@ -121,8 +121,11 @@ type DiscoveredPlugin struct {
 	// ContentHash is the SHA-256 over the plugin's files (pluginContentHash); "" only
 	// when they couldn't be read.
 	ContentHash string
+	// BlockSpecs are its blocks' specs by type, from their block.json (#456), when Err is
+	// nil and its plugin_api is core's (otherwise its blocks aren't installed).
+	BlockSpecs map[string]ThemeBlockSpec
 	// Err is why the plugin can't be used: plugin.json doesn't validate, a declared
-	// block has no directory, or the files couldn't be read.
+	// block has no directory or no valid block.json, or the files couldn't be read.
 	Err error
 }
 

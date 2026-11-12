@@ -7,6 +7,8 @@ import { schemaFingerprint } from "./schemaFingerprint"
 import { editorSchemaFingerprint } from "@gl-admin/components/editor/utils/editorSchema"
 import { getInstalledCollabSchema } from "../theme-blocks/collabSchema"
 import { installedThemeBlocks } from "../theme-blocks/installed"
+import { installedPluginBlocks } from "../plugins/blocks"
+import { getEnabledPlugins, setEnabledPlugins } from "@gl-admin/components/editor/blocks/catalog"
 
 /** Everything about a schema that decides which docs it accepts, as plain data. */
 function describeSchema(schema: Schema) {
@@ -53,11 +55,33 @@ describe("collab schema parity (#206)", () => {
     expect(serverFingerprint).toMatch(/^[0-9a-f]{64}$/)
   })
 
-  it("the collab server's schema is the core schema plus the installed theme blocks, and nothing else", () => {
+  // Design 5.2 (#456): theme blocks, then plugin blocks, each sorted by type. Node order is
+  // part of the fingerprint, so both sides take it from installedExtensionBlockNodes.
+  it("the collab server's schema is the core schema plus the installed theme blocks, then the installed plugin blocks, and nothing else", () => {
     const core = Object.keys(getCoreSchema().nodes)
     const installed = Object.keys(getInstalledCollabSchema().nodes)
-    expect(installed.filter((name) => !core.includes(name))).toEqual(installedThemeBlocks.map((block) => block.type))
+    const themes = installedThemeBlocks.map((block) => block.type)
+    const plugins = installedPluginBlocks.map((block) => block.type)
+    expect(installed.filter((name) => !core.includes(name))).toEqual([...themes, ...plugins])
+    expect(themes).toEqual([...themes].sort())
+    expect(plugins).toEqual([...plugins].sort())
     expect(installed).toContain("theme:example/alert")
+    expect(installed).toContain("plugin:reading-time/estimate")
+  })
+
+  // Design 5.3 (#456): the schema is the installed set, never the enabled one, so enabling
+  // or disabling a plugin changes no fingerprint and restarts nothing.
+  it("enabling or disabling a plugin changes neither schema nor fingerprint", () => {
+    const before = getEnabledPlugins()
+    try {
+      const fingerprints = [[], ["reading-time"], ["reading-time", "other"], []].map((slugs) => {
+        setEnabledPlugins(slugs)
+        return [schemaFingerprint(getSchema(getExtensions({ collabProvider: null })())), schemaFingerprint(getInstalledCollabSchema())]
+      })
+      expect(new Set(fingerprints.flat()).size).toBe(1)
+    } finally {
+      setEnabledPlugins(before)
+    }
   })
 
   it("collaborating or not, the schema is the same", () => {

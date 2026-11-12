@@ -4101,6 +4101,21 @@ func (mr *MockStoreMockRecorder) ListPosts(arg0, arg1 interface{}) *gomock.Call 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPosts", reflect.TypeOf((*MockStore)(nil).ListPosts), arg0, arg1)
 }
 
+// ListPostsUsingPluginBlocks mocks base method.
+func (m *MockStore) ListPostsUsingPluginBlocks(arg0 context.Context, arg1 db.ListPostsUsingPluginBlocksParams) ([]db.ListPostsUsingPluginBlocksRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListPostsUsingPluginBlocks", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListPostsUsingPluginBlocksRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListPostsUsingPluginBlocks indicates an expected call of ListPostsUsingPluginBlocks.
+func (mr *MockStoreMockRecorder) ListPostsUsingPluginBlocks(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPostsUsingPluginBlocks", reflect.TypeOf((*MockStore)(nil).ListPostsUsingPluginBlocks), arg0, arg1)
+}
+
 // ListPostsWithAllMeta mocks base method.
 func (m *MockStore) ListPostsWithAllMeta(arg0 context.Context, arg1 db.ListPostsWithAllMetaParams) ([]db.ListPostsWithAllMetaRow, error) {
 	m.ctrl.T.Helper()
