@@ -20,7 +20,7 @@
 //     timeout_ms (default 10s, at most 30s) on the context and panics recovered.
 //  5. Record done, or a failure with the scheduler's backoff (30s to 10 min), at most
 //     8 attempts, then failed; plugin_hook_failed goes to the activity log, at most
-//     once per plugin per 10 minutes.
+//     once per plugin per 10 minutes (a final failure always).
 //
 // A hook can't touch the change that caused its event: that transaction committed
 // before the event was visible. It can't slow one either: the only work inside it is
@@ -169,6 +169,9 @@ type pluginHookDispatcher struct {
 	// inFlight counts the runs being executed or recorded (not the hook goroutines
 	// themselves): what a shutdown waits for.
 	inFlight sync.WaitGroup
+
+	// nextSkip is when round runs skipInactive again (only the loop's goroutine).
+	nextSkip time.Time
 }
 
 func newPluginHookDispatcher(server *Server, registry pluginHookRegistry) *pluginHookDispatcher {
@@ -223,13 +226,11 @@ func (d *pluginHookDispatcher) round(ctx context.Context) bool {
 		return true
 	}
 	d.fanOut(ctx)
-	statementCtx, cancel := context.WithTimeout(ctx, pluginHookStatementTimeout)
-	skipped, err := d.server.store.SkipInactivePluginHookRuns(statementCtx)
-	cancel()
-	if err != nil && ctx.Err() == nil {
-		log.Warn("plugin_hooks_skip_failed", "error", err)
-	} else if skipped > 0 {
-		log.Info("plugin hook runs skipped: their plugin no longer runs", "runs", skipped)
+	// Disabling a plugin or dropping a hook is rare, and the claim never takes such runs
+	// meanwhile: the skip only has to catch up, not run every round.
+	if now := time.Now(); !now.Before(d.nextSkip) {
+		d.skipInactive(ctx)
+		d.nextSkip = now.Add(pluginHooksIdleCheck)
 	}
 	if len(plugins) == 0 {
 		return false
@@ -241,6 +242,21 @@ func (d *pluginHookDispatcher) round(ctx context.Context) bool {
 		d.claimAndStart(ctx, plugin)
 	}
 	return true
+}
+
+// skipInactive marks the runs that can never run as skipped (SkipInactivePluginHookRuns).
+func (d *pluginHookDispatcher) skipInactive(ctx context.Context) {
+	statementCtx, cancel := context.WithTimeout(ctx, pluginHookStatementTimeout)
+	defer cancel()
+	skipped, err := d.server.store.SkipInactivePluginHookRuns(statementCtx)
+	switch {
+	case err != nil:
+		if ctx.Err() == nil {
+			d.server.logger.Warn("plugin_hooks_skip_failed", "error", err)
+		}
+	case skipped > 0:
+		d.server.logger.Info("plugin hook runs skipped: their plugin or hook no longer runs", "runs", skipped)
+	}
 }
 
 // activePlugins is the plugins table's enabled plugins with hooks, limited to those
@@ -264,12 +280,8 @@ func (d *pluginHookDispatcher) activePlugins(ctx context.Context) ([]hookPlugin,
 			// Not ours to run: the startup scan marks a mismatch incompatible.
 			continue
 		}
-		plugin := hookPlugin{id: row.ID, slug: row.Slug, manifest: manifest, code: code}
-		for _, event := range code.HookEvents() {
-			if slices.Contains(pluginsdk.ObserverEvents, event) {
-				plugin.events = append(plugin.events, event)
-			}
-		}
+		// Register refuses any event that isn't an observer event.
+		plugin := hookPlugin{id: row.ID, slug: row.Slug, manifest: manifest, code: code, events: code.HookEvents()}
 		if len(plugin.events) > 0 {
 			out = append(out, plugin)
 		}
@@ -462,10 +474,16 @@ func (d *pluginHookDispatcher) record(ctx context.Context, log *slog.Logger, plu
 	payload, _ := json.Marshal(map[string]any{
 		"event": claim.Event, "event_id": claim.EventID, "attempts": outcome.Attempts, "final": final,
 	})
+	// Retries are throttled; a run given up for good is always recorded: its event is
+	// lost to this plugin, which an admin has to be able to see.
+	window := pluginHookFailedWindow.Seconds()
+	if final {
+		window = 0
+	}
 	if _, err := d.server.store.CreatePluginHookFailedActivity(recordCtx, db.CreatePluginHookFailedActivityParams{
 		PluginID:      plugin.id,
 		Payload:       payload,
-		WindowSeconds: pluginHookFailedWindow.Seconds(),
+		WindowSeconds: window,
 	}); err != nil {
 		log.Warn("activity_record_failed", "verb", db.ActivityPluginHookFailed, "object_type", db.ActivityObjectPlugin, "object_id", plugin.id, "error", err)
 	}

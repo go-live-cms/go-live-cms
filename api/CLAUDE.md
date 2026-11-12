@@ -1362,13 +1362,13 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   while no plugin with hooks is active here): `FanOutPluginEvents` (one statement, a
   `pg_try_advisory_xact_lock` so one replica fans out, in id order; runs only for plugins subscribed
   **now**; a `post.saved` gets no run if that plugin already has a pending save run for the post; an
-  event with no run is deleted) → `SkipInactivePluginHookRuns` (disabled/missing/incompatible) →
+  event with no run is deleted) → `SkipInactivePluginHookRuns` (disabled/missing/incompatible, or a hook an upgrade dropped; every 30s) →
   per plugin registered in this build, `ClaimDuePluginHookRuns` up to its free slots (2 per plugin,
   8 overall, held until the hook goroutine returns), `FOR UPDATE SKIP LOCKED`, 2-minute lease, never
   while an earlier run of the same plugin and post is unfinished → each hook on its own goroutine
   with `timeout_ms` (10s default, 30s max) and recovery → `RecordPluginHookRunDone` /
   `RecordPluginHookRunFailure` under the claim (scheduler backoff, 8 attempts, then `failed`;
-  `last_error` ≤1000) and `plugin_hook_failed` (system actor, one per plugin per 10 min). Shutdown
+  `last_error` ≤1000) and `plugin_hook_failed` (system actor, one per plugin per 10 min, a final failure always). Shutdown
   waits for runs in flight. Prune hourly: done/skipped 7 days, failed 30, spent events.
 - **Go contract:** `pluginsdk/` (imports only the standard library; tested): `Event`, `Host`
   (`Settings` = manifest defaults + `extension_settings` keys `plugin:<slug>:<field>`; `Posts`/

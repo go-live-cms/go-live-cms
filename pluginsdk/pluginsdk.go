@@ -257,13 +257,18 @@ func validate(slug string, p Plugin) error {
 	return nil
 }
 
-// Registered returns a copy of every registered plugin by slug. The API reads it once
+// Registered returns a copy of every registered plugin by slug, observers included. The API reads it once
 // at startup.
 func Registered() map[string]Plugin {
 	registryMu.RLock()
 	defer registryMu.RUnlock()
 	out := make(map[string]Plugin, len(registry))
 	for slug, p := range registry {
+		observers := make(map[string]Observer, len(p.Observers))
+		for event, observer := range p.Observers {
+			observers[event] = observer
+		}
+		p.Observers = observers
 		out[slug] = p
 	}
 	return out

@@ -52,6 +52,10 @@ web/plugins/<slug>/
 | `settings` | Optional, up to 50 fields keyed `^[a-z][a-z0-9_]{0,63}$`. Each has `type` (`string`, `number`, `boolean`) and may have `default`, `label`, `description`; strings `enum`, `maxLength`, `secret`; numbers `enum`, `integer`, `minimum`, `maximum`. A `default` must satisfy the field's own rules. |
 | `server.hooks` | Optional, one entry per event: `post.saved`, `post.published`, `post.unpublished`, `post.trashed`, `post.restored`, `post.deleted` (may have `timeout_ms`, 1 to 30000), or the guard `post.before_publish` (may have `on_error`: `allow` or `deny`, and `priority`, -1000 to 1000). |
 
+The publish guard `post.before_publish` validates, but the Go contract has no guards until #459:
+until then a plugin that declares one is listed as `incompatible` (see "Server hooks" below), so
+leave it out of the example above for now.
+
 Unknown fields are refused, at every level. One validator in Go (`api/plugins_manifest.go`) and its
 TypeScript twin (`web/gl-admin/lib/plugins/manifest.ts`) share their cases
 (`web/gl-admin/lib/plugins/pluginManifestVectors.json`), and both test suites validate every
@@ -112,7 +116,8 @@ func init() {
 - **How they run:** after the change committed, outside any transaction, as the system. At least
   once (`Event.ID` is the idempotency key), in order per post. An error, panic or timeout
   (`timeout_ms`, default 10s, at most 30s) is retried with backoff, at most 8 attempts, and
-  `plugin_hook_failed` goes to the activity log. Two run at a time per plugin; a hook that ignores
+  `plugin_hook_failed` goes to the activity log (throttled; a run given up for good always is).
+  Runs for a hook an upgrade drops are skipped. Two run at a time per plugin; a hook that ignores
   its context holds its slot until it returns. A hook can never fail, slow or roll back a publish.
 - **Read-only.** `Host` gives the plugin's settings, a logger, and a reader per declared capability
   (`posts:read`, `media:read`, `users:read`; nil otherwise). Nothing writes a post: only the collab

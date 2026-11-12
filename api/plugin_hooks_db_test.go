@@ -523,8 +523,8 @@ func TestPluginHooksOrderAndRetry(t *testing.T) {
 	require.Len(t, recorder.callsFor(post.ID), 3)
 }
 
-// TestPluginHooksGiveUpAfterMaxAttempts: the eighth failure is final, and the
-// activity log is throttled to one entry per plugin per window.
+// TestPluginHooksGiveUpAfterMaxAttempts: the eighth failure is final; retries reach the
+// activity log throttled, the final failure always.
 func TestPluginHooksGiveUpAfterMaxAttempts(t *testing.T) {
 	conn, store := scheduleTestDB(t)
 	row := enableHookPlugin(t, store, []string{pluginsdk.EventPostTrashed}, nil)
@@ -551,7 +551,10 @@ func TestPluginHooksGiveUpAfterMaxAttempts(t *testing.T) {
 
 	rounds(d, 1)
 	require.Len(t, recorder.callsFor(post.ID), 2, "a failed run isn't retried")
-	require.Len(t, hookFailedActivity(t, conn, row.ID), 1, "throttled")
+	activity := hookFailedActivity(t, conn, row.ID)
+	require.Len(t, activity, 2, "retries throttled, the final failure always recorded")
+	require.Equal(t, false, activity[0]["final"])
+	require.Equal(t, true, activity[1]["final"])
 }
 
 // TestPluginHooksLease: a run claimed by a replica that died is taken again when its
@@ -686,6 +689,59 @@ func TestPluginHooksSkipDisabledPlugins(t *testing.T) {
 	require.Equal(t, "skipped", run.Status)
 	require.True(t, run.Finished.Valid)
 	require.Empty(t, recorder.callsFor(post.ID))
+}
+
+// TestPluginHooksSkipDroppedHooks: an upgrade that drops a hook skips that hook's
+// pending runs, so they don't hold the plugin's later runs for the same post.
+func TestPluginHooksSkipDroppedHooks(t *testing.T) {
+	conn, store := scheduleTestDB(t)
+	ctx := context.Background()
+	events := []string{pluginsdk.EventPostSaved, pluginsdk.EventPostPublished}
+	row := enableHookPlugin(t, store, events, nil)
+	recorder := &hookRecorder{}
+	_, d := hookServer(t, store, pluginHookRegistry{row.Slug: recorder.plugin(pluginsdk.EventPostPublished)})
+
+	editor := scheduleUser(t, store, RoleEditor)
+	post := scheduleDraft(t, store, editor, scheduleWord())
+	_, err := store.PublishPostTx(ctx, db.PublishPostTxParams{PostID: post.ID, ContentMedia: publishedContentMedia})
+	require.NoError(t, err)
+	d.fanOut(ctx)
+	saved := eventsNamed(postPluginEvents(t, conn, post.ID), pluginsdk.EventPostSaved)[0]
+	published := eventsNamed(postPluginEvents(t, conn, post.ID), pluginsdk.EventPostPublished)[0]
+	require.Equal(t, "pending", hookRun(t, conn, saved.ID, row.ID).Status)
+
+	// Version 2 declares post.published only (what the scan would store).
+	_, err = conn.Exec(`UPDATE plugins SET manifest = jsonb_set(manifest, '{server,hooks}', '[{"event":"post.published"}]') WHERE id = $1`, row.ID)
+	require.NoError(t, err)
+	roundsUntil(t, d, func() bool { return hookRun(t, conn, published.ID, row.ID).Status == "done" })
+	require.Equal(t, "skipped", hookRun(t, conn, saved.ID, row.ID).Status)
+	require.Equal(t, []string{fmt.Sprintf("post.published#%d", published.ID)}, recorder.callsFor(post.ID))
+}
+
+// TestListHookPluginsNullHooks: a plugin.json with "hooks": null (the validator allows
+// it) is a plugin without hooks, not an error that stops every plugin's hooks.
+func TestListHookPluginsNullHooks(t *testing.T) {
+	_, store := scheduleTestDB(t)
+	ctx := context.Background()
+	slug := pluginDBSlug("nullhooks")
+	_, err := store.InsertDiscoveredPlugin(ctx, db.InsertDiscoveredPluginParams{
+		Slug: slug, Name: "Null hooks", Version: "1.0.0", Status: PluginStatusInstalled, ContentHash: strings.Repeat("b", 64),
+		Manifest: json.RawMessage(fmt.Sprintf(`{"manifest_version":1,"id":%q,"name":"Null hooks","version":"1.0.0","plugin_api":1,"server":{"hooks":null}}`, slug)),
+	})
+	require.NoError(t, err)
+	_, err = store.EnablePlugin(ctx, db.EnablePluginParams{Slug: slug})
+	require.NoError(t, err)
+	t.Cleanup(func() { _, _ = store.DisablePlugin(context.Background(), slug) })
+
+	rows, err := store.ListHookPlugins(ctx)
+	require.NoError(t, err)
+	for _, row := range rows {
+		require.NotEqual(t, slug, row.Slug)
+	}
+	_, err = store.SkipInactivePluginHookRuns(ctx)
+	require.NoError(t, err)
+	_, err = store.FanOutPluginEvents(ctx, pluginHooksFanOutBatch)
+	require.NoError(t, err)
 }
 
 // TestPluginHooksSaveBacklog: while a plugin's save run for a post is pending, later

@@ -898,9 +898,10 @@ type Querier interface {
 	SetUserInvitationAcceptedUser(ctx context.Context, arg SetUserInvitationAcceptedUserParams) error
 	SetUserPassword(ctx context.Context, arg SetUserPasswordParams) (User, error)
 	SetUserRole(ctx context.Context, arg SetUserRoleParams) (User, error)
-	// Runs of a plugin that was disabled, removed from the build or became incompatible
-	// since its events were fanned out: skipped, not run. A run in flight (a live lease)
-	// is left to finish.
+	// Runs that will never run: their plugin was disabled, removed from the build or became
+	// incompatible, or an upgrade dropped the hook for their event. Skipped, so they don't
+	// hold the plugin's later runs for the same post (the claim's ordering check) or stay
+	// pending forever. A run in flight (a live lease) is left to finish.
 	SkipInactivePluginHookRuns(ctx context.Context) (int64, error)
 	// Keeps the row so replies keep their place; the body goes.
 	SoftDeletePostComment(ctx context.Context, id int64) (PostComment, error)

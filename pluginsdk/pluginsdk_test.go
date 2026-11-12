@@ -46,6 +46,10 @@ func TestRegister(t *testing.T) {
 	// Registered hands out a copy: changing it doesn't change the registry.
 	copied := Registered()
 	delete(copied, "sdk-test-ok")
+	Registered()["sdk-test-ok"].Observers[EventPostDeleted] = noop
+	if len(Registered()["sdk-test-ok"].Observers) != 2 {
+		t.Fatal("Registered shares the registry's observers")
+	}
 	if _, ok := Registered()["sdk-test-ok"]; !ok {
 		t.Fatal("Registered returned the registry itself")
 	}

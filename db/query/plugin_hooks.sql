@@ -8,8 +8,11 @@
 SELECT id, slug, manifest FROM plugins
 WHERE enabled
   AND status = 'installed'
-  AND jsonb_typeof(manifest -> 'server' -> 'hooks') = 'array'
-  AND jsonb_array_length(manifest -> 'server' -> 'hooks') > 0
+  -- CASE, not AND: SQL doesn't promise to test the type first, and plugin.json may
+  -- say "hooks": null.
+  AND CASE WHEN jsonb_typeof(manifest -> 'server' -> 'hooks') = 'array'
+           THEN jsonb_array_length(manifest -> 'server' -> 'hooks') > 0
+           ELSE false END
 ORDER BY slug;
 
 -- name: FanOutPluginEvents :one
@@ -69,15 +72,19 @@ SELECT (SELECT got FROM lock)::bool AS locked,
        (SELECT count(*) FROM dropped)::bigint AS dropped;
 
 -- name: SkipInactivePluginHookRuns :execrows
--- Runs of a plugin that was disabled, removed from the build or became incompatible
--- since its events were fanned out: skipped, not run. A run in flight (a live lease)
--- is left to finish.
+-- Runs that will never run: their plugin was disabled, removed from the build or became
+-- incompatible, or an upgrade dropped the hook for their event. Skipped, so they don't
+-- hold the plugin's later runs for the same post (the claim's ordering check) or stay
+-- pending forever. A run in flight (a live lease) is left to finish.
 UPDATE plugin_hook_runs r
 SET status = 'skipped',
     finished_at = now()
 FROM plugins p
 WHERE p.id = r.plugin_id
-  AND NOT (p.enabled AND p.status = 'installed')
+  AND (NOT (p.enabled AND p.status = 'installed')
+       OR NOT (CASE WHEN jsonb_typeof(p.manifest -> 'server' -> 'hooks') = 'array'
+                    THEN p.manifest -> 'server' -> 'hooks' ELSE '[]'::jsonb END
+               @> jsonb_build_array(jsonb_build_object('event', r.event))))
   AND (r.status = 'pending' OR (r.status = 'running' AND r.next_attempt_at <= now()));
 
 -- name: ClaimDuePluginHookRuns :many
