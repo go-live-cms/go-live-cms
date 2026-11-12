@@ -64,8 +64,9 @@ var (
 	pluginAttrNameRe     = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9]*$`)
 	pluginReservedAttrRe = regexp.MustCompile(`(?i)^(pm|text|data-block-id|on.*)$`)
 	pluginNameTokenRe    = regexp.MustCompile(`[A-Za-z_][\w-]*`)
-	pluginExpressionRe   = regexp.MustCompile(`^[A-Za-z0-9_\-\s|*+?(){},]*$`)
-	pluginMarksRe        = regexp.MustCompile(`^[A-Za-z0-9_\s]*$`)
+	// Whitespace spelled out, as in blockJson.ts: \s differs between Go and JS.
+	pluginExpressionRe = regexp.MustCompile(`^[A-Za-z0-9_\- \t\n\r|*+?(){},]*$`)
+	pluginMarksRe      = regexp.MustCompile(`^[A-Za-z0-9_ \t\n\r]*$`)
 )
 
 // PluginBlockError is why a plugin's block.json can't be used: Field is the path of the first

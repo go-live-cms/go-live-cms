@@ -77,8 +77,9 @@ export interface ThemeBlockSpec {
 }
 
 /** Attr names the bridge owns (the block's content), or that the sanitizer would strip (`on*`). */
-const RESERVED_ATTR = /^(pm|text|data-block-id|on.*)$/i
-const ATTR_NAME = /^[a-zA-Z][a-zA-Z0-9]*$/
+export const RESERVED_ATTR = /^(pm|text|data-block-id|on.*)$/i
+/** What a declared attr may be called (theme blocks, and plugin blocks' block.json). */
+export const ATTR_NAME = /^[a-zA-Z][a-zA-Z0-9]*$/
 
 /**
  * Why `spec` is not a usable extension block spec, or null. Checked when a theme is loaded.

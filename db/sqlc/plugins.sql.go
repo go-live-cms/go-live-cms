@@ -248,18 +248,21 @@ func (q *Queries) ListPlugins(ctx context.Context) ([]Plugin, error) {
 }
 
 const listPostsUsingPluginBlocks = `-- name: ListPostsUsingPluginBlocks :many
-SELECT p.id, p.title, p.post_type, p.post_status, p.changed_at,
-       jsonb_path_exists(p.block_doc, '$.blocks.*.** ? (@.type starts with $prefix)',
-                         jsonb_build_object('prefix', $1::text))::boolean AS in_working_copy,
-       COALESCE(jsonb_path_exists(p.published_block_doc, '$.blocks.*.** ? (@.type starts with $prefix)',
-                                  jsonb_build_object('prefix', $1::text)), false)::boolean AS in_published,
+SELECT u.id, u.title, u.post_type, u.post_status, u.changed_at,
+       u.in_working_copy::boolean AS in_working_copy,
+       u.in_published::boolean AS in_published,
        COUNT(*) OVER ()::bigint AS total
-FROM posts p
-WHERE jsonb_path_exists(p.block_doc, '$.blocks.*.** ? (@.type starts with $prefix)',
-                        jsonb_build_object('prefix', $1::text))
-   OR COALESCE(jsonb_path_exists(p.published_block_doc, '$.blocks.*.** ? (@.type starts with $prefix)',
-                                 jsonb_build_object('prefix', $1::text)), false)
-ORDER BY p.changed_at DESC, p.id DESC
+FROM (
+  SELECT p.id, p.title, p.post_type, p.post_status, p.changed_at,
+         jsonb_path_exists(p.block_doc, '$.blocks.*.** ? (@.type starts with $prefix)',
+                           jsonb_build_object('prefix', $1::text)) AS in_working_copy,
+         COALESCE(jsonb_path_exists(p.published_block_doc, '$.blocks.*.** ? (@.type starts with $prefix)',
+                                    jsonb_build_object('prefix', $1::text)), false) AS in_published
+  FROM posts p
+  OFFSET 0
+) u
+WHERE u.in_working_copy OR u.in_published
+ORDER BY u.changed_at DESC, u.id DESC
 LIMIT $2::int
 `
 
@@ -283,8 +286,9 @@ type ListPostsUsingPluginBlocksRow struct {
 // design 4.3): any node whose type starts with type_prefix (`plugin:<slug>/`), in the
 // flat blocks map or nested in a block's pm (a plugin block may sit in a quote). Every
 // status, the trash included: a trashed post still holds the block and may come back.
-// A full scan: admin-only and rare, so no index. `total` counts every match; the rows
-// stop at row_limit, most recently changed first.
+// A full scan: admin-only and rare, so no index. Each document is searched once: OFFSET 0
+// keeps the planner from pulling the subquery up, which would put both searches in WHERE too.
+// `total` counts every match; the rows stop at row_limit, most recently changed first.
 func (q *Queries) ListPostsUsingPluginBlocks(ctx context.Context, arg ListPostsUsingPluginBlocksParams) ([]ListPostsUsingPluginBlocksRow, error) {
 	rows, err := q.db.QueryContext(ctx, listPostsUsingPluginBlocks, arg.TypePrefix, arg.RowLimit)
 	if err != nil {

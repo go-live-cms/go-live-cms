@@ -6,7 +6,7 @@ import { renderToStaticMarkup, renderToString, renderToPipeableStream } from "re
 import type { BlockDocV1 } from "@gl-admin/lib/blocks-spec"
 import BlockRenderer from "./BlockRenderer"
 import { blockRegistry } from "./blocks/registry"
-import { setPluginBlockServerProbe } from "./blocks/PluginBlockBoundary"
+import { PluginBlockBoundary, resetPluginBlockFailureLog, setPluginBlockServerProbe } from "./blocks/PluginBlockBoundary"
 import { BLOCK_IMAGE_SIZES, ImageSizesContext } from "./blocks/utils/responsiveImage"
 import { log } from "../lib/log"
 // What the middleware loads in production: registers react-dom/server as the probe.
@@ -52,6 +52,7 @@ afterAll(() => {
 })
 afterEach(() => {
   vi.restoreAllMocks()
+  resetPluginBlockFailureLog()
 })
 
 /** As @astrojs/react's renderToPipeableStreamAsync: any reported error rejects the render. */
@@ -117,6 +118,81 @@ describe("a plugin renderer that throws, on the server (#456)", () => {
       setPluginBlockServerProbe((element) => {
         renderToStaticMarkup(element)
       })
+    }
+  })
+
+  // A group (#414) holding plugin blocks: the probe runs inside the container's own render.
+  it("hides a broken plugin block inside a group, and renders the one beside it", () => {
+    const error = vi.spyOn(log, "error").mockImplementation(() => {})
+    const grouped: BlockDocV1 = {
+      doc_version: 1,
+      blocks_order: ["blk-group-0000001"],
+      blocks: {
+        "blk-group-0000001": { id: "blk-group-0000001", type: "group", version: 1, attrs: {}, children: ["blk-broken-000001", "blk-plugin-00001"] },
+        "blk-broken-000001": { id: "blk-broken-000001", type: THROWS, version: 1, attrs: { label: "secret" } },
+        "blk-plugin-00001": { id: "blk-plugin-00001", type: OK, version: 1, attrs: {} },
+      },
+    } as BlockDocV1
+    const html = renderToStaticMarkup(<BlockRenderer doc={grouped} imageSizes="50vw" />)
+    expect(html).toContain('class="group')
+    expect(html).toContain('<span class="sizes">50vw</span>')
+    expect(html).not.toContain("secret")
+    expect(error).toHaveBeenCalledTimes(1)
+  })
+
+  // A hidden block's footnote references are left out of the numbering and the list's back
+  // links, so no link points at an anchor that isn't on the page.
+  it("leaves a hidden block's footnote references out of the footnotes", () => {
+    vi.spyOn(log, "error").mockImplementation(() => {})
+    const ref = (footnoteId: string) => ({ type: "footnoteRef", attrs: { footnoteId } })
+    const note = (id: string, value: string) => ({ id, type: "footnote", version: 1, attrs: { pm: { type: "footnote", content: [{ type: "text", text: value }] }, text: value } })
+    const withNotes = {
+      doc_version: 1,
+      blocks_order: ["blk-broken-000001", "para-00001", "notes-0001"],
+      blocks: {
+        "blk-broken-000001": { id: "blk-broken-000001", type: THROWS, version: 1, attrs: { pm: { type: THROWS, content: [ref("note-00001")] } } },
+        "para-00001": { id: "para-00001", type: "paragraph", version: 1, attrs: { pm: { type: "paragraph", content: [{ type: "text", text: "Text" }, ref("note-00002")] } } },
+        "notes-0001": { id: "notes-0001", type: "footnotes", version: 1, attrs: {}, children: ["note-00001", "note-00002"] },
+        "note-00001": note("note-00001", "From the hidden block."),
+        "note-00002": note("note-00002", "From the paragraph."),
+      },
+    } as unknown as BlockDocV1
+    const html = renderToStaticMarkup(<BlockRenderer doc={withNotes} />)
+    expect(html).toContain('<li id="fn-1">From the paragraph.')
+    expect(html).not.toContain("From the hidden block.")
+    for (const target of [...html.matchAll(/href="#([^"]+)"/g)].map((m) => m[1])) expect(html).toContain(`id="${target}"`)
+  })
+
+  it("a boundary rendered without BlockRenderer probes on its own", () => {
+    const error = vi.spyOn(log, "error").mockImplementation(() => {})
+    const Broken = () => {
+      throw new Error("alone")
+    }
+    expect(
+      renderToStaticMarkup(
+        <div>
+          <PluginBlockBoundary type={THROWS} blockId="blk-alone-000001">
+            <Broken />
+          </PluginBlockBoundary>
+          kept
+        </div>,
+      ),
+    ).toBe("<div>kept</div>")
+    expect(error).toHaveBeenCalledWith("plugin_block_render_failed", expect.objectContaining({ type: THROWS, block_id: "blk-alone-000001" }))
+  })
+
+  it("logs a type's failures at most once a minute, then says how many it left out", () => {
+    vi.useFakeTimers()
+    try {
+      const error = vi.spyOn(log, "error").mockImplementation(() => {})
+      for (let i = 0; i < 5; i += 1) renderToStaticMarkup(<BlockRenderer doc={page} />)
+      expect(error).toHaveBeenCalledTimes(1)
+      vi.advanceTimersByTime(60_001)
+      renderToStaticMarkup(<BlockRenderer doc={page} />)
+      expect(error).toHaveBeenCalledTimes(2)
+      expect(error.mock.calls[1][1]).toMatchObject({ type: THROWS, suppressed: 4 })
+    } finally {
+      vi.useRealTimers()
     }
   })
 })

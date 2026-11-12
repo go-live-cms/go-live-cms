@@ -7,6 +7,7 @@ import type { BlockDocV1 } from "@gl-admin/lib/blocks-spec"
 import BlockRenderer from "./BlockRenderer"
 import { blockRegistry } from "./blocks/registry"
 import { log } from "../lib/log"
+import { resetPluginBlockFailureLog } from "./blocks/PluginBlockBoundary"
 
 // Plugin blocks on the public page (#452, #456): rendered like theme blocks (#376), each
 // inside its own safeguard (PluginBlockBoundary). The repository's example plugin is
@@ -59,6 +60,7 @@ afterAll(() => {
 })
 afterEach(() => {
   vi.restoreAllMocks()
+  resetPluginBlockFailureLog()
 })
 
 const page = (broken: string) =>

@@ -1,4 +1,4 @@
-import { attrProblem, type ThemeAttrSpec } from "../blocks-spec/themeBlocks"
+import { ATTR_NAME, attrProblem, RESERVED_ATTR, type ThemeAttrSpec } from "../blocks-spec/themeBlocks"
 import { THEME_BLOCK_CONTENT_NAMES } from "../theme-blocks/installed"
 
 // A plugin block's block.json (#456, docs/design/plugin-system.md 5.1): the exact inputs of
@@ -34,13 +34,12 @@ const ATTR_FIELDS: Record<string, string[]> = {
   number: ["default", "enum", "integer", "maximum", "minimum", "type"],
   boolean: ["default", "type"],
 }
-// Same as blocks-spec/themeBlocks.ts (RESERVED_ATTR, ATTR_NAME).
-const ATTR_NAME_RE = /^[a-zA-Z][a-zA-Z0-9]*$/
-const RESERVED_ATTR_RE = /^(pm|text|data-block-id|on.*)$/i
 // Names ProseMirror reads in a content or marks expression: letters, digits, `_`, `-`.
 const NAME_TOKEN = /[A-Za-z_][\w-]*/g
-const EXPRESSION_RE = /^[A-Za-z0-9_\-\s|*+?(){},]*$/
-const MARKS_RE = /^[A-Za-z0-9_\s]*$/
+// Whitespace is ASCII and spelled out: JS's \s also matches Unicode spaces, Go's doesn't, and
+// both validators must refuse the same files.
+const EXPRESSION_RE = /^[A-Za-z0-9_\- \t\n\r|*+?(){},]*$/
+const MARKS_RE = /^[A-Za-z0-9_ \t\n\r]*$/
 
 export const PLUGIN_BLOCK_LIMITS = {
   title: 100,
@@ -116,7 +115,7 @@ function attrsProblem(value: unknown): Problem | null {
   if (names.length > PLUGIN_BLOCK_LIMITS.attrs) return problem("attrs", `must have at most ${PLUGIN_BLOCK_LIMITS.attrs} attrs`)
   for (const name of names) {
     const field = `attrs.${name}`
-    if (!ATTR_NAME_RE.test(name) || RESERVED_ATTR_RE.test(name)) {
+    if (!ATTR_NAME.test(name) || RESERVED_ATTR.test(name)) {
       return problem(field, "must be letters and digits, start with a letter, and not be pm, text or on…")
     }
     const attr = value[name]

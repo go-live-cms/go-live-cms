@@ -566,8 +566,9 @@ type Querier interface {
 	// design 4.3): any node whose type starts with type_prefix (`plugin:<slug>/`), in the
 	// flat blocks map or nested in a block's pm (a plugin block may sit in a quote). Every
 	// status, the trash included: a trashed post still holds the block and may come back.
-	// A full scan: admin-only and rare, so no index. `total` counts every match; the rows
-	// stop at row_limit, most recently changed first.
+	// A full scan: admin-only and rare, so no index. Each document is searched once: OFFSET 0
+	// keeps the planner from pulling the subquery up, which would put both searches in WHERE too.
+	// `total` counts every match; the rows stop at row_limit, most recently changed first.
 	ListPostsUsingPluginBlocks(ctx context.Context, arg ListPostsUsingPluginBlocksParams) ([]ListPostsUsingPluginBlocksRow, error)
 	// Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
 	// of these pairs; anything else falls through to the id tiebreaker.
