@@ -19,7 +19,8 @@ type PluginResponse struct {
 	// Status: installed | missing (gone from the build, row kept) | incompatible.
 	Status string `json:"status"`
 	// IncompatibleReason, for an incompatible plugin: "plugin_api" (outside core's
-	// range) or "invalid_manifest" (plugin.json stopped validating; the fields here are
+	// range), "hooks" (its server hooks in Go differ from plugin.json's server.hooks,
+	// #458) or "invalid_manifest" (plugin.json stopped validating; the fields here are
 	// from the last valid one).
 	IncompatibleReason string `json:"incompatible_reason,omitempty"`
 	// Enabled is the admin's choice, kept while missing or incompatible. Active is
@@ -47,7 +48,7 @@ type PluginAPIRange struct {
 	Max int `json:"max"`
 }
 
-func toPluginResponse(plugin db.Plugin, withManifest bool) PluginResponse {
+func (server *Server) toPluginResponse(plugin db.Plugin, withManifest bool) PluginResponse {
 	// The row's manifest was validated when it was stored; a decode failure only
 	// leaves the derived lists empty.
 	var manifest PluginManifest
@@ -77,8 +78,12 @@ func toPluginResponse(plugin db.Plugin, withManifest bool) PluginResponse {
 	}
 	if plugin.Status == PluginStatusIncompatible {
 		rsp.IncompatibleReason = "invalid_manifest"
-		if !pluginAPICompatible(manifest.PluginAPI) {
+		switch {
+		case !pluginAPICompatible(manifest.PluginAPI):
 			rsp.IncompatibleReason = "plugin_api"
+		case server.pluginHooksMismatch(plugin.Slug, manifest) != "":
+			// #458: its plugin.json and its Go code declare different hooks.
+			rsp.IncompatibleReason = "hooks"
 		}
 	}
 	if plugin.EnabledAt.Valid {

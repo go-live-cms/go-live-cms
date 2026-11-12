@@ -111,6 +111,29 @@ type Plugin struct {
 	ChangedAt   time.Time       `json:"changed_at"`
 }
 
+type PluginEvent struct {
+	ID        int64           `json:"id"`
+	Event     string          `json:"event"`
+	PostID    int64           `json:"post_id"`
+	ActorID   sql.NullInt64   `json:"actor_id"`
+	Data      json.RawMessage `json:"data"`
+	FannedOut bool            `json:"fanned_out"`
+	Txid      int64           `json:"txid"`
+	CreatedAt time.Time       `json:"created_at"`
+}
+
+type PluginHookRun struct {
+	EventID       int64          `json:"event_id"`
+	PluginID      int64          `json:"plugin_id"`
+	PostID        int64          `json:"post_id"`
+	Event         string         `json:"event"`
+	Status        string         `json:"status"`
+	Attempts      int32          `json:"attempts"`
+	NextAttemptAt time.Time      `json:"next_attempt_at"`
+	LastError     sql.NullString `json:"last_error"`
+	FinishedAt    sql.NullTime   `json:"finished_at"`
+}
+
 type Post struct {
 	ID                   int64                 `json:"id"`
 	Title                string                `json:"title"`

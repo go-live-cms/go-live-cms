@@ -104,7 +104,8 @@ are the most fragile part of the codebase. **Before editing anything under
   later has no entry (logged as "not in this build"). The API image ships `web/themes` too, for its startup scan.
 - **Plugins (#455):** `plugins/<slug>/plugin.json` (`plugins/README.md`). `gl-admin/lib/plugins/manifest.ts`
   is the import-free twin of the API's validator; `pluginManifestVectors.json` is shared with the Go
-  tests, and `manifest.test.ts` validates every plugin in the repository.
+  tests, and `manifest.test.ts` validates every plugin in the repository. Server hooks (#458) are Go in
+  `plugins/<slug>/server/`, built into the API only (`api/CLAUDE.md`); the web build ignores them.
 - **Plugin blocks (#456):** `plugins/<slug>/blocks/<Name>/` with `block.json` (data: the inputs of
   `defineThemeBlock`; `lib/plugins/blockJson.ts`, vectors shared with Go), `editor.ts`
   (`pluginBlockEditor`) and `render.tsx`. Globs: `lib/plugins/blocks.ts` (plugin.json + block.json,

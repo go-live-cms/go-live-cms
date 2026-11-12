@@ -121,6 +121,22 @@ func TestLoadConfigActivityRetention(t *testing.T) {
 	require.ErrorContains(t, err, "ACTIVITY_RETENTION")
 }
 
+// Plugin hooks (#458) run every second by default; 0 turns them off.
+func TestLoadConfigPluginHooksInterval(t *testing.T) {
+	config, err := LoadConfig(t.TempDir())
+	require.NoError(t, err)
+	require.Equal(t, time.Second, config.PluginHooksInterval)
+
+	t.Setenv("PLUGIN_HOOKS_INTERVAL", "0")
+	config, err = LoadConfig(t.TempDir())
+	require.NoError(t, err)
+	require.Zero(t, config.PluginHooksInterval)
+
+	t.Setenv("PLUGIN_HOOKS_INTERVAL", "-1s")
+	_, err = LoadConfig(t.TempDir())
+	require.ErrorContains(t, err, "PLUGIN_HOOKS_INTERVAL")
+}
+
 func TestLoadConfigRejectsNegativeRateLimit(t *testing.T) {
 	t.Setenv("RATE_LIMIT_LOGIN_PER_MINUTE", "-1")
 	_, err := LoadConfig(t.TempDir())

@@ -19,6 +19,7 @@ import (
 	db "github.com/go-live-cms/go-live-cms/db/sqlc"
 	"github.com/go-live-cms/go-live-cms/devModeUtil"
 	"github.com/go-live-cms/go-live-cms/mailer"
+	"github.com/go-live-cms/go-live-cms/pluginsdk"
 	"github.com/go-live-cms/go-live-cms/token"
 	"github.com/go-live-cms/go-live-cms/util"
 )
@@ -81,6 +82,11 @@ type Server struct {
 	// handler tests on a mock store get a recorder) and the edit throttle.
 	activity           activityWriter
 	activityEditWindow time.Duration
+
+	// pluginRegistry is the plugins' server code (#458): pluginsdk.Registered(), which
+	// api/plugins_gen.go's imports fill. The startup scan compares it with each
+	// plugin.json, and RunPluginHooks runs its hooks. Tests set their own.
+	pluginRegistry pluginHookRegistry
 }
 
 // NewServer constructs the Server, initializes a PASETO v4 maker from config,
@@ -189,6 +195,8 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 
 		activity:           newActivityWriter(store),
 		activityEditWindow: activityEditWindow,
+
+		pluginRegistry: pluginsdk.Registered(),
 	}
 	server.runInBackground = server.runDetached
 
