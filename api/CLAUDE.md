@@ -1046,7 +1046,7 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   `invitation_revoked`, joined (actor = the new member), user created (POST `/users`),
   `role_changed` (both routes, `previous_role`; none when the role is unchanged:
   `ChangeUserRoleTx` returns `PreviousRole`), removed;
-  `settings_updated` (`fields`); review requests (#323, below). The trash (#327): `trashed` (`from_status`), `restored` (`post_status`) and permanent delete as `deleted`, recorded by the per-post helpers in `posts_trash.go` so the bulk actions log each post too (bulk publish logs `published`: `publishPostByID` records it for both routes). Extension settings aren't recorded yet. Plugins (#455, below): `plugin_*`, admin-only.
+  `settings_updated` (`fields`); review requests (#323, below). The trash (#327): `trashed` (`from_status`), `restored` (`post_status`) and permanent delete as `deleted`, recorded by the per-post helpers in `posts_trash.go` so the bulk actions log each post too (bulk publish logs `published`: `publishPostByID` records it for both routes). Theme extension settings aren't recorded yet. Plugins (#455, below): `plugin_*`, admin-only, settings included (#457).
 - **Throttle:** high-volume events ("updated", and "edited" from the collab store) are at most
   one per member, verb and object per `activityEditWindow` (10 min, `CreateActivityThrottled`).
   The collab one is written **inside** `StorePostCollabTx` (`EditActivityWindow`, only stores
@@ -1342,6 +1342,23 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   `plugins_db_test.go` (the acceptance list against the real database). The scan is global, so
   DB tests sync through `syncPlugins` with every row that isn't theirs kept present (the local
   test database may be the dev stack's), and plugin tests stay out of `db/sqlc`.
+- **Settings (#457, `plugins_settings.go`, design section 6):** rows in `extension_settings`
+  keyed `plugin:<slug>:<name>`, `extension_type` `plugin`, `extension_id` the slug, through
+  admin-only routes only (the public `/extension-settings` never serves them, #451). `GET
+  /plugins/:slug/settings` (any status) → `{fields: [{name, ...spec}] sorted by name, values}`:
+  stored values that are declared and still pass the manifest's rules (an upgrade can narrow a
+  field; such a row reads as unset), and every `"secret": true` field as `{"set": bool}`, never
+  the value (stored in the clear for Beta: backups hold it). `PUT {values: {name: value|null}}`
+  (installed only, else 409 `plugin_missing`/`plugin_incompatible`): named fields only, null
+  clears (the default applies), a field left out is kept (how the form leaves a secret alone);
+  each value goes through `themeAttrProblem` plus a 10,000-character cap on a string without
+  `maxLength`; any problem → 400 `invalid_plugin_settings` with `fields`, nothing written; the
+  writes are one transaction (`SetPluginSettingsTx`). Activity `plugin_settings_updated`
+  `{fields}`: the names that changed, never values; nothing when nothing changed. `DELETE`
+  ("Delete plugin data", any status) removes this plugin's rows only (`DeletePluginSettings`),
+  activity `plugin_data_deleted` `{count}` when it removed any. Tests: `plugins_settings_test.go`
+  (mock: validation, secrets, the changed-field list) and `plugins_settings_db_test.go` (real DB:
+  roles, keys, secrets never returned, payloads, another plugin's and a theme's rows kept).
 
 ## Plugin server hooks (#458, `000055`, `plugin_hooks.go`, `plugin_host.go`, design 7.1–7.6, 7.8)
 

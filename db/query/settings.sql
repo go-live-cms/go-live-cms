@@ -63,3 +63,17 @@ WHERE key = $1 AND extension_type = 'theme';
 -- name: DeleteExtensionSettingsByExtension :exec
 DELETE FROM extension_settings 
 WHERE extension_type = $1 AND extension_id = $2;
+
+-- Plugin settings (#457, docs/design/plugin-system.md section 6): rows keyed
+-- plugin:<slug>:<name>, written only through the admin-only
+-- /plugins/:slug/settings routes. Read with ListPluginExtensionSettings
+-- (plugin_hooks.sql), which the hook host shares.
+
+-- name: DeletePluginSetting :execrows
+DELETE FROM extension_settings
+WHERE key = $1 AND extension_type = 'plugin' AND extension_id = $2;
+
+-- "Delete plugin data" (section 4.4): every row of this plugin, no other.
+-- name: DeletePluginSettings :execrows
+DELETE FROM extension_settings
+WHERE extension_type = 'plugin' AND extension_id = $1;

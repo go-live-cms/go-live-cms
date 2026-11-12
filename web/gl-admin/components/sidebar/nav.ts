@@ -5,7 +5,7 @@ import type { PostType, TaxonomyType } from "@gl-admin/lib/api/types"
 // what is a UI hint only (lib/roles.ts): the API enforces the real checks, and the
 // router guards the admin-only pages (RequireRole in app.tsx).
 
-export type NavIcon = "home" | "new" | "post" | "page" | "content" | "media" | "users" | "types" | "themes" | "menus" | "settings" | "tag"
+export type NavIcon = "home" | "new" | "post" | "page" | "content" | "media" | "users" | "types" | "themes" | "menus" | "plugins" | "settings" | "tag"
 
 export type NavItem = {
   key: string
@@ -128,6 +128,8 @@ export function buildNavigation({ role, postTypes = DEFAULT_POST_TYPES, taxonomy
       items: [
         { key: "users", label: "Users", to: "/users", icon: "users" },
         { key: "post-types", label: "Post types", to: "/post-types", icon: "types" },
+        // Plugins (#11): trusted code, so admin-only like the API (requireSiteAdmin).
+        { key: "plugins", label: "Plugins", to: "/plugins", icon: "plugins" },
         { key: "settings", label: "Settings", to: "/settings", icon: "settings" },
       ],
     },

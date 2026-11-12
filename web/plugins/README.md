@@ -72,6 +72,13 @@ plugin in this directory, so a plugin that fails fails CI.
   `plugin_installed`, `plugin_updated`, `plugin_missing` by the scan (the system).
 - A plugin is trusted code with the full authority of the process it runs in. Review it as you
   would core code.
+- Admins manage plugins on **Workspace › Plugins** (`/gl-admin/plugins`, #11): enable and
+  disable behind a confirmation, and a settings form built from `settings` (#457). Values are
+  stored as `plugin:<slug>:<name>` in `extension_settings`, admin-only; a `"secret": true` field
+  is write-only (the page shows "Saved" and Replace, never the value). **Delete plugin data**
+  removes the plugin's saved settings and nothing else; its blocks in posts are never touched.
+  Saving records `plugin_settings_updated` with the field names, never the values.
+
 
 ## Server hooks (#458)
 

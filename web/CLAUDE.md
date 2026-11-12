@@ -105,6 +105,19 @@ are the most fragile part of the codebase. **Before editing anything under
 - **Plugins (#455):** `plugins/<slug>/plugin.json` (`plugins/README.md`). Nothing in the web build
   reads them yet (blocks are #456). `gl-admin/lib/plugins/manifest.ts` is the import-free twin of
   the API's validator; `pluginManifestVectors.json` is shared with the Go tests, and
+  `manifest.test.ts` validates every plugin in the repository.
+- **Plugins page (#11, #457; the canvas's "Plugins" board):** `pages/Plugins.tsx` at `/plugins`
+  (admins: `AdminOnly` in `app.tsx`, Workspace › Plugins in `nav.ts`). One list (name, version,
+  author, description, the status pill, declared capabilities plus "Can block publishing" for a
+  `post.before_publish` hook), Enable (the trust warning and what it declares) and Disable (what
+  it affects: blocks, server features, settings) behind dialogs, and Settings, a `Drawer` built
+  from the manifest's fields (text, `enum` select, number, switch, secret: "Saved" + Replace,
+  never the value) with **Delete plugin data** (asks first). Rules, wording and the form's draft
+  (only changed fields are sent; a cleared number sends null; a secret only when one is typed)
+  are `lib/pluginsPage.ts` (tested); the client is `lib/api/plugins.ts`, its own and admin-only
+  (never `ThemeSettingsImpl`). Hidden until their issues: upload/delete (installing is the
+  image), "Update to x.y" (#332), the disable dialog's "Used in N posts" (#456's usage route;
+  `disableSummary` takes the count). Home's feed reads the `plugin_*` verbs, linking here.
   `manifest.test.ts` validates every plugin in the repository. Server hooks (#458) are Go in
   `plugins/<slug>/server/`, built into the API only (`api/CLAUDE.md`); the web build ignores them.
 - **`context.settings` (`src/lib/theme-settings.ts`, #451):** a theme's settings are rows keyed

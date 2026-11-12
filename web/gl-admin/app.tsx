@@ -40,6 +40,7 @@ const Taxonomies = lazy(() => import("@gl-admin/pages/Taxonomies"))
 const Users = lazy(() => import("@gl-admin/pages/Users"))
 const Settings = lazy(() => import("@gl-admin/pages/Settings"))
 const Themes = lazy(() => import("@gl-admin/pages/Themes"))
+const Plugins = lazy(() => import("@gl-admin/pages/Plugins"))
 const Menus = lazy(() => import("@gl-admin/pages/Menus"))
 const Profile = lazy(() => import("@gl-admin/pages/Profile"))
 const PostTypes = lazy(() => import("@gl-admin/pages/PostTypes"))
@@ -104,6 +105,7 @@ function AppLayout() {
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/settings" element={<AdminOnly area="Settings"><Settings /></AdminOnly>} />
                 <Route path="/post-types" element={<AdminOnly area="Post types"><PostTypes /></AdminOnly>} />
+                <Route path="/plugins" element={<AdminOnly area="Plugins"><Plugins /></AdminOnly>} />
                 {UiGallery && <Route path="/dev/ui" element={<UiGallery />} />}
               </Routes>
             </Suspense>

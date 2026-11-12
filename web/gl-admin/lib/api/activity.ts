@@ -27,6 +27,8 @@ export interface ActivityEvent {
   user?: ActivityPerson
   // The member an edit access event is about (#321: who was granted, declined or revoked).
   subject?: ActivityPerson
+  // The plugin a plugin_* event is about (#455), while it is registered.
+  plugin?: { id: number; slug: string; name: string }
   // Non-personal details: a role, a version number, setting names.
   payload: Record<string, unknown>
 }
