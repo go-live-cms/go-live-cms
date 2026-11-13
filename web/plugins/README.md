@@ -214,3 +214,41 @@ pluginsdk.Register("alt-text-check", pluginsdk.Plugin{
   post".
 - It's a policy check, not a lock: an edit stored between the guard and the publish goes out
   unchecked.
+
+## Webhooks (#460)
+
+A plugin with no Go code can still have hooks: declare `server.webhook`, and each hook in
+`server.hooks` is POSTed to a URL an admin enters in its settings. Nothing is compiled in, so
+`server/` must stay empty (`gen-plugins` refuses a plugin with both).
+
+```jsonc
+{
+  "capabilities": ["network"],
+  "settings": {
+    "url":            { "type": "string", "maxLength": 2048, "label": "Endpoint URL" },
+    "signing_secret": { "type": "string", "secret": true, "label": "Signing secret" }
+  },
+  "server": {
+    "webhook": { "url_setting": "url", "secret_setting": "signing_secret" },
+    "hooks": [{ "event": "post.published", "timeout_ms": 5000 }, { "event": "post.deleted" }]
+  }
+}
+```
+
+- **Rules:** `url_setting` is a string setting, `secret_setting` a different one with `"secret":
+  true`; `network` is declared; at least one hook, and no `post.before_publish` (a guard runs
+  inside the publish request and can't wait on a remote server).
+- **The receiver gets** `{id, event, plugin, post_id, actor_id, data, occurred_at}` with the headers
+  `GoLive-Event-Id`, `GoLive-Event`, `GoLive-Timestamp` and `GoLive-Signature: v1=<hex>`, the
+  HMAC-SHA256 of `"<timestamp>.<raw body>"` under the secret. Verify it over the raw bytes, refuse a
+  timestamp more than 5 minutes off, and use the event id as the idempotency key: delivery is at
+  least once. `pluginsdk.VerifyWebhook` does it in Go. To rotate the secret, accept both on the
+  receiver, save the new one in the plugin's settings, then drop the old one.
+- **It runs like a Go hook:** the same order per post, `timeout_ms`, retries with backoff (8
+  attempts) and `plugin_hook_failed`. A 2xx is success; any other status, a redirect (never
+  followed), a timeout or a refused address is a failure. Until the URL and secret (16 characters
+  or more) are set, every attempt fails.
+- **Where it may point:** an `https` URL on a public address. Private, loopback, link-local,
+  CGNAT, metadata and reserved addresses are refused when connecting, after DNS. For a local
+  receiver in development set `PLUGIN_WEBHOOKS_ALLOW_INSECURE=true` (the API refuses it outside
+  `GIN_MODE=debug`). Design: `docs/design/plugin-system.md` section 7.9.

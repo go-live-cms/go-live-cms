@@ -679,13 +679,14 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
 - Block `embed` v1: `provider`, `ref`, `title`, `caption`, an allowlist (`sanitizeEmbedAttrs`). `ref` is
   checked against its provider's pattern, a title is plain text (`normalizeEmbedTitle`: one holding
   a tag is dropped, `a < b` isn't). `embedVectors.json` (web) is shared with `embeds_test.go`.
-- **`POST /embeds/resolve {url}` (`requireContentEditor`) is the API's only outbound request made
-  on a user's behalf, so treat every line of it as SSRF surface.** The pasted URL only ever yields a
+- **`POST /embeds/resolve {url}` (`requireContentEditor`) is an outbound request made on a user's
+  behalf (plugin webhooks, #460, are the other; both dial through `outbound_http.go`), so treat
+  every line of it as SSRF surface.** The pasted URL only ever yields a
   ref; what is fetched is `embedProviderTable[id].oEmbed`, a literal per provider, asked about the
   URL rebuilt from the ref. HTTPS only, `embedFetchTimeout` 3s for the whole exchange,
   `embedMaxAnswerBytes` 64 KB, no redirect to another host or to HTTP (`refuseOtherHostRedirects`,
   ≤3 on the same host), no proxy from the environment, no cookies, and the dialer refuses internal
-  addresses after DNS (`refuseNonPublicEmbedAddress`). Only `title` / `author_name` are decoded; X
+  addresses after DNS (`refuseNonPublicAddress`, `outbound_http.go`). Only `title` / `author_name` are decoded; X
   has no title, so it is "Post by <author>". A URL matching no allowed provider is 400
   `embed_not_allowed`, nothing fetched; a title that can't be read is still a 200 with `title: ""`
   (logged as `embed_title_failed` with a fixed reason, never the URL). A new provider is a row in
@@ -1442,6 +1443,38 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   × on_error, the total budget, the candidate copy) and `plugin_guards_db_test.go` (real DB: each
   path refused then allowed, the guard never runs while the post is locked, only enabled plugins,
   on_error on the button and the scheduler).
+
+## Plugin webhooks (#460, `plugin_webhooks.go`, `outbound_http.go`, design 7.9)
+
+- **Declared in plugin.json:** `server.webhook {url_setting, secret_setting}` (a string setting; a
+  different `"secret": true` string setting), `network` required, at least one hook, never
+  `post.before_publish` (validator + vectors on both sides). Such a plugin has **no Go code**:
+  `pluginHooksMismatch` makes registered code `incompatible` and `gen-plugins` refuses it.
+- **Not a second runner.** `activePlugins` builds the plugin's `pluginsdk.Plugin` itself
+  (`server.webhookPlugin`: one observer per hook, `webhookSender.observer`), so fan-out, claim,
+  lease, order, `timeout_ms`, slots, backoff, 8 attempts, `plugin_hook_failed` and skipping are
+  #458's. 2xx = done; any other status, a 3xx (never followed), a timeout, a refused address, or a
+  URL/secret not set (secret ≥ 16 characters) = a failed attempt. No migration.
+- **Signing** is `pluginsdk.SignWebhook`: HMAC-SHA256 over `"<unix ts>.<raw body>"`, headers
+  `GoLive-Event-Id` (the idempotency key), `GoLive-Event`, `GoLive-Timestamp`, `GoLive-Signature:
+  v1=<hex>`; body `pluginsdk.WebhookPayload`. `VerifyWebhook` = the receiver's side (5-minute
+  window, any `v1` in a comma list). Rotation = saving a new secret setting.
+- **SSRF:** `outbound_http.go` is the one guard, shared with `POST /embeds/resolve`: the dialer's
+  `Control` refuses every non-public range (`nonPublicPrefixes`: private, loopback, link-local,
+  CGNAT, multicast, reserved, documentation, metadata, NAT64/6to4/Teredo/IPv4-compatible; mapped
+  addresses unmapped) **at connect time**, so DNS answers and rebinding are covered; no proxy, no
+  keep-alives. Webhooks add: https only, no userinfo, ≤ 2048 characters, a literal IP must be
+  public (`urlProblem`, also on `PUT /plugins/:slug/settings`), headers ≤ 16 KB, body never read.
+  `PLUGIN_WEBHOOKS_ALLOW_INSECURE` (http + private, for a local receiver) is refused by
+  `LoadConfig`/`NewServer` outside debug mode.
+- **No secret anywhere:** every failure is a fixed `webhookFailure` message (Go's client errors hold
+  the URL, which may carry a token), so logs, `last_error` and activity never hold the URL or the
+  secret; the secret setting is write-only (#457).
+- Tests: `plugin_webhooks_test.go` (signing, failures, the policy incl. a DNS answer and redirects,
+  the address table, settings checks) and `plugin_webhooks_db_test.go` (real DB through the
+  dispatcher: signed at-least-once delivery and retry, refused target, timeout, disabled plugin, no
+  secret in logs/activity/`last_error`/GET settings). Local receivers need the dev allowance
+  (`newWebhookSender(true, pool)`); the refusals use the real policy.
 
 ## Public read cache (#185, `cache/`, `public_cache.go`)
 

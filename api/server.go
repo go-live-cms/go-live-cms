@@ -68,6 +68,9 @@ type Server struct {
 	// embedClient fetches embed titles (embeds_resolve.go, #425): the API's only outbound
 	// request on a user's behalf. A field so tests can point it at a fake server.
 	embedClient *http.Client
+	// webhooks delivers plugin webhooks (plugin_webhooks.go, #460): the HTTP client and
+	// the URL policy it enforces. A field so tests can point it at a local receiver.
+	webhooks *webhookSender
 
 	// themeBlocks is web/themes/blocks.manifest.json (theme_blocks.go, #376): the
 	// installed theme blocks prepareForStore validates. Empty in test mode.
@@ -181,6 +184,9 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	if config.PluginWebhooksAllowInsecure && !config.IsDebugMode() {
+		return nil, errors.New("PLUGIN_WEBHOOKS_ALLOW_INSECURE is for development only (GIN_MODE=debug)")
+	}
 	// Optional (#185): no REDIS_URL is the no-op cache. A bad URL is an error, so a typo
 	// can't silently turn the cache off; an unreachable Valkey only means misses.
 	cacheClient, err := cache.New(config.RedisURL)
@@ -196,6 +202,7 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 		collabTickets:      tokenMaker,
 		collabFlushTimeout: collabFlushTimeout,
 		embedClient:        newEmbedClient(newEmbedTransport(), embedFetchTimeout),
+		webhooks:           newWebhookSender(config.PluginWebhooksAllowInsecure, nil),
 		rateLimits:         limits,
 
 		mailer:    mail,

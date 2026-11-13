@@ -90,7 +90,13 @@ export interface PluginManifest {
   capabilities?: PluginCapability[]
   blocks?: string[]
   settings?: Record<string, PluginSettingSpec>
-  server?: { hooks?: PluginHook[] }
+  server?: { hooks?: PluginHook[]; webhook?: PluginWebhook }
+}
+
+/** server.webhook (#460): every hook is delivered to the URL setting, signed with the secret one. */
+export interface PluginWebhook {
+  url_setting: string
+  secret_setting: string
 }
 
 export type PluginManifestResult =
@@ -112,8 +118,9 @@ const SETTING_TYPE_FIELDS: Record<PluginSettingType, string[]> = {
   number: ["enum", "integer", "minimum", "maximum"],
   boolean: [],
 }
-const SERVER_FIELDS = ["hooks"]
+const SERVER_FIELDS = ["hooks", "webhook"]
 const HOOK_FIELDS = ["event", "timeout_ms", "on_error", "priority"]
+const WEBHOOK_FIELDS = ["url_setting", "secret_setting"]
 
 /** Whether a manifest's plugin_api is in core's range (else: incompatible). */
 export function pluginApiCompatible(api: number): boolean {
@@ -169,7 +176,8 @@ function manifestProblem(value: unknown, dir: string): Problem | null {
     capabilitiesProblem(value.capabilities) ??
     blocksProblem(value.blocks) ??
     settingsProblem(value.settings) ??
-    serverProblem(value.server)
+    serverProblem(value.server) ??
+    webhookProblem(value)
   )
 }
 
@@ -362,6 +370,55 @@ function serverProblem(value: unknown): Problem | null {
     }
   }
   return null
+}
+
+// server.webhook (#460), checked once settings, capabilities and hooks are well formed:
+// a string setting for the URL, a different secret string setting for the signing key,
+// the network capability, and at least one hook, none the publish guard.
+function webhookProblem(manifest: JsonObject): Problem | null {
+  const server = isObject(manifest.server) ? manifest.server : {}
+  const webhook = server.webhook
+  if (webhook === undefined || webhook === null) return null
+  if (!isObject(webhook)) return problem("server.webhook", "must be an object")
+  const unknown = unknownField(webhook, WEBHOOK_FIELDS, "server.webhook.", "is not a webhook field")
+  if (unknown) return unknown
+  const settings = isObject(manifest.settings) ? manifest.settings : {}
+  const urlSetting = webhookSettingName(webhook, settings, "url_setting")
+  if (typeof urlSetting !== "string") return urlSetting
+  const secretSetting = webhookSettingName(webhook, settings, "secret_setting")
+  if (typeof secretSetting !== "string") return secretSetting
+  if (secretSetting === urlSetting) return problem("server.webhook.secret_setting", "must differ from url_setting")
+  const secretSpec = settings[secretSetting]
+  if (!isObject(secretSpec) || secretSpec.secret !== true) {
+    return problem("server.webhook.secret_setting", 'must name a setting with "secret": true')
+  }
+  const capabilities = Array.isArray(manifest.capabilities) ? manifest.capabilities : []
+  if (!capabilities.includes("network")) {
+    return problem("capabilities", "must include network when server.webhook is set")
+  }
+  const hooks = Array.isArray(server.hooks) ? server.hooks : []
+  if (hooks.length === 0) {
+    return problem("server.hooks", "must declare at least one hook when server.webhook is set")
+  }
+  for (const [i, hook] of hooks.entries()) {
+    if (isObject(hook) && hook.event === GUARD_EVENT) {
+      return problem(`server.hooks[${i}].event`, `can't be delivered by a webhook (${GUARD_EVENT} is a publish guard)`)
+    }
+  }
+  return null
+}
+
+function webhookSettingName(webhook: JsonObject, settings: JsonObject, key: string): string | Problem {
+  const field = `server.webhook.${key}`
+  if (!has(webhook, key)) return problem(field, "is required")
+  const name = webhook[key]
+  if (typeof name !== "string") return problem(field, "must be a string")
+  const spec = has(settings, name) ? settings[name] : undefined
+  if (!isObject(spec)) return problem(field, "must name a field in settings")
+  if (spec.type !== "string" || (spec.enum !== undefined && spec.enum !== null)) {
+    return problem(field, "must name a string setting without enum")
+  }
+  return name
 }
 
 function problem(field: string, message: string): Problem {
