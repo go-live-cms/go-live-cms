@@ -1039,7 +1039,9 @@ Each phase is shippable alone. The milestone is Post-MVP, like #412 itself.
 
 ### Sub-issues
 
-Not filed. Priorities are suggestions within Post-MVP.
+Filed on 2026-11-13, all in Post-MVP: T1 #483, T2 #484, T3 #485, T4 #486, T5 #487, T6 #488,
+T7 #489, T8 #490, T9 #491, T10 #492, T11 #493, T12 #494, T13 #495, T14 #496, T16 #497,
+T17 #498, T18 #500, T15 #501. Reader comments are #499. P2 here is Medium and P3 is Low.
 
 | # | Title | Size | Priority |
 |---|---|---|---|
