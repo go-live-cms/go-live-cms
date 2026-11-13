@@ -1,6 +1,7 @@
 # Theme builder: global styles, block templates and template parts (#412)
 
-Status: **design, proposed**, 2026-11. No code ships with this document.
+Status: **design, accepted with the decisions in section 16**, 2026-11. No code ships with
+this document.
 
 Builds on: `docs/design/plugin-system.md` section 8 (runtime loading; 8.7 is #412's part),
 `docs/design/block-library.md` (#352: the nesting table, containers, the catalog),
@@ -32,7 +33,7 @@ editor on top of that, without replacing it:
    the query loop with its pagination are ordinary Block Spec types, in the image. They
    change the schema fingerprint once, in their own deploy. They read data from a render
    context that SSR fills before the synchronous render. Outside a template they render
-   nothing. There is no comments block, because there are no reader comments to show.
+   nothing. The comments block waits for reader comments, which get their own issue.
 4. **Templates and parts get their own tables, not posts.** This is #322's argument: no
    read of `posts` should have to remember to leave them out. They mirror a post's
    collaborative shape: a working `block_doc`, Yjs state, a published snapshot and
@@ -46,7 +47,8 @@ editor on top of that, without replacing it:
    stored per theme, emitted by the existing `themeCssVariables` in light and dark, and
    edited in a plain form (not collaborative), with optimistic concurrency. Values pass a
    strict grammar shared by Go and TypeScript, so nothing free-form reaches a `<style>`
-   tag. Contrast is checked as `tokens.test.ts` checks it.
+   tag. Contrast is checked on the pairs `tokens.test.ts` checks, and a failing pair is a
+   warning that publish asks to confirm.
 7. **Drafts, preview and one publish.** Every edit is a draft. **Publish site design**
    snapshots every changed template, part and style of the active theme in one transaction,
    so readers never see a new header with old colours. A preview reads drafts through an
@@ -59,9 +61,14 @@ editor on top of that, without replacing it:
    lets only admins open a template document. Activity verbs are recorded under
    `site_design`. A publish fires one site-wide purge through #185's hook.
 10. **Export is last.** It produces a data-only child theme for #332. That waits for #332's
-    package format and for child-theme resolution, both Post-MVP.
+    package format and for child-theme resolution, both Post-MVP. A data-only package
+    activates without a site build.
+11. **The default theme becomes block templates** once the builder renders them, so
+    customizing it starts from exactly what readers see. Its templates then serve as the
+    starters for every other code theme.
 
-The phased plan is section 15. The open questions that need an answer are section 16.
+The phased plan is section 15. Section 16 records the decisions taken on review and the
+questions still open.
 
 ---
 
@@ -160,8 +167,9 @@ not drawn).
 - **Font uploads.** Families come from what the theme ships, plus system stacks.
 - **Per-block style presets** (WordPress's `styles.blocks`). Block colours stay the #356
   palette.
-- **A comments block.** There is no reader-comments feature. #192 comments are editorial and
-  never public.
+- **A comments block, for now.** There is no reader-comments feature yet. #192 comments are
+  editorial and never public. Reader comments are planned (decided) as their own issue, and
+  the block (T18) follows them.
 - **Scheduled design publishes.**
 - **Editing templates on a phone** (open question 2).
 - **Per-template "Last edited by" and comments.** #328 and #192 stay post features in v1.
@@ -310,7 +318,7 @@ theme must be able to render them, and the generic layout depends on them.
 | `site_title` | flow atom | `level` (0 = `<p>`, 1–2), `link` (to `/`) | site settings |
 | `site_tagline` | flow atom | — | site settings |
 | `site_logo` | flow atom | `width` (px, 32–600), `link` | a new site setting, `site_logo_media_id`, and its media |
-| `navigation` | flow atom | `location` (one of the active theme's `menuLocations`), `layout` (`row`/`column`), `overlay` (`phone`/`never`) | `/public/menus/:location` |
+| `navigation` | flow atom | exactly one of `location` (one of the active theme's `menuLocations`) or `menuId` (any menu, decided); `layout` (`row`/`column`), `overlay` (`phone`/`never`) | `location`: `/public/menus/:location`. `menuId`: attached by the resolve route (3.3), only for menus a published template or part names, so no public route serves an arbitrary menu by id. |
 | `search` | flow atom | `label`, `placeholder`, `button` (text, capped) | — (a GET form to `/search`, the theme's `SearchForm` markup) |
 | `template_part` | flow atom | `slug` | the resolved parts |
 | `query` | **container** | `postType`, `perPage` (1–24), `orderBy` (`date`/`title`), `order`, `taxonomy` + `termIds`, `authorId`, `inherit` (use the route's own list) | a `/public` list |
@@ -328,9 +336,16 @@ theme must be able to render them, and the generic layout depends on them.
 | `post_terms` | flow atom | `taxonomy` | the published terms with their links (#348) |
 | `post_navigation` | flow atom | — | `/public/posts/:id/adjacent` (#351) |
 
-`comments` is not in the list (section 2). Related posts, the author bio and "On this page"
-are candidates for a second round once the first set has been used. Each takes one more row
-here and needs no new mechanism.
+A menu named by `menuId` that is deleted renders nothing. The Menus page's delete
+confirmation names the templates and parts that use it.
+
+**A third set (T16)** is what converting the default theme (5.7) needs: `related_posts`
+("More to read", #351), `author_cards` ("Written by", #350), `table_of_contents` ("On this
+page"), `color_scheme_switch` (the Light/Dark/System switch), and `readingTime` on
+`post_byline`. Each takes one more row here and needs no new mechanism.
+
+`comments` waits for reader comments (section 2). It is T18, after that feature's own
+issue.
 
 ### 4.2 Where each may sit
 
@@ -588,7 +603,21 @@ starter, and the editor says so plainly: "Single post uses Default's code layout
 starts from a block version, which may look a little different. Reset brings back the code
 layout."
 
-Converting the default theme itself to block templates is open question 7.
+**The default theme is converted to block templates (decided, T17).** It ships
+`templates/*.json` and `parts/*.json` for every route and for its header and footer, so
+"Customize" there starts from exactly what readers see. Its rules:
+
+- **Parity first.** The block templates render the same pages as today's layouts, checked
+  on `theme.astro.test.ts`'s fixtures. Any differences are listed on the issue and approved
+  before the switch.
+- **Post layout variants become block templates.** `single`, `single-sidebar` and
+  `single-wide` are shipped, and a type's `layout_variants` names which one it uses. T17
+  settles the exact mapping as its first acceptance item.
+- **The `.astro` layouts go** once parity holds. The one exception is `layouts/error`: the
+  500 page must render with the API down.
+- **The default theme's templates become the starters.** Core's own starters (T9) exist
+  only until T17 lands. After that, customizing on any other code theme starts from the
+  default theme's templates.
 
 ---
 
@@ -644,9 +673,12 @@ by both test suites (the `themeBlockVectors.json` pattern):
 
 **Contrast.** The pairs `tokens.test.ts` checks (text, textMuted and primary on background
 and surface, onPrimary on primary, each block colour as text and as fill), in both palettes,
-are computed on every draft save and shown next to the fields. **Publish refuses a design
-with a failing pair** (409 `contrast_failed`, naming the pairs). Whether an admin may
-override that is open question 1.
+are computed on every draft save and shown next to the fields. **A failing pair is a
+warning, not a refusal (decided).** Publish answers 409 `contrast_unconfirmed`, naming the
+pairs, unless the request carries `confirm_contrast: true`. The publish dialog shows the
+pairs and a "Publish anyway" confirmation. The release's `summary` and the
+`site_design_published` activity record how many pairs failed, so the warning stays visible
+afterwards.
 
 ### 6.4 Emission
 
@@ -765,8 +797,8 @@ unpublished changes, together:
 
 1. **Outside any transaction:** flush each changed template's collab document (`503` from a
    flush stops the publish, as for posts), then validate: kind rules, no empty template,
-   contrast (6.3), and every `template_part` slug resolving to a part by 4.2's order,
-   counting the parts this publish puts live.
+   and every `template_part` slug resolving to a part by 4.2's order, counting the parts
+   this publish puts live. Contrast (6.3) asks for confirmation; it never refuses.
 2. **`PublishSiteDesignTx`:** lock the theme's rows (`FOR UPDATE`), insert the release,
    write each changed item's published copy and its version, apply resets (section 9), sync
    `site_template_media`'s published rows, and commit. Nothing else runs inside, which is
@@ -979,10 +1011,12 @@ exist yet:
   `parent`. `supports.childThemes` and `parent` exist in `ThemeConfig` but nothing reads
   them.
 
-**A finding worth passing to #332's owner:** a data-only package needs no site build. Its
-templates and styles are data (plugin-system 8.2, kind 1). Its CSS and fonts are static
-files (kind 2: a volume and a file server). So it could be activated in seconds, without
-S11 or S12, as long as its parent is in the image. That's open question 8.
+**Decided: a data-only package activates without a site build.** Its templates and styles
+are data (plugin-system 8.2, kind 1). Its CSS and fonts are static files (kind 2: a volume
+and a file server). So it can be activated in seconds, without S11 or S12, as long as its
+parent is in the image. The site build stays the path for packages with code. This makes
+#332's first version much cheaper: it can ship data-only packages before the builder
+service exists.
 
 Import is the same in reverse. An uploaded data-only theme's templates are that theme's
 **defaults** (5.7), so its own Site editor customizes on top of them.
@@ -1000,7 +1034,8 @@ Each phase is shippable alone. The milestone is Post-MVP, like #412 itself.
 | **2. Site blocks** | T6 identity, navigation, search, part; T7 post blocks and the query loop | T2 |
 | **3. Templates** | T8 storage and the collab document kind; T9 rendering and `<TemplatePart>`; T10 publish, versions, reset | T6 (T7 for T9's full set) |
 | **4. Editor and integration** | T11 Site editor screens; T12 #336 builder page templates; T13 caching hooks; T14 media "Used in" | T1, T4, T9, T10; #185 for T13 |
-| **5. Later** | T15 export as a theme package | #332, child themes |
+| **5. Default theme** | T16 site blocks III; T17 the default theme as block templates | T7, T9 |
+| **6. Later** | T15 export as a theme package; T18 the comments block | #332 and child themes; reader comments |
 
 ### Sub-issues
 
@@ -1023,6 +1058,10 @@ Not filed. Priorities are suggestions within Post-MVP.
 | T13 | caching: purge and cache-aside for the site design (#185) | S | P3 |
 | T14 | media: "Used in" for templates and parts | S | P3 |
 | T15 | themes: export the design as a data-only child theme (#332) | M | P3 |
+| T16 | blocks: site blocks III (related posts, author cards, table of contents, colour scheme switch) | M | P2 |
+| T17 | default theme: ship block templates and parts for every route | L | P2 |
+| T18 | blocks: comments site block | S | P3 |
+| — | comments: reader comments on published posts (its own design; not part of #412) | L | P2 |
 
 **T1. design: Site editor boards, site blocks, preview banner**
 - Scope: the boards in section 13 on the redesign canvas, the site blocks on the blocks
@@ -1053,7 +1092,8 @@ Not filed. Priorities are suggestions within Post-MVP.
 - Acceptance: injection vectors (`;`, `}`, `</style>`, `url(`, `var(`, `expression(`)
   refused in both validators; an unknown key is a 400; a stale save is a 409 with the
   current draft; a published override changes the page's custom properties in all three
-  selectors and nothing else; a failing contrast pair blocks publish with the pairs named;
+  selectors and nothing else; a failing contrast pair makes publish ask for confirmation
+  (`contrast_unconfirmed`, the pairs named) and never refuses it;
   draft values never appear in any `/public` or `/themes` response (route audit case);
   migrations up/down/up.
 - Depends on: T2.
@@ -1114,8 +1154,9 @@ Not filed. Priorities are suggestions within Post-MVP.
 
 **T9. rendering**
 - Scope: the slug lists of 3.2 for every route file; `resolveTemplate` and
-  `/public/site-templates/resolve`; `BlockTemplateLayout.astro`; `<TemplatePart>` reading
-  published parts; anchors, heading ids and the embed loader per 3.4.
+  `/public/site-templates/resolve` (with the menus that navigation blocks name by id);
+  `BlockTemplateLayout.astro`; `<TemplatePart>` reading published parts; anchors, heading
+  ids and the embed loader per 3.4; core's interim starters (replaced by T17).
 - Acceptance: for each route kind, a published override renders and a reset one falls back
   to code (Astro container tests); rank comparison per 3.2 and 3.3 (a builder `single`
   doesn't beat `layouts/product`; a builder `archive` beats the default theme's term
@@ -1130,8 +1171,8 @@ Not filed. Priorities are suggestions within Post-MVP.
   (reset, keep editing, start over, delete), discard, restore per item (rule 9 for templates),
   history routes, activity.
 - Acceptance: one release per publish, with versions only for changed items; a failed flush
-  publishes nothing; an empty template, an unresolved part or a failing contrast pair is
-  refused with what failed; reset publishes NULL and a restore brings it back; restore goes
+  publishes nothing; an empty template or an unresolved part is refused with what failed,
+  and failing contrast pairs need `confirm_contrast`; reset publishes NULL and a restore brings it back; restore goes
   through the editor (relay test, `liveRestore` pattern); nothing in the transaction waits on
   a network call.
 - Depends on: T3, T8.
@@ -1169,40 +1210,62 @@ Not filed. Priorities are suggestions within Post-MVP.
 - Depends on: T8.
 
 **T15. export as a theme package**
-- Scope: section 14, once #332 defines packages and child themes resolve.
+- Scope: section 14, once #332 defines packages and child themes resolve. The package is
+  data-only, so it activates without the site build.
 - Acceptance: an exported package installed on a fresh site renders the same pages as the
-  source site's published design; its templates appear as theme defaults there.
-- Depends on: #332 (and S12 if code is involved), child-theme resolution.
+  source site's published design, with no site build; its templates appear as theme
+  defaults there.
+- Depends on: #332's data-only packages, child-theme resolution. Not S12.
+
+**T16. site blocks III**
+- Scope: `related_posts`, `author_cards`, `table_of_contents`, `color_scheme_switch`, and
+  `readingTime` on `post_byline` (4.1), with the same chain as T6.
+- Acceptance: each renders the markup of the default theme's component it replaces
+  (`RelatedPosts`, `AuthorCards`, `TableOfContents`, `ThemeSwitch`); the switch works
+  without inline script (`theme-init.js`'s CSP rule); the fingerprint test pins the change.
+- Depends on: T7.
+
+**T17. default theme as block templates**
+- Scope: 5.7's decision: `templates/*.json` and `parts/*.json` for every route, header and
+  footer; post variants as block templates; the `.astro` layouts removed except
+  `layouts/error`; the default theme's templates become the starters.
+- Acceptance: first, the variant mapping is settled on the issue; every route kind renders
+  as before on `theme.astro.test.ts`'s fixtures, with listed and approved differences only;
+  the 500 page renders with the API down; Customize on the default theme starts from what
+  readers see; `tokens.test.ts` and the block style tests still pass.
+- Depends on: T9, T16.
+
+**T18. comments site block**
+- Scope: a `comments` site block over the reader-comments feature, for `single` and `page`
+  templates.
+- Acceptance: settled with the reader-comments design.
+- Depends on: the reader-comments issue, T7.
 
 ---
 
-## 16. Open questions
+## 16. Decisions and open questions
 
-Each has a working answer, the one this design assumes, until the user decides.
+Questions 1, 4, 6, 7, 8 and 9 were decided on review (2026-11-13). The others keep the
+working answer this design assumes until someone raises them.
 
-1. **Contrast at publish.** Refuse a design with a failing pair (assumed), or warn and let
-   an admin publish anyway with an explicit confirmation?
-2. **Phones.** Editing templates and styles is desktop-only in v1 (assumed). Is a phone
-   editing path wanted later?
+1. **Contrast at publish. Decided: warn and allow.** Publishing with a failing pair needs an
+   explicit confirmation naming the pairs (6.3, 8.2).
+2. **Phones.** Editing templates and styles is desktop-only in v1 (assumed). A phone editing
+   path could come later.
 3. **Custom CSS.** Not offered (assumed). WordPress has "Additional CSS". If wanted, it needs
-   its own sanitizer and is the only free-form CSS on the site.
-4. **Navigation by location or by menu.** The block picks one of the theme's menu
-   locations (assumed), so Appearance › Menus stays the one place menus are assigned. Picking
-   any menu by id would need `/public/menus/id/:id` and would let a template show a menu no
-   location holds.
+   its own sanitizer and would be the only free-form CSS on the site.
+4. **Navigation by location or by menu. Decided: both.** The block takes a theme menu
+   location or any menu by id (4.1). A menu by id reaches the page through the resolve
+   route only, never through a public route that serves any menu.
 5. **Query loop in posts.** Inert in v1 (assumed). Allowing it later needs no new data path.
-   Is it wanted?
-6. **Customizations and theme switches.** Per theme (assumed, as WordPress does). Should
-   switching themes offer to copy global styles and parts across, when the token sets
-   match?
-7. **The default theme as block templates.** It keeps its `.astro` layouts (assumed), and
-   starters approximate them. Converting it would make "Customize" start from exactly what
-   readers see, at the cost of re-proving every layout's markup and tests.
-8. **Data-only theme packages** (section 14). Should #332 accept a package with no code and
-   activate it without a site build? That would make #332's first version far cheaper, and
-   leave the site build for themes with code.
-9. **Reader comments.** There is no comments block because there are no reader comments. Is
-   a reader-comments feature planned? If so, it should get its own issue, and the block
-   follows it.
+6. **Customizations and theme switches. Decided: per theme.** Switching themes shows that
+   theme's own design, and switching back brings the earlier one back. There is no copy
+   across in v1.
+7. **The default theme as block templates. Decided: convert it** (5.7, T16, T17), after the
+   builder's rendering lands.
+8. **Data-only theme packages. Decided: activate without a site build** (section 14). This
+   goes to #332 as a scope note.
+9. **Reader comments. Decided: planned.** They get their own issue and design, and the
+   comments block (T18) follows them.
 10. **Who edits templates.** Admins only (assumed, from the issue). Editors could be given
     template parts later, without the publish.
