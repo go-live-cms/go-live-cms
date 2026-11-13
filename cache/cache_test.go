@@ -41,7 +41,11 @@ func TestNewParsesURL(t *testing.T) {
 }
 
 func TestNewRejectsBadURLWithoutEchoingIt(t *testing.T) {
-	for _, url := range []string{"http://valkey:6379", "redis://:s3cret@valkey:notaport", "valkey:6379"} {
+	for _, url := range []string{
+		"http://valkey:6379", "redis://:s3cret@valkey:notaport", "valkey:6379",
+		// No scheme: url.Parse quotes the raw value in its error.
+		":s3cret@valkey:6379", "user:s3cret@valkey:6379", "s3cret valkey",
+	} {
 		_, err := New(url)
 		require.Error(t, err, url)
 		require.NotContains(t, err.Error(), "s3cret")

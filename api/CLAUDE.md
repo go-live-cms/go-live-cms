@@ -1440,7 +1440,10 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   route must be in `publicCachePurgeRoutes` or `publicCacheNoPurgeRoutes`**
   (`TestMutatingRoutesDeclarePublicCachePurge` walks both routers). Snapshotted fields (SEO,
   template, byline, restore-settings, html snippets) don't purge: they reach the site on
-  Update, which does.
+  Update, which does. `publicCachePostDetailRoutes` (PUT `/posts/:id`, meta, featured image,
+  media links) purge only if that post was or is published (one `GetPost` before and after),
+  so the editor's debounced saves of a draft don't empty the cache. Logs use
+  `server.requestLog(c)` (the job's logger in the scheduler).
 - **Failures never fail a request**: a cache error is a BYPASS read from Postgres, logged once
   a minute; then reads skip Valkey for 5 s, and the first read after that purges before using
   anything (a purge may have been missed). A failed purge is logged at error level.

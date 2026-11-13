@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -79,7 +80,7 @@ func TestPublicCacheIsOffByDefault(t *testing.T) {
 		require.Empty(t, recorder.Header().Get(publicCacheHeader), "the no-op cache does nothing at all")
 	}
 	// Purging is a no-op too.
-	server.purgePublicCache(context.Background(), "test")
+	server.purgePublicCache(context.Background(), slog.Default(), "test")
 }
 
 func TestNewServerRejectsBadRedisURL(t *testing.T) {
@@ -127,7 +128,7 @@ func TestPublicCachePurgeMakesTheNextReadAMiss(t *testing.T) {
 	require.Equal(t, "HIT", cacheGet(t, server, "/api/v1/settings").Header().Get(publicCacheHeader))
 
 	row.SiteTitle = sql.NullString{String: "Renamed site", Valid: true}
-	server.purgePublicCache(context.Background(), "test")
+	server.purgePublicCache(context.Background(), slog.Default(), "test")
 	recorder := cacheGet(t, server, "/api/v1/settings")
 	require.Equal(t, "MISS", recorder.Header().Get(publicCacheHeader))
 	require.Contains(t, recorder.Body.String(), "Renamed site")
@@ -298,7 +299,7 @@ func TestPublicCacheValkeyDown(t *testing.T) {
 		require.Equal(t, http.StatusOK, recorder.Code)
 		require.Equal(t, "BYPASS", recorder.Header().Get(publicCacheHeader))
 	}
-	server.purgePublicCache(context.Background(), "test") // must not panic or block
+	server.purgePublicCache(context.Background(), slog.Default(), "test") // must not panic or block
 }
 
 // Valkey failing only after the generation was read: the read error is a miss, the
@@ -340,12 +341,16 @@ func TestPublicCacheConcurrentMissesShareOneRead(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	store := mockdb.NewMockStore(ctrl)
 	release := make(chan struct{})
+	var calls atomic.Int32
 	store.EXPECT().GetSettings(gomock.Any()).DoAndReturn(func(context.Context) (db.Setting, error) {
+		calls.Add(1)
 		<-release
 		return testSettingsRow(), nil
-	}).Times(1)
+	}).AnyTimes()
 	server := newTestServer(t, store)
-	withMiniredis(t, server)
+	_, c := miniredisCache(t)
+	misses := &missSignal{Cache: c, missed: make(chan struct{}, 64)}
+	server.SetCache(misses)
 
 	const readers = 8
 	var wg sync.WaitGroup
@@ -357,13 +362,35 @@ func TestPublicCacheConcurrentMissesShareOneRead(t *testing.T) {
 			codes <- cacheGet(t, server, "/api/v1/settings").Code
 		}()
 	}
-	time.Sleep(200 * time.Millisecond) // every reader is past its cache read and waiting
+	// Every reader has missed; the leader's handler is still held, so they wait on it.
+	for i := 0; i < readers; i++ {
+		<-misses.missed
+	}
+	time.Sleep(20 * time.Millisecond) // from the miss to flight.Do: a few instructions
 	close(release)
 	wg.Wait()
 	close(codes)
 	for code := range codes {
 		require.Equal(t, http.StatusOK, code)
 	}
+	// Shared: far fewer database reads than readers (one, unless a reader was descheduled
+	// between its miss and joining the flight).
+	require.GreaterOrEqual(t, calls.Load(), int32(1))
+	require.Less(t, calls.Load(), int32(readers))
+}
+
+// missSignal reports every entry miss (not the generation's) on missed.
+type missSignal struct {
+	cache.Cache
+	missed chan struct{}
+}
+
+func (m *missSignal) Get(ctx context.Context, key string) ([]byte, error) {
+	value, err := m.Cache.Get(ctx, key)
+	if errors.Is(err, cache.ErrMiss) && key != publicCacheNamespace+":gen" {
+		m.missed <- struct{}{}
+	}
+	return value, err
 }
 
 // A follower whose leader answered something not cacheable runs its own handler.
@@ -371,6 +398,7 @@ func TestPublicCacheFollowerOfUncacheableRunsItself(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	store := mockdb.NewMockStore(ctrl)
 	release := make(chan struct{})
+	entered := make(chan struct{}, 1)
 	first := true
 	var mu sync.Mutex
 	store.EXPECT().GetSettings(gomock.Any()).DoAndReturn(func(context.Context) (db.Setting, error) {
@@ -379,19 +407,24 @@ func TestPublicCacheFollowerOfUncacheableRunsItself(t *testing.T) {
 		first = false
 		mu.Unlock()
 		if leading {
+			entered <- struct{}{}
 			<-release
 			return db.Setting{}, errors.New("db hiccup")
 		}
 		return testSettingsRow(), nil
 	}).Times(2)
 	server := newTestServer(t, store)
-	withMiniredis(t, server)
+	_, c := miniredisCache(t)
+	misses := &missSignal{Cache: c, missed: make(chan struct{}, 8)}
+	server.SetCache(misses)
 
 	results := make(chan int, 2)
 	go func() { results <- cacheGet(t, server, "/api/v1/settings").Code }()
-	time.Sleep(100 * time.Millisecond)
+	<-misses.missed
+	<-entered // the leader is in its handler
 	go func() { results <- cacheGet(t, server, "/api/v1/settings").Code }()
-	time.Sleep(100 * time.Millisecond)
+	<-misses.missed
+	time.Sleep(20 * time.Millisecond)
 	close(release)
 	got := []int{<-results, <-results}
 	require.ElementsMatch(t, []int{http.StatusInternalServerError, http.StatusOK}, got)
@@ -444,7 +477,7 @@ func TestPublicCacheRecoversWithAPurge(t *testing.T) {
 
 	flaky.fail.Store(true)
 	row.SiteTitle = sql.NullString{String: "Changed during the outage", Valid: true}
-	server.purgePublicCache(context.Background(), "test") // fails: logged, not returned
+	server.purgePublicCache(context.Background(), slog.Default(), "test") // fails: logged, not returned
 	flaky.fail.Store(false)
 
 	// Within the back-off: Valkey isn't asked at all.
@@ -461,8 +494,26 @@ func TestPublicCacheRecoversWithAPurge(t *testing.T) {
 
 	// Still failing when the back-off ends: bypass again, and keep trying later.
 	flaky.fail.Store(true)
-	server.purgePublicCache(context.Background(), "test")
+	server.purgePublicCache(context.Background(), slog.Default(), "test")
 	server.publicCache.skipUntil.Store(0)
 	require.Equal(t, "BYPASS", cacheGet(t, server, "/api/v1/settings").Header().Get(publicCacheHeader))
 	require.True(t, server.publicCache.unhealthy.Load())
+}
+
+// After an outage only one request runs the recovery purge; the others read the
+// database meanwhile rather than each writing a generation.
+func TestPublicCacheRecoveryPurgesOnce(t *testing.T) {
+	_, c := miniredisCache(t)
+	pc := newPublicCache(c, slog.Default())
+	ctx := context.Background()
+	pc.unhealthy.Store(true)
+
+	pc.recovering.Store(true) // another request is purging
+	require.False(t, pc.usable(ctx, slog.Default()))
+	require.True(t, pc.unhealthy.Load())
+
+	pc.recovering.Store(false)
+	require.True(t, pc.usable(ctx, slog.Default()))
+	require.False(t, pc.unhealthy.Load())
+	require.False(t, pc.recovering.Load())
 }

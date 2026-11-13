@@ -181,7 +181,7 @@ func (server *Server) publishScheduledPost(ctx context.Context, claim db.ClaimDu
 	}
 	log.Info("scheduled post published", attrs...)
 	// After the commit, like a request's purge (public_cache.go, #185).
-	server.purgePublicCache(attemptCtx, "scheduled_publish")
+	server.purgePublicCache(attemptCtx, log, "scheduled_publish")
 	// The member who scheduled it is the publisher, as on the version.
 	server.recordActivity(attemptCtx, log, activityEvent{
 		ActorID:    claim.PublishScheduledBy.Int64,
@@ -284,7 +284,7 @@ func (server *Server) applyScheduledUpdate(ctx context.Context, claim db.ClaimDu
 		"version_no", version.VersionNo,
 		"update_at", claim.UpdateAt.UTC().Format(time.RFC3339),
 		"delay_ms", time.Since(claim.UpdateAt).Milliseconds())
-	server.purgePublicCache(attemptCtx, "scheduled_update")
+	server.purgePublicCache(attemptCtx, log, "scheduled_update")
 	// Credited like the version: to whoever scheduled the update (#324).
 	server.recordActivity(attemptCtx, log, activityEvent{
 		ActorID:    claim.ScheduledBy.Int64,

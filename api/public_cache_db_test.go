@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"testing"
@@ -128,7 +129,7 @@ func TestPublicCachePurgedByEveryPublishPath(t *testing.T) {
 
 	t.Run("single trash, restore, permanent delete", func(t *testing.T) {
 		post := publishForTest(t, store, scheduleDraft(t, store, editor, scheduleWord()), editor)
-		server.purgePublicCache(ctx, "test") // published behind the API's back
+		server.purgePublicCache(ctx, slog.Default(), "test") // published behind the API's back
 		primeList(t, server)
 		call(http.MethodDelete, fmt.Sprintf("/api/v1/posts/%d", post.ID), nil)
 		afterWrite(t, server, post.ID, false, "trash")
@@ -174,7 +175,7 @@ func TestPublicCachePurgedByEveryPublishPath(t *testing.T) {
 		word := scheduleWord()
 		editWorkingCopy(t, conn, post.ID, word)
 		scheduleUpdateAt(t, store, post.ID, editor, time.Now().Add(-time.Minute))
-		server.purgePublicCache(ctx, "test")
+		server.purgePublicCache(ctx, slog.Default(), "test")
 		before := cacheGet(t, server, fmt.Sprintf("/public/posts/%d", post.ID))
 		require.NotContains(t, before.Body.String(), word)
 		require.Equal(t, "HIT", cacheGet(t, server, fmt.Sprintf("/public/posts/%d", post.ID)).Header().Get(publicCacheHeader))
@@ -210,7 +211,7 @@ func TestPublicCachePurgedBySettingsAndMenus(t *testing.T) {
 	location := "cache" + strings.ReplaceAll(uuid.NewString(), "-", "")[:12]
 	menu, err := store.SaveMenuTx(ctx, db.SaveMenuTxParams{Name: "Cache test", Location: sql.NullString{String: location, Valid: true}})
 	require.NoError(t, err)
-	server.purgePublicCache(ctx, "test")
+	server.purgePublicCache(ctx, slog.Default(), "test")
 	require.Equal(t, http.StatusOK, cacheGet(t, server, "/public/menus/"+location).Code)
 	require.Equal(t, "HIT", cacheGet(t, server, "/public/menus/"+location).Header().Get(publicCacheHeader))
 	recorder = trashCall(t, server, &editor, http.MethodPut, fmt.Sprintf("/api/v1/menus/%d", menu.ID), map[string]any{"name": "Cache renamed", "location": location})
@@ -261,4 +262,36 @@ func TestPublicCachePurgeFailureDoesNotFailTheWrite(t *testing.T) {
 	ids, result := cachedListIDs(t, server)
 	require.Equal(t, "BYPASS", result)
 	require.True(t, containsID(ids, post.ID))
+}
+
+// Saving a draft's fields (the editor's debounced title saves) changes nothing public and
+// doesn't purge; the same save on a published post, or a status change, does.
+func TestPublicCacheDraftSavesDoNotPurge(t *testing.T) {
+	_, store, server := publicCacheDBServer(t)
+	editor := scheduleUser(t, store, RoleEditor)
+	draft := scheduleDraft(t, store, editor, scheduleWord())
+	save := func(id int64, body map[string]any) {
+		t.Helper()
+		recorder := trashCall(t, server, &editor, http.MethodPut, fmt.Sprintf("/api/v1/posts/%d", id), body)
+		require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+	}
+
+	primeList(t, server)
+	save(draft.ID, map[string]any{"title": "Draft " + scheduleWord()})
+	recorder := trashCall(t, server, &editor, http.MethodPost, fmt.Sprintf("/api/v1/posts/%d/meta", draft.ID), map[string]any{"meta_key": "cache_test", "meta_value": "x"})
+	require.Less(t, recorder.Code, 300, recorder.Body.String())
+	_, result := cachedListIDs(t, server)
+	require.Equal(t, "HIT", result, "a draft's saves leave the public cache alone")
+
+	save(draft.ID, map[string]any{"post_status": "published"})
+	afterWrite(t, server, draft.ID, true, "draft published through PUT")
+
+	primeList(t, server)
+	save(draft.ID, map[string]any{"title": "Live " + scheduleWord()})
+	_, result = cachedListIDs(t, server)
+	require.Equal(t, "MISS", result, "a published post's save purges")
+
+	primeList(t, server)
+	save(draft.ID, map[string]any{"post_status": "draft"})
+	afterWrite(t, server, draft.ID, false, "unpublished through PUT")
 }

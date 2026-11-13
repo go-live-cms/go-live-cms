@@ -124,6 +124,9 @@ type publicCache struct {
 	retryAfter time.Duration
 	skipUntil  atomic.Int64
 	unhealthy  atomic.Bool
+	// recovering: one request runs the recovery purge; the others bypass meanwhile
+	// instead of each writing its own generation.
+	recovering atomic.Bool
 }
 
 // publicCacheNamespace prefixes every public cache key in Valkey.
@@ -143,28 +146,36 @@ func newPublicCache(c cache.Cache, logger *slog.Logger) *publicCache {
 }
 
 // failed records a cache failure: reads skip Valkey for a while, the next read after
-// that purges first, and the error is logged (throttled).
-func (pc *publicCache) failed(msg string, err error) {
+// that purges first, and the error is logged (throttled) on log, the request's logger.
+func (pc *publicCache) failed(log *slog.Logger, msg string, err error) {
 	pc.unhealthy.Store(true)
 	pc.skipUntil.Store(time.Now().Add(pc.retryAfter).UnixNano())
-	pc.logError(msg, err)
+	pc.logError(log, msg, err)
 }
 
 // usable reports whether reads may use Valkey now. After a failure: not until
-// retryAfter has passed, and then only once a purge has gone through.
-func (pc *publicCache) usable(ctx context.Context) bool {
+// retryAfter has passed, and then only once a purge has gone through. One request
+// runs that purge; the others read the database until it's done.
+func (pc *publicCache) usable(ctx context.Context, log *slog.Logger) bool {
 	if time.Now().UnixNano() < pc.skipUntil.Load() {
 		return false
 	}
 	if !pc.unhealthy.Load() {
 		return true
 	}
+	if !pc.recovering.CompareAndSwap(false, true) {
+		return false
+	}
+	defer pc.recovering.Store(false)
+	if !pc.unhealthy.Load() { // another request recovered it meanwhile
+		return true
+	}
 	if err := pc.ns.Purge(ctx); err != nil {
-		pc.failed("public cache still unavailable; reading the database", err)
+		pc.failed(log, "public cache still unavailable; reading the database", err)
 		return false
 	}
 	pc.unhealthy.Store(false)
-	pc.logger.Info("public cache available again; purged in case a purge was missed")
+	log.Info("public cache available again; purged in case a purge was missed")
 	return true
 }
 
@@ -196,13 +207,13 @@ func (server *Server) Cache() cache.Cache {
 }
 
 // logError logs a cache failure, at most once per publicCacheErrorLogInterval.
-func (pc *publicCache) logError(msg string, err error, attrs ...any) {
+func (pc *publicCache) logError(log *slog.Logger, msg string, err error, attrs ...any) {
 	now := time.Now().UnixNano()
 	last := pc.lastErrorLog.Load()
 	if now-last < int64(publicCacheErrorLogInterval) || !pc.lastErrorLog.CompareAndSwap(last, now) {
 		return
 	}
-	pc.logger.Warn(msg, append(attrs, "error", err)...)
+	log.Warn(msg, append(attrs, "error", err)...)
 }
 
 // publicCacheKeySuffix is the part of the key that identifies the request: method,
@@ -232,7 +243,8 @@ func (server *Server) cachePublicResponses() gin.HandlerFunc {
 			return
 		}
 		ctx := c.Request.Context()
-		if !pc.usable(ctx) {
+		log := server.requestLog(c)
+		if !pc.usable(ctx, log) {
 			c.Header(publicCacheHeader, "BYPASS")
 			c.Next()
 			return
@@ -240,7 +252,7 @@ func (server *Server) cachePublicResponses() gin.HandlerFunc {
 		// The generation first, then Postgres: see cache.Namespace.
 		key, err := pc.ns.Key(ctx, publicCacheKeySuffix(c.Request))
 		if err != nil {
-			pc.failed("public cache unavailable; reading the database", err)
+			pc.failed(log, "public cache unavailable; reading the database", err)
 			c.Header(publicCacheHeader, "BYPASS")
 			c.Next()
 			return
@@ -252,7 +264,7 @@ func (server *Server) cachePublicResponses() gin.HandlerFunc {
 				return
 			}
 		} else if !errors.Is(err, cache.ErrMiss) {
-			pc.failed("public cache read failed; reading the database", err)
+			pc.failed(log, "public cache read failed; reading the database", err)
 		}
 
 		leader := false
@@ -271,7 +283,7 @@ func (server *Server) cachePublicResponses() gin.HandlerFunc {
 			storeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), publicCachePurgeTimeout)
 			defer cancel()
 			if err := pc.cache.Set(storeCtx, key, entry.encode(), pc.ttl); err != nil {
-				pc.failed("public cache write failed", err)
+				pc.failed(log, "public cache write failed", err)
 			}
 			return entry, nil
 		})
@@ -375,10 +387,11 @@ func (w *publicCacheRecorder) entry(route publicCacheRoute) (*publicCacheEntry, 
 	}, true
 }
 
-// purgePublicCache invalidates every cached public response (reason is logged on
-// failure: a route template or the scheduler's job). Call it after the write committed.
-// It never fails the caller: a failure is logged and the entries expire on their TTL.
-func (server *Server) purgePublicCache(ctx context.Context, reason string) {
+// purgePublicCache invalidates every cached public response. Call it after the write
+// committed. It never fails the caller: a failure is logged on log (the request's or the
+// job's logger, so it carries the id of the write that needed it, with reason: a route
+// template or the job) and reads stop trusting the cache until a purge goes through.
+func (server *Server) purgePublicCache(ctx context.Context, log *slog.Logger, reason string) {
 	pc := server.publicCache
 	if !pc.enabled() {
 		return
@@ -390,7 +403,7 @@ func (server *Server) purgePublicCache(ctx context.Context, reason string) {
 		pc.unhealthy.Store(true)
 		pc.skipUntil.Store(time.Now().Add(pc.retryAfter).UnixNano())
 		// Not throttled: a missed purge is worth seeing every time.
-		pc.logger.Error("public cache purge failed; reads skip the cache until a purge succeeds",
+		log.Error("public cache purge failed; reads skip the cache until a purge succeeds",
 			"reason", reason, "error", err)
 	}
 }
@@ -399,18 +412,61 @@ func (server *Server) purgePublicCache(ctx context.Context, reason string) {
 // publicCachePurgeRoutes, once its handler has returned (so after its transaction
 // committed). Not after a 4xx: the request was refused and wrote nothing. A 5xx still
 // purges, in case it failed after its commit.
+//
+// The routes in publicCachePostDetailRoutes change one post's fields, and the editor
+// saves some of them on a debounce while someone types. When that post was neither
+// published before the request nor after it, nothing public changed, so they don't purge:
+// otherwise editing a draft would empty the cache every second.
 func (server *Server) purgePublicCacheAfterWrite() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.Next()
 		route := c.Request.Method + " " + c.FullPath()
-		if _, purges := publicCachePurgeRoutes[route]; !purges {
+		if _, purges := publicCachePurgeRoutes[route]; !purges || !server.publicCache.enabled() {
+			c.Next()
 			return
 		}
+		postScoped := publicCachePostDetailRoutes[route]
+		wasPublished, known := false, false
+		if postScoped {
+			wasPublished, known = server.postIsPublished(c)
+		}
+		c.Next()
 		if status := c.Writer.Status(); status >= http.StatusBadRequest && status < http.StatusInternalServerError {
 			return
 		}
-		server.purgePublicCache(c.Request.Context(), route)
+		if postScoped && known && !wasPublished {
+			if isPublished, ok := server.postIsPublished(c); ok && !isPublished {
+				return
+			}
+		}
+		server.purgePublicCache(c.Request.Context(), server.requestLog(c), route)
 	}
+}
+
+// postIsPublished reports whether the post named by the route's :id is published now.
+// ok is false when that can't be told (bad id, lookup error): the caller then purges.
+func (server *Server) postIsPublished(c *gin.Context) (published, ok bool) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return false, false
+	}
+	post, err := server.store.GetPost(c.Request.Context(), id)
+	if err != nil {
+		return false, false
+	}
+	return post.PostStatus == postStatusPublished, true
+}
+
+// publicCachePostDetailRoutes are the purge routes that write one post's own fields
+// (/posts/:id): they purge only when that post was or is published. Status changes go
+// through PUT /posts/:id, so a draft published (or a post unpublished) there still purges.
+var publicCachePostDetailRoutes = map[string]bool{
+	"PUT /api/v1/posts/:id":                    true,
+	"POST /api/v1/posts/:id/meta":              true,
+	"DELETE /api/v1/posts/:id/meta/:key":       true,
+	"POST /api/v1/posts/:id/featured-image":    true,
+	"DELETE /api/v1/posts/:id/featured-image":  true,
+	"POST /api/v1/posts/:id/media":             true,
+	"DELETE /api/v1/posts/:id/media/:media_id": true,
 }
 
 // publicCachePurgeRoutes are the mutating routes after which the public cache is purged:

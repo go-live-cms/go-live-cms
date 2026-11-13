@@ -72,7 +72,7 @@ func New(redisURL string) (Cache, error) {
 	opts, err := redis.ParseURL(redisURL)
 	if err != nil {
 		// Never echo the URL: it may carry a password.
-		return nil, fmt.Errorf("invalid REDIS_URL: want redis://[user:password@]host:port[/db] or rediss://... (%s)", redactURLError(err))
+		return nil, fmt.Errorf("invalid REDIS_URL: want redis://[user:password@]host:port[/db] or rediss://... (%s)", redactURLError(err, redisURL))
 	}
 	opts.DialTimeout = dialTimeout
 	opts.DialerRetries = dialerRetries
@@ -86,10 +86,11 @@ func New(redisURL string) (Cache, error) {
 	return &Redis{client: redis.NewClient(opts)}, nil
 }
 
-// redactURLError keeps go-redis's reason without any part of the URL.
-func redactURLError(err error) string {
+// redactURLError keeps go-redis's reason only when it can't hold any part of the URL:
+// url.Parse quotes the whole value (password included) whether or not it has a scheme.
+func redactURLError(err error, redisURL string) string {
 	msg := err.Error()
-	if i := strings.Index(msg, "://"); i >= 0 {
+	if strings.Contains(msg, redisURL) || strings.Contains(msg, "://") || strings.Contains(msg, "@") || strings.Contains(msg, `"`) {
 		return "unparsable URL"
 	}
 	return msg

@@ -286,7 +286,7 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 	// and the cache outlives this process (another replica, the previous release, a
 	// restored database): start clean.
 	if !config.IsTestMode {
-		server.purgePublicCache(server.ctx, "startup")
+		server.purgePublicCache(server.ctx, server.logger, "startup")
 	}
 
 	return server, nil
