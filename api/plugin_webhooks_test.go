@@ -287,7 +287,7 @@ func TestOutboundAddressGuard(t *testing.T) {
 		"169.254.169.254", "172.16.0.1", "172.31.255.255", "192.0.0.192", "192.0.2.1", "192.88.99.1",
 		"192.168.0.1", "198.18.0.1", "198.51.100.1", "203.0.113.1", "224.0.0.251", "239.255.255.250",
 		"240.0.0.1", "255.255.255.255", "168.63.129.16",
-		"::", "::1", "::127.0.0.1", "::ffff:10.0.0.1", "::ffff:169.254.169.254", "64:ff9b::a00:1",
+		"::", "::1", "::127.0.0.1", "::ffff:10.0.0.1", "::ffff:0:a00:5", "::ffff:169.254.169.254", "64:ff9b::a00:1",
 		"64:ff9b:1::1", "100::1", "2001::1", "2001:db8::1", "2002:a00:1::1", "fc00::1", "fd00:ec2::254",
 		"fe80::1", "fe80::1%eth0", "fec0::1", "ff02::1",
 	} {
@@ -317,13 +317,31 @@ func TestWebhookPluginMismatch(t *testing.T) {
 	require.Equal(t, []string{pluginsdk.EventPostPublished}, plugin.HookEvents())
 }
 
+// NewServer refuses the development allowance outside debug mode, whatever built the
+// config, and gives a debug server the insecure sender.
+func TestNewServerWebhookAllowance(t *testing.T) {
+	config := newTestServer(t, nil).config
+	config.PluginWebhooksAllowInsecure = true
+	_, err := NewServer(config, nil)
+	require.ErrorContains(t, err, "PLUGIN_WEBHOOKS_ALLOW_INSECURE")
+
+	config.PluginWebhooksAllowInsecure = false
+	server, err := NewServer(config, nil)
+	require.NoError(t, err)
+	require.False(t, server.webhookSender().allowInsecure, "the strict policy by default")
+	require.Equal(t, "must be an https URL", server.webhookSender().urlProblem("http://hooks.example.com/"))
+}
+
 func TestWebhookSettingProblem(t *testing.T) {
 	server := &Server{}
 	manifest := PluginManifest{Server: PluginServer{Webhook: &PluginWebhook{URLSetting: "url", SecretSetting: "signing_secret"}}}
 	require.Empty(t, server.webhookSettingProblem(manifest, "url", "https://hooks.example.com/"))
 	require.Empty(t, server.webhookSettingProblem(manifest, "url", ""), "unset is allowed")
 	require.Equal(t, "must be an https URL", server.webhookSettingProblem(manifest, "url", "http://hooks.example.com/"))
-	require.Equal(t, "must be at least 16 characters", server.webhookSettingProblem(manifest, "signing_secret", "short"))
+	tooShort := "must be at least 16 characters, not only spaces"
+	require.Equal(t, tooShort, server.webhookSettingProblem(manifest, "signing_secret", "short"))
+	require.Equal(t, tooShort, server.webhookSettingProblem(manifest, "signing_secret", strings.Repeat(" ", 20)), "spaces aren't unset")
+	require.Equal(t, tooShort, server.webhookSettingProblem(manifest, "signing_secret", "ééééééééé"), "counted in characters, not bytes")
 	require.Empty(t, server.webhookSettingProblem(manifest, "signing_secret", testWebhookSecret))
 	require.Empty(t, server.webhookSettingProblem(manifest, "other", "http://x"))
 	require.Empty(t, server.webhookSettingProblem(PluginManifest{}, "url", "http://x"), "not a webhook plugin")

@@ -49,6 +49,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -103,13 +104,26 @@ func newWebhookSender(allowInsecure bool, rootCAs *x509.CertPool) *webhookSender
 	}
 }
 
-// webhookSender is the server's sender, or the default policy's when a test built the
-// Server by hand.
+// defaultWebhookSender is the strict policy's sender, built once, for a Server made by
+// hand (tests) without one.
+var defaultWebhookSender = sync.OnceValue(func() *webhookSender { return newWebhookSender(false, nil) })
+
+// webhookSender is the server's sender, or the strict default. It never writes the
+// field, so concurrent hook goroutines and handlers don't race on it.
 func (server *Server) webhookSender() *webhookSender {
-	if server.webhooks == nil {
-		server.webhooks = newWebhookSender(false, nil)
+	if server.webhooks != nil {
+		return server.webhooks
 	}
-	return server.webhooks
+	return defaultWebhookSender()
+}
+
+// webhookSecretProblem says why secret can't sign deliveries, or "" when it can: at
+// least WebhookSecretMinLength characters, and not only whitespace.
+func webhookSecretProblem(secret string) string {
+	if strings.TrimSpace(secret) == "" || utf8.RuneCountInString(secret) < pluginsdk.WebhookSecretMinLength {
+		return fmt.Sprintf("must be at least %d characters, not only spaces", pluginsdk.WebhookSecretMinLength)
+	}
+	return ""
 }
 
 // urlProblem says why raw can't be a webhook URL, or "" when it can. It never repeats
@@ -119,7 +133,7 @@ func (s *webhookSender) urlProblem(raw string) string {
 		return fmt.Sprintf("must be at most %d characters", webhookURLMax)
 	}
 	u, err := url.Parse(raw)
-	if err != nil || u.Host == "" || u.Hostname() == "" || u.Opaque != "" {
+	if err != nil || u.Hostname() == "" || u.Opaque != "" {
 		return "must be an absolute https URL"
 	}
 	switch {
@@ -131,7 +145,8 @@ func (s *webhookSender) urlProblem(raw string) string {
 	if u.User != nil {
 		return "must not contain a user name or password"
 	}
-	if ip, err := netip.ParseAddr(strings.Trim(u.Hostname(), "[]")); err == nil && !s.allowInsecure && !isPublicAddress(ip) {
+	// Hostname() has no brackets; a name is left to the dialer, which sees its DNS answer.
+	if ip, err := netip.ParseAddr(u.Hostname()); err == nil && !s.allowInsecure && !isPublicAddress(ip) {
 		return "must not point to a private, local or reserved address"
 	}
 	return ""
@@ -169,7 +184,7 @@ func (s *webhookSender) observer(slug string, webhook PluginWebhook) pluginsdk.O
 			return webhookURLNotSet
 		case secret == "":
 			return webhookSecretNotSet
-		case len(secret) < pluginsdk.WebhookSecretMinLength:
+		case webhookSecretProblem(secret) != "":
 			return webhookSecretShort
 		}
 		if problem := s.urlProblem(target); problem != "" {
@@ -270,16 +285,18 @@ func (server *Server) webhookPlugin(slug string, manifest PluginManifest) plugin
 func (server *Server) webhookSettingProblem(manifest PluginManifest, name string, value any) string {
 	webhook := manifest.Server.Webhook
 	s, _ := value.(string)
-	if webhook == nil || strings.TrimSpace(s) == "" {
+	if webhook == nil || s == "" {
 		return ""
 	}
 	switch name {
 	case webhook.URLSetting:
+		if strings.TrimSpace(s) == "" {
+			return ""
+		}
 		return server.webhookSender().urlProblem(strings.TrimSpace(s))
 	case webhook.SecretSetting:
-		if len(s) < pluginsdk.WebhookSecretMinLength {
-			return fmt.Sprintf("must be at least %d characters", pluginsdk.WebhookSecretMinLength)
-		}
+		// A secret of spaces is not "unset": it would sign with a guessable key.
+		return webhookSecretProblem(s)
 	}
 	return ""
 }

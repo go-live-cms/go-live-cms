@@ -137,6 +137,24 @@ func TestLoadConfigPluginHooksInterval(t *testing.T) {
 	require.ErrorContains(t, err, "PLUGIN_HOOKS_INTERVAL")
 }
 
+// The webhook SSRF allowance (#460) is off by default and refused outside debug mode.
+func TestLoadConfigPluginWebhooksAllowInsecure(t *testing.T) {
+	config, err := LoadConfig(t.TempDir())
+	require.NoError(t, err)
+	require.False(t, config.PluginWebhooksAllowInsecure)
+
+	t.Setenv("PLUGIN_WEBHOOKS_ALLOW_INSECURE", "true")
+	for _, mode := range []string{GinModeRelease, GinModeTest} {
+		t.Setenv("GIN_MODE", mode)
+		_, err = LoadConfig(t.TempDir())
+		require.ErrorContains(t, err, "PLUGIN_WEBHOOKS_ALLOW_INSECURE", mode)
+	}
+	t.Setenv("GIN_MODE", GinModeDebug)
+	config, err = LoadConfig(t.TempDir())
+	require.NoError(t, err)
+	require.True(t, config.PluginWebhooksAllowInsecure)
+}
+
 func TestLoadConfigRejectsNegativeRateLimit(t *testing.T) {
 	t.Setenv("RATE_LIMIT_LOGIN_PER_MINUTE", "-1")
 	_, err := LoadConfig(t.TempDir())

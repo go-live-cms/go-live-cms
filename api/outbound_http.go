@@ -52,17 +52,18 @@ var nonPublicPrefixes = func() []netip.Prefix {
 		"240.0.0.0/4",      // reserved, and the broadcast address
 		"168.63.129.16/32", // Azure's host services (WireServer)
 		// IPv6.
-		"::/96",          // unspecified, loopback (::1) and IPv4-compatible
-		"64:ff9b::/96",   // NAT64
-		"64:ff9b:1::/48", // local-use NAT64
-		"100::/64",       // discard
-		"2001::/23",      // IETF protocol assignments, Teredo included
-		"2001:db8::/32",  // documentation
-		"2002::/16",      // 6to4
-		"fc00::/7",       // unique local (AWS's IPv6 metadata, fd00:ec2::254)
-		"fe80::/10",      // link-local
-		"fec0::/10",      // site-local (deprecated, still routed by some stacks)
-		"ff00::/8",       // multicast
+		"::/96",           // unspecified, loopback (::1) and IPv4-compatible
+		"::ffff:0:0:0/96", // IPv4-translated (SIIT), which Unmap doesn't convert
+		"64:ff9b::/96",    // NAT64
+		"64:ff9b:1::/48",  // local-use NAT64
+		"100::/64",        // discard
+		"2001::/23",       // IETF protocol assignments, Teredo included
+		"2001:db8::/32",   // documentation
+		"2002::/16",       // 6to4
+		"fc00::/7",        // unique local (AWS's IPv6 metadata, fd00:ec2::254)
+		"fe80::/10",       // link-local
+		"fec0::/10",       // site-local (deprecated, still routed by some stacks)
+		"ff00::/8",        // multicast
 	}
 	prefixes := make([]netip.Prefix, len(ranges))
 	for i, r := range ranges {
