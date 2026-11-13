@@ -89,6 +89,11 @@ type Server struct {
 	// plugin.json, and RunPluginHooks runs its hooks. Tests set their own.
 	pluginRegistry pluginHookRegistry
 
+	// guardCalls counts each plugin's publish guard calls still running (#459,
+	// plugin_guards.go); guardSkipLogged remembers which mismatches were logged.
+	guardCalls      publishGuardCalls
+	guardSkipLogged sync.Map
+
 	// publicCache is the public read cache (#185, public_cache.go): Valkey when
 	// REDIS_URL is set, else a no-op. Purged after every write to public content.
 	publicCache *publicCache

@@ -23,6 +23,7 @@ import { BlockActions } from "./blockActions"
 import { BlockGutterKeys } from "./blockGutter"
 import { BlockNavigationKeys, BlockSelectionKeys } from "../extensions/BlockNavigation"
 import { NodeSelectionGuard } from "../extensions/NodeSelectionGuard"
+import { FloatingToolbarKeys } from "./floatingToolbar"
 import { EmptyContainerFill } from "../extensions/CoverMediaBlocks"
 import { authManager } from "@gl-admin/lib/auth"
 import { tiptapExtensionRegistry } from "./extensionRegistry"
@@ -133,6 +134,8 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
       // Blocks at any depth from the keyboard (#417): Esc, ↵, ↑↓, ⌘⇧↑↓, ⌫; no schema.
       BlockSelectionKeys,
       BlockNavigationKeys,
+      // ⌥F10 to the floating toolbar that is showing (#144); a keymap, no schema.
+      FloatingToolbarKeys,
       EmptyContainerFill,
       PasteSanitizer,
       Placeholder.configure({

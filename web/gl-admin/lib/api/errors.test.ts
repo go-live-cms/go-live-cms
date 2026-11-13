@@ -1,8 +1,19 @@
 import { describe, expect, it } from "vitest"
-import { ApiError, apiErrorFromResponse, errorMessage, friendlyApiMessage } from "./errors"
+import { ApiError, apiErrorFromResponse, errorMessage, friendlyApiMessage, pluginRefusalReason } from "./errors"
 
 const respond = (status: number, body: string, headers: Record<string, string> = {}) =>
   new Response(body, { status, headers: { "content-type": "application/json", ...headers } })
+
+// #459: a publish a plugin's guard refused carries the plugin's reason.
+describe("pluginRefusalReason", () => {
+  it("is the reason of a plugin_refused error only", async () => {
+    const refused = await apiErrorFromResponse(respond(409, JSON.stringify({ error: "Add a summary.", code: "plugin_refused" })))
+    expect(pluginRefusalReason(refused)).toBe("Add a summary.")
+    expect(pluginRefusalReason(new ApiError("x", 409, null, "plugin_refused", null))).toBe("A plugin refused to publish this post.")
+    expect(pluginRefusalReason(new ApiError("x", 409, null, "post_trashed", "in the trash"))).toBeNull()
+    expect(pluginRefusalReason(new Error("x"))).toBeNull()
+  })
+})
 
 describe("apiErrorFromResponse", () => {
   it("turns a bare 403 from the role middleware into a permission message", async () => {

@@ -61,7 +61,8 @@ export default function Tabs({ label, tabs, value, onChange, activation = "autom
               role="tab"
               id={`${baseId}-tab-${tab.id}`}
               aria-selected={isSelected}
-              aria-controls={tab.panel !== undefined ? `${baseId}-panel-${tab.id}` : undefined}
+              // Only the selected tab's panel is rendered: no pointer at an id that isn't there (#144).
+              aria-controls={isSelected && tab.panel !== undefined ? `${baseId}-panel-${tab.id}` : undefined}
               tabIndex={i === tabStop ? 0 : -1}
               disabled={tab.disabled}
               className="gl-tabs__tab"

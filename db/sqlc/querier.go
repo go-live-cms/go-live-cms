@@ -375,6 +375,11 @@ type Querier interface {
 	GetReviewRequest(ctx context.Context, id int64) (ReviewRequest, error)
 	// One request with GetCurrentReviewRequest's columns (the response after a write).
 	GetReviewRequestDetail(ctx context.Context, id int64) (GetReviewRequestDetailRow, error)
+	// The frozen body a claimed update would publish, for the publish guards (#459):
+	// read before PublishScheduledUpdateTx, outside it. No row: the update was
+	// cancelled, rescheduled or ended, or claimed again, since this claim; the
+	// transaction would publish nothing either.
+	GetScheduledUpdateSnapshot(ctx context.Context, arg GetScheduledUpdateSnapshotParams) (GetScheduledUpdateSnapshotRow, error)
 	GetSession(ctx context.Context, id uuid.UUID) (Session, error)
 	GetSessionByRefreshTokenHash(ctx context.Context, refreshTokenHash []byte) (Session, error)
 	GetSessionForUpdate(ctx context.Context, id uuid.UUID) (Session, error)

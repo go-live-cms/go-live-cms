@@ -113,6 +113,10 @@ are the most fragile part of the codebase. **Before editing anything under
   is the import-free twin of the API's validator; `pluginManifestVectors.json` is shared with the Go
   tests, and `manifest.test.ts` validates every plugin in the repository. Server hooks (#458) are Go in
   `plugins/<slug>/server/`, built into the API only (`api/CLAUDE.md`); the web build ignores them.
+  A publish a plugin's guard refuses (#459) is a 409 `plugin_refused` whose `error` is the plugin's
+  reason: `blockAPI` makes it the error's message (so list toasts show it), `pluginRefusalReason`
+  (`lib/api/errors.ts`) puts it in the editor's "Publish failed" banner, the bulk report shows it,
+  and the scheduled publish/update notices say a plugin stopped it (`lib/schedule.ts`).
 - **Plugins page (#11, #457; the canvas's "Plugins" board):** `pages/Plugins.tsx` at `/plugins`
   (admins: `AdminOnly` in `app.tsx`, Workspace › Plugins in `nav.ts`). One list (name, version,
   author, description, the status pill, declared capabilities plus "Can block publishing" for a
@@ -792,6 +796,18 @@ are the most fragile part of the codebase. **Before editing anything under
   slash menu's (the field is the combobox, `aria-activedescendant`, ↑↓ wrap across groups), but
   it's a modal: Tab stays inside, Esc returns focus to where it was. A term opens as
   `/taxonomies?type=&term=`, which opens its panel for editors and admins.
+- **Accessibility (#144):** `app.tsx` renders `div#admin` with one `<main id="main-content">`
+  (the routed page; the sidebar, palette and toaster sit beside it, never in it) and a "Skip to content"
+  link as the first Tab stop (it makes `<main>` focusable only until it blurs, so clicks on page text
+  don't focus it); nothing else may be a `<main>`. The editor's floating toolbars (BubbleMenu,
+  BlockTypeToolbar, Image/Embed/Html toolbars) carry `data-floating-toolbar` and call
+  `onFloatingToolbarKeyDown` (`components/editor/utils/floatingToolbar.ts`): ⌥F10 from the text
+  (`FloatingToolbarKeys`, a keymap only: rule 7), ← → Home End inside, ⌥F10 to the next one, Esc back
+  with the selection kept. A new floating toolbar needs both. `CommandSelect` is a keyboard listbox.
+  Focus rings are `--focus-ring` (global `:focus-visible`; menu rows `mixins.menu-row`'s inset ring).
+  **`axe-core`** (exact dev dependency) runs in vitest: `gl-admin/components/ui/axe.test.tsx` renders
+  components with react-dom into jsdom (contrast off: `tokens.test.ts` owns it); add new shared
+  components and editor chrome there. Remaining findings: the Post-MVP issues linked from #144.
 - The admin Content list route `/content/:typeName` keys its component by `typeName`
   (`ContentByType` in `app.tsx`) so switching post types remounts + refetches.
 

@@ -105,6 +105,17 @@ function isNetworkError(error: unknown): boolean {
   return error instanceof TypeError && /fetch|network|load failed/i.test(error.message)
 }
 
+// A plugin's publish guard refused a publish (#459): the API's 409 code, a bulk result's
+// code, and a scheduled publish's or update's failure reason. The 409's error is the
+// plugin's own reason, plain text.
+export const PLUGIN_REFUSED = "plugin_refused"
+
+// The plugin's reason when error is a publish a plugin refused, else null.
+export function pluginRefusalReason(error: unknown): string | null {
+  if (!(error instanceof ApiError) || error.code !== PLUGIN_REFUSED) return null
+  return error.serverMessage || "A plugin refused to publish this post."
+}
+
 // Built-in JS errors are bugs, not something to show a user.
 const BUILTIN_ERRORS = [TypeError, ReferenceError, SyntaxError, RangeError, EvalError, URIError]
 

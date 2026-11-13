@@ -257,7 +257,16 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
         const text = editor.state.doc.textBetween(0, editor.state.doc.content.size, " ")
         queueMicrotask(() => onChange(html, text))
       },
-      editorProps: { attributes: { class: "gl-content-editor notion-editor-content" } },
+      editorProps: {
+        attributes: {
+          class: "gl-content-editor notion-editor-content",
+          // A named multi-line text box (#144): screen readers announce "Post content",
+          // and the slash and @ menus' aria-activedescendant has a role to hang on.
+          role: "textbox",
+          "aria-multiline": "true",
+          "aria-label": "Post content",
+        },
+      },
     },
     [extensions, readOnly, collab]
   )

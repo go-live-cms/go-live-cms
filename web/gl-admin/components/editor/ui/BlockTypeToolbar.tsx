@@ -4,6 +4,7 @@ import type { Editor as TiptapEditor } from "@tiptap/core"
 import { applyTurnInto, computeTurnIntoFromSelection, type TurnIntoValue } from "../utils/turnInto"
 import { turnIntoEntries } from "../blocks/catalog"
 import CommandSelect, { type CommandSelectOption } from "./CommandSelect"
+import { FLOATING_TOOLBAR_ATTR, onFloatingToolbarKeyDown } from "../utils/floatingToolbar"
 import { BlockIcon, catalogSelectOptions } from "./BlockIcon"
 import { findCallout } from "../extensions/Callout"
 import {
@@ -112,7 +113,13 @@ const BlockTypeToolbar = ({ editor }: BlockTypeToolbarProps) => {
         return isInParagraph || isInHeading
       }}
     >
-      <div role="toolbar" aria-label="Block" className="editor-toolbar__group">
+      <div
+        role="toolbar"
+        aria-label="Block"
+        className="editor-toolbar__group"
+        {...{ [FLOATING_TOOLBAR_ATTR]: "" }}
+        onKeyDown={(e) => onFloatingToolbarKeyDown(e, editor)}
+      >
         <CommandSelect
           options={blockTypeOptions}
           value={blockType}

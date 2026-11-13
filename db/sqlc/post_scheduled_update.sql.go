@@ -142,6 +142,35 @@ func (q *Queries) GetPostStatus(ctx context.Context, id int64) (string, error) {
 	return post_status, err
 }
 
+const getScheduledUpdateSnapshot = `-- name: GetScheduledUpdateSnapshot :one
+SELECT s.block_doc, p.post_type
+FROM post_scheduled_updates s
+JOIN posts p ON p.id = s.post_id
+WHERE s.post_id = $1::bigint
+  AND s.next_attempt_at = $2::timestamptz
+`
+
+type GetScheduledUpdateSnapshotParams struct {
+	PostID int64     `json:"post_id"`
+	Claim  time.Time `json:"claim"`
+}
+
+type GetScheduledUpdateSnapshotRow struct {
+	BlockDoc json.RawMessage `json:"block_doc"`
+	PostType string          `json:"post_type"`
+}
+
+// The frozen body a claimed update would publish, for the publish guards (#459):
+// read before PublishScheduledUpdateTx, outside it. No row: the update was
+// cancelled, rescheduled or ended, or claimed again, since this claim; the
+// transaction would publish nothing either.
+func (q *Queries) GetScheduledUpdateSnapshot(ctx context.Context, arg GetScheduledUpdateSnapshotParams) (GetScheduledUpdateSnapshotRow, error) {
+	row := q.db.QueryRowContext(ctx, getScheduledUpdateSnapshot, arg.PostID, arg.Claim)
+	var i GetScheduledUpdateSnapshotRow
+	err := row.Scan(&i.BlockDoc, &i.PostType)
+	return i, err
+}
+
 const insertPublishedVersionFromScheduledUpdate = `-- name: InsertPublishedVersionFromScheduledUpdate :one
 INSERT INTO post_versions (post_id, version_no, status, block_doc, settings, created_by)
 SELECT s.post_id, $1::int, 'published', s.block_doc, s.settings, s.scheduled_by
