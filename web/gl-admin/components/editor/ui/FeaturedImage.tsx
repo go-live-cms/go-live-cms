@@ -74,7 +74,7 @@ const FeaturedImage: React.FC<FeaturedImageProps> = ({
 
       <div className="gl-featured-image__content">
         {featuredImage ? (
-          <div className="gl-featured-image__preview" {...pickerButton("Change featured image")}>
+          <div className="gl-featured-image__preview" {...pickerButton(`Change featured image: ${featuredImage.alt || featuredImage.name}`)}>
             <img
               src={getMediaVariantPreviewURL(featuredImage, "medium")}
               alt={featuredImage.alt || featuredImage.name}

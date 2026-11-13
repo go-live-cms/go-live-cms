@@ -785,9 +785,10 @@ are the most fragile part of the codebase. **Before editing anything under
   slash menu's (the field is the combobox, `aria-activedescendant`, ↑↓ wrap across groups), but
   it's a modal: Tab stays inside, Esc returns focus to where it was. A term opens as
   `/taxonomies?type=&term=`, which opens its panel for editors and admins.
-- **Accessibility (#144):** `app.tsx` renders `div#admin` with one `<main id="main-content" tabIndex={-1}>`
+- **Accessibility (#144):** `app.tsx` renders `div#admin` with one `<main id="main-content">`
   (the routed page; the sidebar, palette and toaster sit beside it, never in it) and a "Skip to content"
-  link as the first Tab stop; nothing else may be a `<main>`. The editor's floating toolbars (BubbleMenu,
+  link as the first Tab stop (it makes `<main>` focusable only until it blurs, so clicks on page text
+  don't focus it); nothing else may be a `<main>`. The editor's floating toolbars (BubbleMenu,
   BlockTypeToolbar, Image/Embed/Html toolbars) carry `data-floating-toolbar` and call
   `onFloatingToolbarKeyDown` (`components/editor/utils/floatingToolbar.ts`): ⌥F10 from the text
   (`FloatingToolbarKeys`, a keymap only: rule 7), ← → Home End inside, ⌥F10 to the next one, Esc back

@@ -77,10 +77,15 @@ function AppLayout() {
 
   // Landmarks (#144): the sidebar is navigation beside <main>, never inside it, and the
   // first Tab stop skips it. The skip link focuses <main> itself (no URL hash: the router
-  // owns the URL).
+  // owns the URL). <main> is focusable only for that moment: a permanent tabIndex would
+  // make every click on the page's text focus it instead of <body>.
   const skipToContent = (event: MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault()
-    document.getElementById(MAIN_CONTENT_ID)?.focus()
+    const main = document.getElementById(MAIN_CONTENT_ID)
+    if (!main) return
+    main.tabIndex = -1
+    main.addEventListener("blur", () => main.removeAttribute("tabindex"), { once: true })
+    main.focus()
   }
 
   return (
@@ -92,7 +97,7 @@ function AppLayout() {
       <ErrorBoundary resetKey={pathname} fallback={<SidebarFallback />}>
         <Sidebar />
       </ErrorBoundary>
-      <main className={routeClasses} id={MAIN_CONTENT_ID} tabIndex={-1}>
+      <main className={routeClasses} id={MAIN_CONTENT_ID}>
         <div id="admin-content">
           {/* Resets on navigation, so leaving a crashed page recovers. */}
           <ErrorBoundary resetKey={pathname}>

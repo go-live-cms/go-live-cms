@@ -163,6 +163,24 @@ describe("CommandSelect from the keyboard (#144)", () => {
     expect(outer).not.toHaveBeenCalled()
   })
 
+  it("keeps focus on the trigger after a pick when onChange focuses nothing, never on <body>", () => {
+    const { onChange, trigger } = renderSelect()
+    trigger.focus()
+    press("ArrowDown")
+    press("Enter")
+    expect(onChange).toHaveBeenCalledWith(options[1])
+    expect(focused()).toBe(trigger)
+  })
+
+  it("Tab closes the list from the trigger, so the browser's Tab moves on from there", () => {
+    const { trigger } = renderSelect()
+    trigger.focus()
+    press("ArrowDown")
+    press("Tab")
+    expect(container.querySelector("[role=listbox]")).toBeNull()
+    expect(focused()).toBe(trigger)
+  })
+
   it("only the active option is a Tab stop", () => {
     const { trigger } = renderSelect()
     trigger.focus()

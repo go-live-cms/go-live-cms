@@ -60,9 +60,14 @@ export const CommandSelect: React.FC<CommandSelectProps> = ({
         if (refocus) trigger.current?.focus()
     }
 
+    // The focused option unmounts with the list: if nothing else took focus (onChange
+    // may focus the editor, TipTap's on the next frame), keep it on the trigger, never
+    // on <body>.
     const pick = (opt: CommandSelectOption) => {
+        const focusInList = list.current?.contains(document.activeElement) ?? false
         onChange(opt)
         setOpen(false)
+        if (focusInList && list.current?.contains(document.activeElement)) trigger.current?.focus()
     }
 
     const onTriggerKeyDown = (e: React.KeyboardEvent) => {
@@ -88,6 +93,9 @@ export const CommandSelect: React.FC<CommandSelectProps> = ({
             e.stopPropagation()
             close(true)
         } else if (e.key === "Tab") {
+            // Tab moves on from the trigger: the focused option is about to unmount, and
+            // the browser's Tab runs after this handler.
+            trigger.current?.focus()
             setOpen(false)
         } else {
             const i = typeaheadIndex(options.map((o) => o.label), e.key, active)
