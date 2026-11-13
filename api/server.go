@@ -16,6 +16,7 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/go-live-cms/go-live-cms/cache"
 	db "github.com/go-live-cms/go-live-cms/db/sqlc"
 	"github.com/go-live-cms/go-live-cms/devModeUtil"
 	"github.com/go-live-cms/go-live-cms/mailer"
@@ -95,6 +96,10 @@ type Server struct {
 	// plugin_guards.go); guardSkipLogged remembers which mismatches were logged.
 	guardCalls      publishGuardCalls
 	guardSkipLogged sync.Map
+
+	// publicCache is the public read cache (#185, public_cache.go): Valkey when
+	// REDIS_URL is set, else a no-op. Purged after every write to public content.
+	publicCache *publicCache
 }
 
 // NewServer constructs the Server, initializes a PASETO v4 maker from config,
@@ -182,6 +187,12 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 	if config.PluginWebhooksAllowInsecure && !config.IsDebugMode() {
 		return nil, errors.New("PLUGIN_WEBHOOKS_ALLOW_INSECURE is for development only (GIN_MODE=debug)")
 	}
+	// Optional (#185): no REDIS_URL is the no-op cache. A bad URL is an error, so a typo
+	// can't silently turn the cache off; an unreachable Valkey only means misses.
+	cacheClient, err := cache.New(config.RedisURL)
+	if err != nil {
+		return nil, err
+	}
 	server := &Server{
 		store:      store,
 		config:     config,
@@ -211,6 +222,7 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 		pluginRegistry: pluginsdk.Registered(),
 	}
 	server.runInBackground = server.runDetached
+	server.publicCache = newPublicCache(cacheClient, server.logger)
 
 	if shouldCheckSeededAccounts(config) {
 		if err := checkSeededAccounts(server.store, config); err != nil {
@@ -280,6 +292,13 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 		} else if stats.Generated > 0 {
 			server.logger.Info("dev media variant backfill finished", "generated", stats.Generated, "scanned", stats.Scanned)
 		}
+	}
+
+	// The theme and plugin scans and the dev seed may have changed what the site shows,
+	// and the cache outlives this process (another replica, the previous release, a
+	// restored database): start clean.
+	if !config.IsTestMode {
+		server.purgePublicCache(server.ctx, server.logger, "startup")
 	}
 
 	return server, nil
@@ -444,8 +463,10 @@ func (server *Server) setupRoutes() error {
 	// /health, /readyz and /uploads are left unlimited.
 	generalLimit := server.rateLimits.general.perIP(server.rateLimits.generalExempt...)
 	// Request bodies are capped per route (request_limits.go).
-	v1 := router.Group("/api/v1", generalLimit, bodyLimitMiddleware())
-	public := router.Group("/public", generalLimit, bodyLimitMiddleware()) // Public API group for SSR/public content
+	// The public read cache (#185, public_cache.go): cache-aside for the anonymous reads
+	// in publicCacheRoutes, and a purge after every write in publicCachePurgeRoutes.
+	v1 := router.Group("/api/v1", generalLimit, bodyLimitMiddleware(), server.cachePublicResponses(), server.purgePublicCacheAfterWrite())
+	public := router.Group("/public", generalLimit, bodyLimitMiddleware(), server.cachePublicResponses()) // Public API group for SSR/public content
 
 	router.GET("/health", server.healthCheck)
 	router.GET("/api/v1/health", server.healthCheck) // same liveness check, reachable through the web /api proxy

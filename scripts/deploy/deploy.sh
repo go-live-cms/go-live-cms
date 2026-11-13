@@ -62,7 +62,7 @@ migrate_with() { # <image> <migrate args...>
 
 if [ "${SKIP_PULL:-}" != "1" ]; then
   log "pulling $GOLIVE_IMAGE_REGISTRY/{api,web,collab}:$TAG"
-  dc pull --quiet api web collab postgres caddy
+  dc pull --quiet api web collab postgres caddy valkey
 fi
 
 log "starting postgres"

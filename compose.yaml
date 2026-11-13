@@ -3,7 +3,8 @@ name: golive_cms
 # Production stack (#272). Only `caddy` publishes ports (80/443): it terminates TLS,
 # sends /collab to the Hocuspocus collab service (#206) and everything else to web,
 # which forwards /api/v1 and /uploads to the API. Postgres, the API and the collab
-# server are reachable only on the compose network.
+# server are reachable only on the compose network, and Valkey (the public read cache,
+# #185) only on the cache network it shares with the API.
 #
 # Secrets come from a `.env` next to this file (never committed). Generate one with
 #   go run ./cmd/gen-prod-env -site cms.example.com > .env
@@ -49,6 +50,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      # Started, not healthy: the cache is optional, the API runs (uncached) without it.
+      valkey:
+        condition: service_started
+    networks:
+      - default
+      - cache
     environment:
       DB_SOURCE: "postgresql://root:${POSTGRES_PASSWORD}@postgres:5432/golive_cms?sslmode=disable"
       DB_DRIVER: postgres
@@ -110,6 +117,9 @@ services:
       # Uploaded media. Media rows store absolute paths under it, so keep it the
       # same across deploys and restores. Served at /uploads/media/*.
       UPLOAD_PATH: "/app/uploads/media"
+      # The public read cache (#185): the valkey service below, on the cache network
+      # only the API joins. Internal wiring, not a setting; unset turns the cache off.
+      REDIS_URL: "redis://valkey:6379/0"
     secrets:
       - paseto_v4_private_key
       - paseto_v4_local_key
@@ -132,6 +142,35 @@ services:
       retries: 5
       start_period: 30s
     restart: unless-stopped
+
+  # The public read cache (#185, api/public_cache.go): copies of the API's public
+  # responses, purged after every write that changes the site. Never published, and on
+  # its own internal network that only the API joins, so no other container (web,
+  # collab, caddy) can read or poison it; that's also why it has no password. Memory
+  # only: no RDB/AOF, no volume, not backed up (docs/operations/backups.md). Losing it
+  # costs a few uncached page views. At the memory cap it evicts the least recently
+  # used keys; every key also expires within minutes.
+  valkey:
+    image: valkey/valkey:8.1-alpine
+    command:
+      - valkey-server
+      - --maxmemory
+      - 96mb
+      - --maxmemory-policy
+      - allkeys-lru
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+    mem_limit: 128m
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - cache
 
   web:
     image: "${GOLIVE_IMAGE_REGISTRY:-golive}/web:${GOLIVE_IMAGE_TAG:-local}"
@@ -239,6 +278,14 @@ networks:
           # Dynamic addresses come from the upper half only, so no other container can
           # take the fixed .10 (web) / .11 (caddy) that the API trusts.
           ip_range: 172.28.0.128/25
+  # The API and Valkey only (#185). internal: no route out of it. Its subnet is fixed
+  # next to default's: one picked from Docker's pool could overlap 172.28.0.0/24 and make
+  # creating the default network fail.
+  cache:
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.28.1.0/28
 
 # Secrets (#158), mounted read-only at /run/secrets/<name> in the services that list
 # them, so they aren't in the containers' environment (`docker inspect`, /proc/*/environ,
