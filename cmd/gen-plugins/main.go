@@ -9,11 +9,13 @@
 //
 // Run it from the repository root (or pass -root). A plugin has server code when its
 // server/ directory holds a non-test .go file; symlinked plugin directories are skipped,
-// as the startup scan skips them.
+// as the startup scan skips them. A plugin with server code whose plugin.json declares
+// server.webhook (#460) is an error: its hooks are either Go or a webhook.
 package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -128,10 +130,41 @@ func serverPlugins(dir string) ([]string, error) {
 		if !slugRe.MatchString(slug) {
 			return nil, fmt.Errorf("%s/%s has server code but %q is not a plugin id", pluginsDir, slug, slug)
 		}
+		webhook, err := declaresWebhook(filepath.Join(dir, slug, "plugin.json"))
+		if err != nil {
+			return nil, err
+		}
+		if webhook {
+			// The startup scan would list it as incompatible (pluginHooksMismatch); say so
+			// at build time instead.
+			return nil, fmt.Errorf("%s/%s has server code and declares server.webhook: a plugin's hooks are Go or a webhook, not both", pluginsDir, slug)
+		}
 		slugs = append(slugs, slug)
 	}
 	sort.Strings(slugs)
 	return slugs, nil
+}
+
+// declaresWebhook reports whether a plugin.json sets server.webhook (#460). A missing or
+// unreadable manifest declares nothing here: the validator reports it elsewhere.
+func declaresWebhook(manifestPath string) (bool, error) {
+	raw, err := os.ReadFile(manifestPath)
+	if errors.Is(err, fs.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	var manifest struct {
+		Server struct {
+			Webhook json.RawMessage `json:"webhook"`
+		} `json:"server"`
+	}
+	if json.Unmarshal(raw, &manifest) != nil {
+		return false, nil
+	}
+	webhook := bytes.TrimSpace(manifest.Server.Webhook)
+	return len(webhook) > 0 && !bytes.Equal(webhook, []byte("null")), nil
 }
 
 // modulePath reads the module line of go.mod.

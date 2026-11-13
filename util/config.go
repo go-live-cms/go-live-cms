@@ -243,6 +243,12 @@ type Config struct {
 	// (another replica may still run them). Events are still written while it is off.
 	PluginHooksInterval time.Duration `mapstructure:"PLUGIN_HOOKS_INTERVAL"`
 
+	// PluginWebhooksAllowInsecure lets plugin webhooks (#460, api/plugin_webhooks.go)
+	// use http:// and reach private and loopback addresses, so a receiver can run on a
+	// developer's machine or in the dev compose network. Development only: LoadConfig
+	// and NewServer refuse it outside GIN_MODE=debug. Off by default.
+	PluginWebhooksAllowInsecure bool `mapstructure:"PLUGIN_WEBHOOKS_ALLOW_INSECURE"`
+
 	// RateLimitExemptCIDRs is a comma-separated list of client IPs/CIDRs that
 	// skip the general limit (the auth limits still apply). Use it for trusted
 	// server-side callers that funnel many users through one address, such as
@@ -363,6 +369,7 @@ func LoadConfig(path string) (config Config, err error) {
 	viper.SetDefault("PASSWORD_RESET_TTL", "1h")
 	viper.SetDefault("SCHEDULED_PUBLISH_INTERVAL", "30s")
 	viper.SetDefault("PLUGIN_HOOKS_INTERVAL", "1s")
+	viper.SetDefault("PLUGIN_WEBHOOKS_ALLOW_INSECURE", false)
 
 	// Required, so deliberately no default. Bind it explicitly instead: viper's
 	// Unmarshal only sees AutomaticEnv values for keys it already knows from a
@@ -443,6 +450,12 @@ func LoadConfig(path string) (config Config, err error) {
 
 	if config.PluginHooksInterval < 0 {
 		return config, fmt.Errorf("PLUGIN_HOOKS_INTERVAL must be 0 (off) or a positive duration")
+	}
+
+	// The webhook SSRF allowance would let a plugin's settings reach the internal
+	// network: never outside development.
+	if config.PluginWebhooksAllowInsecure && !config.IsDebugMode() {
+		return config, fmt.Errorf("PLUGIN_WEBHOOKS_ALLOW_INSECURE is for development only (GIN_MODE=debug)")
 	}
 
 	if config.ActivityRetention < 0 {

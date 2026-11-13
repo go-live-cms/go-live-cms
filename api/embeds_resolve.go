@@ -2,16 +2,12 @@ package api
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"io"
-	"net"
 	"net/http"
-	"net/netip"
 	"slices"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -27,8 +23,9 @@ import (
 //   - HTTPS only, 3 s for the whole exchange, 64 KB read at most, and no redirect to another
 //     host or to plain HTTP (at most 3 on the same host).
 //   - No proxy from the environment, no cookies, and the dialer refuses loopback, private,
-//     link-local, multicast and CGNAT addresses, so a poisoned DNS answer can't reach the
-//     internal network either.
+//     link-local, multicast, CGNAT, metadata and transition addresses after DNS
+//     (outbound_http.go, shared with plugin webhooks), so a poisoned DNS answer can't
+//     reach the internal network either.
 //   - Only the title is read. A title that can't be read costs nothing but the title: the
 //     answer is still 200 and the editor lets the author type one.
 
@@ -43,43 +40,17 @@ const embedNotAllowedMessage = "An embed link that isn't allowed"
 
 var (
 	errEmbedRedirect = errors.New("embed: redirect refused")
-	errEmbedAddress  = errors.New("embed: address refused")
+	// errEmbedAddress is the shared guard's refusal (outbound_http.go).
+	errEmbedAddress = errAddressRefused
 )
 
-var carrierGradeNAT = netip.MustParsePrefix("100.64.0.0/10")
-
-// isPublicEmbedAddress: an address outside everything a server's own network uses.
-func isPublicEmbedAddress(ip netip.Addr) bool {
-	ip = ip.Unmap()
-	return ip.IsValid() && !ip.IsLoopback() && !ip.IsPrivate() && !ip.IsLinkLocalUnicast() && !ip.IsLinkLocalMulticast() &&
-		!ip.IsInterfaceLocalMulticast() && !ip.IsMulticast() && !ip.IsUnspecified() && !carrierGradeNAT.Contains(ip)
-}
-
-// refuseNonPublicEmbedAddress is the dialer's check, run on the address DNS answered.
-func refuseNonPublicEmbedAddress(_, address string, _ syscall.RawConn) error {
-	host, _, err := net.SplitHostPort(address)
-	if err != nil {
-		return errEmbedAddress
-	}
-	ip, err := netip.ParseAddr(host)
-	if err != nil || !isPublicEmbedAddress(ip) {
-		return errEmbedAddress
-	}
-	return nil
-}
-
-// newEmbedTransport has no proxy and dials public addresses only.
+// newEmbedTransport has no proxy and dials public addresses only (outbound_http.go).
 func newEmbedTransport() *http.Transport {
-	dialer := &net.Dialer{Timeout: embedFetchTimeout, Control: refuseNonPublicEmbedAddress}
-	return &http.Transport{
-		Proxy:                  nil,
-		DialContext:            dialer.DialContext,
-		TLSClientConfig:        &tls.Config{MinVersion: tls.VersionTLS12},
-		TLSHandshakeTimeout:    embedFetchTimeout,
-		ResponseHeaderTimeout:  embedFetchTimeout,
-		MaxResponseHeaderBytes: embedMaxAnswerBytes,
-		DisableKeepAlives:      true,
-	}
+	return newPublicOnlyTransport(outboundTransportOptions{
+		connectTimeout: embedFetchTimeout,
+		headerTimeout:  embedFetchTimeout,
+		maxHeaderBytes: embedMaxAnswerBytes,
+	})
 }
 
 // refuseOtherHostRedirects stops at anything but HTTPS on the host first asked.

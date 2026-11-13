@@ -133,6 +133,17 @@ type PluginSettingSpec struct {
 // PluginServer is the manifest's `server` object.
 type PluginServer struct {
 	Hooks []PluginHook `json:"hooks"`
+	// Webhook, when set, delivers every hook in Hooks to a URL instead of to Go code
+	// (#460, design section 7.9): a plugin with no server/ package can have hooks.
+	Webhook *PluginWebhook `json:"webhook,omitempty"`
+}
+
+// PluginWebhook names the two settings a webhook plugin's delivery reads: the URL an
+// admin enters, and the secret it is signed with (a "secret": true field, so rotating it
+// is saving a new value).
+type PluginWebhook struct {
+	URLSetting    string `json:"url_setting"`
+	SecretSetting string `json:"secret_setting"`
 }
 
 // PluginHook is one declared hook (section 7).
@@ -259,7 +270,10 @@ func validatePluginManifestValue(value any, dir string) *PluginManifestError {
 	if problem := validatePluginSettings(manifest["settings"]); problem != nil {
 		return problem
 	}
-	return validatePluginServer(manifest["server"])
+	if problem := validatePluginServer(manifest["server"]); problem != nil {
+		return problem
+	}
+	return validatePluginWebhook(manifest)
 }
 
 func validatePluginCapabilities(value any) *PluginManifestError {
@@ -444,9 +458,84 @@ func validatePluginSetting(field string, value any) *PluginManifestError {
 }
 
 var (
-	pluginServerFields = []string{"hooks"}
-	pluginHookFields   = []string{"event", "timeout_ms", "on_error", "priority"}
+	pluginServerFields  = []string{"hooks", "webhook"}
+	pluginHookFields    = []string{"event", "timeout_ms", "on_error", "priority"}
+	pluginWebhookFields = []string{"url_setting", "secret_setting"}
 )
+
+// validatePluginWebhook checks server.webhook (#460), once the settings, capabilities and
+// hooks are known to be well formed: it names a string setting for the URL and a
+// different, secret string setting for the signing key; the plugin declares the network
+// capability (it makes outbound calls, through core); and it has at least one hook, none
+// of them the publish guard, which runs synchronously before a publish and can't wait on
+// a remote server.
+func validatePluginWebhook(manifest map[string]any) *PluginManifestError {
+	server, _ := manifest["server"].(map[string]any)
+	raw, present := server["webhook"]
+	if !present || raw == nil {
+		return nil
+	}
+	webhook, ok := raw.(map[string]any)
+	if !ok {
+		return manifestProblem("server.webhook", "must be an object")
+	}
+	if problem := unknownFields(webhook, pluginWebhookFields, "server.webhook.", "is not a webhook field"); problem != nil {
+		return problem
+	}
+	settings, _ := manifest["settings"].(map[string]any)
+	urlSetting, problem := webhookSettingName(webhook, settings, "url_setting")
+	if problem != nil {
+		return problem
+	}
+	secretSetting, problem := webhookSettingName(webhook, settings, "secret_setting")
+	if problem != nil {
+		return problem
+	}
+	if secretSetting == urlSetting {
+		return manifestProblem("server.webhook.secret_setting", "must differ from url_setting")
+	}
+	secretSpec, _ := settings[secretSetting].(map[string]any)
+	if secret, _ := secretSpec["secret"].(bool); !secret {
+		return manifestProblem("server.webhook.secret_setting", `must name a setting with "secret": true`)
+	}
+
+	capabilities, _ := manifest["capabilities"].([]any)
+	if !slices.Contains(capabilities, any("network")) {
+		return manifestProblem("capabilities", "must include network when server.webhook is set")
+	}
+	hooks, _ := server["hooks"].([]any)
+	if len(hooks) == 0 {
+		return manifestProblem("server.hooks", "must declare at least one hook when server.webhook is set")
+	}
+	for i, item := range hooks {
+		hook, _ := item.(map[string]any)
+		if event, _ := hook["event"].(string); event == pluginGuardEvent {
+			return manifestProblem(fmt.Sprintf("server.hooks[%d].event", i), "can't be delivered by a webhook (%s is a publish guard)", pluginGuardEvent)
+		}
+	}
+	return nil
+}
+
+// webhookSettingName reads server.webhook[key]: the name of a string setting.
+func webhookSettingName(webhook, settings map[string]any, key string) (string, *PluginManifestError) {
+	field := "server.webhook." + key
+	raw, present := webhook[key]
+	if !present {
+		return "", manifestProblem(field, "is required")
+	}
+	name, ok := raw.(string)
+	if !ok {
+		return "", manifestProblem(field, "must be a string")
+	}
+	spec, declared := settings[name].(map[string]any)
+	if !declared {
+		return "", manifestProblem(field, "must name a field in settings")
+	}
+	if spec["type"] != "string" || spec["enum"] != nil {
+		return "", manifestProblem(field, "must name a string setting without enum")
+	}
+	return name, nil
+}
 
 func validatePluginServer(value any) *PluginManifestError {
 	if value == nil {

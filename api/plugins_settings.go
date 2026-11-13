@@ -196,6 +196,11 @@ func (server *Server) updatePluginSettings(c *gin.Context) {
 			problems[name] = problem
 			continue
 		}
+		// A webhook plugin's URL and signing secret (#460): the delivery's own rules.
+		if problem := server.webhookSettingProblem(manifest, name, value); problem != "" {
+			problems[name] = problem
+			continue
+		}
 		values[name] = value
 	}
 	if len(problems) > 0 {

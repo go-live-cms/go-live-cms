@@ -110,6 +110,8 @@ are the most fragile part of the codebase. **Before editing anything under
   reason: `blockAPI` makes it the error's message (so list toasts show it), `pluginRefusalReason`
   (`lib/api/errors.ts`) puts it in the editor's "Publish failed" banner, the bulk report shows it,
   and the scheduled publish/update notices say a plugin stopped it (`lib/schedule.ts`).
+  A plugin without Go code may deliver its hooks to a URL instead (`server.webhook`, #460: a URL
+  setting and a secret setting, validated by both twins).
 - **Plugins page (#11, #457; the canvas's "Plugins" board):** `pages/Plugins.tsx` at `/plugins`
   (admins: `AdminOnly` in `app.tsx`, Workspace › Plugins in `nav.ts`). One list (name, version,
   author, description, the status pill, declared capabilities plus "Can block publishing" for a

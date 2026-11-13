@@ -434,7 +434,7 @@ Plugins registered in Go are linked by a generated `api/plugins_gen.go` (blank i
 
 **Go has no runtime loading story.** A plugin installed later without a rebuild can only have
 hooks **out of process**, which means webhooks on the same outbox (Phase 5). That is why delivery
-is separated from the event below.
+is separated from the event below. Section 7.9 settles the webhook's signing and SSRF policy.
 
 ### 7.2 Events, and where they come from
 
@@ -599,6 +599,78 @@ type Plugin struct {
 
 func Register(slug string, p Plugin) // called from init()
 ```
+
+### 7.9 Webhooks: declaration, signing, SSRF policy (#460)
+
+**Declared in the manifest**, so a plugin with no Go code can have hooks:
+
+```jsonc
+{
+  "capabilities": ["network"],              // required with a webhook
+  "settings": {
+    "url":            { "type": "string", "maxLength": 2048, "label": "Endpoint URL" },
+    "signing_secret": { "type": "string", "secret": true, "label": "Signing secret" }
+  },
+  "server": {
+    "webhook": { "url_setting": "url", "secret_setting": "signing_secret" },
+    "hooks": [{ "event": "post.published", "timeout_ms": 5000 }, { "event": "post.deleted" }]
+  }
+}
+```
+
+- `url_setting` names a string setting (no `enum`); `secret_setting` a different string setting
+  with `"secret": true`, so the key is write-only (section 6) and **rotating it is saving a new
+  value**. At least one hook; never `post.before_publish`, which runs synchronously before a publish
+  (7.7) and can't wait on a remote server. The validator and its vectors check all of this.
+- A webhook plugin has **no Go code**: one with a `server/` package fails `gen-plugins` and, if it
+  got that far, is `incompatible` (`hooks`) at the scan. Its hooks are Go or a webhook, never both.
+- Saving the settings checks the URL (below) and a secret of at least 16 characters. An unset URL
+  or secret isn't an error to save; every delivery fails until both are set.
+
+**Delivery is the outbox's.** The dispatcher builds the webhook plugin's `pluginsdk.Plugin` itself,
+one observer per declared hook, that POSTs the event. So fan-out, the claim and its lease, ordering
+per (plugin, post), `timeout_ms`, the slots, the backoff, the 8 attempts, `plugin_hook_failed` and
+skipping a disabled plugin are 7.4 to 7.6 unchanged. **A 2xx is success**; any other status, a
+redirect, a timeout, a refused address or a missing URL or secret is a failed attempt. Every replica
+delivers (nothing has to be compiled in). No migration: the run is the delivery.
+
+**Signing.** HMAC-SHA256, keyed by the secret setting, over `"<timestamp>.<raw body>"`:
+
+| Header | Value |
+|---|---|
+| `GoLive-Event-Id` | The event id: the same on every retry, **the receiver's idempotency key** (at least once, 7.5) |
+| `GoLive-Event` | `post.published`, ... |
+| `GoLive-Timestamp` | When this attempt was signed, Unix seconds |
+| `GoLive-Signature` | `v1=<hex>`; a receiver accepts any `v1` value in a comma-separated list |
+
+The body is `pluginsdk.WebhookPayload`: `{id, event, plugin, post_id, actor_id, data,
+occurred_at}`, ids and small facts only, as 7.2's events. A receiver that wants the content reads
+`/public` (a published post) itself. The receiver verifies over the bytes it received, refuses a
+timestamp more than **5 minutes** from its clock (each retry is signed when it is sent, so a genuine
+delivery is always fresh), and ignores an event id it has handled. `pluginsdk.VerifyWebhook` does
+the first two. **Rotation:** the receiver accepts the old and new secret for a while, the admin
+saves the new one, the receiver drops the old one. The version prefix lets the scheme change later.
+
+**SSRF policy.** The plugin's settings choose where the API connects, so the call is guarded like
+`POST /embeds/resolve` and through the same code (`api/outbound_http.go`):
+
+- **https only.** `PLUGIN_WEBHOOKS_ALLOW_INSECURE` allows http and private addresses for a
+  receiver on a developer's machine; the API refuses to start with it outside `GIN_MODE=debug`.
+- No user name or password in the URL; at most 2048 characters; a literal IP must be public. Checked
+  on save and again before every delivery.
+- **The address check runs at connect time** (the dialer's `Control`), on the address DNS answered:
+  loopback, private, link-local, CGNAT, multicast, reserved, documentation, metadata (169.254.169.254,
+  fd00:ec2::254, 100.100.100.200, 192.0.0.192, Azure's 168.63.129.16) and the IPv6 forms that embed
+  an IPv4 address (IPv4-mapped is unmapped first; NAT64, 6to4, Teredo and IPv4-compatible are
+  refused whole). Nothing is checked ahead of the connection, so **DNS rebinding** can't pass a
+  public answer to the check and a private one to the connection.
+- **Redirects are not followed**: a 3xx is a failure, so a public host can't bounce the call inward.
+- `timeout_ms` covers the whole attempt (5s for the dial and TLS handshake); answer headers capped
+  at 16 KB and **the body is never read**; no proxy from the environment, no cookies, no keep-alives.
+- **No secret anywhere.** The secret is only an HMAC key and the URL may hold a token, so failures
+  are fixed messages ("webhook answered HTTP 503", "webhook refused: the URL resolves to a private,
+  local or reserved address"): never the URL or the secret in a log, `last_error`, the activity log or
+  an API response.
 
 ---
 
