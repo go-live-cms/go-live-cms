@@ -70,7 +70,9 @@ type PostResponse struct {
 type ScheduleFailureResponse struct {
 	FailedAt time.Time `json:"failed_at"`
 	// Reason is a code: scheduledPublishCollabFlushFailed or
-	// scheduledPublishFailed (scheduled_publish.go).
+	// scheduledPublishFailed (scheduled_publish.go), scheduledUpdateFailed on a
+	// scheduled update, or codePluginRefused when a plugin's publish guard refused it
+	// (#459, plugin_guards.go).
 	Reason   string `json:"reason"`
 	Attempts int32  `json:"attempts"`
 	// NextAttemptAt is the next try (it may already be in progress).

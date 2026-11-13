@@ -17,7 +17,7 @@ import { firstParagraphText, postPath } from "@/lib/seo"
 import { authManager } from "@gl-admin/lib/auth"
 import { blockAPIClient, type PostVersion } from "@gl-admin/lib/api/blockAPI"
 import { getSettings, type PostUrlStructure } from "@gl-admin/lib/api/settings"
-import { ApiError, errorMessage } from "@gl-admin/lib/api/errors"
+import { ApiError, errorMessage, pluginRefusalReason } from "@gl-admin/lib/api/errors"
 import { CollabStoreError } from "@gl-admin/lib/collaboration/CollabSaveStatus"
 import Editor, { type EditorRef } from "@gl-admin/components/editor/Editor"
 import EditorTopBar, { ArchiveIcon, OfflineIcon } from "@gl-admin/components/editor/ui/EditorTopBar"
@@ -72,7 +72,8 @@ const STORED_REFRESH_DELAY_MS = 500
 
 // A failed publish (#341, "Publish failed"): the banner offers Try again, and after a
 // second failure "Copy error details" for support.
-type PublishFailure = { attempts: number; message: string; requestId: string | null; storeFailed: boolean }
+// refusal: a plugin's publish guard refused it (#459), with the plugin's reason.
+type PublishFailure = { attempts: number; message: string; requestId: string | null; storeFailed: boolean; refusal: string | null }
 
 // Scheduled publishing (#147): when the time has come, how long to wait before the first
 // look (the scheduler runs every 30s) and between looks.
@@ -638,6 +639,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
           message: error instanceof Error ? error.message : String(error),
           requestId: error instanceof ApiError ? error.requestId : null,
           storeFailed,
+          refusal: pluginRefusalReason(error),
         }))
       }
     } else {
@@ -987,7 +989,12 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
             // The post exists as a draft; it can be published from the editor.
             published = false
             console.error("❌ Failed to publish the new post:", error)
-            showError("Saved as a draft, but publishing failed. Try publishing again from the editor.")
+            const refusal = pluginRefusalReason(error)
+            showError(
+              refusal
+                ? `Saved as a draft, but it wasn't published: ${refusal}`
+                : "Saved as a draft, but publishing failed. Try publishing again from the editor."
+            )
           }
         }
         if (published || !isPublish) {
@@ -1259,9 +1266,11 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
             </>
           }
         >
-          {publishFailure.storeFailed
-            ? "The server couldn't save your latest edits, so nothing was published. The live post hasn't changed."
-            : "Nothing was published. The live post hasn't changed."}
+          {publishFailure.refusal
+            ? `${publishFailure.refusal} Nothing was published. The live post hasn't changed.`
+            : publishFailure.storeFailed
+              ? "The server couldn't save your latest edits, so nothing was published. The live post hasn't changed."
+              : "Nothing was published. The live post hasn't changed."}
           {publishFailure.attempts > 1 && publishFailure.requestId && (
             <span className="post-editor__error-id"> Error ID: {publishFailure.requestId}</span>
           )}

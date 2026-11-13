@@ -2951,6 +2951,21 @@ func (mr *MockStoreMockRecorder) GetReviewRequestDetail(arg0, arg1 interface{}) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetReviewRequestDetail", reflect.TypeOf((*MockStore)(nil).GetReviewRequestDetail), arg0, arg1)
 }
 
+// GetScheduledUpdateSnapshot mocks base method.
+func (m *MockStore) GetScheduledUpdateSnapshot(arg0 context.Context, arg1 db.GetScheduledUpdateSnapshotParams) (db.GetScheduledUpdateSnapshotRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetScheduledUpdateSnapshot", arg0, arg1)
+	ret0, _ := ret[0].(db.GetScheduledUpdateSnapshotRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetScheduledUpdateSnapshot indicates an expected call of GetScheduledUpdateSnapshot.
+func (mr *MockStoreMockRecorder) GetScheduledUpdateSnapshot(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetScheduledUpdateSnapshot", reflect.TypeOf((*MockStore)(nil).GetScheduledUpdateSnapshot), arg0, arg1)
+}
+
 // GetSession mocks base method.
 func (m *MockStore) GetSession(arg0 context.Context, arg1 uuid.UUID) (db.Session, error) {
 	m.ctrl.T.Helper()
