@@ -53,6 +53,12 @@
     background: var(--background-hover);
   }
 
+  // Keyboard focus (#144): the hover fill alone is ~1.1:1 against the menu, so a
+  // focused row also gets the focus ring, inset to stay inside the menu's padding.
+  &:focus-visible {
+    box-shadow: inset 0 0 0 2px var(--focus-ring);
+  }
+
   &[aria-disabled="true"] {
     cursor: not-allowed;
     opacity: 0.5;

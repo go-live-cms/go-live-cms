@@ -1401,8 +1401,8 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   waits for runs in flight. Prune hourly: done/skipped 7 days, failed 30, spent events.
 - **Go contract:** `pluginsdk/` (imports only the standard library; tested): `Event`, `Host`
   (`Settings` = manifest defaults + `extension_settings` keys `plugin:<slug>:<field>`; `Posts`/
-  `Media`/`Users` nil unless declared; `Log`), `Plugin{Observers}`, `Register` from `init()`.
-  #459 adds guards as a new `Plugin` field. Readers are read-only: no hook writes `block_doc`
+  `Media`/`Users` nil unless declared; `Log`), `Plugin{Observers, BeforePublish}`, `Register` from
+  `init()`. Readers are read-only: no hook writes `block_doc`
   (rule 11). `server.pluginRegistry` = `pluginsdk.Registered()`, filled by
   **`api/plugins_gen.go`** (blank imports of `web/plugins/*/server`, `go run ./cmd/gen-plugins`,
   committed, `--check` in CI's Go lint job). The scan compares it with each `plugin.json`
@@ -1413,6 +1413,36 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   path in the version's transaction, a rollback writes none; order and retry; giving up; the lease;
   panics and hung hooks; skips; save backlog; pruning; drift; the loop). Dispatcher tests loop
   `roundsUntil` their own run: on a shared database other tests' events reach the same plugin first.
+
+## Publish guards (#459, `plugin_guards.go`, design 7.3, 7.7)
+
+- A guard is `pluginsdk.Plugin.BeforePublish` (`Guard`: `PublishCandidate{PostID, PostType, ActorID,
+  Via, BlockDoc}` → `Decision{Deny, Reason}`), declared `{"event": "post.before_publish", "on_error",
+  "priority"}`. `HookEvents` includes it (the mismatch check), `ObserverEvents` doesn't (the
+  dispatcher claims observers only).
+- **`runPublishGuards` runs before the transaction on every publishing path, never inside
+  `PublishPostTx`** (no plugin code under the row lock): `publishPostByID` (button, bulk) and
+  `publishScheduledPost` after the flush, on `block_doc`; `applyScheduledUpdate` on the frozen
+  snapshot (`GetScheduledUpdateSnapshot`, fenced by the claim; no row = changed, skipped); `POST
+  /posts` and `PUT /posts/:id` when `post_status` becomes `published` (`checkStatusPublishGuards`,
+  before any write; no version, so the candidate is the current published body or the empty doc,
+  `PostID` 0 on create; saving a published post again isn't asked). A new path that publishes must
+  call it too.
+- Which: `ListHookPlugins` rows (enabled, installed) whose code is registered with a guard and
+  matches plugin.json, sorted `(priority, slug)`, sequential, first deny wins. No guard code in the
+  build → no read at all. 3s each (`pluginGuardTimeout`), 5s total (`pluginGuardBudget`), through
+  the context; a guard ignoring it isn't waited for. Error, panic, timeout or budget used up →
+  allow (logged `plugin_guard_failed`) unless `on_error: "deny"`. Each guard gets its own copy of
+  the body. The reason is made one plain line, ≤280 characters, and never logged.
+- Answers: 409 `{code: plugin_refused, error: <reason>}` (`pluginRefusal.actionError`; bulk: the
+  per-post result), 503 when the guards can't be listed (nothing published). The scheduler records
+  `plugin_refused` through `recordScheduledPublishFailure` / `recordScheduledUpdateFailure`
+  (`schedule_failure` / `scheduled_update.failure`) and retries with the backoff; the reason text
+  isn't stored (`publish_error` is a code).
+- Tests: `plugin_guards_test.go` (mock: which and in what order, first deny, error/panic/timeout/hang
+  × on_error, the total budget, the candidate copy) and `plugin_guards_db_test.go` (real DB: each
+  path refused then allowed, the guard never runs while the post is locked, only enabled plugins,
+  on_error on the button and the scheduler).
 
 ## Plugin webhooks (#460, `plugin_webhooks.go`, `outbound_http.go`, design 7.9)
 

@@ -90,6 +90,11 @@ type Server struct {
 	// api/plugins_gen.go's imports fill. The startup scan compares it with each
 	// plugin.json, and RunPluginHooks runs its hooks. Tests set their own.
 	pluginRegistry pluginHookRegistry
+
+	// guardCalls counts each plugin's publish guard calls still running (#459,
+	// plugin_guards.go); guardSkipLogged remembers which mismatches were logged.
+	guardCalls      publishGuardCalls
+	guardSkipLogged sync.Map
 }
 
 // NewServer constructs the Server, initializes a PASETO v4 maker from config,

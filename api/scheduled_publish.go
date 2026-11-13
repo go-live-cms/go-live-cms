@@ -18,7 +18,8 @@
 //     after a lease ran out (this replica died) all make it publish nothing.
 //
 // A failed attempt (the collab server can't flush, the 503 case of the Publish
-// button, or the transaction fails) is recorded on the post (publish_failed_at,
+// button, a plugin's publish guard refuses it (#459, plugin_guards.go: reason
+// plugin_refused), or the transaction fails) is recorded on the post (publish_failed_at,
 // publish_error: the editor's "Scheduled publish failed") and retried with
 // backoff, 30s up to every 10 minutes, until it publishes or someone changes
 // the schedule. A replica that dies mid-attempt leaves its lease, so the post
@@ -35,13 +36,16 @@ package api
 
 import (
 	"context"
+	"database/sql"
 	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
 
 	db "github.com/go-live-cms/go-live-cms/db/sqlc"
+	"github.com/go-live-cms/go-live-cms/pluginsdk"
 )
 
 const (
@@ -159,6 +163,30 @@ func (server *Server) publishScheduledPost(ctx context.Context, claim db.ClaimDu
 		return false
 	}
 
+	// The publish guards (#459), on what the flush stored, before the transaction. A
+	// refusal is a failed attempt like any other: shown as schedule_failure and retried
+	// with the backoff, so fixing the post lets a later attempt through.
+	refusal, err := server.runPublishGuards(attemptCtx, log, func(ctx context.Context) (pluginsdk.PublishCandidate, error) {
+		post, err := server.store.GetPost(ctx, claim.ID)
+		if err != nil {
+			return pluginsdk.PublishCandidate{}, err
+		}
+		body, err := server.guardBody(ctx, claim.ID, post.BlockDoc)
+		if err != nil {
+			return pluginsdk.PublishCandidate{}, err
+		}
+		return pluginsdk.PublishCandidate{PostID: claim.ID, PostType: post.PostType, ActorID: claim.PublishScheduledBy.Int64,
+			Via: pluginsdk.PublishViaSchedule, BlockDoc: body}, nil
+	})
+	if err != nil {
+		server.recordScheduledPublishFailure(attemptCtx, log, claim, scheduledPublishFailed, err)
+		return false
+	}
+	if refusal != nil {
+		server.recordScheduledPublishFailure(attemptCtx, log, claim, codePluginRefused, fmt.Errorf("refused by plugin %s", refusal.Plugin))
+		return false
+	}
+
 	version, err := server.store.PublishScheduledPostTx(attemptCtx, db.PublishScheduledPostTxParams{
 		PostID:       claim.ID,
 		Claim:        claim.Claim.Time,
@@ -213,6 +241,27 @@ func (server *Server) recordScheduledPublishFailure(ctx context.Context, log *sl
 	}
 }
 
+// recordScheduledUpdateFailure is recordScheduledPublishFailure for a scheduled
+// update (#335): the reason on its row (scheduled_update.failure) and the next try
+// after the backoff.
+func (server *Server) recordScheduledUpdateFailure(ctx context.Context, log *slog.Logger, claim db.ClaimDueScheduledUpdatesRow, reason string, cause error) {
+	retry := scheduledPublishRetryAfter(claim.Attempts)
+	log.Warn("scheduled update failed", "reason", reason, "error", cause, "retry_in", retry.String())
+	rows, err := server.store.RecordScheduledUpdateFailure(ctx, db.RecordScheduledUpdateFailureParams{
+		Reason:            reason,
+		RetryAfterSeconds: retry.Seconds(),
+		PostID:            claim.PostID,
+		Claim:             claim.Claim.Time,
+	})
+	switch {
+	case err != nil:
+		log.Error("recording a failed scheduled update failed; retried when the claim expires",
+			"error", err, "lease", scheduledPublishLease.String())
+	case rows == 0:
+		log.Info("failed scheduled update not recorded: it changed meanwhile")
+	}
+}
+
 // applyDueScheduledUpdates is publishDueScheduledPosts for scheduled updates
 // (#335): claim and apply due updates one at a time until none is due, ctx is
 // done or the round's cap is reached. Returns how many it applied.
@@ -251,6 +300,30 @@ func (server *Server) applyScheduledUpdate(ctx context.Context, claim db.ClaimDu
 	attemptCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), scheduledPublishTimeout)
 	defer cancel()
 
+	// The publish guards (#459), on the frozen snapshot this update publishes (never
+	// the working copy), before the transaction.
+	refusal, err := server.runPublishGuards(attemptCtx, log, func(ctx context.Context) (pluginsdk.PublishCandidate, error) {
+		snapshot, err := server.store.GetScheduledUpdateSnapshot(ctx, db.GetScheduledUpdateSnapshotParams{
+			PostID: claim.PostID, Claim: claim.Claim.Time,
+		})
+		if err != nil {
+			return pluginsdk.PublishCandidate{}, err
+		}
+		return pluginsdk.PublishCandidate{PostID: claim.PostID, PostType: snapshot.PostType, ActorID: claim.ScheduledBy.Int64,
+			Via: pluginsdk.PublishViaScheduledUpdate, BlockDoc: snapshot.BlockDoc}, nil
+	})
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		log.Info("scheduled update skipped: it changed or ended meanwhile")
+		return false
+	case err != nil:
+		server.recordScheduledUpdateFailure(attemptCtx, log, claim, scheduledUpdateFailed, err)
+		return false
+	case refusal != nil:
+		server.recordScheduledUpdateFailure(attemptCtx, log, claim, codePluginRefused, fmt.Errorf("refused by plugin %s", refusal.Plugin))
+		return false
+	}
+
 	version, err := server.store.PublishScheduledUpdateTx(attemptCtx, db.PublishScheduledUpdateTxParams{
 		PostID:       claim.PostID,
 		Claim:        claim.Claim.Time,
@@ -261,21 +334,7 @@ func (server *Server) applyScheduledUpdate(ctx context.Context, claim db.ClaimDu
 		return false
 	}
 	if err != nil {
-		retry := scheduledPublishRetryAfter(claim.Attempts)
-		log.Warn("scheduled update failed", "reason", scheduledUpdateFailed, "error", err, "retry_in", retry.String())
-		rows, recErr := server.store.RecordScheduledUpdateFailure(attemptCtx, db.RecordScheduledUpdateFailureParams{
-			Reason:            scheduledUpdateFailed,
-			RetryAfterSeconds: retry.Seconds(),
-			PostID:            claim.PostID,
-			Claim:             claim.Claim.Time,
-		})
-		switch {
-		case recErr != nil:
-			log.Error("recording a failed scheduled update failed; retried when the claim expires",
-				"error", recErr, "lease", scheduledPublishLease.String())
-		case rows == 0:
-			log.Info("failed scheduled update not recorded: it changed meanwhile")
-		}
+		server.recordScheduledUpdateFailure(attemptCtx, log, claim, scheduledUpdateFailed, err)
 		return false
 	}
 	log.Info("scheduled update published",

@@ -100,3 +100,14 @@ SET failed_at = now(),
     next_attempt_at = now() + make_interval(secs => sqlc.arg(retry_after_seconds)::double precision)
 WHERE post_id = sqlc.arg(post_id)::bigint
   AND next_attempt_at = sqlc.arg(claim)::timestamptz;
+
+-- name: GetScheduledUpdateSnapshot :one
+-- The frozen body a claimed update would publish, for the publish guards (#459):
+-- read before PublishScheduledUpdateTx, outside it. No row: the update was
+-- cancelled, rescheduled or ended, or claimed again, since this claim; the
+-- transaction would publish nothing either.
+SELECT s.block_doc, p.post_type
+FROM post_scheduled_updates s
+JOIN posts p ON p.id = s.post_id
+WHERE s.post_id = sqlc.arg(post_id)::bigint
+  AND s.next_attempt_at = sqlc.arg(claim)::timestamptz;

@@ -59,8 +59,14 @@ func TestPluginHooksMismatch(t *testing.T) {
 	both := pluginHooksMismatch(hooksManifest(pluginsdk.EventPostSaved), observing(pluginsdk.EventPostTrashed), true)
 	require.Contains(t, both, "post.saved")
 	require.Contains(t, both, "post.trashed")
-	// A guard can't be implemented until #459, so declaring one doesn't match.
-	require.NotEmpty(t, pluginHooksMismatch(hooksManifest(pluginGuardEvent), pluginsdk.Plugin{}, true))
+	// A guard (#459) is Plugin.BeforePublish: declared without one doesn't match, and
+	// neither does one in Go that plugin.json doesn't declare.
+	require.Contains(t, pluginHooksMismatch(hooksManifest(pluginGuardEvent), pluginsdk.Plugin{}, true),
+		"declared without a hook in Go: post.before_publish")
+	require.Contains(t, pluginHooksMismatch(PluginManifest{}, guarding(allowGuard), true),
+		"hooks in Go not declared in plugin.json: post.before_publish")
+	require.Empty(t, pluginHooksMismatch(hooksManifest(pluginGuardEvent, pluginsdk.EventPostSaved),
+		pluginsdk.Plugin{BeforePublish: allowGuard, Observers: observing(pluginsdk.EventPostSaved).Observers}, true))
 }
 
 func TestHookPluginTimeout(t *testing.T) {

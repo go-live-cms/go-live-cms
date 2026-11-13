@@ -1,7 +1,7 @@
 @use "@gl-admin/assets/styles/variables";
 
 
-main#admin {
+div#admin {
   display: flex;
   height: 100vh;
 
@@ -13,7 +13,7 @@ main#admin {
   --admin-main-padding: 2rem 6.25rem;
 }
 
-section.admin-main {
+main.admin-main {
   height: 100vh;
   overflow-y: auto;
   padding: var(--admin-main-padding);
@@ -21,7 +21,7 @@ section.admin-main {
 }
 
 @media (width <= 1024px) {
-  main#admin {
+  div#admin {
     --admin-main-padding: 2rem 2.5rem;
   }
 }
@@ -29,14 +29,14 @@ section.admin-main {
 // The sidebar is an off-canvas drawer here (sidebar.scss), so the layout
 // stacks the mobile top bar above the page instead of beside the sidebar.
 @media (width <= 768px) {
-  main#admin {
+  div#admin {
     --admin-main-padding: 1.5rem 1rem;
 
     flex-direction: column;
     height: 100dvh;
   }
 
-  section.admin-main {
+  main.admin-main {
     flex: 1;
     height: auto;
     min-height: 0;

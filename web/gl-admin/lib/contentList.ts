@@ -217,6 +217,9 @@ export function bulkFailureReason(result: { code?: string; error?: string }): st
       return "It isn’t in the trash"
     case "collab_unavailable":
       return "The latest edits couldn’t be saved; try again"
+    // A plugin’s publish guard refused it (#459): its reason, written for whoever publishes.
+    case "plugin_refused":
+      return result.error || "A plugin refused to publish it"
     default:
       return result.error || "Something went wrong"
   }

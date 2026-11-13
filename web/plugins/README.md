@@ -55,9 +55,8 @@ web/plugins/<slug>/
 | `settings` | Optional, up to 50 fields keyed `^[a-z][a-z0-9_]{0,63}$`. Each has `type` (`string`, `number`, `boolean`) and may have `default`, `label`, `description`; strings `enum`, `maxLength`, `secret`; numbers `enum`, `integer`, `minimum`, `maximum`. A `default` must satisfy the field's own rules. |
 | `server.hooks` | Optional, one entry per event: `post.saved`, `post.published`, `post.unpublished`, `post.trashed`, `post.restored`, `post.deleted` (may have `timeout_ms`, 1 to 30000), or the guard `post.before_publish` (may have `on_error`: `allow` or `deny`, and `priority`, -1000 to 1000). |
 
-The publish guard `post.before_publish` validates, but the Go contract has no guards until #459:
-until then a plugin that declares one is listed as `incompatible` (see "Server hooks" below), so
-leave it out of the example above for now.
+A plugin that declares a hook must implement it in Go (see "Server hooks" below), the guard
+`post.before_publish` included: declared and not implemented, it's listed as `incompatible`.
 
 Unknown fields are refused, at every level. One validator in Go (`api/plugins_manifest.go`) and its
 TypeScript twin (`web/gl-admin/lib/plugins/manifest.ts`) share their cases
@@ -164,7 +163,7 @@ func init() {
   Go has no runtime loading, so hooks are compiled into the API image.
 - **Declare it:** every hook in Go must be in `server.hooks`, and every declared hook must be in Go.
   If they differ the plugin is listed as `incompatible` (`incompatible_reason: "hooks"`) and can't
-  be enabled. A guard (`post.before_publish`) can't be implemented yet (#459).
+  be enabled. A guard (`post.before_publish`) is `Plugin.BeforePublish` (below).
 - **Events:** `post.saved` (created, a body store or a settings save; coalesced, so read the post
   when the hook runs), `post.published` (also an Update; `ActorID` is who it's credited to),
   `post.unpublished`, `post.trashed`, `post.restored`, `post.deleted` (the post is gone; `Data`
@@ -179,6 +178,42 @@ func init() {
 - **Read-only.** `Host` gives the plugin's settings, a logger, and a reader per declared capability
   (`posts:read`, `media:read`, `users:read`; nil otherwise). Nothing writes a post: only the collab
   server writes `block_doc`.
+
+## Publish guards (#459)
+
+A guard decides whether a publish may go ahead. Declare it as `{ "event": "post.before_publish",
+"on_error": "allow" | "deny", "priority": 0 }` and set `BeforePublish`:
+
+```go
+pluginsdk.Register("alt-text-check", pluginsdk.Plugin{
+	BeforePublish: func(ctx context.Context, host pluginsdk.Host, c pluginsdk.PublishCandidate) (pluginsdk.Decision, error) {
+		if missingAlt(c.BlockDoc) {
+			return pluginsdk.Deny("Add alt text to every image."), nil
+		}
+		return pluginsdk.Allow(), nil
+	},
+})
+```
+
+- **Every publish asks it,** before the publish's transaction: the Publish/Update button and bulk
+  publish (after the collab flush, on the working copy), the scheduler (the same), a scheduled
+  update (its frozen snapshot), and `post_status` set to `published` through `POST` or `PUT
+  /posts` (`Via` says which; that path makes no version, so `BlockDoc` is the post's current
+  published body, empty when it has none, and `PostID` is 0 for a post being created).
+- **It reads, it doesn't change.** `BlockDoc` is the guard's own copy; there are no mutating
+  filters.
+- **Order and budget:** enabled plugins only, by `priority` (lowest first) then id, one at a
+  time; the first denial wins. 3 seconds each, 5 for all of them together.
+- **A denial** is a 409 `plugin_refused` whose `error` is your reason, shown to whoever published
+  (in bulk, that post's line of the report). Write one short plain-text sentence that says what to
+  fix; line breaks become spaces and it's cut at 280 characters. A scheduled publish or update
+  that a guard refuses shows "A plugin stopped..." (`schedule_failure.reason: plugin_refused`) and
+  is retried with the scheduler's backoff, so fixing the post lets it through.
+- **An error, panic or timeout allows the publish** (logged as `plugin_guard_failed`) unless you
+  declared `"on_error": "deny"`: then the publish is refused with "<name> couldn't check this
+  post".
+- It's a policy check, not a lock: an edit stored between the guard and the publish goes out
+  unchecked.
 
 ## Webhooks (#460)
 

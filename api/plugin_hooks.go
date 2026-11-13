@@ -100,11 +100,13 @@ type pluginHookRegistry map[string]pluginsdk.Plugin
 
 // pluginHooksMismatch says how a plugin's registered hooks differ from the ones its
 // plugin.json declares, or "" when they match. A plugin with neither has nothing to
-// compare. Every declared hook counts, the publish guard (post.before_publish) too:
-// until the contract has guards (#459) a plugin that declares one can't honour it.
+// compare. Every declared hook counts, the publish guard (post.before_publish,
+// Plugin.BeforePublish, #459) too: a guard declared without code would let a publish
+// through that its plugin.json says it checks.
 //
 // A webhook plugin (server.webhook, #460) has its hooks delivered to a URL, so it must
 // have no Go code: one plugin's hooks are either compiled in or a webhook, never both.
+// The validator refuses a webhook plugin that declares a guard.
 func pluginHooksMismatch(manifest PluginManifest, registered pluginsdk.Plugin, isRegistered bool) string {
 	if manifest.Server.Webhook != nil {
 		if isRegistered {
@@ -297,8 +299,8 @@ func (d *pluginHookDispatcher) activePlugins(ctx context.Context) ([]hookPlugin,
 		case !ok:
 			continue
 		}
-		// Register refuses any event that isn't an observer event.
-		plugin := hookPlugin{id: row.ID, slug: row.Slug, manifest: manifest, code: code, events: code.HookEvents()}
+		// Observers only: a guard (#459) runs in the publish, not from the outbox.
+		plugin := hookPlugin{id: row.ID, slug: row.Slug, manifest: manifest, code: code, events: code.ObserverEvents()}
 		if len(plugin.events) > 0 {
 			out = append(out, plugin)
 		}

@@ -101,9 +101,10 @@ function Pagination<T, Q>({
       {children({ data, total, loading, error, retry })}
       {/* data.length too: an endpoint without meta.total reports total 0 */}
       {!loading && !error && (total > 0 || data.length > 0) &&
-        <div className="gl-pagination__controls">
+        // Icon-only buttons are named (#144: they read as "button" with no name).
+        <nav className="gl-pagination__controls" aria-label="Pagination">
           {/* Go to first page */}
-          <button onClick={() => setOffset(0)} disabled={currentPage === 0}>
+          <button type="button" aria-label="First page" onClick={() => setOffset(0)} disabled={currentPage === 0}>
             <Icon
               name="double-next"
               mirror_horizontally={true}
@@ -114,7 +115,12 @@ function Pagination<T, Q>({
           </button>
 
           {/* Previous page */}
-          <button onClick={() => setOffset((o) => Math.max(0, o - limit))} disabled={currentPage === 0}>
+          <button
+            type="button"
+            aria-label="Previous page"
+            onClick={() => setOffset((o) => Math.max(0, o - limit))}
+            disabled={currentPage === 0}
+          >
             <Icon
               name="next"
               mirror_horizontally={true}
@@ -126,13 +132,22 @@ function Pagination<T, Q>({
 
           <div className="gl-pagination__navigation">
             {getPageNumbers().map((page) => (
-              <button key={page} onClick={() => setOffset(page * limit)} disabled={page === currentPage}>
+              <button
+                key={page}
+                type="button"
+                aria-label={`Page ${page + 1}`}
+                aria-current={page === currentPage ? "page" : undefined}
+                onClick={() => setOffset(page * limit)}
+                disabled={page === currentPage}
+              >
                 {page + 1}
               </button>
             ))}
           </div>
           {/* Next page */}
           <button
+            type="button"
+            aria-label="Next page"
             onClick={() => setOffset((o) => (o + limit < total ? o + limit : o))}
             disabled={currentPage >= totalPages - 1 || totalPages === 0}
           >
@@ -145,6 +160,8 @@ function Pagination<T, Q>({
           </button>
           {/* Go to last page */}
           <button
+            type="button"
+            aria-label="Last page"
             onClick={() => setOffset((totalPages - 1) * limit)}
             disabled={currentPage >= totalPages - 1 || totalPages === 0}
           >
@@ -161,9 +178,10 @@ function Pagination<T, Q>({
               options={limitOptions.map((option) => ({ value: String(option), label: String(option) }))}
               value={String(limit)}
               onChange={handleLimitChange}
+              aria-label="Rows per page"
             />
           </div>
-        </div>
+        </nav>
       }
     </div>
   )

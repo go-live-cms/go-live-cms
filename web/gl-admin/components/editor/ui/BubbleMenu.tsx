@@ -3,6 +3,7 @@ import { BubbleMenu as TipTapBubbleMenu } from "@tiptap/react/menus"
 import { turnIntoEntries } from "../blocks/catalog"
 import { applyTurnInto, computeTurnIntoFromSelection, type TurnIntoValue } from "../utils/turnInto"
 import CommandSelect, { type CommandSelectOption } from "../ui/CommandSelect"
+import { FLOATING_TOOLBAR_ATTR, onFloatingToolbarKeyDown } from "../utils/floatingToolbar"
 import { catalogSelectOptions } from "./BlockIcon"
 import { NodeSelection } from "@tiptap/pm/state"
 import { CAPTION_MARKS, TEXT_PART_NODE_NAMES } from "@gl-admin/lib/blocks-spec"
@@ -119,7 +120,13 @@ const BubbleMenu = ({ editor, className = "", openLinkModal, ...props }: any) =>
       }}
       {...props}
     >
-      <div role="toolbar" aria-label="Format text" className="editor-toolbar__group">
+      <div
+        role="toolbar"
+        aria-label="Format text"
+        className="editor-toolbar__group"
+        {...{ [FLOATING_TOOLBAR_ATTR]: "selection" }}
+        onKeyDown={(e) => onFloatingToolbarKeyDown(e, editor)}
+      >
         {!inCaption && !inCell && !inNote && (
           <>
             <CommandSelect

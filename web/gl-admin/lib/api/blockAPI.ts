@@ -1,5 +1,5 @@
 import type { BlockDocV1 } from "../blocks-spec"
-import { ApiError } from "./errors"
+import { ApiError, PLUGIN_REFUSED } from "./errors"
 import type { PostSEOSettings, ScheduledUpdate } from "./types"
 
 // A published snapshot from post_versions (#136)
@@ -97,8 +97,25 @@ export class BlockAPIClient {
 
     if (!response.ok) {
       // An ApiError so callers can tell a 503 (publish: the collab flush failed) apart and
-      // show the error ID; the message stays the same.
-      throw new ApiError(`Failed to ${what}: ${response.statusText}`, response.status, null, null, null, response.headers.get("X-Request-ID"))
+      // show the error ID; the message stays the same. The body's code and error are kept
+      // too, and a publish a plugin refused (#459, 409 plugin_refused) says the plugin's
+      // reason, which is written for the person publishing.
+      let body: { code?: unknown; error?: unknown } | null = null
+      try {
+        body = await response.json()
+      } catch {
+        body = null
+      }
+      const code = typeof body?.code === "string" ? body.code : null
+      const serverMessage = typeof body?.error === "string" ? body.error : null
+      throw new ApiError(
+        code === PLUGIN_REFUSED && serverMessage ? serverMessage : `Failed to ${what}: ${response.statusText}`,
+        response.status,
+        null,
+        code,
+        serverMessage,
+        response.headers.get("X-Request-ID")
+      )
     }
 
     return response
