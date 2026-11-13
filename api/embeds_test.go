@@ -527,12 +527,12 @@ func TestEmbedDialRefusesInternalAddresses(t *testing.T) {
 		"100.64.0.1:443", "0.0.0.0:443", "[::]:443", "[fe80::1]:443", "[fc00::1]:443", "224.0.0.1:443", "[::ffff:127.0.0.1]:443", "not-an-address",
 	}
 	for _, address := range refused {
-		require.ErrorIs(t, refuseNonPublicEmbedAddress("tcp", address, nil), errEmbedAddress, address)
+		require.ErrorIs(t, refuseNonPublicAddress("tcp", address, nil), errEmbedAddress, address)
 	}
 	for _, address := range []string{"142.250.74.14:443", "[2607:f8b0:4004:800::200e]:443"} {
-		require.NoError(t, refuseNonPublicEmbedAddress("tcp", address, nil), address)
+		require.NoError(t, refuseNonPublicAddress("tcp", address, nil), address)
 	}
-	require.False(t, isPublicEmbedAddress(netip.Addr{}))
+	require.False(t, isPublicAddress(netip.Addr{}))
 }
 
 // The real transport never reaches a local server, whatever the URL says.

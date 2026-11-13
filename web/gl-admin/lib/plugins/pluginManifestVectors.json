@@ -128,6 +128,70 @@
     { "name": "on_error on an observer", "valid": false, "field": "server.hooks[0].on_error", "set": { "server": { "hooks": [{ "event": "post.published", "on_error": "allow" }] } } },
     { "name": "on_error neither allow nor deny", "valid": false, "field": "server.hooks[0].on_error", "set": { "server": { "hooks": [{ "event": "post.before_publish", "on_error": "block" }] } } },
     { "name": "priority on an observer", "valid": false, "field": "server.hooks[0].priority", "set": { "server": { "hooks": [{ "event": "post.saved", "priority": 1 }] } } },
-    { "name": "priority over 1000", "valid": false, "field": "server.hooks[0].priority", "set": { "server": { "hooks": [{ "event": "post.before_publish", "priority": 1001 }] } } }
+    { "name": "priority over 1000", "valid": false, "field": "server.hooks[0].priority", "set": { "server": { "hooks": [{ "event": "post.before_publish", "priority": 1001 }] } } },
+
+    { "name": "a webhook plugin (#460)", "valid": true, "set": {
+      "capabilities": ["network"],
+      "settings": { "url": { "type": "string", "maxLength": 2048 }, "signing_secret": { "type": "string", "secret": true } },
+      "server": { "webhook": { "url_setting": "url", "secret_setting": "signing_secret" }, "hooks": [{ "event": "post.published", "timeout_ms": 5000 }, { "event": "post.deleted" }] }
+    } },
+    { "name": "a webhook URL setting that is itself secret", "valid": true, "set": {
+      "capabilities": ["posts:read", "network"],
+      "settings": { "url": { "type": "string", "secret": true }, "signing_secret": { "type": "string", "secret": true } },
+      "server": { "webhook": { "url_setting": "url", "secret_setting": "signing_secret" }, "hooks": [{ "event": "post.saved" }] }
+    } },
+    { "name": "webhook not an object", "valid": false, "field": "server.webhook", "set": { "server": { "webhook": "https://example.com", "hooks": [{ "event": "post.saved" }] } } },
+    { "name": "webhook with an unknown field", "valid": false, "field": "server.webhook.url", "set": {
+      "server": { "webhook": { "url": "https://example.com", "url_setting": "url", "secret_setting": "s" }, "hooks": [{ "event": "post.saved" }] }
+    } },
+    { "name": "webhook without url_setting", "valid": false, "field": "server.webhook.url_setting", "set": {
+      "capabilities": ["network"], "settings": { "s": { "type": "string", "secret": true } },
+      "server": { "webhook": { "secret_setting": "s" }, "hooks": [{ "event": "post.saved" }] }
+    } },
+    { "name": "webhook url_setting not a string", "valid": false, "field": "server.webhook.url_setting", "set": {
+      "capabilities": ["network"], "settings": { "s": { "type": "string", "secret": true } },
+      "server": { "webhook": { "url_setting": 1, "secret_setting": "s" }, "hooks": [{ "event": "post.saved" }] }
+    } },
+    { "name": "webhook url_setting naming no setting", "valid": false, "field": "server.webhook.url_setting", "set": {
+      "capabilities": ["network"], "settings": { "s": { "type": "string", "secret": true } },
+      "server": { "webhook": { "url_setting": "url", "secret_setting": "s" }, "hooks": [{ "event": "post.saved" }] }
+    } },
+    { "name": "webhook url_setting naming a number setting", "valid": false, "field": "server.webhook.url_setting", "set": {
+      "capabilities": ["network"], "settings": { "url": { "type": "number" }, "s": { "type": "string", "secret": true } },
+      "server": { "webhook": { "url_setting": "url", "secret_setting": "s" }, "hooks": [{ "event": "post.saved" }] }
+    } },
+    { "name": "webhook url_setting naming an enum setting", "valid": false, "field": "server.webhook.url_setting", "set": {
+      "capabilities": ["network"], "settings": { "url": { "type": "string", "enum": ["https://a.example"] }, "s": { "type": "string", "secret": true } },
+      "server": { "webhook": { "url_setting": "url", "secret_setting": "s" }, "hooks": [{ "event": "post.saved" }] }
+    } },
+    { "name": "webhook without secret_setting", "valid": false, "field": "server.webhook.secret_setting", "set": {
+      "capabilities": ["network"], "settings": { "url": { "type": "string" } },
+      "server": { "webhook": { "url_setting": "url" }, "hooks": [{ "event": "post.saved" }] }
+    } },
+    { "name": "webhook secret_setting equal to url_setting", "valid": false, "field": "server.webhook.secret_setting", "set": {
+      "capabilities": ["network"], "settings": { "url": { "type": "string", "secret": true } },
+      "server": { "webhook": { "url_setting": "url", "secret_setting": "url" }, "hooks": [{ "event": "post.saved" }] }
+    } },
+    { "name": "webhook secret_setting not secret", "valid": false, "field": "server.webhook.secret_setting", "set": {
+      "capabilities": ["network"], "settings": { "url": { "type": "string" }, "s": { "type": "string" } },
+      "server": { "webhook": { "url_setting": "url", "secret_setting": "s" }, "hooks": [{ "event": "post.saved" }] }
+    } },
+    { "name": "webhook without the network capability", "valid": false, "field": "capabilities", "set": {
+      "capabilities": ["posts:read"], "settings": { "url": { "type": "string" }, "s": { "type": "string", "secret": true } },
+      "server": { "webhook": { "url_setting": "url", "secret_setting": "s" }, "hooks": [{ "event": "post.saved" }] }
+    } },
+    { "name": "webhook without capabilities", "valid": false, "field": "capabilities", "set": {
+      "capabilities": null, "settings": { "url": { "type": "string" }, "s": { "type": "string", "secret": true } },
+      "server": { "webhook": { "url_setting": "url", "secret_setting": "s" }, "hooks": [{ "event": "post.saved" }] }
+    } },
+    { "name": "webhook without hooks", "valid": false, "field": "server.hooks", "set": {
+      "capabilities": ["network"], "settings": { "url": { "type": "string" }, "s": { "type": "string", "secret": true } },
+      "server": { "webhook": { "url_setting": "url", "secret_setting": "s" } }
+    } },
+    { "name": "webhook delivering the publish guard", "valid": false, "field": "server.hooks[1].event", "set": {
+      "capabilities": ["network"], "settings": { "url": { "type": "string" }, "s": { "type": "string", "secret": true } },
+      "server": { "webhook": { "url_setting": "url", "secret_setting": "s" }, "hooks": [{ "event": "post.saved" }, { "event": "post.before_publish" }] }
+    } },
+    { "name": "webhook null is no webhook", "valid": true, "set": { "server": { "webhook": null, "hooks": [{ "event": "post.saved" }] } } }
   ]
 }

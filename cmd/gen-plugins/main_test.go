@@ -59,6 +59,25 @@ func TestGenerateRefusesABadSlug(t *testing.T) {
 	require.ErrorContains(t, err, "not a plugin id")
 }
 
+// A webhook plugin (#460) has no Go code: its hooks are delivered to a URL.
+func TestGenerateRefusesServerCodeWithAWebhook(t *testing.T) {
+	root := fakeRepo(t)
+	writeFile(t, filepath.Join(root, "web/plugins/notify/server/hooks.go"), "package server")
+	writeFile(t, filepath.Join(root, "web/plugins/notify/plugin.json"),
+		`{"server": {"webhook": {"url_setting": "url", "secret_setting": "secret"}, "hooks": [{"event": "post.saved"}]}}`)
+	_, err := generate(root)
+	require.ErrorContains(t, err, "declares server.webhook")
+
+	// A webhook plugin without server code, and server code with "webhook": null, are fine.
+	writeFile(t, filepath.Join(root, "web/plugins/notify/plugin.json"), `{"server": {"webhook": null}}`)
+	writeFile(t, filepath.Join(root, "web/plugins/hooks-only/plugin.json"),
+		`{"server": {"webhook": {"url_setting": "url", "secret_setting": "secret"}}}`)
+	out, err := generate(root)
+	require.NoError(t, err)
+	require.Contains(t, string(out), "notify/server")
+	require.NotContains(t, string(out), "hooks-only")
+}
+
 func TestRunWritesThenChecks(t *testing.T) {
 	root := fakeRepo(t)
 	writeFile(t, filepath.Join(root, "web/plugins/seo/server/hooks.go"), "package server")

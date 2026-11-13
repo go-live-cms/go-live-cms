@@ -106,6 +106,8 @@ are the most fragile part of the codebase. **Before editing anything under
   is the import-free twin of the API's validator; `pluginManifestVectors.json` is shared with the Go
   tests, and `manifest.test.ts` validates every plugin in the repository. Server hooks (#458) are Go in
   `plugins/<slug>/server/`, built into the API only (`api/CLAUDE.md`); the web build ignores them.
+  A plugin without Go code may deliver its hooks to a URL instead (`server.webhook`, #460: a URL
+  setting and a secret setting, validated by both twins).
 - **Plugins page (#11, #457; the canvas's "Plugins" board):** `pages/Plugins.tsx` at `/plugins`
   (admins: `AdminOnly` in `app.tsx`, Workspace › Plugins in `nav.ts`). One list (name, version,
   author, description, the status pill, declared capabilities plus "Can block publishing" for a

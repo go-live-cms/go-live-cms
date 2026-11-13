@@ -102,7 +102,16 @@ type pluginHookRegistry map[string]pluginsdk.Plugin
 // plugin.json declares, or "" when they match. A plugin with neither has nothing to
 // compare. Every declared hook counts, the publish guard (post.before_publish) too:
 // until the contract has guards (#459) a plugin that declares one can't honour it.
+//
+// A webhook plugin (server.webhook, #460) has its hooks delivered to a URL, so it must
+// have no Go code: one plugin's hooks are either compiled in or a webhook, never both.
 func pluginHooksMismatch(manifest PluginManifest, registered pluginsdk.Plugin, isRegistered bool) string {
+	if manifest.Server.Webhook != nil {
+		if isRegistered {
+			return "declares server.webhook but also registers hooks in Go"
+		}
+		return ""
+	}
 	declared := make([]string, 0, len(manifest.Server.Hooks))
 	for _, hook := range manifest.Server.Hooks {
 		declared = append(declared, hook.Event)
@@ -261,7 +270,9 @@ func (d *pluginHookDispatcher) skipInactive(ctx context.Context) {
 
 // activePlugins is the plugins table's enabled plugins with hooks, limited to those
 // whose code this process has. A plugin enabled in the database but not registered
-// here (another build in a rolling deploy) is left to the replicas that have it.
+// here (another build in a rolling deploy) is left to the replicas that have it. A
+// webhook plugin (#460) needs no code: every replica delivers its hooks, through an
+// observer per hook that POSTs the event (plugin_webhooks.go).
 func (d *pluginHookDispatcher) activePlugins(ctx context.Context) ([]hookPlugin, error) {
 	statementCtx, cancel := context.WithTimeout(ctx, pluginHookStatementTimeout)
 	defer cancel()
@@ -276,8 +287,14 @@ func (d *pluginHookDispatcher) activePlugins(ctx context.Context) ([]hookPlugin,
 		if err := json.Unmarshal(row.Manifest, &manifest); err != nil {
 			continue
 		}
-		if !ok || pluginHooksMismatch(manifest, code, ok) != "" {
+		if pluginHooksMismatch(manifest, code, ok) != "" {
 			// Not ours to run: the startup scan marks a mismatch incompatible.
+			continue
+		}
+		switch {
+		case manifest.Server.Webhook != nil:
+			code = d.server.webhookPlugin(row.Slug, manifest)
+		case !ok:
 			continue
 		}
 		// Register refuses any event that isn't an observer event.

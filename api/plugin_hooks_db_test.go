@@ -35,7 +35,6 @@ var allObserverEvents = pluginsdk.ObserverEvents
 // hook for each event (timeouts in ms by event, optional) and the capabilities.
 func enableHookPlugin(t *testing.T, store db.Store, events []string, timeouts map[string]int, capabilities ...string) db.Plugin {
 	t.Helper()
-	ctx := context.Background()
 	slug := pluginDBSlug("hooks")
 	hooks := []map[string]any{}
 	for _, event := range events {
@@ -52,8 +51,19 @@ func enableHookPlugin(t *testing.T, store db.Store, events []string, timeouts ma
 	if len(capabilities) > 0 {
 		manifest["capabilities"] = capabilities
 	}
+	return enableManifestPlugin(t, store, slug, manifest)
+}
+
+// enableManifestPlugin inserts an installed plugin row with this plugin.json (validated
+// first) and enables it until the test ends.
+func enableManifestPlugin(t *testing.T, store db.Store, slug string, manifest map[string]any) db.Plugin {
+	t.Helper()
+	ctx := context.Background()
 	raw, err := json.Marshal(manifest)
 	require.NoError(t, err)
+	_, normalized, err := ParsePluginManifest(raw, slug)
+	require.NoError(t, err, "the test's plugin.json validates")
+	raw = normalized
 	// Events left unfanned by an earlier test would go to every plugin subscribed now,
 	// this one included (as on a real site): fan them out to their own plugins first.
 	for i := 0; i < 100; i++ {
@@ -65,7 +75,7 @@ func enableHookPlugin(t *testing.T, store db.Store, events []string, timeouts ma
 		time.Sleep(10 * time.Millisecond)
 	}
 	_, err = store.InsertDiscoveredPlugin(ctx, db.InsertDiscoveredPluginParams{
-		Slug: slug, Name: "Hooks " + slug, Version: "1.0.0", Manifest: raw,
+		Slug: slug, Name: fmt.Sprint(manifest["name"]), Version: "1.0.0", Manifest: raw,
 		ContentHash: strings.Repeat("a", 64), Status: PluginStatusInstalled,
 	})
 	require.NoError(t, err)
