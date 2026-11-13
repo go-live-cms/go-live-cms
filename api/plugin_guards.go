@@ -44,10 +44,14 @@ import (
 	"runtime/debug"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/gin-gonic/gin"
+
+	"github.com/go-live-cms/go-live-cms/customhtml"
 	"github.com/go-live-cms/go-live-cms/pluginsdk"
 )
 
@@ -67,7 +71,41 @@ const (
 	// pluginGuardOnErrorDeny is plugin.json's on_error value that makes a failed guard
 	// refuse the publish.
 	pluginGuardOnErrorDeny = "deny"
+	// pluginGuardCallsMax caps one plugin's guard calls running at once in this
+	// process, those that outlived their time included. A guard that ignores its
+	// context then costs at most this many goroutines (and body copies), not one per
+	// publish; past it the guard isn't called and counts as failed (on_error decides).
+	pluginGuardCallsMax = 8
+	// publishGuardsKey memoizes the guard list on a request (bulk publishes many posts).
+	publishGuardsKey = "publish_guards"
 )
+
+// publishGuardCalls counts each plugin's guard calls still running. The zero value is
+// ready.
+type publishGuardCalls struct {
+	mu    sync.Mutex
+	inUse map[string]int
+}
+
+// acquire takes a call slot for slug when one is free.
+func (s *publishGuardCalls) acquire(slug string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.inUse == nil {
+		s.inUse = map[string]int{}
+	}
+	if s.inUse[slug] >= pluginGuardCallsMax {
+		return false
+	}
+	s.inUse[slug]++
+	return true
+}
+
+func (s *publishGuardCalls) release(slug string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.inUse[slug]--
+}
 
 // publishGuard is one plugin's guard, ready to run.
 type publishGuard struct {
@@ -141,8 +179,10 @@ func (server *Server) publishGuards(ctx context.Context) ([]publishGuard, error)
 		}
 		if mismatch := pluginHooksMismatch(manifest, code, true); mismatch != "" {
 			// The startup scan marks it incompatible; until then its guard can't be
-			// trusted to be the one plugin.json describes.
-			server.logger.Warn("plugin_guard_skipped", "plugin", row.Slug, "reason", mismatch)
+			// trusted to be the one plugin.json describes. Logged once, not per publish.
+			if _, logged := server.guardSkipLogged.LoadOrStore(row.Slug+"\x00"+mismatch, true); !logged {
+				server.logger.Warn("plugin_guard_skipped", "plugin", row.Slug, "reason", mismatch)
+			}
 			continue
 		}
 		guard := publishGuard{
@@ -172,6 +212,26 @@ func (server *Server) publishGuards(ctx context.Context) ([]publishGuard, error)
 // listing the guards is errPublishGuardsUnavailable.
 func (server *Server) runPublishGuards(ctx context.Context, log *slog.Logger, candidate func(context.Context) (pluginsdk.PublishCandidate, error)) (*pluginRefusal, error) {
 	guards, err := server.publishGuards(ctx)
+	return server.runGuardList(ctx, log, guards, err, candidate)
+}
+
+// requestPublishGuards is publishGuards read once per request: a bulk publish asks
+// the same guards about every post.
+func (server *Server) requestPublishGuards(c *gin.Context) ([]publishGuard, error) {
+	if cached, ok := c.Get(publishGuardsKey); ok {
+		if guards, ok := cached.([]publishGuard); ok {
+			return guards, nil
+		}
+	}
+	guards, err := server.publishGuards(c.Request.Context())
+	if err == nil {
+		c.Set(publishGuardsKey, guards)
+	}
+	return guards, err
+}
+
+// runGuardList is runPublishGuards with the guards (or the error listing them) given.
+func (server *Server) runGuardList(ctx context.Context, log *slog.Logger, guards []publishGuard, err error, candidate func(context.Context) (pluginsdk.PublishCandidate, error)) (*pluginRefusal, error) {
 	if err != nil {
 		log.Error("plugin_guards_list_failed", "error", err)
 		return nil, fmt.Errorf("%w: %v", errPublishGuardsUnavailable, err)
@@ -202,10 +262,15 @@ func (server *Server) runPublishGuard(budget context.Context, log *slog.Logger, 
 	if budget.Err() != nil {
 		// The guards before this one used the whole budget.
 		err = fmt.Errorf("not run: the %s budget for all guards was used up", pluginGuardBudget)
+	} else if !server.guardCalls.acquire(guard.plugin.slug) {
+		// Its calls are all taken, likely by ones that outlived their time: don't pile
+		// up more.
+		err = fmt.Errorf("not run: %d calls of this guard are already running", pluginGuardCallsMax)
 	} else {
 		guardCtx, cancel := context.WithTimeout(budget, pluginGuardTimeout)
 		host := &pluginHost{server: server, plugin: guard.plugin, log: log}
-		decision, err = callGuard(guardCtx, log, host, guard.guard, publish)
+		slug := guard.plugin.slug
+		decision, err = callGuard(guardCtx, log, host, guard.guard, publish, func() { server.guardCalls.release(slug) })
 		cancel()
 	}
 	took := time.Since(started).Milliseconds()
@@ -232,8 +297,8 @@ func (server *Server) runPublishGuard(budget context.Context, log *slog.Logger, 
 
 // callGuard runs the guard on its own goroutine with panics recovered, and stops
 // waiting when ctx is done: a guard that ignores its context can't hold a publish
-// past its time.
-func callGuard(ctx context.Context, log *slog.Logger, host pluginsdk.Host, guard pluginsdk.Guard, publish pluginsdk.PublishCandidate) (pluginsdk.Decision, error) {
+// past its time. done is called when the goroutine returns, however late.
+func callGuard(ctx context.Context, log *slog.Logger, host pluginsdk.Host, guard pluginsdk.Guard, publish pluginsdk.PublishCandidate, done func()) (pluginsdk.Decision, error) {
 	type answer struct {
 		decision pluginsdk.Decision
 		err      error
@@ -242,6 +307,7 @@ func callGuard(ctx context.Context, log *slog.Logger, host pluginsdk.Host, guard
 	publish.BlockDoc = append(json.RawMessage(nil), publish.BlockDoc...)
 	result := make(chan answer, 1)
 	go func() {
+		defer done()
 		defer func() {
 			if rec := recover(); rec != nil {
 				log.Error("plugin_guard_panic", "error", fmt.Sprint(rec), "stack", string(debug.Stack()))
@@ -255,6 +321,13 @@ func callGuard(ctx context.Context, log *slog.Logger, host pluginsdk.Host, guard
 	case got := <-result:
 		return got.decision, got.err
 	case <-ctx.Done():
+		// An answer that arrived together with the deadline still counts: select picks
+		// at random between ready cases.
+		select {
+		case got := <-result:
+			return got.decision, got.err
+		default:
+		}
 		return pluginsdk.Decision{}, fmt.Errorf("timed out: %w", ctx.Err())
 	}
 }
@@ -284,4 +357,23 @@ func cleanGuardReason(reason string) string {
 		reason = string([]rune(reason)[:pluginGuardReasonMax-1]) + "…"
 	}
 	return reason
+}
+
+// guardBody is the body a publish of postID will snapshot, as guards should see it:
+// doc with each custom HTML block's sanitized markup in attrs.html, as
+// materializeHTML puts it in the version inside the transaction (#428). Read-only: it
+// rewrites no snippet row.
+func (server *Server) guardBody(ctx context.Context, postID int64, doc json.RawMessage) (json.RawMessage, error) {
+	if len(customhtml.SnippetIDs(doc)) == 0 {
+		return doc, nil
+	}
+	rows, err := server.store.ListPostHTMLSnippets(ctx, postID)
+	if err != nil {
+		return nil, err
+	}
+	markup := make(map[string]string, len(rows))
+	for _, row := range rows {
+		markup[row.SnippetID] = row.Html
+	}
+	return customhtml.Materialize(doc, markup)
 }

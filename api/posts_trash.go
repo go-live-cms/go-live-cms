@@ -40,7 +40,8 @@ const (
 )
 
 // maxBulkPosts caps one POST /posts/bulk: each publish flushes the collab
-// document first (up to collabFlushTimeout), so a request stays bounded.
+// document first (up to collabFlushTimeout) and asks the publish guards (up to
+// pluginGuardBudget, #459), so a request stays bounded.
 const maxBulkPosts = 100
 
 // postActionError is why one post's action failed: the HTTP status the single
@@ -179,14 +180,20 @@ func (server *Server) publishPostByID(c *gin.Context, postID, userID int64, labe
 	}
 
 	// The plugins' publish guards (#459), on the working copy the flush just stored,
-	// before the transaction: never under its row lock.
-	refusal, err := server.runPublishGuards(c.Request.Context(), server.requestLog(c), func(ctx context.Context) (pluginsdk.PublishCandidate, error) {
+	// before the transaction: never under its row lock. Listed once per request, so a
+	// bulk publish doesn't re-read them for every post.
+	guards, listErr := server.requestPublishGuards(c)
+	refusal, err := server.runGuardList(c.Request.Context(), server.requestLog(c), guards, listErr, func(ctx context.Context) (pluginsdk.PublishCandidate, error) {
 		post, err := server.store.GetPost(ctx, postID)
 		if err != nil {
 			return pluginsdk.PublishCandidate{}, err
 		}
+		body, err := server.guardBody(ctx, postID, post.BlockDoc)
+		if err != nil {
+			return pluginsdk.PublishCandidate{}, err
+		}
 		return pluginsdk.PublishCandidate{PostID: postID, PostType: post.PostType, ActorID: userID,
-			Via: pluginsdk.PublishViaButton, BlockDoc: post.BlockDoc}, nil
+			Via: pluginsdk.PublishViaButton, BlockDoc: body}, nil
 	})
 	switch {
 	case errors.Is(err, sql.ErrNoRows):

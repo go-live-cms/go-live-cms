@@ -6,11 +6,14 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	mockdb "github.com/go-live-cms/go-live-cms/db/mock"
 	db "github.com/go-live-cms/go-live-cms/db/sqlc"
 	"github.com/go-live-cms/go-live-cms/pluginsdk"
@@ -310,6 +313,98 @@ func TestPublishGuardErrors(t *testing.T) {
 		return pluginsdk.PublishCandidate{}, gone
 	})
 	require.ErrorIs(t, err, gone)
+}
+
+// A plugin with pluginGuardCallsMax calls already running (guards that ignored their
+// context) isn't called again: it counts as failed, and on_error decides. A call that
+// returns gives its slot back.
+func TestPublishGuardCallsCap(t *testing.T) {
+	for _, onError := range []string{"", "deny"} {
+		t.Run("on_error="+onError, func(t *testing.T) {
+			ran := &guardLog{}
+			server, _ := guardServer(t, pluginHookRegistry{"stuck": guarding(ran.guard("stuck", allowing))}, guardRow(1, "stuck", 0, onError))
+			for i := 0; i < pluginGuardCallsMax; i++ {
+				require.True(t, server.guardCalls.acquire("stuck"))
+			}
+			refusal, err := server.runPublishGuards(context.Background(), quietLog(), fixedCandidate(pluginsdk.PublishCandidate{}))
+			require.NoError(t, err)
+			require.Empty(t, ran.names(), "called past the cap")
+			if onError == "deny" {
+				require.NotNil(t, refusal)
+			} else {
+				require.Nil(t, refusal)
+			}
+
+			// Once a slot is free it runs again, and gives the slot back.
+			server.guardCalls.release("stuck")
+			_, err = server.runPublishGuards(context.Background(), quietLog(), fixedCandidate(pluginsdk.PublishCandidate{}))
+			require.NoError(t, err)
+			require.Equal(t, []string{"stuck"}, ran.names())
+			require.Eventually(t, func() bool {
+				server.guardCalls.mu.Lock()
+				defer server.guardCalls.mu.Unlock()
+				return server.guardCalls.inUse["stuck"] == pluginGuardCallsMax-1
+			}, time.Second, 5*time.Millisecond)
+		})
+	}
+}
+
+// A hung guard keeps its slot until it returns, however late.
+func TestPublishGuardHungCallHoldsSlot(t *testing.T) {
+	shortGuardBudgets(t, 20*time.Millisecond, 100*time.Millisecond)
+	release := make(chan struct{})
+	hung := func(context.Context, pluginsdk.Host, pluginsdk.PublishCandidate) (pluginsdk.Decision, error) {
+		<-release
+		return pluginsdk.Allow(), nil
+	}
+	server, _ := guardServer(t, pluginHookRegistry{"hung": guarding(hung)}, guardRow(1, "hung", 0, ""))
+	inUse := func() int {
+		server.guardCalls.mu.Lock()
+		defer server.guardCalls.mu.Unlock()
+		return server.guardCalls.inUse["hung"]
+	}
+	_, err := server.runPublishGuards(context.Background(), quietLog(), fixedCandidate(pluginsdk.PublishCandidate{}))
+	require.NoError(t, err)
+	require.Equal(t, 1, inUse(), "still running past its time")
+	close(release)
+	require.Eventually(t, func() bool { return inUse() == 0 }, time.Second, 5*time.Millisecond)
+}
+
+// A request lists the guards once, however many posts it publishes (bulk).
+func TestRequestPublishGuardsListedOnce(t *testing.T) {
+	store := mockdb.NewMockStore(gomock.NewController(t))
+	server := newTestServer(t, store)
+	server.pluginRegistry = pluginHookRegistry{"g": guarding(allowGuard)}
+	store.EXPECT().ListHookPlugins(gomock.Any()).Times(1).Return([]db.ListHookPluginsRow{guardRow(1, "g", 0, "")}, nil)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
+	for i := 0; i < 3; i++ {
+		guards, err := server.requestPublishGuards(c)
+		require.NoError(t, err)
+		require.Len(t, guards, 1)
+	}
+}
+
+// Guards see a custom HTML block's markup, as the version will hold it (sanitized),
+// though block_doc holds only its snippet id.
+func TestGuardBodyMaterializesHTML(t *testing.T) {
+	store := mockdb.NewMockStore(gomock.NewController(t))
+	server := newTestServer(t, store)
+	const snippet = "11111111-1111-4111-8111-111111111111"
+	doc := json.RawMessage(`{"doc_version":1,"blocks_order":["h"],"blocks":{"h":{"id":"h","type":"html","version":1,"attrs":{"snippetId":"` + snippet + `"}}}}`)
+	store.EXPECT().ListPostHTMLSnippets(gomock.Any(), int64(5)).Return([]db.PostHtmlSnippet{
+		{PostID: 5, SnippetID: snippet, Html: `<p onclick="x()">Hi <a href="https://example.test">there</a></p>`},
+	}, nil)
+	body, err := server.guardBody(context.Background(), 5, doc)
+	require.NoError(t, err)
+	require.Contains(t, string(body), "https://example.test")
+	require.NotContains(t, string(body), "onclick")
+
+	// No html block: nothing read, the body as it is.
+	plain := json.RawMessage(`{"doc_version":1,"blocks_order":[],"blocks":{}}`)
+	body, err = server.guardBody(context.Background(), 5, plain)
+	require.NoError(t, err)
+	require.Equal(t, string(plain), string(body))
 }
 
 func TestCleanGuardReason(t *testing.T) {

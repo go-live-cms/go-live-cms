@@ -180,7 +180,7 @@ func (server *Server) createPost(c *gin.Context) {
 	// empty published body (below), so that's what they're asked about; it has no id
 	// yet.
 	if createParams.PostStatus == postStatusPublished && !server.checkStatusPublishGuards(c, pluginsdk.PublishCandidate{
-		PostType: createParams.PostType, ActorID: caller.ID, Via: pluginsdk.PublishViaStatus, BlockDoc: []byte(emptyBlockDoc),
+		PostType: createParams.PostType, ActorID: caller.ID, Via: pluginsdk.PublishViaStatus, BlockDoc: emptyBlockDoc,
 	}) {
 		return
 	}
@@ -383,7 +383,7 @@ func (server *Server) updatePost(c *gin.Context) {
 	// post's current published body (none: empty). Saving a published post again
 	// with its status unchanged publishes nothing and isn't asked about.
 	if strings.EqualFold(updateParams.PostStatus, postStatusPublished) && !strings.EqualFold(existingPost.PostStatus, postStatusPublished) {
-		live := []byte(emptyBlockDoc)
+		live := emptyBlockDoc
 		if existingPost.PublishedBlockDoc.Valid {
 			live = existingPost.PublishedBlockDoc.RawMessage
 		}

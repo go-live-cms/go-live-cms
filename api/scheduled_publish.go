@@ -171,8 +171,12 @@ func (server *Server) publishScheduledPost(ctx context.Context, claim db.ClaimDu
 		if err != nil {
 			return pluginsdk.PublishCandidate{}, err
 		}
+		body, err := server.guardBody(ctx, claim.ID, post.BlockDoc)
+		if err != nil {
+			return pluginsdk.PublishCandidate{}, err
+		}
 		return pluginsdk.PublishCandidate{PostID: claim.ID, PostType: post.PostType, ActorID: claim.PublishScheduledBy.Int64,
-			Via: pluginsdk.PublishViaSchedule, BlockDoc: post.BlockDoc}, nil
+			Via: pluginsdk.PublishViaSchedule, BlockDoc: body}, nil
 	})
 	if err != nil {
 		server.recordScheduledPublishFailure(attemptCtx, log, claim, scheduledPublishFailed, err)
