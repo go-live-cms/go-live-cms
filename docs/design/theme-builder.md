@@ -222,8 +222,10 @@ says so.
 per section 11. The answer is the first slug, in rank order, that has a published override or a theme block
 template. It carries that slug's rank, its doc with `media` attached, and the published
 parts it references, each with its media. Otherwise the answer is 404. The caller compares
-the rank with that of the first candidate code layout in the glob, which is a synchronous
-check. If the builder's rank is the same or more specific, the route renders
+the rank with that of the first **active theme's** code layout in the glob, which is a
+synchronous check. The default theme's layouts don't take part in the comparison: they are
+the last resort after every rank, so a builder `archive` beats `default/layouts/term` when
+the active theme has no term layout. If the builder's rank is the same or more specific, the route renders
 `BlockTemplateLayout`. Otherwise it renders the code layout, as today. Each route file
 changes by one call, and the props it computes don't change.
 
@@ -336,9 +338,15 @@ here and needs no new mechanism.
 `prepareForStore` does the same, with shared vectors (`siteBlockVectors.json`):
 
 - **`post_content`**: at most one per template. Never in a part: a header holding the post
-  would render it twice.
+  would render it twice. Never inside a query's `post_template` either: a list item carries
+  no body, and the block would otherwise render the route's post once per item.
+  `post_excerpt` is the list's block.
 - **`template_part`**: in templates only. A part can't hold a part, so parts are never
-  recursive and a cycle can't happen.
+  recursive and a cycle can't happen. A slug resolves to the active theme's **published
+  override**, else the **part the theme ships** (5.7), else **core's starter part** (5.7:
+  `header` and `footer` exist). So a template customized on a code theme keeps a header and
+  footer before anyone customizes the parts. A slug none of the three has is refused on
+  publish (8.2).
 - **`query` and its children** follow new rows in the nesting table (block-library 2.2),
   which **stays acyclic**. A `query` may sit at the top level or in a `group`. A
   `post_template` holds flow, `columns`, `details` and `media_text`, but **not** a `group`
@@ -420,7 +428,9 @@ CREATE TABLE site_templates (
   id                   bigserial PRIMARY KEY,
   theme_slug           varchar NOT NULL,              -- no FK: a removed theme's rows stay (5.5)
   kind                 varchar NOT NULL CHECK (kind IN ('template', 'part')),
-  slug                 varchar NOT NULL CHECK (slug ~ '^[a-z0-9][a-z0-9-]{0,63}$'),
+  -- '_' because post type and taxonomy names allow it (identifierRe): single-case_study.
+  -- 80 so custom-<name> fits a 64-character name (section 10).
+  slug                 varchar NOT NULL CHECK (slug ~ '^[a-z0-9][a-z0-9_-]{0,79}$'),
   title                varchar(120) NOT NULL,
   -- Working copy. Written only by the collab store after creation (rule 11, 7.3).
   block_doc            jsonb   NOT NULL DEFAULT '{}'::jsonb,
@@ -431,7 +441,7 @@ CREATE TABLE site_templates (
   source_hash          varchar NOT NULL DEFAULT '',   -- hash of the theme template it started from
   -- Published side. NULL published_block_doc = no override: the theme's default renders.
   published_block_doc  jsonb,
-  published_version_id bigint,                        -- FK added below
+  published_version_id bigint,                        -- FK added after site_template_versions
   created_by           bigint REFERENCES users (id) ON DELETE SET NULL,
   created_at           timestamptz NOT NULL DEFAULT now(),
   changed_at           timestamptz NOT NULL DEFAULT now(),
@@ -466,6 +476,10 @@ CREATE TABLE site_template_versions (
   created_at  timestamptz NOT NULL DEFAULT now(),
   UNIQUE (template_id, version_no)
 );
+
+ALTER TABLE site_templates
+  ADD CONSTRAINT site_templates_published_version_fk
+  FOREIGN KEY (published_version_id) REFERENCES site_template_versions (id) ON DELETE SET NULL;
 
 -- Global styles, one row per theme. Not a collab document (section 6).
 CREATE TABLE global_styles (
@@ -682,8 +696,12 @@ but it doesn't make the second path free.
   comments, post activity or the plugin event trigger.
 - **Access:** the lookup gains the doc kind. For a template only `admin` gets `can_edit`.
   Everyone else is **denied** (`permission-denied`), not given a read-only view, since
-  templates are admin-only. The periodic re-check and `POST /internal/users/:id/recheck`
-  work unchanged, so a demoted admin's template connections close. There is no trash for
+  templates are admin-only. `accessMode` becomes kind-aware for this: today any content
+  role without `can_edit` maps to read-only, which for a template would give an editor a
+  read-only view at connect and turn a demoted admin's connection read-only (`demoted`)
+  on a re-check. For a template that case maps to deny at connect and to a close with
+  `access-revoked` on a re-check. The timers and `POST /internal/users/:id/recheck` are
+  otherwise unchanged, so a demoted admin's template connections close at once. There is no trash for
   templates, so `post-trashed` never applies.
 - **Store pipeline:** unchanged steps, with `validateBlockDoc(doc, { kind })` (4.2). A store
   that fails the kind's rules is `kept-invalid`, as today.
@@ -747,8 +765,8 @@ unpublished changes, together:
 
 1. **Outside any transaction:** flush each changed template's collab document (`503` from a
    flush stops the publish, as for posts), then validate: kind rules, no empty template,
-   contrast (6.3), every `template_part` slug resolving to a part that is or will be
-   published.
+   contrast (6.3), and every `template_part` slug resolving to a part by 4.2's order,
+   counting the parts this publish puts live.
 2. **`PublishSiteDesignTx`:** lock the theme's rows (`FOR UPDATE`), insert the release,
    write each changed item's published copy and its version, apply resets (section 9), sync
    `site_template_media`'s published rows, and commit. Nothing else runs inside, which is
@@ -860,7 +878,11 @@ cache-aside interface and purge hooks.
 
 ## 12. Access and activity
 
-- **Routes:** everything under `/site-design` is `requireSiteAdmin`. The only public reads
+- **Routes:** everything under `/site-design` is `requireSiteAdmin`, except
+  `GET /site-design/draft` (8.3). The middleware calls that one with a design-preview token,
+  not an access token, so it verifies the token's audience and expiry itself, then checks
+  that the token's user is still an admin, which is `requireSiteAdmin`'s check by another
+  path. `route_auth_test.go` names it. The only public reads
   are `/public/site-templates/resolve` (published only) and the published global styles
   (served with `/themes/active`, which is public already). `route_auth_test.go` lists them
   with reasons, and a new case proves a draft is never served by either.
@@ -1068,7 +1090,8 @@ Not filed. Priorities are suggestions within Post-MVP.
 - Scope: `query`, `post_template`, `query_pagination`, `query_no_results`, `query_title`,
   `term_description`, and the `post_*` blocks of 4.1; nesting table rows (acyclic);
   `collectTemplateNeeds`; `/public/posts` filters; the limits and soft failures of 4.3.
-- Acceptance: `nestingVectors.json` cases for every new row and the forbidden cycles; a
+- Acceptance: `nestingVectors.json` cases for every new row and the forbidden cycles,
+  and `siteBlockVectors.json` refusing `post_content` in a part or a post template; a
   query never returns a draft, trashed or non-public post (DB test); 5 queries on a page
   render 4 and log once; a failed query renders nothing and the page renders; `inherit`
   reuses the route's list (no second fetch, asserted); pagination URLs equal #349's.
@@ -1082,7 +1105,8 @@ Not filed. Priorities are suggestions within Post-MVP.
   `parts/` (5.7); starters.
 - Acceptance: the relay tests a post suite has, on a template (two admins typing, the
   stored doc, a restart, a reseed after `block_doc` is written around the server, a stale
-  epoch); an editor is refused at connect and a demoted admin is closed on re-check;
+  epoch); an editor is refused at connect and a demoted admin is closed (never made
+  read-only) on re-check, through the kind-aware `accessMode`; a slug with `_` stores;
   `process.test.ts` covers the new name; a template whose store fails its kind's rules is
   `kept-invalid`; migrations up/down/up; `web/collab-server/CLAUDE.md` and the collab rules
   file updated.
@@ -1093,8 +1117,10 @@ Not filed. Priorities are suggestions within Post-MVP.
   `/public/site-templates/resolve`; `BlockTemplateLayout.astro`; `<TemplatePart>` reading
   published parts; anchors, heading ids and the embed loader per 3.4.
 - Acceptance: for each route kind, a published override renders and a reset one falls back
-  to code (Astro container tests); rank comparison per 3.2 (a builder `single` doesn't beat
-  `layouts/product`); the 500 page never resolves a template; `SeoHead` output is identical
+  to code (Astro container tests); rank comparison per 3.2 and 3.3 (a builder `single`
+  doesn't beat `layouts/product`; a builder `archive` beats the default theme's term
+  layout); a customized template on the default theme renders core's starter header and
+  footer until the parts are customized; the 500 page never resolves a template; `SeoHead` output is identical
   to the code layout's for the same post; a failed resolve renders the code layout; render
   time measured against the code layout on the same route and recorded on the issue.
 - Depends on: T7, T8.
