@@ -9,6 +9,7 @@ processes + Postgres, run via Docker Compose.
 | Collab (Hocuspocus, #206) | 1235 (+ 1236 internal) | Node, Hocuspocus, Yjs, esbuild bundle | `web/collab-server/` |
 | Web | 4321 | Astro SSR + React admin SPA | `web/` |
 | DB | 5432 | PostgreSQL 12 | `db/migration/` |
+| Cache (#185) | 6379, never published | Valkey 8.1, optional (`REDIS_URL`) | `cache/`, `api/public_cache.go` |
 
 **Production** (`compose.yaml`, #272/#267) adds **Caddy** in front: the only published
 service (80/443, TLS), `/collab` → the Hocuspocus `collab` service, everything else → web

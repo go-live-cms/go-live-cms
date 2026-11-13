@@ -12,6 +12,7 @@ import { getSiteSettings } from "../lib/siteSettings"
 import { isApiProxyPath, proxyToApi } from "./apiProxy"
 import { redirectOn404 } from "./redirects"
 import { shouldNoindex } from "../lib/seo"
+import { withPageCacheControl } from "../lib/httpCache"
 import { SERVER_MEDIA_URL } from "../../gl-admin/lib/server-api-url"
 import { hocuspocusUrl } from "../../gl-admin/lib/collaboration/backend"
 import { log } from "../lib/log"
@@ -178,7 +179,12 @@ async function handleRequest(context: APIContext, next: MiddlewareNext, proxied:
 
   // A page the site answers 404 for may have moved (#331, redirects.ts). Frames on public
   // pages only from the allowed embed providers (#425); none if the setting can't be read.
-  const response = withRobotsHeader(await redirectOn404(context.request, url, await next()), url.pathname)
+  // Cache-Control: public for published pages, no-store otherwise (#185, httpCache.ts).
+  const response = withPageCacheControl(
+    withRobotsHeader(await redirectOn404(context.request, url, await next()), url.pathname),
+    context.request,
+    context.routePattern,
+  )
   return applyPublicCsp(response, async () => (await getSiteSettings(context.locals)).allowedEmbeds)
 }
 

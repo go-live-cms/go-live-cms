@@ -92,6 +92,13 @@ are the most fragile part of the codebase. **Before editing anything under
   with `server/start.mjs`, which wraps any other console output (Astro's banner and uncaught
   page errors, dependencies) as `{msg: "console", text}` lines; the scrub rules and the
   context hook both use are in `server/logFormat.mjs` (plain JS, no Node imports).
+- **Page `Cache-Control` (#185):** `src/lib/httpCache.ts`, applied by the middleware to every
+  public HTML response without its own header: `public, max-age=60, stale-while-revalidate=300`
+  only for a 200 from `CACHEABLE_PAGE_ROUTES` (home, post/page URLs, archives, term and author
+  pages, their page N) to an anonymous visitor with `SITE_URL` set; `private, no-store` for the
+  rest (a session cookie, a `Set-Cookie`, search, 404/500, unknown routes). A page that renders
+  something per visitor must not be in that list. The API caches its public reads in Valkey and
+  purges on every publish (`api/CLAUDE.md`); `/api/posts-reload` is just a no-cache passthrough.
 - **Server-side API calls use `SERVER_API_URL`, read at runtime** (#272): import
   `SERVER_API_URL` (with `/api/v1`) or `SERVER_MEDIA_URL` (the API origin, e.g. for
   `/public/*` and `/uploads`) from `gl-admin/lib/server-api-url.ts`. Never

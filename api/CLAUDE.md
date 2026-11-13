@@ -1413,6 +1413,42 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   panics and hung hooks; skips; save backlog; pruning; drift; the loop). Dispatcher tests loop
   `roundsUntil` their own run: on a shared database other tests' events reach the same plugin first.
 
+## Public read cache (#185, `cache/`, `public_cache.go`)
+
+- **`cache/`**: `Cache` (Get → `ErrMiss`, Set, SetNX, Delete, Enabled, Ping, Close), the
+  Valkey/Redis client (go-redis v9; 500 ms dial, 250 ms reads, one dial retry, its own log
+  silenced) and `Noop`. `REDIS_URL` (and `_FILE`) is optional: unset = `Noop`, so handler
+  tests and plain runs need nothing; a bad URL fails `NewServer`. `cache.Namespace`: every key
+  carries a random generation (`<name>:gen`, no TTL); `Purge` sets a new one. Take the key
+  (generation) **before** reading Postgres, so a read that raced a write stores under the old
+  generation.
+- **What's cached** (`publicCacheRoutes`, `cachePublicResponses` on the `/public` and
+  `/api/v1` groups): whole anonymous GET responses (status, Content-Type, body) of the public
+  post, list, author, term and menu reads, `/public/front-page` and the site config the web
+  reads per request (settings, active theme, extension settings, post types, taxonomy types
+  and terms). 200s, plus 404s where the route says (`notFound`: front page, menus). Never with
+  an `Authorization` header, a `Set-Cookie` or `no-store`, over 2 MiB, or search/redirects.
+  Key = method + escaped path + sorted query (hashed past 512 bytes); TTL 5 minutes;
+  concurrent misses share one run (singleflight). `X-Cache: HIT|MISS|BYPASS`. A replayed 404
+  goes through `requestIDErrorWriter`, so it carries the current request id. A new cached
+  route must be public (`TestPublicCacheRoutesArePublic`) and must not read a header, cookie
+  or the clock.
+- **Purges are global and after commit**: `purgePublicCacheAfterWrite` on `/api/v1` purges
+  after any request to a route in `publicCachePurgeRoutes` that didn't answer 4xx; the
+  scheduler purges after a scheduled publish or update; `NewServer` purges at startup (theme
+  scan, seed, a restored DB); `main backfill-variants` after generating. **Every mutating
+  route must be in `publicCachePurgeRoutes` or `publicCacheNoPurgeRoutes`**
+  (`TestMutatingRoutesDeclarePublicCachePurge` walks both routers). Snapshotted fields (SEO,
+  template, byline, restore-settings, html snippets) don't purge: they reach the site on
+  Update, which does.
+- **Failures never fail a request**: a cache error is a BYPASS read from Postgres, logged once
+  a minute; then reads skip Valkey for 5 s, and the first read after that purges before using
+  anything (a purge may have been missed). A failed purge is logged at error level.
+- Tests: `cache/cache_test.go` (miniredis), `public_cache_test.go` (mock store: hit/miss,
+  keys, bypass, what isn't stored, recovery, singleflight), `public_cache_routes_test.go`
+  (route audits), `public_cache_db_test.go` (real DB: every publish path, settings, menus,
+  drafts never cached, a failed purge doesn't fail the write).
+
 ## Gotchas
 
 - **Themes are discovered from disk** on startup (`ScanThemesDirectory("web/themes")`,

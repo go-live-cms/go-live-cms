@@ -14,6 +14,7 @@ and how schema migrations run in production. The scripts live in
 | Live Yjs state of editor documents (the collab server, #206) | Postgres `post_ydoc_state` | No: `block_doc` is canonical, and a missing or stale row reseeds from it | `db.dump` (it's a table) |
 | Secrets: `app.env` / `.env`, PASETO keys, `ROLE_LOOKUP_SECRET`, `COLLAB_INTERNAL_SECRET` | host / secret store | Yes | **Not** by these scripts. Keep them in your secret manager. Without the PASETO keys a restore still works, but every session is invalidated. |
 | Theme sources (`web/themes`) | git | Yes | git |
+| Public read cache (#185): copies of the API's public responses | Valkey (`valkey` service, memory only, no volume) | No: rebuilt from Postgres on the next page views | **Nothing, on purpose.** It's a cache: a restart or a lost host only costs a few uncached reads. |
 
 Postgres and the media directory must be backed up **together**: media rows store the
 file's absolute path under `UPLOAD_PATH`, and a row without its file is a broken image.
@@ -139,6 +140,8 @@ every document then reseeds from `block_doc` ([collab-cutover.md](collab-cutover
    Add `--force` only when you mean to delete what is there.
 5. **Start** `docker compose up -d`. The API runs any pending migrations on start (see
    below), and refuses to start if a dev seeded account still has its seeded password.
+   It also purges the public read cache when it starts, so Valkey (which step 1 left
+   running) never serves pages from before the restore. Nothing of Valkey's is restored.
 6. **Verify:**
    - `docker compose logs api` shows the migrations and `/health` answers;
    - row counts look right: `SELECT count(*) FROM posts; SELECT count(*) FROM media;`;

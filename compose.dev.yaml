@@ -26,6 +26,9 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      # Started, not healthy: the cache is optional.
+      valkey:
+        condition: service_started
     env_file:
       - ./app.env
     environment:
@@ -67,6 +70,9 @@ services:
       SMTP_TLS: none # Mailpit has no TLS; clear text is only allowed in debug mode
       MAIL_FROM: "GoLive CMS (dev) <no-reply@golive.localhost>"
       PUBLIC_BASE_URL: "http://localhost:4321"
+      # Public read cache (#185): the valkey service below. Set it to "" to run uncached.
+      # Inspect it with: docker compose -f compose.dev.yaml exec valkey valkey-cli
+      REDIS_URL: "${REDIS_URL-redis://valkey:6379/0}"
     volumes:
       - .:/app
       - /app/tmp
@@ -84,6 +90,18 @@ services:
       timeout: 3s
       retries: 5
       start_period: 120s
+
+  # Public read cache (#185, api/public_cache.go). Never published (the API reaches it
+  # on the compose network), memory only, capped and evicting like production's.
+  valkey:
+    image: valkey/valkey:8.1-alpine
+    command: ["valkey-server", "--maxmemory", "64mb", "--maxmemory-policy", "allkeys-lru", "--save", "", "--appendonly", "no"]
+    mem_limit: 96m
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
 
   web:
     build:

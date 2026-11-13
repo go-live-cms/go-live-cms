@@ -259,6 +259,12 @@ type Config struct {
 	// keeps an event; older ones are pruned hourly. LoadConfig defaults it to
 	// 2160h (90 days); 0 keeps every event (a zero Config: tests).
 	ActivityRetention time.Duration `mapstructure:"ACTIVITY_RETENTION"`
+
+	// RedisURL is the Valkey/Redis cache (#185, cache/), e.g. redis://valkey:6379/0
+	// (rediss:// for TLS; a password goes in the URL, or use REDIS_URL_FILE). Optional:
+	// empty means no cache, every public read goes to Postgres as before. The cache only
+	// holds copies of public responses, so losing it loses nothing (it isn't backed up).
+	RedisURL string `mapstructure:"REDIS_URL"`
 }
 
 // LoadConfig reads app.env (optional) and environment variables into Config.
@@ -363,6 +369,9 @@ func LoadConfig(path string) (config Config, err error) {
 	viper.SetDefault("PASSWORD_RESET_TTL", "1h")
 	viper.SetDefault("SCHEDULED_PUBLISH_INTERVAL", "30s")
 	viper.SetDefault("PLUGIN_HOOKS_INTERVAL", "1s")
+
+	// The public read cache (#185) is optional: no URL, no cache.
+	viper.SetDefault("REDIS_URL", "")
 
 	// Required, so deliberately no default. Bind it explicitly instead: viper's
 	// Unmarshal only sees AutomaticEnv values for keys it already knows from a
@@ -648,6 +657,8 @@ var secretFileSettings = []struct {
 	{"ROLE_LOOKUP_SECRET", func(c *Config) *string { return &c.RoleLookupSecret }},
 	{"COLLAB_INTERNAL_SECRET", func(c *Config) *string { return &c.CollabInternalSecret }},
 	{"SMTP_PASS", func(c *Config) *string { return &c.SMTPPass }},
+	// May hold the Valkey password (#185).
+	{"REDIS_URL", func(c *Config) *string { return &c.RedisURL }},
 }
 
 // maxSecretFileBytes caps a <KEY>_FILE read: secrets are short, so anything

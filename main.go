@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-live-cms/go-live-cms/api"
+	"github.com/go-live-cms/go-live-cms/cache"
 	db "github.com/go-live-cms/go-live-cms/db/sqlc"
 	"github.com/go-live-cms/go-live-cms/util"
 
@@ -97,6 +98,7 @@ func main() {
 	}
 	<-schedulerDone
 	<-hooksDone
+	_ = server.Cache().Close()
 	slog.Info("API stopped")
 }
 
@@ -118,7 +120,25 @@ func runBackfillVariants(config util.Config, store db.Store, args []string) {
 	stats, err := api.BackfillMediaVariants(ctx, store, config.UploadPath, *all, slog.Default())
 	slog.Info("media variant backfill finished",
 		"scanned", stats.Scanned, "generated", stats.Generated, "skipped", stats.Skipped, "failed", stats.Failed)
+	// Published pages list the variants (srcset): drop cached copies without them (#185).
+	if stats.Generated > 0 {
+		purgePublicCache(ctx, config)
+	}
 	if err != nil {
 		fatal("media variant backfill failed", err)
+	}
+}
+
+// purgePublicCache purges the public read cache (#185) from a command that runs outside
+// the server. A failure is only logged: the entries expire on their own.
+func purgePublicCache(ctx context.Context, config util.Config) {
+	c, err := cache.New(config.RedisURL)
+	if err != nil {
+		slog.Warn("public cache not purged", "error", err)
+		return
+	}
+	defer c.Close()
+	if err := api.PurgePublicCache(ctx, c); err != nil {
+		slog.Warn("public cache not purged; cached pages expire within minutes", "error", err)
 	}
 }

@@ -14,6 +14,7 @@ browser ──https──▶ caddy :443 ──/collab──▶ collab:1235 ─�
                                               │ SSR fetches: SERVER_API_URL
                                               ▼
                                            api:8080 ──▶ postgres:5432
+                                              └──(cache network)──▶ valkey:6379 (public read cache, #185)
 ```
 
 | Service | Image | Published | State |
@@ -23,6 +24,7 @@ browser ──https──▶ caddy :443 ──/collab──▶ collab:1235 ─�
 | `collab` | `ghcr.io/go-live-cms/collab` | no | none (live Yjs state is in Postgres, `post_ydoc_state`) |
 | `api` | `ghcr.io/go-live-cms/api` | no | `uploads` |
 | `postgres` | `postgres:12-alpine` | no | `postgres_data` |
+| `valkey` | `valkey/valkey:8.1-alpine` | no | none (memory only, 96 MB cap; a cache, not backed up) |
 
 - **Caddy** terminates TLS (Let's Encrypt for a domain, its local CA for `localhost`) and
   is the only thing on the internet. It sends `/collab` and `/collab/*` to the collab
@@ -48,6 +50,36 @@ browser ──https──▶ caddy :443 ──/collab──▶ collab:1235 ─�
   needs client IPs, change the filter in the Caddyfile for that investigation and revert it
   afterwards.
 - `web` and `collab` run as the `node` user. The `api` image still runs as root.
+
+### Caching (#185)
+
+Two layers, both safe to lose:
+
+- **Valkey** holds copies of the API's anonymous public responses (`/public/*` post, list,
+  author, term, menu and front-page reads, and the site config the public site reads on
+  every request: settings, active theme, theme settings, post types, taxonomy types and
+  terms). Never drafts or previews (no public route serves one), never a request with an
+  `Authorization` header (the admin always reads Postgres), never search. Every entry
+  expires within 5 minutes, and every write that changes what the site shows (publish,
+  Update, unpublish, trash, restore, delete, bulk, the scheduler, settings, menus, terms,
+  themes, post types, media, members' profiles) purges them all after it commits.
+  Details and the route list: `api/public_cache.go`.
+  - It sits on the `cache` network (`internal: true`), which only `api` joins, so `web`,
+    `collab` and `caddy` can't reach it; that's why it has no password. Memory only (no
+    RDB/AOF, no volume), 96 MB with `allkeys-lru`, container limit 128 MB.
+  - `REDIS_URL` (`redis://valkey:6379/0`) is fixed in `compose.yaml`, not a `.env`
+    setting. Unset, the API runs without a cache. A Valkey that is down or slow only costs
+    speed: reads go to Postgres (logged once a minute) and the API stays healthy.
+  - To empty it by hand: `docker compose exec valkey valkey-cli FLUSHALL`, or restart the
+    API (every start purges). A restored database needs neither: restore stops and starts
+    the API (backups.md).
+- **HTTP**: public pages answer `Cache-Control: public, max-age=60,
+  stale-while-revalidate=300` (published content, anonymous visitors, with `SITE_URL`
+  set) and `private, no-store` otherwise: signed-in visitors (a session cookie), search
+  results, error pages, the admin and the account pages. Caddy has no cache of its own and
+  passes the header through, so it matters for browsers and for a CDN you put in front;
+  such a CDN keeps a published change out for up to a minute (plus 5 of
+  stale-while-revalidate) unless you purge it too. Rules: `web/src/lib/httpCache.ts`.
 
 ### API URLs: server side vs browser
 
@@ -197,7 +229,8 @@ container and doesn't recreate one when only the value changed, so `deploy.sh` e
 
 Every secret the API reads accepts `<NAME>_FILE`: the PASETO keys, the
 `PASETO_V4_PREVIOUS_*_KEYS` lists, `ROLE_LOOKUP_SECRET`, `COLLAB_INTERNAL_SECRET`,
-`SMTP_PASS` and `DB_SOURCE` (`util/config.go`, `secretFileSettings`). The file's
+`SMTP_PASS`, `DB_SOURCE` and `REDIS_URL` (for a Valkey with a password;
+`util/config.go`, `secretFileSettings`). The file's
 surrounding whitespace is trimmed, and setting both `<NAME>` and `<NAME>_FILE` is a
 startup error. The plain variables keep working (dev compose and `app.env` use them).
 The collab server accepts `ROLE_LOOKUP_SECRET_FILE`, `COLLAB_INTERNAL_SECRET_FILE` and
@@ -242,7 +275,8 @@ Caddyfile, the scripts and `.env` to `DEPLOY_PATH`:
    runs `migrate up` on boot, which is then a no-op.
 5. `docker compose up -d --wait`: recreates what changed and fails the job unless every
    healthcheck passes (api `/readyz`, web `/favicon.ico`, collab `/healthz` on its
-   internal port) within 4 minutes.
+   internal port, valkey `PING`) within 4 minutes. The new API purges the public cache
+   when it starts.
 6. Appends `<time> <sha>` to `/opt/golive/.deploy-history`.
 
 Deploys run one at a time. An automatic deploy is skipped when its commit is no longer
