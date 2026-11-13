@@ -517,8 +517,16 @@ func TestPluginHooksOrderAndRetry(t *testing.T) {
 	require.True(t, done.Finished.Valid)
 
 	// What the hook was handed: the event's facts, and a host with the declared reader.
+	// The last call for this post: on a shared database other tests' posts reach this
+	// plugin too, and may run after it.
 	recorder.mu.Lock()
-	last, host := recorder.calls[len(recorder.calls)-1], recorder.hosts[len(recorder.hosts)-1]
+	var last pluginsdk.Event
+	var host pluginsdk.Host
+	for i, call := range recorder.calls {
+		if call.PostID == post.ID {
+			last, host = call, recorder.hosts[i]
+		}
+	}
 	recorder.mu.Unlock()
 	require.Equal(t, editor.ID, last.ActorID)
 	require.Equal(t, publishedID, last.ID)
