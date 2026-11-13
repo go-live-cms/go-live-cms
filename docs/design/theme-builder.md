@@ -570,8 +570,8 @@ table gains one row naming the site design tables.
   global styles. The Site editor lists them under "Other themes" with a Delete (which asks
   first). Bringing the theme back brings its design back. This is #336's rule for page
   template names, applied to the whole design.
-- **A theme renamed** (a new slug) is a new theme as far as the builder is concerned. Moving
-  customizations between themes is open question 6.
+- **A theme renamed** (a new slug) is a new theme as far as the builder is concerned.
+  Customizations aren't copied between themes (16.6).
 - **Block Spec changes** apply to template docs exactly as to posts: the seed drops what
   the schema can't build (#213), versions and `meta.dropped` keep it, and #453's reseed
   covers an uninstalled extension block.
