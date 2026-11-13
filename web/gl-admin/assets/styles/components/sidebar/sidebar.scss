@@ -2,6 +2,8 @@
 // (shared)", "375 · Posts" and "375 · Sidebar open" boards. The drawer itself is the
 // shared Drawer (modal.scss), on --z-drawer.
 
+@use "@gl-admin/assets/styles/mixins";
+
 $mobile: 768px; // MOBILE_QUERY in Sidebar.tsx
 
 .gl-shell__sidebar {
@@ -278,6 +280,11 @@ $mobile: 768px; // MOBILE_QUERY in Sidebar.tsx
     color: var(--text-secondary);
     font-size: var(--type-footnote);
     line-height: var(--type-footnote-lh);
+  }
+
+  // ", account menu" after the visible name (#144: the name starts with what is shown).
+  &__user-hint {
+    @include mixins.visually-hidden;
   }
 }
 

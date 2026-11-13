@@ -40,12 +40,28 @@ const FeaturedImage: React.FC<FeaturedImageProps> = ({
     }
   }
 
+  // The preview and the placeholder open the picker; as buttons (#144) the keyboard can
+  // reach and press them too. Divs, not <button>s: they hold block content.
+  const pickerButton = (label: string) => ({
+    role: "button",
+    tabIndex: disabled ? -1 : 0,
+    "aria-label": label,
+    "aria-disabled": disabled || undefined,
+    onClick: openSelector,
+    onKeyDown: (e: React.KeyboardEvent) => {
+      if (e.key !== "Enter" && e.key !== " ") return
+      e.preventDefault()
+      openSelector()
+    },
+  })
+
   return (
     <div className="gl-featured-image">
       <div className="gl-featured-image__header">
         <h3 className="gl-featured-image__title">Featured Image</h3>
         {featuredImage && (
           <button
+            type="button"
             onClick={handleRemove}
             className="gl-featured-image__remove"
             disabled={disabled}
@@ -58,7 +74,7 @@ const FeaturedImage: React.FC<FeaturedImageProps> = ({
 
       <div className="gl-featured-image__content">
         {featuredImage ? (
-          <div className="gl-featured-image__preview" onClick={openSelector}>
+          <div className="gl-featured-image__preview" {...pickerButton("Change featured image")}>
             <img
               src={getMediaVariantPreviewURL(featuredImage, "medium")}
               alt={featuredImage.alt || featuredImage.name}
@@ -81,11 +97,11 @@ const FeaturedImage: React.FC<FeaturedImageProps> = ({
         ) : (
           <div
             className={`gl-featured-image__placeholder ${disabled ? 'gl-featured-image__placeholder--disabled' : ''}`}
-            onClick={openSelector}
+            {...(disabled ? {} : pickerButton("Set featured image"))}
           >
             <div className="gl-featured-image__placeholder-content">
               <div className="gl-featured-image__placeholder-icon">
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" focusable="false">
                   <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
                   <circle cx="8.5" cy="8.5" r="1.5"/>
                   <polyline points="21,15 16,10 5,21"/>

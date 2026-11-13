@@ -117,11 +117,12 @@ function UserMenu() {
       placement="top-start"
       className="gl-sidebar__user-menu"
       trigger={(props) => (
-        <button {...props} type="button" className="gl-sidebar__user" aria-label={`Account: ${name}, ${role}`}>
+        <button {...props} type="button" className="gl-sidebar__user">
           <Avatar user={{ id: user.id, name, src: user.avatar }} size={28} decorative />
           <span className="gl-sidebar__user-text">
             <span className="gl-sidebar__user-name">{name}</span>
             <span className="gl-sidebar__user-role">{role}</span>
+            <span className="gl-sidebar__user-hint">, account menu</span>
           </span>
           <MoreIcon className="gl-sidebar__user-more" />
         </button>

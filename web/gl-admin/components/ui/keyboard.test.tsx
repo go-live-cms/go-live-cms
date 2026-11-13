@@ -236,6 +236,8 @@ describe("Tabs", () => {
     expect(panel.textContent).toBe("Trashed posts")
     expect(panel.getAttribute("aria-labelledby")).toBe(tabs()[3].id)
     expect(tabs()[3].getAttribute("aria-controls")).toBe(panel.id)
+    // The other panels aren't rendered, so nothing points at them (#144).
+    expect(tabs()[0].hasAttribute("aria-controls")).toBe(false)
   })
 
   it("only moves focus with manual activation; selecting is a click", async () => {
