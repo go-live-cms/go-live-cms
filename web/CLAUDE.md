@@ -106,6 +106,10 @@ are the most fragile part of the codebase. **Before editing anything under
   is the import-free twin of the API's validator; `pluginManifestVectors.json` is shared with the Go
   tests, and `manifest.test.ts` validates every plugin in the repository. Server hooks (#458) are Go in
   `plugins/<slug>/server/`, built into the API only (`api/CLAUDE.md`); the web build ignores them.
+  A publish a plugin's guard refuses (#459) is a 409 `plugin_refused` whose `error` is the plugin's
+  reason: `blockAPI` makes it the error's message (so list toasts show it), `pluginRefusalReason`
+  (`lib/api/errors.ts`) puts it in the editor's "Publish failed" banner, the bulk report shows it,
+  and the scheduled publish/update notices say a plugin stopped it (`lib/schedule.ts`).
 - **Plugins page (#11, #457; the canvas's "Plugins" board):** `pages/Plugins.tsx` at `/plugins`
   (admins: `AdminOnly` in `app.tsx`, Workspace › Plugins in `nav.ts`). One list (name, version,
   author, description, the status pill, declared capabilities plus "Can block publishing" for a

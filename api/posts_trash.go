@@ -24,6 +24,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	db "github.com/go-live-cms/go-live-cms/db/sqlc"
+	"github.com/go-live-cms/go-live-cms/pluginsdk"
 )
 
 // Error codes the posts list shows (web lib/contentList.ts mirrors them).
@@ -34,6 +35,8 @@ const (
 	codePostForbidden    = "forbidden"
 	codeCollabSaveFailed = "collab_unavailable"
 	codePostActionFailed = "failed"
+	// A plugin's publish guard refused the publish (#459): codePluginRefused,
+	// plugin_guards.go.
 )
 
 // maxBulkPosts caps one POST /posts/bulk: each publish flushes the collab
@@ -173,6 +176,27 @@ func (server *Server) publishPostByID(c *gin.Context, postID, userID int64, labe
 		server.requestLog(c).Warn("collab flush before publish failed", "post_id", postID, "error", err)
 		return db.PublishPostTxResult{}, &postActionError{http.StatusServiceUnavailable, codeCollabSaveFailed,
 			"the collaboration server could not save the latest edits; nothing was published, try again"}
+	}
+
+	// The plugins' publish guards (#459), on the working copy the flush just stored,
+	// before the transaction: never under its row lock.
+	refusal, err := server.runPublishGuards(c.Request.Context(), server.requestLog(c), func(ctx context.Context) (pluginsdk.PublishCandidate, error) {
+		post, err := server.store.GetPost(ctx, postID)
+		if err != nil {
+			return pluginsdk.PublishCandidate{}, err
+		}
+		return pluginsdk.PublishCandidate{PostID: postID, PostType: post.PostType, ActorID: userID,
+			Via: pluginsdk.PublishViaButton, BlockDoc: post.BlockDoc}, nil
+	})
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return db.PublishPostTxResult{}, errPostNotFound
+	case errors.Is(err, errPublishGuardsUnavailable):
+		return db.PublishPostTxResult{}, publishGuardsFailedError()
+	case err != nil:
+		return db.PublishPostTxResult{}, postActionFailed("failed to publish post")
+	case refusal != nil:
+		return db.PublishPostTxResult{}, refusal.actionError()
 	}
 
 	// One transaction: the version gets the working copy's blocks and settings

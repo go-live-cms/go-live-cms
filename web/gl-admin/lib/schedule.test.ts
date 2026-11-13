@@ -158,6 +158,10 @@ describe("scheduleFailureMessage", () => {
     expect(scheduleFailureMessage({ reason: "publish_failed", next_attempt_at: "2026-11-03T11:59:00Z" }, saoPaulo, now)).toBe(
       "The post couldn't be published at its time. Trying again now."
     )
+    // #459: a plugin's publish guard refused it.
+    expect(scheduleFailureMessage({ reason: "plugin_refused", next_attempt_at: "2026-11-03T12:05:00Z" }, saoPaulo, now)).toBe(
+      "A plugin stopped the post from being published at its time. It's tried again automatically, next at 09:05."
+    )
   })
 })
 
@@ -177,6 +181,9 @@ describe("scheduled update text", () => {
       "The update couldn't be published at its time; the live post is unchanged. It's tried again automatically, next at 09:05."
     )
     expect(scheduledUpdateFailureMessage({ next_attempt_at: null }, saoPaulo, now)).toContain("Trying again now.")
+    expect(scheduledUpdateFailureMessage({ reason: "plugin_refused", next_attempt_at: null }, saoPaulo, now)).toBe(
+      "A plugin stopped the update at its time; the live post is unchanged. Trying again now."
+    )
   })
 
   it("tells an applied update from one that was cancelled or replaced", () => {

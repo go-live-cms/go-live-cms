@@ -22,6 +22,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	db "github.com/go-live-cms/go-live-cms/db/sqlc"
+	"github.com/go-live-cms/go-live-cms/pluginsdk"
 	"github.com/sqlc-dev/pqtype"
 )
 
@@ -173,6 +174,15 @@ func (server *Server) createPost(c *gin.Context) {
 	}
 	if createParams.PostStatus == "" {
 		createParams.PostStatus = "draft"
+	}
+
+	// Created as published: the publish guards (#459) first. The post goes live with an
+	// empty published body (below), so that's what they're asked about; it has no id
+	// yet.
+	if createParams.PostStatus == postStatusPublished && !server.checkStatusPublishGuards(c, pluginsdk.PublishCandidate{
+		PostType: createParams.PostType, ActorID: caller.ID, Via: pluginsdk.PublishViaStatus, BlockDoc: []byte(emptyBlockDoc),
+	}) {
+		return
 	}
 
 	// Generate unique URL if there's a conflict
@@ -368,6 +378,22 @@ func (server *Server) updatePost(c *gin.Context) {
 		updateParams.MenuOrder = req.MenuOrder
 	}
 
+	// Setting post_status to published (from any other status) is a publish: the
+	// publish guards (#459) first. It makes no version, so what goes live is the
+	// post's current published body (none: empty). Saving a published post again
+	// with its status unchanged publishes nothing and isn't asked about.
+	if strings.EqualFold(updateParams.PostStatus, postStatusPublished) && !strings.EqualFold(existingPost.PostStatus, postStatusPublished) {
+		live := []byte(emptyBlockDoc)
+		if existingPost.PublishedBlockDoc.Valid {
+			live = existingPost.PublishedBlockDoc.RawMessage
+		}
+		if !server.checkStatusPublishGuards(c, pluginsdk.PublishCandidate{
+			PostID: id, PostType: updateParams.PostType, ActorID: caller.ID, Via: pluginsdk.PublishViaStatus, BlockDoc: live,
+		}) {
+			return
+		}
+	}
+
 	// A slug edit gets the same uniqueness rule as create: normalized, then
 	// suffixed -2, -3, ... if another post has it. The response carries the
 	// slug actually stored.
@@ -451,6 +477,24 @@ func (server *Server) updatePost(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"post": toPostResponse(updatedPost),
 	})
+}
+
+// checkStatusPublishGuards runs the publish guards (#459) for a post_status set to
+// published through POST or PUT /posts, before anything is written. false means the
+// answer was written: 409 plugin_refused, or 503 when the guards couldn't be listed.
+func (server *Server) checkStatusPublishGuards(c *gin.Context, candidate pluginsdk.PublishCandidate) bool {
+	refusal, err := server.runPublishGuards(c.Request.Context(), server.requestLog(c), func(context.Context) (pluginsdk.PublishCandidate, error) {
+		return candidate, nil
+	})
+	switch {
+	case err != nil:
+		publishGuardsFailedError().write(c)
+		return false
+	case refusal != nil:
+		refusal.actionError().write(c)
+		return false
+	}
+	return true
 }
 
 // deletePost (DELETE /posts/:id) moves the post to the trash since #327:

@@ -184,6 +184,7 @@ export interface ScheduleFailure {
   failed_at: string
   // "collab_flush_failed": the collaboration server couldn't save the latest edits.
   // "publish_failed": the publish itself failed.
+  // "plugin_refused": a plugin's publish guard refused it (#459).
   reason: string
   attempts: number
   next_attempt_at: string | null

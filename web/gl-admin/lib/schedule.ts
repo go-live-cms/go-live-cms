@@ -1,5 +1,6 @@
 import { DEFAULT_DATE_SETTINGS, type DateSettings } from "@/lib/siteDates"
 import { utcOffsetLabel } from "@gl-admin/lib/settingsForm"
+import { PLUGIN_REFUSED } from "@gl-admin/lib/api/errors"
 
 // Scheduled publishing (#147): the rules behind the Schedule dialog and the "Scheduled ·
 // Nov 3" pills, as data so they're testable. Times are picked and shown in the site's time
@@ -205,13 +206,18 @@ export function scheduledUpdateTitle(updateAt: string, settings: Pick<DateSettin
   return `Update scheduled for ${formatScheduleTime(updateAt, settings, { withTime: true, now })}`
 }
 
-// The notice after a failed attempt to apply a scheduled update: when it's tried again.
+// The notice after a failed attempt to apply a scheduled update: why, and when it's tried
+// again.
 export function scheduledUpdateFailureMessage(
-  failure: { next_attempt_at: string | null },
+  failure: { reason?: string; next_attempt_at: string | null },
   settings: Pick<DateSettings, "language" | "timeZone">,
   now: Date = new Date()
 ): string {
-  return `The update couldn't be published at its time; the live post is unchanged. ${retryLine(failure.next_attempt_at, settings, now)}`
+  const why =
+    failure.reason === PLUGIN_REFUSED
+      ? "A plugin stopped the update at its time; the live post is unchanged."
+      : "The update couldn't be published at its time; the live post is unchanged."
+  return `${why} ${retryLine(failure.next_attempt_at, settings, now)}`
 }
 
 // When a pending update disappears, the post's newest version says why: one made at or
@@ -248,6 +254,8 @@ export function scheduleFailureMessage(
   const why =
     failure.reason === "collab_flush_failed"
       ? "The server couldn't save the latest edits, so the post wasn't published at its time."
-      : "The post couldn't be published at its time."
+      : failure.reason === PLUGIN_REFUSED
+        ? "A plugin stopped the post from being published at its time."
+        : "The post couldn't be published at its time."
   return `${why} ${retryLine(failure.next_attempt_at, settings, now)}`
 }

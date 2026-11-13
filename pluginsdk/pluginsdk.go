@@ -22,7 +22,20 @@
 // server.hooks; a plugin whose two lists differ is listed as incompatible and its hooks
 // don't run.
 //
-// Hooks observe; they can't change anything on the way through. An observer runs after
+// A plugin may also guard publishing (#459): Plugin.BeforePublish, declared in
+// plugin.json as {"event": "post.before_publish", "on_error": "allow" | "deny"}, is
+// asked before every publish and may refuse it with a reason (see Guard).
+//
+//	pluginsdk.Register("alt-text-check", pluginsdk.Plugin{
+//		BeforePublish: func(ctx context.Context, host pluginsdk.Host, c pluginsdk.PublishCandidate) (pluginsdk.Decision, error) {
+//			if missingAlt(c.BlockDoc) {
+//				return pluginsdk.Deny("Add alt text to every image."), nil
+//			}
+//			return pluginsdk.Allow(), nil
+//		},
+//	})
+//
+// Observers observe; they can't change anything on the way through. An observer runs after
 // the change it describes has committed, outside any transaction, as the system rather
 // than as the member who caused it. It can't fail, slow or roll back that change: an
 // error, a panic or a timeout is retried with backoff (at most 8 attempts), and a
@@ -78,6 +91,70 @@ var ObserverEvents = []string{
 	EventPostSaved, EventPostPublished, EventPostUnpublished,
 	EventPostTrashed, EventPostRestored, EventPostDeleted,
 }
+
+// EventBeforePublish is the publish guard's name in plugin.json's server.hooks
+// (section 7.7). It is not an event: a guard is Plugin.BeforePublish, called before a
+// publish, and it may refuse it.
+const EventBeforePublish = "post.before_publish"
+
+// The ways a post gets published: PublishCandidate.Via.
+const (
+	// PublishViaButton: the editor's Publish or Update, or a bulk publish.
+	PublishViaButton = "publish"
+	// PublishViaSchedule: the scheduler publishing a scheduled post.
+	PublishViaSchedule = "schedule"
+	// PublishViaScheduledUpdate: the scheduler applying a published post's scheduled
+	// update (its body frozen when it was scheduled).
+	PublishViaScheduledUpdate = "scheduled_update"
+	// PublishViaStatus: post_status set to published through POST or PUT /posts. That
+	// makes no new version: the body that goes live is the post's current published
+	// body (empty when it has none).
+	PublishViaStatus = "status"
+)
+
+// PublishCandidate is a publish a guard is asked about.
+type PublishCandidate struct {
+	// PostID is the post; 0 for a post that POST /posts is creating as published.
+	PostID int64
+	// PostType is the post's type ("post", "page", ...).
+	PostType string
+	// ActorID is the member publishing (for the scheduler, who scheduled it); 0 when
+	// none is known.
+	ActorID int64
+	// Via is one of the PublishVia* constants.
+	Via string
+	// BlockDoc is the body that goes live, as Block Spec v1 JSON. It is the guard's own
+	// copy: changing it changes nothing.
+	BlockDoc json.RawMessage
+}
+
+// Decision is a guard's answer. The zero value allows the publish.
+type Decision struct {
+	// Deny refuses the publish.
+	Deny bool
+	// Reason is shown to whoever published, as plain text: one short sentence that
+	// says what to fix ("Add alt text to every image."). Longer reasons are cut, and
+	// line breaks and control characters become spaces.
+	Reason string
+}
+
+// Allow lets the publish go ahead.
+func Allow() Decision { return Decision{} }
+
+// Deny refuses the publish with a short plain-text reason.
+func Deny(reason string) Decision { return Decision{Deny: true, Reason: reason} }
+
+// Guard decides whether a publish may go ahead. It runs before the publish's
+// transaction, on every path that publishes, in the request (or the scheduler's
+// attempt) that publishes: keep it fast. Guards run one after another, ordered by
+// plugin.json's priority (lowest first) and then the plugin id; the first denial
+// wins and the rest don't run. A guard gets 3 seconds, and all of them together 5.
+// An error, a panic or running past its time allows the publish (and is logged)
+// unless plugin.json declares "on_error": "deny" for it.
+//
+// A guard is a policy check, not a lock: an edit stored between the guard and the
+// publish is published unchecked. It can't change the content (no mutating filters).
+type Guard func(ctx context.Context, host Host, candidate PublishCandidate) (Decision, error)
 
 // Capabilities a plugin.json may declare (section 2). Host hands out an accessor only
 // when its capability is declared.
@@ -198,11 +275,24 @@ type Plugin struct {
 	// declared in plugin.json's server.hooks, and each declared observer event must be
 	// here.
 	Observers map[string]Observer
+	// BeforePublish is the plugin's publish guard, or nil. plugin.json must declare it
+	// as {"event": "post.before_publish"}, and a declared guard must be set here.
+	BeforePublish Guard
 }
 
-// HookEvents lists the events p has a hook for, sorted: what plugin.json's
-// server.hooks must declare.
+// HookEvents lists the events p has a hook for, sorted, the guard
+// (EventBeforePublish) included: what plugin.json's server.hooks must declare.
 func (p Plugin) HookEvents() []string {
+	events := p.ObserverEvents()
+	if p.BeforePublish != nil {
+		events = append(events, EventBeforePublish)
+		sort.Strings(events)
+	}
+	return events
+}
+
+// ObserverEvents lists the events p observes, sorted: HookEvents without the guard.
+func (p Plugin) ObserverEvents() []string {
 	events := make([]string, 0, len(p.Observers))
 	for event := range p.Observers {
 		events = append(events, event)
@@ -246,6 +336,9 @@ func validate(slug string, p Plugin) error {
 		known := false
 		for _, name := range ObserverEvents {
 			known = known || name == event
+		}
+		if !known && event == EventBeforePublish {
+			return fmt.Errorf("pluginsdk: plugin %q: %q is not an observer event; set Plugin.BeforePublish", slug, event)
 		}
 		if !known {
 			return fmt.Errorf("pluginsdk: plugin %q: %q is not an observer event", slug, event)

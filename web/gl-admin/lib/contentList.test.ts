@@ -320,15 +320,20 @@ describe("bulk actions", () => {
         { id: 2, ok: false, code: "forbidden" },
         { id: 3, ok: false, code: "collab_unavailable" },
         { id: 4, ok: false, code: "not_found" },
+        // #459: a plugin's publish guard refused it, with its reason.
+        { id: 5, ok: false, code: "plugin_refused", error: "Add alt text to every image." },
+        { id: 6, ok: false, code: "plugin_refused" },
       ],
       titles
     )
     expect(report.done).toBe("1 post published")
-    expect(report.failed).toBe("3 posts weren’t published")
+    expect(report.failed).toBe("5 posts weren’t published")
     expect(report.failures).toEqual([
       { id: 2, title: "Pricing", reason: "You don’t have permission" },
       { id: 3, title: "Roadmap", reason: "The latest edits couldn’t be saved; try again" },
       { id: 4, title: "Post 4", reason: "It no longer exists" },
+      { id: 5, title: "Post 5", reason: "Add alt text to every image." },
+      { id: 6, title: "Post 6", reason: "A plugin refused to publish it" },
     ])
     expect(bulkReport("trash", [{ id: 1, ok: true }, { id: 2, ok: true }], titles)).toEqual({
       done: "2 posts moved to the trash",

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
 import { BlockAPIClient, UnauthorizedError } from "./blockAPI"
+import { ApiError } from "./errors"
 
 // #136: unpublish + revisions endpoints
 describe("BlockAPIClient revisions/unpublish", () => {
@@ -50,6 +51,24 @@ describe("BlockAPIClient revisions/unpublish", () => {
     const v = await client.getVersion(3, 2)
     expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/posts/3/versions/2")
     expect(v.doc).toEqual(doc)
+  })
+
+  // #459: a plugin's publish guard refused; its reason reaches the editor.
+  it("keeps the API's code and error on a failed publish", async () => {
+    fetchMock.mockResolvedValueOnce(json({ error: "Add alt text to every image.", code: "plugin_refused", request_id: "r1" }, 409))
+    const error = await client.publishPost(3).catch((e) => e)
+    expect(error).toBeInstanceOf(ApiError)
+    expect(error.status).toBe(409)
+    expect(error.code).toBe("plugin_refused")
+    expect(error.serverMessage).toBe("Add alt text to every image.")
+    expect(error.message).toBe("Add alt text to every image.")
+
+    // A body that isn't JSON leaves them null.
+    fetchMock.mockResolvedValueOnce(new Response("upstream down", { status: 502 }))
+    const plain = await client.publishPost(3).catch((e) => e)
+    expect(plain.message).toMatch(/Failed to publish post/)
+    expect(plain.code).toBeNull()
+    expect(plain.serverMessage).toBeNull()
   })
 
   it("maps 401 to UnauthorizedError and other failures to Error", async () => {
