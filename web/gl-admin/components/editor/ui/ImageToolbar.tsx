@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react"
 import { BubbleMenu as TipTapBubbleMenu } from "@tiptap/react/menus"
+import { FLOATING_TOOLBAR_ATTR, onFloatingToolbarKeyDown } from "../utils/floatingToolbar"
 import type { Editor as TiptapEditor } from "@tiptap/core"
 import { NodeSelection } from "@tiptap/pm/state"
 import Tooltip from "@gl-admin/components/ui/Tooltip"
@@ -124,7 +125,13 @@ const ImageToolbar = ({ editor }: ImageToolbarProps) => {
         isViewMounted(e) && e.isEditable && isMediaSelection(s.selection) && s.selection.$from.parent.type.name !== "gallery"
       }
     >
-      <div role="toolbar" aria-label={LABELS[state.name] ?? "Media"} className="editor-toolbar__group">
+      <div
+        role="toolbar"
+        aria-label={LABELS[state.name] ?? "Media"}
+        className="editor-toolbar__group"
+        {...{ [FLOATING_TOOLBAR_ATTR]: "" }}
+        onKeyDown={(e) => onFloatingToolbarKeyDown(e, editor)}
+      >
         {state.name === "image" && WIDTHS.map((width) => (
           <Tooltip key={width.value} content={width.label} placement="top">
             <button

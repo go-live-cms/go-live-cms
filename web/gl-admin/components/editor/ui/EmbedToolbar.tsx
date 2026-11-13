@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react"
 import { BubbleMenu as TipTapBubbleMenu } from "@tiptap/react/menus"
+import { FLOATING_TOOLBAR_ATTR, onFloatingToolbarKeyDown } from "../utils/floatingToolbar"
 import type { Editor as TiptapEditor } from "@tiptap/core"
 import { NodeSelection } from "@tiptap/pm/state"
 import { findSelectedEmbed } from "../extensions/EmbedBlock"
@@ -42,7 +43,13 @@ export default function EmbedToolbar({ editor }: { editor: TiptapEditor }) {
       className="editor-toolbar image-toolbar"
       shouldShow={({ editor: e, state: s }) => isViewMounted(e) && e.isEditable && isEmbedSelection(s.selection)}
     >
-      <div role="toolbar" aria-label="Embed" className="editor-toolbar__group">
+      <div
+        role="toolbar"
+        aria-label="Embed"
+        className="editor-toolbar__group"
+        {...{ [FLOATING_TOOLBAR_ATTR]: "" }}
+        onKeyDown={(e) => onFloatingToolbarKeyDown(e, editor)}
+      >
         <button type="button" className="editor-toolbar__button editor-toolbar__button--text" onClick={editLink}>
           Edit link
         </button>

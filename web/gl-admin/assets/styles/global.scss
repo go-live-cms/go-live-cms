@@ -42,3 +42,29 @@ samp {
   outline: 2px solid var(--focus-ring);
   outline-offset: 1px;
 }
+
+// The first Tab stop (#144): hidden until focused, then over the sidebar's top corner.
+.gl-skip-link {
+  background: var(--background);
+  border-radius: var(--radius-md);
+  box-shadow: var(--menu-shadow);
+  color: var(--text-selected);
+  font-size: var(--type-body);
+  font-weight: 500;
+  left: var(--space-2);
+  line-height: var(--type-body-lh);
+  padding: var(--space-2) var(--space-3);
+  position: absolute;
+  top: var(--space-2);
+  transform: translateY(calc(-100% - var(--space-4)));
+  z-index: var(--z-toast);
+
+  &:focus {
+    transform: none;
+  }
+}
+
+// The skip link's target: focused from script only, it draws no ring around the page.
+main.admin-main:focus {
+  outline: none;
+}

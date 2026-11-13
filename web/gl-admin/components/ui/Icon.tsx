@@ -70,7 +70,11 @@ export const Icon: React.FC<Props> = ({
         transform: transforms.join(" "),
         transformOrigin: "center center",
       }}
+      // #144: a span's aria-label is ignored without a role. With `alt` it's an image;
+      // without, decorative (its button or link carries the name).
+      role={alt ? "img" : undefined}
       aria-label={alt}
+      aria-hidden={alt ? undefined : true}
       dangerouslySetInnerHTML={{ __html: svgContent }}
     />
   )

@@ -1344,7 +1344,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
       )}
 
       <div className="post-editor__body">
-        <main className="post-editor__canvas">
+        <div className="post-editor__canvas">
           {viewingVersion && (
             <div className="post-editor__document">
               <VersionPreview version={viewingVersion} postId={initialData?.id} workingKey={workingCopyKey} />
@@ -1481,7 +1481,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
             )}
             </div>
           </div>
-        </main>
+        </div>
 
         {comments && (
           <CommentsPanel

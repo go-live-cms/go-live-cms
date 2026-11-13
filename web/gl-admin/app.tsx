@@ -1,4 +1,4 @@
-import { StrictMode, Suspense, lazy, useEffect, type ReactNode } from "react"
+import { StrictMode, Suspense, lazy, useEffect, type MouseEvent, type ReactNode } from "react"
 import { BrowserRouter, Routes, Route, useLocation, useParams } from "react-router-dom"
 import { GoLiveProvider } from "./contexts/GoLiveContext"
 import { ThemeProvider } from "./contexts/ThemeContext"
@@ -61,6 +61,8 @@ function SidebarFallback() {
   )
 }
 
+const MAIN_CONTENT_ID = "main-content"
+
 function AdminOnly({ area, children }: { area: string; children: ReactNode }) {
   return (
     <RequireRole allow={isSiteAdmin} area={area}>
@@ -73,13 +75,29 @@ function AppLayout() {
   const routeClasses = useRouteClasses()
   const { pathname } = useLocation()
 
+  // Landmarks (#144): the sidebar is navigation beside <main>, never inside it, and the
+  // first Tab stop skips it. The skip link focuses <main> itself (no URL hash: the router
+  // owns the URL). <main> is focusable only for that moment: a permanent tabIndex would
+  // make every click on the page's text focus it instead of <body>.
+  const skipToContent = (event: MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault()
+    const main = document.getElementById(MAIN_CONTENT_ID)
+    if (!main) return
+    main.tabIndex = -1
+    main.addEventListener("blur", () => main.removeAttribute("tabindex"), { once: true })
+    main.focus()
+  }
+
   return (
-    <main id="admin">
+    <div id="admin">
+      <a className="gl-skip-link" href={`#${MAIN_CONTENT_ID}`} onClick={skipToContent}>
+        Skip to content
+      </a>
       {/* Its own boundary, so a sidebar crash doesn't take the pages down with it. */}
       <ErrorBoundary resetKey={pathname} fallback={<SidebarFallback />}>
         <Sidebar />
       </ErrorBoundary>
-      <section className={routeClasses}>
+      <main className={routeClasses} id={MAIN_CONTENT_ID}>
         <div id="admin-content">
           {/* Resets on navigation, so leaving a crashed page recovers. */}
           <ErrorBoundary resetKey={pathname}>
@@ -111,13 +129,13 @@ function AppLayout() {
             </Suspense>
           </ErrorBoundary>
         </div>
-      </section>
+      </main>
       {/* Its own boundary too: a crash in it must not take the page behind it down. */}
       <ErrorBoundary resetKey={pathname} fallback={null}>
         <CommandPalette />
       </ErrorBoundary>
       <Toaster />
-    </main>
+    </div>
   )
 }
 

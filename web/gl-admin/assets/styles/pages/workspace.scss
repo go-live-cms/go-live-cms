@@ -227,7 +227,7 @@
   }
 }
 
-// Settings: the page fills the scrolling area (section.admin-main, whose wrapper has no
+// Settings: the page fills the scrolling area (main.admin-main, whose wrapper has no
 // height to take a percentage of) so the unsaved-changes bar sits at its bottom even
 // when the form is short.
 .gl-settings {
@@ -361,8 +361,10 @@
       color: var(--success-text);
     }
 
+    // warning-text is 4.38:1 on the card's background-subtle at 11px (#144);
+    // warning-label passes in both themes.
     &.is-off {
-      color: var(--warning-text);
+      color: var(--warning-label);
     }
   }
 
