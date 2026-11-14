@@ -30,9 +30,8 @@ export interface SiteSettings extends DateSettings {
 // up after a moment and use the defaults rather than hang the page.
 const SETTINGS_TIMEOUT_MS = 2000
 
-// The defaults a failed or timed-out read gave (no settings answered), and the language of
-// the last read that did answer, on any request: what `getSiteLanguage` falls back to.
-const FALLBACK_SETTINGS = new WeakSet<SiteSettings>()
+// The language of the last read that answered, on any request (#481): a failed or timed-out
+// read keeps it rather than switching the site's pages, and their dates, to the default.
 let lastKnownLanguage: string | null = null
 
 async function loadSiteSettings(): Promise<SiteSettings> {
@@ -62,13 +61,12 @@ async function loadSiteSettings(): Promise<SiteSettings> {
     frontPageId: Number.isInteger(settings?.front_page_id) && (settings?.front_page_id as number) > 0 ? (settings?.front_page_id as number) : null,
     allowedEmbeds: knownEmbedProviders(settings?.editor_allowed_embeds),
     ...normalizeDateSettings({
-      language: settings?.site_language,
+      language: settings ? settings.site_language : (lastKnownLanguage ?? undefined),
       timeZone: settings?.site_timezone,
       dateFormat: settings?.date_format,
     }),
   }
   if (settings) lastKnownLanguage = result.language
-  else FALLBACK_SETTINGS.add(result)
   return result
 }
 
@@ -90,14 +88,14 @@ export const LANGUAGE_WAIT_MS = 250
 /**
  * The site language for `<html lang>` on a page that needs nothing else from the settings
  * (the account pages, #481). It shares the request's one lookup, but waits for it at most
- * `waitMs`, not the settings' 2 s timeout: a hung API must not hold a sign-in or reset page
- * for that. Without an answer it is the language the last successful read gave (any request),
- * else the default.
+ * `waitMs`, not the settings' 2 s timeout: a hung API must not hold a reset or invite page
+ * for that. Without an answer in time it is the language the last successful read gave (any
+ * request), else the default: what a failed read gives too.
  */
 export async function getSiteLanguage(locals?: App.Locals, waitMs = LANGUAGE_WAIT_MS): Promise<string> {
   let timer: ReturnType<typeof setTimeout> | undefined
   const answered = await Promise.race([
-    getSiteSettings(locals).then((site) => (FALLBACK_SETTINGS.has(site) ? null : site.language)),
+    getSiteSettings(locals).then((site) => site.language),
     new Promise<null>((resolve) => {
       timer = setTimeout(() => resolve(null), waitMs)
     }),

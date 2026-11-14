@@ -64,6 +64,17 @@ describe("getSiteLanguage", () => {
     expect(await getSiteLanguage({} as App.Locals)).toBe("de-DE")
   })
 
+  it("a failed getSiteSettings read keeps the last language too, so theme pages and their dates don't switch", async () => {
+    const { getSiteSettings } = await load()
+    api.getSettings.mockResolvedValueOnce({ site_language: "es-ES", site_timezone: "Europe/Madrid" })
+    expect((await getSiteSettings()).language).toBe("es-ES")
+    api.getSettings.mockRejectedValueOnce(new Error("down"))
+    const fallback = await getSiteSettings()
+    expect(fallback.language).toBe("es-ES")
+    // Only the language: the rest are the defaults a failed read always gave.
+    expect(fallback.timeZone).toBe("UTC")
+  })
+
   it("a failed read before any answer is the default", async () => {
     const { getSiteLanguage } = await load()
     api.getSettings.mockRejectedValue(new Error("down"))
