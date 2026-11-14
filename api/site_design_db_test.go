@@ -177,33 +177,50 @@ func TestGlobalStylesSaveAndPublish(t *testing.T) {
 func TestDraftGlobalStylesNeverPublic(t *testing.T) {
 	f := newSiteDesignDBFixture(t)
 	ctx := context.Background()
-	draftMarker := fmt.Sprintf("#%06x", time.Now().UnixNano()&0xffffff)
-	publishedMarker := "#0a0b0c"
-	if draftMarker == publishedMarker {
-		draftMarker = "#0c0b0a"
+
+	// Every /public and /themes GET route, anonymous and signed in.
+	audit := func() []string {
+		bodies := []string{}
+		for _, route := range f.server.router.Routes() {
+			if route.Method != http.MethodGet {
+				continue
+			}
+			if !strings.HasPrefix(route.Path, "/public/") && !strings.HasPrefix(route.Path, "/api/v1/themes") {
+				continue
+			}
+			path := strings.ReplaceAll(routeExample(route.Path), "/themes/1", fmt.Sprintf("/themes/%d", f.theme.ID))
+			for _, caller := range []*db.User{nil, &f.admin} {
+				bodies = append(bodies, path+" "+f.request(t, caller, http.MethodGet, path, "").Body.String())
+			}
+		}
+		return bodies
 	}
+
+	// A marker no route serves before the draft exists, so a match afterwards is the
+	// draft and not a colour some other data happens to hold.
+	baseline := strings.Join(audit(), "\n")
+	publishedMarker := "#0a0b0c"
+	draftMarker := ""
+	for n := time.Now().UnixNano(); draftMarker == ""; n++ {
+		candidate := fmt.Sprintf("#%06x", n&0xffffff)
+		if candidate != publishedMarker && !strings.Contains(baseline, candidate) {
+			draftMarker = candidate
+		}
+	}
+
 	require.NoError(t, f.store.EnsureGlobalStyles(ctx, f.theme.Slug))
 	_, err := f.conn.Exec(`UPDATE global_styles SET draft = $2, draft_revision = 1, published = $3 WHERE theme_slug = $1`, f.theme.Slug,
 		fmt.Sprintf(`{"colors":{"light":{"primary":"%s"},"dark":{"primary":"%s"}}}`, draftMarker, draftMarker),
 		fmt.Sprintf(`{"colors":{"light":{"primary":"%s"}}}`, publishedMarker))
 	require.NoError(t, err)
+	// Written around the API, so purge as a publish would (the baseline cached the reads).
+	f.server.purgePublicCache(ctx, f.server.logger, "test")
 
-	checked := 0
-	for _, route := range f.server.router.Routes() {
-		if route.Method != http.MethodGet {
-			continue
-		}
-		if !strings.HasPrefix(route.Path, "/public/") && !strings.HasPrefix(route.Path, "/api/v1/themes") {
-			continue
-		}
-		path := strings.ReplaceAll(routeExample(route.Path), "/themes/1", fmt.Sprintf("/themes/%d", f.theme.ID))
-		for _, caller := range []*db.User{nil, &f.admin} {
-			recorder := f.request(t, caller, http.MethodGet, path, "")
-			require.NotContains(t, recorder.Body.String(), draftMarker, "%s (signed in: %v) serves the styles draft", path, caller != nil)
-			checked++
-		}
+	bodies := audit()
+	for _, body := range bodies {
+		require.NotContains(t, body, draftMarker, "a /public or /themes route serves the styles draft: %.200s", body)
 	}
-	require.Greater(t, checked, 20, "the audit found too few routes")
+	require.Greater(t, len(bodies), 20, "the audit found too few routes")
 
 	styles, _ := f.activeThemeStyles(t)
 	require.Contains(t, styles, publishedMarker)

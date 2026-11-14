@@ -47,11 +47,17 @@ func (server *Server) saveGlobalStyles(c *gin.Context) {
 	if !ok {
 		return
 	}
+	tokens := state.tokens
 	if !globalStylesSupported(state.tokens, state.known) {
-		respondGlobalStylesUnsupported(c, state.theme)
-		return
+		// A theme that lost support (or left the build) can still have its draft
+		// cleared: against no declared tokens only {} validates.
+		if _, verr := ValidateGlobalStyles(req.Styles, ThemeTokens{}); verr != nil {
+			respondGlobalStylesUnsupported(c, state.theme)
+			return
+		}
+		tokens = ThemeTokens{}
 	}
-	normalized, verr := ValidateGlobalStyles(req.Styles, state.tokens)
+	normalized, verr := ValidateGlobalStyles(req.Styles, tokens)
 	if verr != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": verr.Error(), "code": verr.Code, "path": verr.Path})
 		return

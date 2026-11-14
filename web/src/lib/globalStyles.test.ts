@@ -119,4 +119,11 @@ describe("themeTokenManifest", () => {
     expect(manifest.themes.default.font_options.map((option) => option.id)).toEqual(["literata", "inter", "jetbrains-mono"])
     expect(Object.keys(manifest.themes.default.tokens)).toEqual(["colors", "blockColors", "typography", "layout", "spacing", "radius"])
   })
+
+  it("refuses a font option the API's loader would refuse at startup", () => {
+    const withFont = (fontOptions: unknown) => ({ default: { ...defaultConfig, fontOptions } as object })
+    expect(() => themeTokenManifest(withFont([{ id: "Source Serif", label: "x", stack: "serif" }]))).toThrow(/fontOptions/)
+    expect(() => themeTokenManifest(withFont([{ id: "ok", label: "x", stack: "" }]))).toThrow(/fontOptions/)
+    expect(() => themeTokenManifest(withFont([{ id: "ok", label: "x", stack: "serif" }]))).not.toThrow()
+  })
 })

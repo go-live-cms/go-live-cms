@@ -1543,7 +1543,7 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   revision, published, failing contrast pairs); `PUT` (`{styles, base_revision}`: the whole
   draft; stale → 409 `styles_changed` with `current`; same draft → no new revision; theme
   not in the manifest or without `supports.globalStyles` → 409
-  `global_styles_unsupported`; throttled `global_styles_updated` on the theme id with
+  `global_styles_unsupported`, except `{}`, so a stale draft can be cleared; throttled `global_styles_updated` on the theme id with
   `groups`); `POST /site-design/publish` (`{confirm_contrast}`): nothing changed → 409
   `nothing_to_publish`; the draft re-validated (a token the theme stopped declaring → 409
   `styles_invalid`, `reason`, `path`); **contrast is a warning**: failing pairs → 409

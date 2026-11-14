@@ -424,6 +424,9 @@ export function contrastFailures(theme: GlobalStylesTheme, styles: unknown): Con
 
 const TOKEN_GROUPS = ["colors", "blockColors", "typography", "layout", "spacing", "radius"] as const
 
+/** A font option's id, as the API's manifest loader accepts it (fontOptionIDRe). */
+export const FONT_OPTION_ID_RE = /^[a-z0-9][a-z0-9-]{0,39}$/
+
 function withoutUndefined(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(withoutUndefined)
   if (!isObject(value)) return value
@@ -455,6 +458,13 @@ export function themeTokenManifest(configs: Record<string, object>): { manifest_
   for (const slug of sortedKeys(configs)) {
     const config = configs[slug] as { colors?: unknown; supports?: { globalStyles?: unknown }; fontOptions?: FontOption[] }
     if (!isObject(config.colors)) continue
+    // The API refuses to start on a manifest with a bad font option
+    // (LoadThemeTokenManifest), so the build refuses to write one.
+    for (const option of config.fontOptions ?? []) {
+      if (typeof option.id !== "string" || !FONT_OPTION_ID_RE.test(option.id) || typeof option.stack !== "string" || option.stack === "") {
+        throw new Error(`themes/${slug}: fontOptions entry ${JSON.stringify(option.id)} needs an id matching ${FONT_OPTION_ID_RE} and a stack`)
+      }
+    }
     themes[slug] = {
       supports_global_styles: config.supports?.globalStyles === true,
       tokens: declaredTokens(config),

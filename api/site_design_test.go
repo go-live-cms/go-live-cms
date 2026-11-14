@@ -1,7 +1,6 @@
 package api
 
 import (
-	"bytes"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -36,13 +35,7 @@ func siteDesignServer(t *testing.T) (*Server, *mockdb.MockStore) {
 
 func siteDesignRequest(t *testing.T, server *Server, store *mockdb.MockStore, method, path, body string) *httptest.ResponseRecorder {
 	t.Helper()
-	var reader *bytes.Reader
-	if body != "" {
-		reader = bytes.NewReader([]byte(body))
-	} else {
-		reader = bytes.NewReader(nil)
-	}
-	request := httptest.NewRequest(method, path, reader)
+	request := httptest.NewRequest(method, path, strings.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
 	signInAs(t, server, store, request, siteDesignAdmin)
 	recorder := httptest.NewRecorder()
@@ -199,8 +192,19 @@ func TestSaveGlobalStylesRefuses(t *testing.T) {
 		tokens.SupportsGlobalStyles = false
 		server.themeTokens.Themes[globalStylesFixtureSlug] = tokens
 		expectStylesRow(store, nil)
-		recorder := siteDesignRequest(t, server, store, http.MethodPut, "/api/v1/site-design/global-styles", `{"styles":{},"base_revision":0}`)
+		recorder := siteDesignRequest(t, server, store, http.MethodPut, "/api/v1/site-design/global-styles", `{"styles":{"radius":{"md":"10px"}},"base_revision":0}`)
 		requireCode(t, recorder, http.StatusConflict, "global_styles_unsupported")
+
+		// It can still clear a draft left from when it supported them.
+		expectStylesRow(store, stylesRow(`{"radius":{"md":"10px"}}`, `{}`, 3))
+		store.EXPECT().EnsureGlobalStyles(gomock.Any(), siteDesignTheme.Slug).Return(nil)
+		store.EXPECT().UpdateGlobalStylesDraft(gomock.Any(), gomock.Any()).DoAndReturn(func(_ any, arg db.UpdateGlobalStylesDraftParams) (db.GlobalStyle, error) {
+			require.JSONEq(t, `{}`, string(arg.Draft))
+			return *stylesRow(`{}`, `{}`, 4), nil
+		})
+		recorder = siteDesignRequest(t, server, store, http.MethodPut, "/api/v1/site-design/global-styles", `{"styles":{},"base_revision":3}`)
+		requireStatus(t, recorder, http.StatusOK)
+		require.False(t, decodeStyles(t, recorder).HasUnpublishedChanges)
 	})
 }
 
