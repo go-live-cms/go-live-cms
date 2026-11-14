@@ -56,7 +56,9 @@ export default function Tooltip({ content, detail, placement = "right", enabled 
   useEffect(() => {
     const target = targetRef.current
     if (!enabled || !target) return
-    const el = getFocusable(target)[0] ?? target.firstElementChild
+    // Never the description span itself (a child that renders no element).
+    const first = target.firstElementChild === textRef.current ? null : target.firstElementChild
+    const el = getFocusable(target)[0] ?? first
     if (!el || !(el instanceof HTMLElement)) return
     const name = el.getAttribute("aria-label") ?? el.textContent
     if (!detail && words(textRef.current?.textContent ?? tipRef.current?.textContent) === words(name)) return
@@ -68,7 +70,10 @@ export default function Tooltip({ content, detail, placement = "right", enabled 
       if (rest.length) el.setAttribute("aria-describedby", rest.join(" "))
       else el.removeAttribute("aria-describedby")
     }
-  }, [enabled, id, content, detail])
+    // Not on `content` / `detail`: usually new JSX each render. The description span
+    // follows them; only whether they repeat the name is decided here, once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, id])
 
   const host = typeof document !== "undefined" ? (document.getElementById("admin") ?? document.body) : null
   const theme = targetRef.current?.closest("[data-theme]")?.getAttribute("data-theme") ?? undefined

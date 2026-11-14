@@ -1,4 +1,5 @@
-import { forwardRef, useId, useMemo, useRef, useState, useCallback, useEffect, type InputHTMLAttributes, type ReactNode } from "react"
+import { forwardRef, useMemo, useRef, useState, useCallback, useEffect, type InputHTMLAttributes, type ReactNode } from "react"
+import { useStableId } from "@gl-admin/components/ui/a11y"
 import { getInputMask, getValidationPattern, type InputMaskType } from "@gl-admin/utils/inputMasks"
 import "@gl-admin/assets/styles/components/ui/input.scss"
 
@@ -121,9 +122,14 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
       return value.replace(/<[^>]*>?/gm, "")
     }
 
+    // What was typed (or autofilled) into the plain field before the mask loaded, so an
+    // uncontrolled masked input starts from it rather than from defaultValue.
+    const typed = useRef<string | undefined>(undefined)
+
     const handleChange = useCallback<NonNullable<typeof onChange>>(
       (e) => {
         const sanitizedValue = sanitizeInput(e.currentTarget.value)
+        typed.current = sanitizedValue
         if (value === undefined) setFilled(sanitizedValue !== "")
         if (onChange) {
           const event = {
@@ -165,8 +171,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
 
     // useId (#479): two unnamed inputs of one type used to share `input-text`, and a
     // label pointed at the wrong one.
-    const generatedId = useId()
-    const inputId = id ?? `input-${generatedId.replace(/[^a-zA-Z0-9_-]/g, "")}`
+    const inputId = useStableId("input", id)
     // The red edge also shows a value the mask's pattern rejects, but only an error
     // message marks the field invalid for screen readers: "invalid" needs a reason.
     const invalid = Boolean(error) || !isValid()
@@ -178,7 +183,10 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
     const wasFocused = useRef(false)
     wasFocused.current = focused
     useEffect(() => {
-      if (masked && wasFocused.current) document.getElementById(inputId)?.focus()
+      if (!masked || !wasFocused.current) return
+      const field = document.getElementById(inputId) as HTMLInputElement | null
+      field?.focus()
+      field?.setSelectionRange?.(field.value.length, field.value.length)
       // Only the swap matters.
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [Boolean(masked)])
@@ -225,7 +233,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             name={name}
             placeholder={placeholder}
             value={value as any}
-            defaultValue={defaultValue}
+            defaultValue={value === undefined ? (typed.current ?? defaultValue) : defaultValue}
             aria-invalid={ariaInvalid}
             aria-describedby={describedBy(inputId, hint, error, ariaDescribedBy)}
             onFocus={handleFocus}

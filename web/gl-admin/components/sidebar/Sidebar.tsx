@@ -2,6 +2,7 @@ import { useEffect, useId, useMemo, useState, type MouseEvent } from "react"
 import { Link, useLocation, useNavigate } from "react-router-dom"
 import { extractSvgPath } from "@gl-admin/components/ui/Icon"
 import { IconButton } from "@gl-admin/components/ui/Button"
+import { useStableId } from "@gl-admin/components/ui/a11y"
 import Drawer from "@gl-admin/components/ui/Drawer"
 import Avatar from "@gl-admin/components/ui/Avatar"
 import Menu, { MenuItem, MenuSeparator } from "@gl-admin/components/ui/Menu"
@@ -145,7 +146,7 @@ type SidebarNavProps = {
 
 // The sidebar's content, shared by the desktop column and the phone drawer.
 export function SidebarNav({ sections, current, onSearch = openCommandPalette }: SidebarNavProps) {
-  const idPrefix = `gl-nav-section-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`
+  const idPrefix = useStableId("gl-nav-section")
   return (
     <div className="gl-sidebar">
       <div className="gl-sidebar__top">

@@ -172,9 +172,9 @@ export function Toaster() {
         if (back && document.contains(back)) back.focus()
         return
       }
-      // The newest toast: the last one drawn, errors (drawn last) first.
-      const toasts = root.querySelectorAll<HTMLElement>(".gl-toast")
-      const newest = toasts[toasts.length - 1]
+      // The newest toast (ids count up), whichever region draws it.
+      const order = (el: HTMLElement) => Number(el.dataset.toastId?.replace("toast-", "") ?? 0)
+      const newest = Array.from(root.querySelectorAll<HTMLElement>(".gl-toast")).sort((a, b) => order(a) - order(b)).pop()
       const target = newest?.querySelector<HTMLElement>("button")
       if (!target) return
       returnTo.current = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null

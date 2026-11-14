@@ -151,6 +151,18 @@ describe("Combobox", () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
+  it("deleting the text clears the value", async () => {
+    const onChange = vi.fn()
+    await render(<Combobox label="Time zone" options={options} value="2" onChange={onChange} />)
+    const input = container.querySelector<HTMLInputElement>("[role='combobox']")!
+    await act(async () => {
+      const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!
+      setValue.call(input, "")
+      input.dispatchEvent(new Event("input", { bubbles: true }))
+    })
+    expect(onChange).toHaveBeenCalledWith(null)
+  })
+
   it("Escape with the list open closes only the list", async () => {
     const onClose = vi.fn()
     await render(
@@ -256,6 +268,20 @@ describe("Toast timing", () => {
     await act(async () => (document.activeElement as HTMLButtonElement).click())
     expect(container.textContent).not.toContain("Undo")
     expect(document.activeElement).toBe(field)
+    field.remove()
+  })
+
+  it(`${TOASTER_SHORTCUT} goes to the newest toast, not an older error`, async () => {
+    const field = document.createElement("input")
+    document.body.appendChild(field)
+    field.focus()
+    await render(<Toaster />)
+    await act(async () => {
+      toast.error("Couldn't save")
+      toast.success("Moved to trash", { action: { label: "Undo", onClick: () => {} } })
+    })
+    await press(TOASTER_SHORTCUT, field)
+    expect(document.activeElement?.textContent).toBe("Undo")
     field.remove()
   })
 

@@ -31,6 +31,7 @@ const contains = (option: SelectOption, query: string) => option.label.toLowerCa
 // A text field that filters a list as you type (authors, categories, a parent page).
 // Focus stays in the input: ArrowDown/ArrowUp open and move, Enter picks, Escape
 // closes the list (with the list closed it isn't handled here, so a dialog closes).
+// Deleting the text clears the value.
 export default function Combobox({
   label,
   options,
@@ -77,7 +78,7 @@ export default function Combobox({
     if (e.key === "Escape") {
       // Only an open list is this field's to close. Closed, Escape goes on to whatever
       // holds the field (a dialog closes) and the value stays (#479): clearing it is
-      // deleting the text.
+      // deleting the text (onChange below).
       if (open) {
         e.preventDefault()
         e.stopPropagation()
@@ -128,6 +129,8 @@ export default function Combobox({
           value={text}
           disabled={disabled}
           onChange={(e) => {
+            // Deleting all the text clears the value (#479: Escape no longer does).
+            if (e.target.value === "" && value !== null) onChange(null)
             setQuery(e.target.value)
             setOpen(true)
             setActive(e.target.value ? 0 : -1)

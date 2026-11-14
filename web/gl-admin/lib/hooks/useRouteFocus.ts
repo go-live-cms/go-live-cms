@@ -7,8 +7,8 @@ export const ROUTE_FOCUS_WAIT_MS = 3000
 
 // Focuses an element that isn't a control, for this moment only: tabindex and the
 // marker (global.scss draws no ring for it) go on blur, so clicks on page text don't
-// focus it later.
-function focusOnce(el: HTMLElement) {
+// focus it later. The skip link (app.tsx) uses it for <main> too.
+export function focusOnce(el: HTMLElement) {
   if (!el.hasAttribute("tabindex")) {
     el.tabIndex = -1
     el.addEventListener("blur", () => el.removeAttribute("tabindex"), { once: true })

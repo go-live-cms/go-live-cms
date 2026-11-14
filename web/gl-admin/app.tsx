@@ -17,7 +17,7 @@ import NewUser from "./pages/NewUser"
 import EditUser from "./pages/EditUser"
 import EditContent from "./pages/EditPost"
 import { useRouteClasses } from "./utils/useRouteClasses"
-import { useRouteFocus } from "@gl-admin/lib/hooks/useRouteFocus"
+import { focusOnce, useRouteFocus } from "@gl-admin/lib/hooks/useRouteFocus"
 import { installInputModality, installSubmitFocus } from "@gl-admin/components/ui/a11y"
 
 // Wrapper so the Content list remounts when the post type changes.
@@ -93,10 +93,7 @@ function AppLayout() {
   const skipToContent = (event: MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault()
     const main = document.getElementById(MAIN_CONTENT_ID)
-    if (!main) return
-    main.tabIndex = -1
-    main.addEventListener("blur", () => main.removeAttribute("tabindex"), { once: true })
-    main.focus()
+    if (main) focusOnce(main)
   }
 
   return (
