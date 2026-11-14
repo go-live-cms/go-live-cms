@@ -98,6 +98,8 @@ type Store interface {
 	ReplaceMenuItemsTx(ctx context.Context, arg ReplaceMenuItemsTxParams) ([]MenuItem, error)
 	// plugin settings (#457)
 	SetPluginSettingsTx(ctx context.Context, arg SetPluginSettingsTxParams) error
+	// site design (#485): publish global styles under a release
+	PublishGlobalStylesTx(ctx context.Context, arg PublishGlobalStylesTxParams) (PublishGlobalStylesTxResult, error)
 
 	ExecTx(ctx context.Context, fn func(*Queries) error) error
 

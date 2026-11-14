@@ -16,7 +16,7 @@ import { withPageCacheControl } from "../lib/httpCache"
 import { SERVER_MEDIA_URL } from "../../gl-admin/lib/server-api-url"
 import { hocuspocusUrl } from "../../gl-admin/lib/collaboration/backend"
 import { log } from "../lib/log"
-import { NO_GLOBAL_STYLES } from "../lib/themeTokens"
+import { NO_GLOBAL_STYLES, publishedGlobalStyles } from "../lib/themeTokens"
 import { requestIdFrom, runWithLogContext } from "./requestContext"
 // A plugin block whose renderer throws renders nothing instead of failing the page (#456).
 import "../lib/pluginBlockProbe"
@@ -57,6 +57,9 @@ async function handleRequest(context: APIContext, next: MiddlewareNext, proxied:
     try {
       const theme = await getActiveTheme()
       context.locals.activeTheme = theme.slug
+      // The published global styles (#485) the theme's base layout merges into its tokens
+      // (resolveThemeTokens): served with the active theme, never the draft.
+      context.locals.globalStyles = publishedGlobalStyles(theme.global_styles)
 
       // WordPress-style: Load theme config to get registered assets
       try {
@@ -136,8 +139,7 @@ async function handleRequest(context: APIContext, next: MiddlewareNext, proxied:
     }
   }
 
-  // The published global styles the theme's base layout merges into its tokens (#484).
-  // Nothing is stored yet: #485 reads them here, once per request.
+  // No override when the active theme couldn't be read (or the API is older than #485).
   context.locals.globalStyles ??= NO_GLOBAL_STYLES
 
   // Serve theme assets (CSS, thumbnails, etc.). Only these extensions: themes/

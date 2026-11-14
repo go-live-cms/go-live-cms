@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest"
 import defaultConfig from "../../themes/default/theme.config"
 import { themeConfig as exampleConfig } from "../../themes/example/theme.config"
-import { NO_GLOBAL_STYLES, resolveThemeTokens, supportsGlobalStyles, themeCssVariables, type GlobalStyles } from "./themeTokens"
+import { NO_GLOBAL_STYLES, publishedGlobalStyles, resolveThemeTokens, supportsGlobalStyles, themeCssVariables, type GlobalStyles } from "./themeTokens"
+import { SYSTEM_FONT_STACKS } from "./globalStyles"
 
 // The token half of the theme contract (#484, design 3.5 and 6.4). The default theme's own
 // values and contrast are checked in themes/default/tokens.test.ts.
@@ -71,14 +72,48 @@ describe("resolveThemeTokens", () => {
     expect(css({ colors: { light: { surface: "#ffffff" } } })).toContain("--color-surface:#ffffff;")
   })
 
-  it("leaves font families alone until #485 resolves their option ids", () => {
-    expect(css({ typography: { fontFamily: { heading: "literata" } } })).toBe(themeCssVariables(defaultConfig))
+  it("resolves font family ids to the theme's option, or to a system stack", () => {
+    const literata = defaultConfig.fontOptions!.find((option) => option.id === "literata")!.stack
+    expect(css({ typography: { fontFamily: { heading: "literata" } } })).toContain(`--font-heading:${literata};`)
+    expect(css({ typography: { fontFamily: { mono: "system-mono" } } })).toContain(`--font-mono:${SYSTEM_FONT_STACKS["system-mono"]};`)
+    // An id the theme stopped offering keeps the theme's own font (design 5.5).
+    expect(css({ typography: { fontFamily: { heading: "comic-sans" } } })).toBe(themeCssVariables(defaultConfig))
+    // A stack is never taken from the override itself.
+    expect(css({ typography: { fontFamily: { base: '"Evil"; } body { display: none' } } })).toBe(themeCssVariables(defaultConfig))
+  })
+
+  it("a published override changes the custom properties in all three selectors and nothing else (#485)", () => {
+    const before = themeCssVariables(defaultConfig).split("\n")
+    const after = css({
+      colors: { light: { text: "#111111" }, dark: { text: "#f5f5f5" } },
+      blockColors: { dark: { red: { text: "#ffaaaa" } } },
+      layout: { contentWidth: "720px" },
+    }).split("\n")
+    expect(after).toHaveLength(3)
+    expect(after[0]).toBe(before[0].replace("--color-text:#21201c;", "--color-text:#111111;").replace("--content-width:680px;", "--content-width:720px;"))
+    for (const i of [1, 2]) expect(after[i]).toBe(before[i].replace("--color-text:#eeeeec;", "--color-text:#f5f5f5;").replace("--block-red:#ff9592;", "--block-red:#ffaaaa;"))
+  })
+
+  it("only emits what the grammar allows, whatever the stored row holds", () => {
+    for (const value of ["1px;", "#1b7760;", "url(x)", "var(--x)", "expression(1)", "</style>", "calc(1px + 1px)", "0", "#fff"]) {
+      expect(css({ colors: { light: { primary: value } }, radius: { md: value } })).toBe(themeCssVariables(defaultConfig))
+    }
+    expect(css({ typography: { lineHeight: { tight: 3 } } })).toBe(themeCssVariables(defaultConfig))
+    expect(css({ colors: { light: { primary: "#155E4B" } } })).toContain("--color-primary:#155e4b;")
   })
 
   it("never changes the theme's config", () => {
     const copy = JSON.stringify(defaultConfig)
     resolveThemeTokens(defaultConfig, { colors: { light: { primary: "#000000" } }, spacing: { "1": "2px" } })
     expect(JSON.stringify(defaultConfig)).toBe(copy)
+  })
+})
+
+describe("publishedGlobalStyles", () => {
+  it("is the active theme's global_styles, or no override", () => {
+    const styles = { colors: { light: { primary: "#155e4b" } } }
+    expect(publishedGlobalStyles(styles)).toBe(styles)
+    for (const value of [undefined, null, {}, [], "x", 1]) expect(publishedGlobalStyles(value)).toBe(NO_GLOBAL_STYLES)
   })
 })
 

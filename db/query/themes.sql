@@ -83,16 +83,19 @@ WHERE theme_id = $1 AND setting_key = $2;
 -- name: DeleteAllThemeSettings :exec
 DELETE FROM theme_settings WHERE theme_id = $1;
 
--- Get active theme with its settings
+-- Get active theme with its settings, and its *published* global styles (#485): this
+-- route is public, so it never reads global_styles.draft.
 -- name: GetActiveThemeWithSettings :one
-SELECT 
+SELECT
   t.*,
   COALESCE(
     jsonb_object_agg(ts.setting_key, ts.setting_value) FILTER (WHERE ts.id IS NOT NULL),
     '{}'::jsonb
-  ) as settings
+  ) as settings,
+  COALESCE(gs.published, '{}'::jsonb)::jsonb AS global_styles
 FROM themes t
 LEFT JOIN theme_settings ts ON t.id = ts.theme_id
+LEFT JOIN global_styles gs ON gs.theme_slug = t.slug
 WHERE t.active = true
-GROUP BY t.id
+GROUP BY t.id, gs.published
 LIMIT 1;

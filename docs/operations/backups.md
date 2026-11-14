@@ -13,7 +13,8 @@ and how schema migrations run in production. The scripts live in
 | Uploaded media files | `UPLOAD_PATH` (`/app/uploads/media`, `uploads` volume) | **Yes** | `media.tar.gz` |
 | Live Yjs state of editor documents (the collab server, #206) | Postgres `post_ydoc_state` | No: `block_doc` is canonical, and a missing or stale row reseeds from it | `db.dump` (it's a table) |
 | Secrets: `app.env` / `.env`, PASETO keys, `ROLE_LOOKUP_SECRET`, `COLLAB_INTERNAL_SECRET` | host / secret store | Yes | **Not** by these scripts. Keep them in your secret manager. Without the PASETO keys a restore still works, but every session is invalidated. |
-| Theme sources (`web/themes`) | git | Yes | git |
+| Site design (#485, `000056`): global styles per theme (`global_styles`: the draft and the published override), their versions (`global_style_versions`) and the publishes (`site_design_releases`) | Postgres | **Yes** | `db.dump` (they're tables). A restore brings back each theme's draft and published styles as they were; the public cache is purged at startup. |
+| Theme sources (`web/themes`), and the token manifest the API validates global styles with (`web/themes/tokens.manifest.json`) | git | Yes | git |
 | Public read cache (#185): copies of the API's public responses | Valkey (`valkey` service, memory only, no volume) | No: rebuilt from Postgres on the next page views | **Nothing, on purpose.** It's a cache: a restart or a lost host only costs a few uncached reads. |
 
 Postgres and the media directory must be backed up **together**: media rows store the

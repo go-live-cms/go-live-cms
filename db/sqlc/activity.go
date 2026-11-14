@@ -16,6 +16,10 @@ const (
 	ActivityObjectRedirect = "redirect"
 	// Plugins (#455): admin-only in the feed; object_id is plugins.id.
 	ActivityObjectPlugin = "plugin"
+	// The site design (#485, docs/design/theme-builder.md section 12): admin-only in the
+	// feed. object_id is the theme's id (global_styles_updated) or the release's
+	// (site_design_published).
+	ActivityObjectSiteDesign = "site_design"
 )
 
 const (
@@ -114,4 +118,12 @@ const (
 	// system, at most one per plugin per 10 minutes (CreatePluginHookFailedActivity);
 	// payload: event, event_id, attempts, final (true once it won't be retried).
 	ActivityPluginHookFailed = "plugin_hook_failed"
+
+	// Site design (#485). global_styles_updated is a draft save (throttled), on the
+	// theme; payload groups = the token groups that changed (colors, fonts, …), never
+	// a value. site_design_published is one publish, on its release; payload
+	// theme_slug, global_styles_groups and contrast_failures (how many pairs failed
+	// when it was published anyway, so the warning stays visible afterwards).
+	ActivityGlobalStylesUpdated = "global_styles_updated"
+	ActivitySiteDesignPublished = "site_design_published"
 )

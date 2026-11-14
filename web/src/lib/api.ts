@@ -135,6 +135,8 @@ export interface Theme {
 
 export interface ActiveThemeWithSettings extends Theme {
   settings: Record<string, any>
+  // The theme's published global styles (#485, design 6.2): `{}` when none. Never the draft.
+  global_styles?: import("./themeTokens").GlobalStyles
 }
 
 export async function getThemes(): Promise<Theme[]> {

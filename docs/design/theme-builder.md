@@ -681,6 +681,12 @@ by both test suites (the `themeBlockVectors.json` pattern):
 - **Number:** line heights, a plain decimal.
 - **Keys:** only paths the theme declares. Anything else is refused (400 `unknown_token`),
   not dropped. A form that sends an unknown key has a bug worth seeing.
+- **As built (#485):** the API reads each theme's declared tokens and `fontOptions` from
+  `web/themes/tokens.manifest.json`, generated from `theme.config.ts` like the block
+  manifest. Spacing steps must not decrease (equal steps pass), and the order rules
+  compare plain lengths in the same unit only. A draft holding a token its theme stopped
+  declaring (5.5) stays stored, but publish answers 409 `styles_invalid` naming it until
+  the form removes it.
 
 **Contrast.** The pairs `tokens.test.ts` checks (text, textMuted and primary on background
 and surface, onPrimary on primary, each block colour as text and as fill), in both palettes,

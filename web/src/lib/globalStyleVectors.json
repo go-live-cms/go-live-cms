@@ -1,0 +1,205 @@
+{
+  "comment": "Global styles (#485, docs/design/theme-builder.md 6.3): cases both validators must agree on, read by web/src/lib/globalStyles.test.ts and api/global_styles_test.go (TestGlobalStyleVectors). `theme` is a small declared-token fixture. Every `invalid` case names the code, the first offending path (keys walked in sorted order) and the message the form and the API both show. Contrast cases list the failing pairs as palette:foreground/background, in order.",
+  "theme": {
+    "tokens": {
+      "colors": {
+        "light": { "primary": "#1b7760", "background": "#fdfdfc", "surface": "#f9f9f8", "text": "#21201c", "textMuted": "#63635e", "onPrimary": "#ffffff" },
+        "dark": { "primary": "#1fd8a4", "background": "#111110", "surface": "#191918", "text": "#eeeeec", "textMuted": "#b5b3ad", "onPrimary": "#111110" }
+      },
+      "blockColors": {
+        "light": { "red": { "text": "#ce2c31", "background": "#feebec" } },
+        "dark": { "red": { "text": "#ff9592", "background": "#3b1219" } }
+      },
+      "typography": {
+        "fontFamily": { "base": "\"Literata\", serif", "heading": "system-ui, sans-serif", "mono": "monospace" },
+        "fontSize": { "base": "clamp(1.0625rem, 1rem + 0.25vw, 1.1875rem)", "sm": "0.9375rem" },
+        "lineHeight": { "normal": 1.5, "relaxed": 1.7 }
+      },
+      "layout": { "container": "1200px", "gutter": "clamp(20px, 4vw, 40px)", "contentWidth": "680px", "wideWidth": "960px" },
+      "spacing": { "1": "4px", "2": "8px", "3": "12px", "10": "128px" },
+      "radius": { "sm": "4px", "md": "8px" }
+    },
+    "font_options": [{ "id": "literata", "label": "Literata", "stack": "\"Literata\", serif" }]
+  },
+  "system_fonts": ["system-sans", "system-serif", "system-mono"],
+  "contrast_pairs": [
+    ["text", "background", 4.5],
+    ["text", "surface", 4.5],
+    ["text", "surface2", 4.5],
+    ["text", "highlight", 4.5],
+    ["textMuted", "background", 4.5],
+    ["textMuted", "surface", 4.5],
+    ["textMuted", "surface2", 4.5],
+    ["secondary", "background", 4.5],
+    ["secondary", "surface", 4.5],
+    ["secondary", "surface2", 4.5],
+    ["secondary", "primarySubtle", 4.5],
+    ["primary", "background", 4.5],
+    ["primary", "surface", 4.5],
+    ["primaryHover", "background", 4.5],
+    ["onPrimary", "primary", 4.5],
+    ["onPrimary", "primaryHover", 4.5],
+    ["borderStrong", "background", 3],
+    ["focus", "background", 3],
+    ["focus", "surface", 3],
+    ["text", "infoBg", 4.5],
+    ["text", "successBg", 4.5],
+    ["text", "warningBg", 4.5],
+    ["text", "dangerBg", 4.5],
+    ["primary", "infoBg", 4.5],
+    ["primary", "successBg", 4.5],
+    ["primary", "warningBg", 4.5],
+    ["primary", "dangerBg", 4.5],
+    ["info", "infoBg", 3],
+    ["success", "successBg", 3],
+    ["warning", "warningBg", 3],
+    ["danger", "dangerBg", 3],
+    ["borderStrong", "surface", 3]
+  ],
+  "valid": [
+    { "name": "no override", "input": {}, "normalized": {} },
+    { "name": "a colour, lowercased", "input": { "colors": { "light": { "primary": "#155E4B" } } }, "normalized": { "colors": { "light": { "primary": "#155e4b" } } } },
+    {
+      "name": "light and dark side by side",
+      "input": { "colors": { "light": { "primary": "#155e4b" }, "dark": { "primary": "#3fe0b3", "surface": "#1A1A19" } } },
+      "normalized": { "colors": { "light": { "primary": "#155e4b" }, "dark": { "primary": "#3fe0b3", "surface": "#1a1a19" } } }
+    },
+    { "name": "a block colour", "input": { "blockColors": { "dark": { "red": { "background": "#2A0000" } } } }, "normalized": { "blockColors": { "dark": { "red": { "background": "#2a0000" } } } } },
+    {
+      "name": "clamp() is respaced",
+      "input": { "typography": { "fontSize": { "base": "clamp(1rem,1rem+0.5vw,  1.25rem)" } } },
+      "normalized": { "typography": { "fontSize": { "base": "clamp(1rem, 1rem + 0.5vw, 1.25rem)" } } }
+    },
+    { "name": "clamp() without a sum", "input": { "layout": { "gutter": "clamp(16px, 3vw, 32px)" } }, "normalized": { "layout": { "gutter": "clamp(16px, 3vw, 32px)" } } },
+    {
+      "name": "every unit",
+      "input": { "radius": { "sm": ".5rem", "md": "50%" }, "spacing": { "2": "0.5em" }, "typography": { "fontSize": { "sm": "1vw" } } },
+      "normalized": { "radius": { "sm": ".5rem", "md": "50%" }, "spacing": { "2": "0.5em" }, "typography": { "fontSize": { "sm": "1vw" } } }
+    },
+    { "name": "empty groups are dropped", "input": { "colors": { "light": {}, "dark": {} }, "spacing": {}, "typography": { "fontSize": {} } }, "normalized": {} },
+    {
+      "name": "a theme font option and a system font",
+      "input": { "typography": { "fontFamily": { "base": "literata", "heading": "system-sans", "mono": "system-mono" } } },
+      "normalized": { "typography": { "fontFamily": { "base": "literata", "heading": "system-sans", "mono": "system-mono" } } }
+    },
+    { "name": "line heights at the bounds", "input": { "typography": { "lineHeight": { "normal": 1, "relaxed": 2.5 } } }, "normalized": { "typography": { "lineHeight": { "normal": 1, "relaxed": 2.5 } } } },
+    { "name": "a narrower reading width", "input": { "layout": { "contentWidth": "720px" } }, "normalized": { "layout": { "contentWidth": "720px" } } },
+    { "name": "widths in different units aren't compared", "input": { "layout": { "contentWidth": "90vw" } }, "normalized": { "layout": { "contentWidth": "90vw" } } },
+    { "name": "equal spacing steps", "input": { "spacing": { "2": "12px" } }, "normalized": { "spacing": { "2": "12px" } } }
+  ],
+  "invalid": [
+    { "name": "not an object: array", "input": [], "code": "invalid_value", "path": "", "message": "must be a JSON object" },
+    { "name": "not an object: string", "input": "colors", "code": "invalid_value", "path": "", "message": "must be a JSON object" },
+    { "name": "not an object: null", "input": null, "code": "invalid_value", "path": "", "message": "must be a JSON object" },
+    { "name": "an unknown group", "input": { "shadows": { "sm": "1px" } }, "code": "unknown_token", "path": "shadows", "message": "shadows: this theme doesn't declare this token" },
+    { "name": "an undeclared colour", "input": { "colors": { "light": { "brandNew": "#123456" } } }, "code": "unknown_token", "path": "colors.light.brandNew", "message": "colors.light.brandNew: this theme doesn't declare this token" },
+    { "name": "an unknown palette", "input": { "colors": { "sepia": { "primary": "#123456" } } }, "code": "unknown_token", "path": "colors.sepia", "message": "colors.sepia: this theme doesn't declare this token" },
+    { "name": "an undeclared block colour", "input": { "blockColors": { "light": { "teal": { "text": "#008080" } } } }, "code": "unknown_token", "path": "blockColors.light.teal", "message": "blockColors.light.teal: this theme doesn't declare this token" },
+    { "name": "a block colour field", "input": { "blockColors": { "light": { "red": { "border": "#008080" } } } }, "code": "unknown_token", "path": "blockColors.light.red.border", "message": "blockColors.light.red.border: this theme doesn't declare this token" },
+    { "name": "a typography group core can't style", "input": { "typography": { "letterSpacing": { "base": "1px" } } }, "code": "unknown_token", "path": "typography.letterSpacing", "message": "typography.letterSpacing: this theme doesn't declare this token" },
+    { "name": "an undeclared size", "input": { "typography": { "fontSize": { "5xl": "4rem" } } }, "code": "unknown_token", "path": "typography.fontSize.5xl", "message": "typography.fontSize.5xl: this theme doesn't declare this token" },
+    { "name": "an undeclared spacing step", "input": { "spacing": { "11": "160px" } }, "code": "unknown_token", "path": "spacing.11", "message": "spacing.11: this theme doesn't declare this token" },
+    { "name": "__proto__", "input": { "__proto__": { "primary": "#123456" } }, "code": "unknown_token", "path": "__proto__", "message": "__proto__: this theme doesn't declare this token" },
+    { "name": "constructor", "input": { "colors": { "light": { "constructor": "#123456" } } }, "code": "unknown_token", "path": "colors.light.constructor", "message": "colors.light.constructor: this theme doesn't declare this token" },
+    { "name": "a group that isn't an object", "input": { "colors": "red" }, "code": "invalid_value", "path": "colors", "message": "colors: must be an object" },
+    { "name": "a palette that is an array", "input": { "colors": { "light": [] } }, "code": "invalid_value", "path": "colors.light", "message": "colors.light: must be an object" },
+    { "name": "a value where a group goes", "input": { "layout": "1200px" }, "code": "invalid_value", "path": "layout", "message": "layout: must be an object" },
+    { "name": "a group where a value goes", "input": { "colors": { "light": { "primary": { "value": "#123456" } } } }, "code": "invalid_value", "path": "colors.light.primary", "message": "colors.light.primary: must be a string" },
+
+    { "name": "colour: ;", "input": { "colors": { "light": { "primary": "#1b7760;" } } }, "code": "invalid_value", "path": "colors.light.primary", "message": "colors.light.primary: must be a colour like #1b7760" },
+    { "name": "colour: a second declaration", "input": { "colors": { "light": { "primary": "red;color:blue" } } }, "code": "invalid_value", "path": "colors.light.primary", "message": "colors.light.primary: must be a colour like #1b7760" },
+    { "name": "colour: }", "input": { "colors": { "light": { "primary": "#1b7760}body{color:red" } } }, "code": "invalid_value", "path": "colors.light.primary", "message": "colors.light.primary: must be a colour like #1b7760" },
+    { "name": "colour: </style>", "input": { "colors": { "light": { "primary": "</style><script>alert(1)</script>" } } }, "code": "invalid_value", "path": "colors.light.primary", "message": "colors.light.primary: must be a colour like #1b7760" },
+    { "name": "colour: url(", "input": { "colors": { "light": { "primary": "url(https://tracker.example/p.gif)" } } }, "code": "invalid_value", "path": "colors.light.primary", "message": "colors.light.primary: must be a colour like #1b7760" },
+    { "name": "colour: var(", "input": { "colors": { "light": { "primary": "var(--color-text)" } } }, "code": "invalid_value", "path": "colors.light.primary", "message": "colors.light.primary: must be a colour like #1b7760" },
+    { "name": "colour: expression(", "input": { "colors": { "light": { "primary": "expression(alert(1))" } } }, "code": "invalid_value", "path": "colors.light.primary", "message": "colors.light.primary: must be a colour like #1b7760" },
+    { "name": "colour: three digits", "input": { "colors": { "light": { "primary": "#fff" } } }, "code": "invalid_value", "path": "colors.light.primary", "message": "colors.light.primary: must be a colour like #1b7760" },
+    { "name": "colour: rgb()", "input": { "colors": { "dark": { "text": "rgb(0, 0, 0)" } } }, "code": "invalid_value", "path": "colors.dark.text", "message": "colors.dark.text: must be a colour like #1b7760" },
+    { "name": "colour: a name", "input": { "blockColors": { "light": { "red": { "text": "red" } } } }, "code": "invalid_value", "path": "blockColors.light.red.text", "message": "blockColors.light.red.text: must be a colour like #1b7760" },
+    { "name": "colour: spaces", "input": { "colors": { "light": { "primary": " #1b7760" } } }, "code": "invalid_value", "path": "colors.light.primary", "message": "colors.light.primary: must be a colour like #1b7760" },
+    { "name": "colour: a number", "input": { "colors": { "light": { "primary": 1800 } } }, "code": "invalid_value", "path": "colors.light.primary", "message": "colors.light.primary: must be a string" },
+
+    { "name": "length: ;", "input": { "radius": { "md": "8px;" } }, "code": "invalid_value", "path": "radius.md", "message": "radius.md: must be a length (px, rem, em, %, vw) or clamp() of lengths" },
+    { "name": "length: }", "input": { "radius": { "md": "8px}body{display:none" } }, "code": "invalid_value", "path": "radius.md", "message": "radius.md: must be a length (px, rem, em, %, vw) or clamp() of lengths" },
+    { "name": "length: </style>", "input": { "radius": { "md": "8px</style>" } }, "code": "invalid_value", "path": "radius.md", "message": "radius.md: must be a length (px, rem, em, %, vw) or clamp() of lengths" },
+    { "name": "length: url(", "input": { "radius": { "md": "url(https://tracker.example/p.gif)" } }, "code": "invalid_value", "path": "radius.md", "message": "radius.md: must be a length (px, rem, em, %, vw) or clamp() of lengths" },
+    { "name": "length: var(", "input": { "radius": { "md": "var(--radius-sm)" } }, "code": "invalid_value", "path": "radius.md", "message": "radius.md: must be a length (px, rem, em, %, vw) or clamp() of lengths" },
+    { "name": "length: expression(", "input": { "radius": { "md": "expression(alert(1))" } }, "code": "invalid_value", "path": "radius.md", "message": "radius.md: must be a length (px, rem, em, %, vw) or clamp() of lengths" },
+    { "name": "length: calc()", "input": { "radius": { "md": "calc(1px + 2px)" } }, "code": "invalid_value", "path": "radius.md", "message": "radius.md: must be a length (px, rem, em, %, vw) or clamp() of lengths" },
+    { "name": "length: var() inside clamp()", "input": { "typography": { "fontSize": { "base": "clamp(1rem, var(--x), 2rem)" } } }, "code": "invalid_value", "path": "typography.fontSize.base", "message": "typography.fontSize.base: must be a length (px, rem, em, %, vw) or clamp() of lengths" },
+    { "name": "length: url() inside clamp()", "input": { "typography": { "fontSize": { "base": "clamp(1rem, url(x), 2rem)" } } }, "code": "invalid_value", "path": "typography.fontSize.base", "message": "typography.fontSize.base: must be a length (px, rem, em, %, vw) or clamp() of lengths" },
+    { "name": "length: clamp() with two arguments", "input": { "typography": { "fontSize": { "base": "clamp(1rem, 2rem)" } } }, "code": "invalid_value", "path": "typography.fontSize.base", "message": "typography.fontSize.base: must be a length (px, rem, em, %, vw) or clamp() of lengths" },
+    { "name": "length: a sum outside the middle", "input": { "typography": { "fontSize": { "base": "clamp(1rem + 1vw, 2rem, 3rem)" } } }, "code": "invalid_value", "path": "typography.fontSize.base", "message": "typography.fontSize.base: must be a length (px, rem, em, %, vw) or clamp() of lengths" },
+    { "name": "length: a difference", "input": { "typography": { "fontSize": { "base": "clamp(1rem, 2rem - 1vw, 3rem)" } } }, "code": "invalid_value", "path": "typography.fontSize.base", "message": "typography.fontSize.base: must be a length (px, rem, em, %, vw) or clamp() of lengths" },
+    { "name": "length: CLAMP", "input": { "typography": { "fontSize": { "base": "CLAMP(1rem, 2rem, 3rem)" } } }, "code": "invalid_value", "path": "typography.fontSize.base", "message": "typography.fontSize.base: must be a length (px, rem, em, %, vw) or clamp() of lengths" },
+    { "name": "length: a tab inside clamp()", "input": { "typography": { "fontSize": { "base": "clamp(1rem,\t2rem, 3rem)" } } }, "code": "invalid_value", "path": "typography.fontSize.base", "message": "typography.fontSize.base: must be a length (px, rem, em, %, vw) or clamp() of lengths" },
+    { "name": "length: a newline inside clamp()", "input": { "typography": { "fontSize": { "base": "clamp(1rem,\n2rem, 3rem)" } } }, "code": "invalid_value", "path": "typography.fontSize.base", "message": "typography.fontSize.base: must be a length (px, rem, em, %, vw) or clamp() of lengths" },
+    { "name": "length: no unit", "input": { "spacing": { "1": "4" } }, "code": "invalid_value", "path": "spacing.1", "message": "spacing.1: must be a length (px, rem, em, %, vw) or clamp() of lengths" },
+    { "name": "length: negative", "input": { "spacing": { "1": "-4px" } }, "code": "invalid_value", "path": "spacing.1", "message": "spacing.1: must be a length (px, rem, em, %, vw) or clamp() of lengths" },
+    { "name": "length: an exponent", "input": { "spacing": { "1": "1e3px" } }, "code": "invalid_value", "path": "spacing.1", "message": "spacing.1: must be a length (px, rem, em, %, vw) or clamp() of lengths" },
+    { "name": "length: another unit", "input": { "spacing": { "1": "4pt" } }, "code": "invalid_value", "path": "spacing.1", "message": "spacing.1: must be a length (px, rem, em, %, vw) or clamp() of lengths" },
+    { "name": "length: upper case", "input": { "spacing": { "1": "4PX" } }, "code": "invalid_value", "path": "spacing.1", "message": "spacing.1: must be a length (px, rem, em, %, vw) or clamp() of lengths" },
+    { "name": "length: too many digits", "input": { "spacing": { "1": "123456px" } }, "code": "invalid_value", "path": "spacing.1", "message": "spacing.1: must be a length (px, rem, em, %, vw) or clamp() of lengths" },
+    { "name": "length: an escape", "input": { "radius": { "md": "8px\\3b" } }, "code": "invalid_value", "path": "radius.md", "message": "radius.md: must be a length (px, rem, em, %, vw) or clamp() of lengths" },
+    { "name": "length: a comment", "input": { "radius": { "md": "8px/*" } }, "code": "invalid_value", "path": "radius.md", "message": "radius.md: must be a length (px, rem, em, %, vw) or clamp() of lengths" },
+    { "name": "length: empty", "input": { "radius": { "md": "" } }, "code": "invalid_value", "path": "radius.md", "message": "radius.md: must be a length (px, rem, em, %, vw) or clamp() of lengths" },
+    { "name": "length: a number", "input": { "radius": { "md": 8 } }, "code": "invalid_value", "path": "radius.md", "message": "radius.md: must be a string" },
+
+    { "name": "line height: a string", "input": { "typography": { "lineHeight": { "normal": "1.5" } } }, "code": "invalid_value", "path": "typography.lineHeight.normal", "message": "typography.lineHeight.normal: must be a number" },
+    { "name": "line height: below 1", "input": { "typography": { "lineHeight": { "normal": 0.9 } } }, "code": "invalid_value", "path": "typography.lineHeight.normal", "message": "typography.lineHeight.normal: must be a number from 1 to 2.5" },
+    { "name": "line height: above 2.5", "input": { "typography": { "lineHeight": { "relaxed": 2.6 } } }, "code": "invalid_value", "path": "typography.lineHeight.relaxed", "message": "typography.lineHeight.relaxed: must be a number from 1 to 2.5" },
+    { "name": "line height: null", "input": { "typography": { "lineHeight": { "relaxed": null } } }, "code": "invalid_value", "path": "typography.lineHeight.relaxed", "message": "typography.lineHeight.relaxed: must be a number" },
+
+    { "name": "font: not an option", "input": { "typography": { "fontFamily": { "base": "comic-sans" } } }, "code": "invalid_value", "path": "typography.fontFamily.base", "message": "typography.fontFamily.base: must be one of the theme's font options or a system font" },
+    { "name": "font: a stack, not an id", "input": { "typography": { "fontFamily": { "base": "\"Literata\", serif" } } }, "code": "invalid_value", "path": "typography.fontFamily.base", "message": "typography.fontFamily.base: must be one of the theme's font options or a system font" },
+    { "name": "font: ; and }", "input": { "typography": { "fontFamily": { "heading": "literata;}</style>" } } }, "code": "invalid_value", "path": "typography.fontFamily.heading", "message": "typography.fontFamily.heading: must be one of the theme's font options or a system font" },
+    { "name": "font: a number", "input": { "typography": { "fontFamily": { "mono": 1 } } }, "code": "invalid_value", "path": "typography.fontFamily.mono", "message": "typography.fontFamily.mono: must be a string" },
+
+    { "name": "order: content wider than wide", "input": { "layout": { "contentWidth": "1000px" } }, "code": "token_order", "path": "layout.contentWidth", "message": "layout.contentWidth: contentWidth must be at most wideWidth" },
+    { "name": "order: wide wider than the container", "input": { "layout": { "wideWidth": "1300px" } }, "code": "token_order", "path": "layout.wideWidth", "message": "layout.wideWidth: wideWidth must be at most container" },
+    { "name": "order: a container narrower than wide", "input": { "layout": { "container": "600px" } }, "code": "token_order", "path": "layout.container", "message": "layout.container: wideWidth must be at most container" },
+    { "name": "order: a step larger than the next", "input": { "spacing": { "2": "20px" } }, "code": "token_order", "path": "spacing.2", "message": "spacing.2: spacing 2 must be at most spacing 3" },
+    { "name": "order: a step smaller than the one before", "input": { "spacing": { "3": "2px" } }, "code": "token_order", "path": "spacing.3", "message": "spacing.3: spacing 2 must be at most spacing 3" },
+    { "name": "order: steps are numeric, not text", "input": { "spacing": { "10": "10px" } }, "code": "token_order", "path": "spacing.10", "message": "spacing.10: spacing 3 must be at most spacing 10" },
+
+    { "name": "the first error in sorted order", "input": { "radius": { "md": "x" }, "colors": { "light": { "primary": "x" } } }, "code": "invalid_value", "path": "colors.light.primary", "message": "colors.light.primary: must be a colour like #1b7760" },
+    { "name": "values before order", "input": { "layout": { "contentWidth": "1000px", "wideWidth": "x" } }, "code": "invalid_value", "path": "layout.wideWidth", "message": "layout.wideWidth: must be a length (px, rem, em, %, vw) or clamp() of lengths" }
+  ],
+  "contrast": [
+    { "name": "the theme's own colours", "styles": {}, "failing": [] },
+    {
+      "name": "light text too pale",
+      "styles": { "colors": { "light": { "text": "#cccccc" } } },
+      "failing": ["light:text/background", "light:text/surface", "light:text/blockColors.red.background"]
+    },
+    {
+      "name": "a dark primary in the dark palette",
+      "styles": { "colors": { "dark": { "primary": "#222222" } } },
+      "failing": ["dark:primary/background", "dark:primary/surface", "dark:onPrimary/primary"]
+    },
+    {
+      "name": "a pale block colour",
+      "styles": { "blockColors": { "light": { "red": { "text": "#ffaaaa" } } } },
+      "failing": ["light:blockColors.red.text/background", "light:blockColors.red.text/surface"]
+    },
+    { "name": "an undeclared colour changes nothing", "styles": { "colors": { "light": { "highlight": "#000000" } } }, "failing": [] }
+  ],
+  "groups": [
+    { "name": "unchanged", "before": { "colors": { "light": { "primary": "#155e4b" } } }, "after": { "colors": { "light": { "primary": "#155e4b" } } }, "groups": [] },
+    { "name": "a colour", "before": {}, "after": { "colors": { "light": { "primary": "#155e4b" } } }, "groups": ["colors"] },
+    {
+      "name": "fonts beside an unchanged scale",
+      "before": { "typography": { "fontSize": { "base": "1rem" } } },
+      "after": { "typography": { "fontFamily": { "heading": "literata" }, "fontSize": { "base": "1rem" } } },
+      "groups": ["fonts"]
+    },
+    {
+      "name": "sizes and line heights are one group",
+      "before": {},
+      "after": { "typography": { "fontSize": { "base": "1rem" }, "lineHeight": { "normal": 1.4 } } },
+      "groups": ["typeScale"]
+    },
+    { "name": "a reset", "before": { "spacing": { "1": "2px" }, "radius": { "sm": "2px" }, "blockColors": { "light": { "red": { "text": "#aa0000" } } } }, "after": {}, "groups": ["blockColors", "spacing", "radius"] },
+    { "name": "an empty group is no group", "before": { "layout": {} }, "after": {}, "groups": [] }
+  ]
+}

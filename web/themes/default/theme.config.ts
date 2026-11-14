@@ -7,6 +7,7 @@
  * in), so styles/theme.css only uses var(--...).
  */
 import type { ThemeScriptAsset, ThemeStyleAsset } from "@/lib/themeAssets"
+import type { FontOption } from "@/lib/globalStyles"
 
 export interface ThemeColors {
   primary: string
@@ -135,6 +136,11 @@ export interface ThemeConfig {
 
   typography: ThemeTypography
 
+  // The fonts global styles may choose for typography.fontFamily (#485, design 6.1), by id.
+  // Each is self-hosted with @font-face in styles/theme.css, so choosing one loads only it.
+  // Core adds its system stacks (system-sans, system-serif, system-mono).
+  fontOptions?: FontOption[]
+
   layout: ThemeLayout
 
   // Spacing scale (space-1 … space-10) and corner radii.
@@ -154,6 +160,13 @@ export interface ThemeConfig {
     defaultMode: "light" | "dark" | "system"
     storageKey: string
   }
+}
+
+// The self-hosted fonts (fonts/, @font-face in styles/theme.css), as CSS stacks.
+const FONT_STACKS = {
+  literata: '"Literata", Georgia, "Times New Roman", serif',
+  inter: '"Inter", system-ui, -apple-system, "Segoe UI", sans-serif',
+  mono: '"JetBrains Mono", ui-monospace, Menlo, Consolas, monospace',
 }
 
 // Where the header's Light / Dark / System switch keeps the reader's choice.
@@ -279,9 +292,9 @@ export const themeConfig: ThemeConfig = {
   // The fonts are self-hosted (fonts/, @font-face in styles/theme.css).
   typography: {
     fontFamily: {
-      base: '"Literata", Georgia, "Times New Roman", serif',
-      heading: '"Inter", system-ui, -apple-system, "Segoe UI", sans-serif',
-      mono: '"JetBrains Mono", ui-monospace, Menlo, Consolas, monospace',
+      base: FONT_STACKS.literata,
+      heading: FONT_STACKS.inter,
+      mono: FONT_STACKS.mono,
     },
     // xs and sm are fixed; base and up scale from 375px to 1280px.
     fontSize: {
@@ -301,6 +314,12 @@ export const themeConfig: ThemeConfig = {
       relaxed: 1.7, // body copy
     },
   },
+
+  fontOptions: [
+    { id: "literata", label: "Literata", stack: FONT_STACKS.literata },
+    { id: "inter", label: "Inter", stack: FONT_STACKS.inter },
+    { id: "jetbrains-mono", label: "JetBrains Mono", stack: FONT_STACKS.mono },
+  ],
 
   layout: {
     container: "1200px",

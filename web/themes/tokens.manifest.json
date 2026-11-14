@@ -1,0 +1,254 @@
+{
+  "manifest_version": 1,
+  "themes": {
+    "default": {
+      "supports_global_styles": true,
+      "tokens": {
+        "colors": {
+          "dark": {
+            "accent": "#ffc53d",
+            "background": "#111110",
+            "border": "#3b3a37",
+            "borderStrong": "#6f6d66",
+            "danger": "#ff977d",
+            "dangerBg": "#391714",
+            "focus": "#1fd8a4",
+            "highlight": "#4a3a10",
+            "info": "#70b8ff",
+            "infoBg": "#0d2847",
+            "onPrimary": "#111110",
+            "primary": "#1fd8a4",
+            "primaryHover": "#63e3bd",
+            "primarySubtle": "#0f2e22",
+            "secondary": "#adf0d4",
+            "success": "#71d083",
+            "successBg": "#1b2a1e",
+            "surface": "#191918",
+            "surface2": "#222221",
+            "text": "#eeeeec",
+            "textMuted": "#b5b3ad",
+            "warning": "#ffca16",
+            "warningBg": "#302008"
+          },
+          "light": {
+            "accent": "#ffc53d",
+            "background": "#fdfdfc",
+            "border": "#dad9d6",
+            "borderStrong": "#8d8d86",
+            "danger": "#d13415",
+            "dangerBg": "#feebe7",
+            "focus": "#1b7760",
+            "highlight": "#ffe7b3",
+            "info": "#0d74ce",
+            "infoBg": "#e6f4fe",
+            "onPrimary": "#ffffff",
+            "primary": "#1b7760",
+            "primaryHover": "#145a48",
+            "primarySubtle": "#e6f7ed",
+            "secondary": "#1d3b31",
+            "success": "#2a7e3b",
+            "successBg": "#e9f6e9",
+            "surface": "#f9f9f8",
+            "surface2": "#f1f0ef",
+            "text": "#21201c",
+            "textMuted": "#63635e",
+            "warning": "#ab6400",
+            "warningBg": "#fff7c2"
+          }
+        },
+        "blockColors": {
+          "dark": {
+            "blue": {
+              "background": "#0d2847",
+              "text": "#70b8ff"
+            },
+            "brown": {
+              "background": "#2e201a",
+              "text": "#dbb594"
+            },
+            "gray": {
+              "background": "#212225",
+              "text": "#b0b4ba"
+            },
+            "green": {
+              "background": "#132d21",
+              "text": "#3dd68c"
+            },
+            "orange": {
+              "background": "#331e0b",
+              "text": "#ffa057"
+            },
+            "pink": {
+              "background": "#37172f",
+              "text": "#ff8dcc"
+            },
+            "purple": {
+              "background": "#291f43",
+              "text": "#baa7ff"
+            },
+            "red": {
+              "background": "#3b1219",
+              "text": "#ff9592"
+            },
+            "yellow": {
+              "background": "#302008",
+              "text": "#ffca16"
+            }
+          },
+          "light": {
+            "blue": {
+              "background": "#e6f4fe",
+              "text": "#0c6cbf"
+            },
+            "brown": {
+              "background": "#f6eee7",
+              "text": "#815e46"
+            },
+            "gray": {
+              "background": "#f0f0f3",
+              "text": "#60646c"
+            },
+            "green": {
+              "background": "#e6f6eb",
+              "text": "#1e7a52"
+            },
+            "orange": {
+              "background": "#ffefd6",
+              "text": "#b84a00"
+            },
+            "pink": {
+              "background": "#fee9f5",
+              "text": "#c2298a"
+            },
+            "purple": {
+              "background": "#f4f0fe",
+              "text": "#6550b9"
+            },
+            "red": {
+              "background": "#feebec",
+              "text": "#ce2c31"
+            },
+            "yellow": {
+              "background": "#fff7c2",
+              "text": "#9e5d00"
+            }
+          }
+        },
+        "typography": {
+          "fontFamily": {
+            "base": "\"Literata\", Georgia, \"Times New Roman\", serif",
+            "heading": "\"Inter\", system-ui, -apple-system, \"Segoe UI\", sans-serif",
+            "mono": "\"JetBrains Mono\", ui-monospace, Menlo, Consolas, monospace"
+          },
+          "fontSize": {
+            "2xl": "clamp(1.625rem, 1.4rem + 0.9vw, 2rem)",
+            "3xl": "clamp(1.875rem, 1.5rem + 1.6vw, 2.5rem)",
+            "4xl": "clamp(2.25rem, 1.6rem + 2.6vw, 3.25rem)",
+            "base": "clamp(1.0625rem, 1rem + 0.25vw, 1.1875rem)",
+            "lg": "clamp(1.1875rem, 1.1rem + 0.35vw, 1.375rem)",
+            "sm": "0.9375rem",
+            "xl": "clamp(1.375rem, 1.25rem + 0.5vw, 1.625rem)",
+            "xs": "0.8125rem"
+          },
+          "lineHeight": {
+            "normal": 1.5,
+            "relaxed": 1.7,
+            "snug": 1.3,
+            "tight": 1.15
+          }
+        },
+        "layout": {
+          "container": "1200px",
+          "contentWidth": "680px",
+          "gutter": "clamp(20px, 4vw, 40px)",
+          "headerHeight": "64px",
+          "wideWidth": "960px"
+        },
+        "spacing": {
+          "1": "4px",
+          "2": "8px",
+          "3": "12px",
+          "4": "16px",
+          "5": "24px",
+          "6": "32px",
+          "7": "48px",
+          "8": "64px",
+          "9": "96px",
+          "10": "128px"
+        },
+        "radius": {
+          "full": "999px",
+          "lg": "14px",
+          "md": "8px",
+          "sm": "4px"
+        }
+      },
+      "font_options": [
+        {
+          "id": "literata",
+          "label": "Literata",
+          "stack": "\"Literata\", Georgia, \"Times New Roman\", serif"
+        },
+        {
+          "id": "inter",
+          "label": "Inter",
+          "stack": "\"Inter\", system-ui, -apple-system, \"Segoe UI\", sans-serif"
+        },
+        {
+          "id": "jetbrains-mono",
+          "label": "JetBrains Mono",
+          "stack": "\"JetBrains Mono\", ui-monospace, Menlo, Consolas, monospace"
+        }
+      ]
+    },
+    "test": {
+      "supports_global_styles": false,
+      "tokens": {
+        "colors": {
+          "dark": {
+            "accent": "34 197 94",
+            "background": "28 25 23",
+            "border": "234 179 8",
+            "primary": "248 113 113",
+            "secondary": "251 191 36",
+            "surface": "41 37 36",
+            "text": "250 250 249",
+            "textMuted": "168 162 158"
+          },
+          "light": {
+            "accent": "16 185 129",
+            "background": "250 250 249",
+            "border": "245 158 11",
+            "primary": "239 68 68",
+            "secondary": "251 146 60",
+            "surface": "255 255 255",
+            "text": "28 25 23",
+            "textMuted": "120 113 108"
+          }
+        },
+        "typography": {
+          "fontFamily": {
+            "base": "\"Inter\", -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+            "heading": "\"Playfair Display\", Georgia, serif",
+            "mono": "\"JetBrains Mono\", \"Fira Code\", Consolas, monospace"
+          },
+          "fontSize": {
+            "2xl": "1.875rem",
+            "3xl": "2.5rem",
+            "4xl": "3.5rem",
+            "base": "1.063rem",
+            "lg": "1.25rem",
+            "sm": "0.938rem",
+            "xl": "1.5rem",
+            "xs": "0.813rem"
+          }
+        },
+        "layout": {
+          "container": "1400px",
+          "gutter": "3rem"
+        }
+      },
+      "font_options": []
+    }
+  }
+}
