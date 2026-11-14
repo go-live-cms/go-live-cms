@@ -5,7 +5,7 @@
  */
 import { getSettings } from "@/lib/api"
 import { SITE_TITLE } from "@/consts"
-import { normalizeDateSettings, type DateSettings } from "@/lib/siteDates"
+import { DEFAULT_DATE_SETTINGS, normalizeDateSettings, type DateSettings } from "@/lib/siteDates"
 import { log } from "@/lib/log"
 import { knownEmbedProviders, type EmbedProvider } from "@gl-admin/lib/blocks-spec/embeds"
 
@@ -30,6 +30,10 @@ export interface SiteSettings extends DateSettings {
 // up after a moment and use the defaults rather than hang the page.
 const SETTINGS_TIMEOUT_MS = 2000
 
+// The language of the last read that answered, on any request (#481): a failed or timed-out
+// read keeps it rather than switching the site's pages, and their dates, to the default.
+let lastKnownLanguage: string | null = null
+
 async function loadSiteSettings(): Promise<SiteSettings> {
   let settings: Record<string, unknown> | null = null
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -48,7 +52,7 @@ async function loadSiteSettings(): Promise<SiteSettings> {
   const title = typeof settings?.site_title === "string" && settings.site_title.trim() ? settings.site_title : SITE_TITLE
   const tagline = typeof settings?.site_tagline === "string" ? settings.site_tagline.trim() : ""
   const perPage = Number(settings?.posts_per_page)
-  return {
+  const result: SiteSettings = {
     title,
     tagline,
     postsPerPage: Number.isInteger(perPage) && perPage > 0 ? perPage : 10,
@@ -57,11 +61,13 @@ async function loadSiteSettings(): Promise<SiteSettings> {
     frontPageId: Number.isInteger(settings?.front_page_id) && (settings?.front_page_id as number) > 0 ? (settings?.front_page_id as number) : null,
     allowedEmbeds: knownEmbedProviders(settings?.editor_allowed_embeds),
     ...normalizeDateSettings({
-      language: settings?.site_language,
+      language: settings ? settings.site_language : (lastKnownLanguage ?? undefined),
       timeZone: settings?.site_timezone,
       dateFormat: settings?.date_format,
     }),
   }
+  if (settings) lastKnownLanguage = result.language
+  return result
 }
 
 const LOCALS_KEY = "siteSettings"
@@ -74,4 +80,26 @@ export function getSiteSettings(locals?: App.Locals): Promise<SiteSettings> {
   if (!locals) return loadSiteSettings()
   locals[LOCALS_KEY] ??= loadSiteSettings()
   return locals[LOCALS_KEY] as Promise<SiteSettings>
+}
+
+// How long a page that needs the settings only for `<html lang>` waits for them.
+export const LANGUAGE_WAIT_MS = 250
+
+/**
+ * The site language for `<html lang>` on a page that needs nothing else from the settings
+ * (the account pages, #481). It shares the request's one lookup, but waits for it at most
+ * `waitMs`, not the settings' 2 s timeout: a hung API must not hold a reset or invite page
+ * for that. Without an answer in time it is the language the last successful read gave (any
+ * request), else the default: what a failed read gives too.
+ */
+export async function getSiteLanguage(locals?: App.Locals, waitMs = LANGUAGE_WAIT_MS): Promise<string> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const answered = await Promise.race([
+    getSiteSettings(locals).then((site) => site.language),
+    new Promise<null>((resolve) => {
+      timer = setTimeout(() => resolve(null), waitMs)
+    }),
+  ])
+  clearTimeout(timer)
+  return answered ?? lastKnownLanguage ?? DEFAULT_DATE_SETTINGS.language
 }

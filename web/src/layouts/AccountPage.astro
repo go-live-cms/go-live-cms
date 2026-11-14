@@ -6,7 +6,7 @@
 // <script> only mounts it (no inline script, admin CSP #161).
 import Head from "@/layouts/Page/Head.astro"
 import { SITE_TITLE } from "@/consts"
-import { getSiteSettings } from "@/lib/siteSettings"
+import { getSiteLanguage } from "@/lib/siteSettings"
 import GLLogo from "@gl-admin/assets/gl-logo.svg?raw"
 import "@gl-admin/assets/styles/pages/login.scss"
 
@@ -17,8 +17,9 @@ interface Props {
 
 const { title, description } = Astro.props
 // The site's language (#481, WCAG 3.1.1), like the theme's pages: shared with any other
-// settings read on this request, and the default when they can't be read.
-const { language } = await getSiteSettings(Astro.locals)
+// settings read on this request, but never waiting long for it (a hung API must not hold a
+// sign-in page): the last language read, else the default, when it doesn't answer in time.
+const language = await getSiteLanguage(Astro.locals)
 
 // Emailed links hold a token (in the fragment, but be safe), and /login may
 // carry a redirect: never cache these pages.

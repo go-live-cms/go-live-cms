@@ -452,7 +452,8 @@ are the most fragile part of the codebase. **Before editing anything under
   posts list's box (`?q=`) calls `GET /posts/search` with the tab's filters, best match first.
 - **Site settings (#330):** `src/lib/siteSettings.ts` `getSiteSettings(Astro.locals)` fetches
   `/settings` once per request (pass `Astro.locals`; every caller shares it): title, tagline,
-  language, time zone, date format. `<html lang>` is the language; the tagline is the home dek,
+  language, time zone, date format. `<html lang>` is the language (the account pages and `layouts/Page.astro`
+  read it with `getSiteLanguage`: at most 250 ms, then the last language read, else the default, #481); the tagline is the home dek,
   the footer line and `SeoHead`'s fallback description (`og:site_name` = the site title).
   **Every public date goes through `formatSiteDate(date, site, "long" | "short")`**
   (`src/lib/siteDates.ts`): the preset sets the day/month/year order, the language the names,
