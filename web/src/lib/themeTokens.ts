@@ -128,10 +128,18 @@ export function themeCssVariables(config: ThemeTokenConfig): string {
 }
 
 // The values go into a <style> element. #485 validates every value against the grammar
-// of design 6.3 before it is stored; this is the last line, so nothing that could close a
-// declaration or the element is ever emitted, whatever the stored row holds.
-const UNSAFE_VALUE = /[;{}<>\\]|\/\*/
-const safeString = (value: unknown): value is string => typeof value === "string" && value.trim() !== "" && !UNSAFE_VALUE.test(value)
+// of design 6.3 before it is stored; this is the last line, whatever the stored row holds:
+// only what a colour or a length can be (`#1b7760`, `680px`, `clamp(1rem, 1rem + 1vw, 2rem)`),
+// and no function but clamp(), so nothing can close a declaration or the element, or name
+// url(), var(), calc() or expression().
+const VALUE_CHARS = /^[#a-zA-Z0-9.,%+\-\s()]+$/
+const FUNCTION_CALL = /([a-zA-Z-]*)\s*\(/g
+const safeString = (value: unknown): value is string =>
+  typeof value === "string" &&
+  value.trim() !== "" &&
+  value.length <= 200 &&
+  VALUE_CHARS.test(value) &&
+  [...value.matchAll(FUNCTION_CALL)].every(([, name]) => name.toLowerCase() === "clamp")
 const safeNumber = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value)
 
 function isEmpty(styles: GlobalStyles | null | undefined): boolean {

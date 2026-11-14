@@ -20,7 +20,8 @@ export interface ThemeScriptAsset {
    * Render-blocking: a plain `<script src>` in `<head>`, run before the first paint, for a
    * script such as the default theme's `theme-init.js` that sets `data-theme` so a dark page
    * never flashes light. Never inline (a CSP of `script-src 'self'` must keep working), and
-   * `defer`/`async` don't apply. Other scripts go before `</body>`.
+   * `defer`/`async` don't apply. Other scripts go before `</body>`, and so does a
+   * `type: "module"` script marked blocking (browsers always defer modules).
    */
   blocking?: boolean
   /**
@@ -46,12 +47,16 @@ export function scriptDataAttributes(script: ThemeScriptAsset): Record<string, s
   return attributes
 }
 
+// A module script is always deferred by the browser, so it can't block: one registered as
+// blocking goes with the other scripts instead.
+const isBlocking = (script: ThemeScriptAsset) => script.blocking === true && script.type?.trim().toLowerCase() !== "module"
+
 /** The scripts for `<head>`, run before the first paint, in registration order. */
 export function blockingScripts(scripts: ThemeScriptAsset[] | undefined): ThemeScriptAsset[] {
-  return (scripts ?? []).filter((script) => script?.src && script.blocking === true)
+  return (scripts ?? []).filter((script) => script?.src && isBlocking(script))
 }
 
 /** The scripts for the end of `<body>`, in registration order. */
 export function bodyScripts(scripts: ThemeScriptAsset[] | undefined): ThemeScriptAsset[] {
-  return (scripts ?? []).filter((script) => script?.src && script.blocking !== true)
+  return (scripts ?? []).filter((script) => script?.src && !isBlocking(script))
 }

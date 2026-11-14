@@ -7,7 +7,7 @@ import { renderContent, getBlockContent, isBlankParagraph } from "./blocks/utils
 import { ImageSizesContext, BLOCK_IMAGE_SIZES } from "./blocks/utils/responsiveImage"
 import { HeadingIdsContext, headingAnchors, type HeadingAnchor } from "./blocks/utils/headingAnchors"
 import { FootnotesContext } from "./blocks/utils/footnotes"
-import { docHasEmbed, PageScopeContext, type PageScope } from "./blocks/utils/pageScope"
+import { docElementIds, docHasEmbed, PageScopeContext, type PageScope } from "./blocks/utils/pageScope"
 // Browser-safe: the admin's revision preview renders this component too.
 import { log } from "../lib/log"
 
@@ -32,9 +32,13 @@ interface BlockRendererProps {
 }
 
 // The embed loader of the page's outermost renderer: added after its blocks if its own doc,
-// or a renderer nested in its blocks, has an embed. Rendered after the blocks, so every
-// nested renderer has reported by then.
-function EmbedLoader({ state }: { state: { needed: boolean } }) {
+// or a renderer nested in its blocks, has an embed. Rendered after the blocks, so nested
+// renderers have normally reported by then; one that renders later (e.g. resolved after a
+// Suspense boundary) is told it's too late (`closed`) and adds its own, so the script is
+// never missing.
+type LoaderState = { needed: boolean; closed: boolean }
+function EmbedLoader({ state }: { state: LoaderState }) {
+  state.closed = true
   return state.needed ? <script src={EMBED_LOADER_SRC} defer /> : null
 }
 
@@ -76,13 +80,21 @@ export default function BlockRenderer({ doc, imageSizes = BLOCK_IMAGE_SIZES, hea
   // is ours, on this site: nothing is asked of a provider until a reader clicks. Once per
   // page (#484): a nested renderer reports it to the outermost, which adds it.
   const readingOrder = blocksInReadingOrder(doc)
-  const hasEmbed = docHasEmbed(doc)
-  const loader = page ? null : { needed: hasEmbed }
-  if (page && hasEmbed) page.needEmbedLoader()
-  // What renderers nested in this doc's blocks skip and report to.
+  const hasEmbed = docHasEmbed(doc, readingOrder)
+  const loader: LoaderState | null = page ? null : { needed: hasEmbed, closed: false }
+  // A nested renderer adds the script itself only if the outermost can no longer.
+  const ownLoader = page !== null && hasEmbed && !page.needEmbedLoader()
+  // What renderers nested in this doc's blocks skip and report to: this doc's reserved,
+  // anchor and heading ids.
   const scope: PageScope = {
-    reservedIds: [...reserved, ...anchors.map((h) => h.id)],
-    needEmbedLoader: page ? () => page.needEmbedLoader() : () => void (loader!.needed = true),
+    reservedIds: [...reserved, ...docElementIds(doc), ...anchors.map((h) => h.id)],
+    needEmbedLoader: page
+      ? () => page.needEmbedLoader()
+      : () => {
+          if (loader!.closed) return false
+          loader!.needed = true
+          return true
+        },
   }
 
   // On the server, every plugin block is rendered on its own first (#456): one whose renderer
@@ -106,6 +118,7 @@ export default function BlockRenderer({ doc, imageSizes = BLOCK_IMAGE_SIZES, hea
             </PluginBlockChecksContext.Provider>
           </FootnotesContext.Provider>
           {loader && <EmbedLoader state={loader} />}
+          {ownLoader && <script src={EMBED_LOADER_SRC} defer />}
         </HeadingIdsContext.Provider>
       </ImageSizesContext.Provider>
     </PageScopeContext.Provider>

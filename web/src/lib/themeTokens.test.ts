@@ -62,6 +62,15 @@ describe("resolveThemeTokens", () => {
     expect(css({ typography: { lineHeight: { tight: Number.NaN } } })).toBe(themeCssVariables(defaultConfig))
   })
 
+  it("names no function but clamp(): no url(), var(), calc() or expression()", () => {
+    for (const value of ["url(https://tracker.example/p.gif)", "url (//x)", "var(--x)", "calc(1px + 2px)", "expression(alert(1))", "clamp(1px, url(x), 2px)", "@import x", "'x'", "x".repeat(201)]) {
+      expect(css({ colors: { light: { surface: value } }, typography: { fontSize: { base: value } } })).toBe(themeCssVariables(defaultConfig))
+    }
+    // The forms the default theme's own values take still apply.
+    expect(css({ typography: { fontSize: { base: "clamp(1rem, 0.9rem + 0.5vw, 1.25rem)" } } })).toContain("--size-base:clamp(1rem, 0.9rem + 0.5vw, 1.25rem);")
+    expect(css({ colors: { light: { surface: "#ffffff" } } })).toContain("--color-surface:#ffffff;")
+  })
+
   it("leaves font families alone until #485 resolves their option ids", () => {
     expect(css({ typography: { fontFamily: { heading: "literata" } } })).toBe(themeCssVariables(defaultConfig))
   })

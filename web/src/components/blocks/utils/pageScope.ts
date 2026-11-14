@@ -17,26 +17,50 @@
  * `pageHeadingAnchors` and passes each list as the renderer's `headings`.
  */
 import { createContext } from "react"
-import { blocksInReadingOrder, embedTargetOf, type Block, type BlockDocV1 } from "@gl-admin/lib/blocks-spec"
+import { blockAnchorId, blocksInReadingOrder, embedTargetOf, FOOTNOTES_TITLE_ID, type Block, type BlockDocV1 } from "@gl-admin/lib/blocks-spec"
 import { headingAnchors, type HeadingAnchor } from "./headingAnchors"
 
 export interface PageScope {
   // Ids a nested renderer's headings never take.
   readonly reservedIds: readonly (string | RegExp)[]
-  // A nested renderer's doc has an embed: the outermost renderer adds the loader.
-  needEmbedLoader(): void
+  // A nested renderer's doc has an embed. true: the outermost renderer adds the loader;
+  // false: it already rendered its end (the nested one rendered late), so the nested one
+  // adds the script itself. The script is never missing; it is twice only in that case.
+  needEmbedLoader(): boolean
 }
 
 // null outside a BlockRenderer: the renderer is the outermost and owns the page's scope.
 export const PageScopeContext = createContext<PageScope | null>(null)
 
-/** Whether the doc has an embed that renders (so the page needs `/gl-embeds.js`, #425). */
-export function docHasEmbed(doc: BlockDocV1 | null | undefined): boolean {
+/**
+ * Whether the doc has an embed that renders (so the page needs `/gl-embeds.js`, #425).
+ * `readingOrder` is `blocksInReadingOrder(doc)` when the caller already has it.
+ */
+export function docHasEmbed(doc: BlockDocV1 | null | undefined, readingOrder?: readonly string[]): boolean {
   if (!doc?.blocks || !Array.isArray(doc.blocks_order)) return false
-  return blocksInReadingOrder(doc).some((id) => {
+  return (readingOrder ?? blocksInReadingOrder(doc)).some((id) => {
     const block = doc.blocks[id] as Block | undefined
     return block?.type === "embed" && embedTargetOf(block.attrs) !== null
   })
+}
+
+/**
+ * The element ids a rendered doc puts on the page besides its headings: its top-level
+ * blocks' `b-<id>` anchors (#356) and, with footnotes (#422), the list's title and the
+ * `fn-N` / `ref-N` anchors. A doc nested inside it reserves them, as headingAnchors does
+ * for the doc's own.
+ */
+export function docElementIds(doc: BlockDocV1 | null | undefined): (string | RegExp)[] {
+  if (!doc?.blocks || !Array.isArray(doc.blocks_order)) return []
+  const ids: (string | RegExp)[] = []
+  for (const blockId of doc.blocks_order) {
+    const anchor = blockAnchorId(blockId)
+    if (anchor) ids.push(anchor)
+  }
+  if (doc.blocks_order.some((blockId) => doc.blocks[blockId]?.type === "footnotes")) {
+    ids.push(FOOTNOTES_TITLE_ID, /^fn-\d+$/, /^ref-\d+(-\d+)?$/)
+  }
+  return ids
 }
 
 /**

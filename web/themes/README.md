@@ -109,6 +109,7 @@ export default themeConfig
 ---
 // layouts/post/default.astro
 import BlockRenderer from '@/components/BlockRenderer'
+import ThemeScripts from '@/components/ThemeScripts.astro'
 
 interface Props {
   post: any
@@ -128,6 +129,7 @@ const { post, title, description } = Astro.props
     {Astro.locals.themeAssets?.styles?.map((style: any) => (
       <link rel="stylesheet" href={style.src} media={style.media || 'all'} />
     ))}
+    <ThemeScripts scripts={Astro.locals.themeAssets?.scripts} placement="head" />
   </head>
   <body>
     <article>
@@ -141,9 +143,7 @@ const { post, title, description } = Astro.props
       </div>
     </article>
 
-    {Astro.locals.themeAssets?.scripts?.map((script: any) => (
-      <script src={script.src} defer={script.defer} async={script.async}></script>
-    ))}
+    <ThemeScripts scripts={Astro.locals.themeAssets?.scripts} placement="body" />
   </body>
 </html>
 ```
@@ -458,6 +458,7 @@ For themes with shared HTML structure (header, footer, meta tags), create a `bas
 // layouts/base.astro
 import themeConfig from '../theme.config'
 import SeoHead from '@/components/SeoHead.astro'
+import ThemeScripts from '@/components/ThemeScripts.astro'
 import type { SeoMeta } from '@/lib/seo'
 
 interface Props {
@@ -482,16 +483,16 @@ const themeAssets = Astro.locals.themeAssets || {}
     {themeAssets.styles?.map((style: any) => (
       <link rel="stylesheet" href={style.src} media={style.media || 'all'} />
     ))}
+    <!-- Theme-registered scripts that must run before the first paint (blocking: true) -->
+    <ThemeScripts scripts={themeAssets.scripts} placement="head" />
 
     <slot name="head" />
   </head>
   <body>
     <slot />
 
-    <!-- Theme-registered scripts -->
-    {themeAssets.scripts?.map((script: any) => (
-      <script src={script.src} defer={script.defer} async={script.async}></script>
-    ))}
+    <!-- The other theme-registered scripts -->
+    <ThemeScripts scripts={themeAssets.scripts} placement="body" />
   </body>
 </html>
 ```
@@ -603,32 +604,27 @@ assets: {
 
 **Build your CSS however you want** — SCSS, Tailwind, PostCSS, plain CSS. The theme system only cares about the compiled output file. The middleware serves files from `web/themes/` with proper MIME types and caching headers.
 
-**In your layout**, render them like this:
-
-```astro
-<!-- In <head> -->
-{Astro.locals.themeAssets?.styles?.map((style: any) => (
-  <link rel="stylesheet" href={style.src} media={style.media || 'all'} />
-))}
-
-<!-- Before </body> -->
-{Astro.locals.themeAssets?.scripts?.map((script: any) => (
-  <script src={script.src} defer={script.defer} async={script.async} type={script.type}></script>
-))}
-```
-
-With `blocking` scripts, use core's `ThemeScripts` instead, which puts each where it
-belongs (rules in `src/lib/themeAssets.ts`):
+**In your layout**, render them like this. Core's `ThemeScripts` puts each script where it
+belongs: `blocking` ones in `<head>`, the rest before `</body>` (rules in
+`src/lib/themeAssets.ts`; a `type: "module"` script is never blocking, since browsers
+always defer modules):
 
 ```astro
 ---
 import ThemeScripts from '@/components/ThemeScripts.astro'
 ---
 <!-- In <head> -->
+{Astro.locals.themeAssets?.styles?.map((style: any) => (
+  <link rel="stylesheet" href={style.src} media={style.media || 'all'} />
+))}
 <ThemeScripts scripts={Astro.locals.themeAssets?.scripts} placement="head" />
+
 <!-- Before </body> -->
 <ThemeScripts scripts={Astro.locals.themeAssets?.scripts} placement="body" />
 ```
+
+An older layout that maps `themeAssets.scripts` itself still works, but it puts a
+`blocking` script at the end of `<body>`, where it can't run before the first paint.
 
 ---
 

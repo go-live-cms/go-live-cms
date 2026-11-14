@@ -21,6 +21,12 @@ describe("theme scripts", () => {
     expect(bodyScripts(undefined)).toEqual([])
   })
 
+  it("a module marked blocking goes at the end of <body>: browsers defer modules", () => {
+    const module = [{ src: "/m.js", blocking: true, type: "module" }]
+    expect(blockingScripts(module)).toEqual([])
+    expect(bodyScripts(module).map((s) => s.src)).toEqual(["/m.js"])
+  })
+
   it("data becomes data-* attributes; a name that isn't one is left out", () => {
     expect(scriptDataAttributes({ src: "/a.js", data: { "storage-key": "k", "Bad Name": "x", onload: "y", "x\"y": "z" } })).toEqual({ "data-storage-key": "k", "data-onload": "y" })
     expect(scriptDataAttributes({ src: "/a.js" })).toEqual({})
