@@ -32,6 +32,20 @@ describe("the rendered page", () => {
     expect(page).toContain('aria-label="Load video: Two editors, one draft"')
   })
 
+  it("ties where it connects to the Load button as its description (#481)", () => {
+    const page = html(docOf({ "embed-0001": embed({ provider: "youtube", ref: REFS.youtube }) }))
+    expect(page).toContain('aria-describedby="embed-note-embed-0001"')
+    expect(page).toContain('<span class="embed-note" id="embed-note-embed-0001">Loading it connects to')
+    // A heading never takes the note's id.
+    const withHeading = docOf({
+      "head-00001": { type: "heading", attrs: { level: 2, pm: { type: "heading", content: [{ type: "text", text: "Embed note embed 0001" }] } } },
+      "embed-0001": embed({ provider: "youtube", ref: REFS.youtube }),
+    })
+    expect(html(withHeading)).toContain('<h2 id="embed-note-embed-0001-2"')
+    // A block id that isn't safe in an id gets no description rather than a broken one.
+    expect(html(docOf({ "e1": embed({ provider: "youtube", ref: REFS.youtube }) }))).not.toContain("aria-describedby")
+  })
+
   it("makes no third-party request: no iframe, image, link or foreign script, nor a provider's address", () => {
     const page = html(everyProvider())
     expect(page).not.toMatch(/<iframe|<img|<link|<object|<embed|<video|<audio|srcset/)

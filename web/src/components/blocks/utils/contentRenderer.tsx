@@ -10,17 +10,32 @@ import { DEFAULT_DATE_SETTINGS } from "../../../lib/siteDates"
 import { FOOTNOTE_REF_NODE } from "@gl-admin/lib/blocks-spec/footnotes"
 import { FootnoteRefMark } from "./footnotes"
 
+// Visually hidden at the end of a link that opens a new tab (every theme defines `.sr-only`).
+export const NEW_TAB_LABEL = " (opens in a new tab)"
+
 /**
  * Render a single text node with its marks (bold, italic, link, code, etc.)
  * Marks are applied in order, wrapping the content progressively
  */
-export function renderTextNode(node: PMNode, index: number): React.ReactNode {
+// `linkContinues`: the next run is the same new-tab link (a link with mixed marks is split
+// into runs, each its own <a>), so only the last run says it opens a new tab.
+interface MarkOptions {
+  linkContinues?: boolean
+}
+
+export function renderTextNode(node: PMNode, index: number, options: MarkOptions = {}): React.ReactNode {
   if (node.type !== "text" || !node.text) return null
-  return <React.Fragment key={index}>{applyMarks(node.text, node, index)}</React.Fragment>
+  return <React.Fragment key={index}>{applyMarks(node.text, node, index, options)}</React.Fragment>
+}
+
+// The href of a run's new-tab link, or null when it has none.
+function newTabHref(node: PMNode | undefined): string | null {
+  const link = node?.marks?.find((mark) => mark.type === "link")
+  return link?.attrs?.target === "_blank" ? String(link.attrs?.href ?? "") : null
 }
 
 /** `content` wrapped in `node`'s marks, in order (a text run's, or an inline node's, #320). */
-function applyMarks(text: React.ReactNode, node: PMNode, index: number): React.ReactNode {
+function applyMarks(text: React.ReactNode, node: PMNode, index: number, options: MarkOptions = {}): React.ReactNode {
   let content: React.ReactNode = text
 
   // Apply marks in order (wrapping progressively)
@@ -42,18 +57,22 @@ function applyMarks(text: React.ReactNode, node: PMNode, index: number): React.R
         case "underline":
           content = <u key={`underline-${index}`}>{content}</u>
           break
-        case "link":
+        case "link": {
+          const newTab = mark.attrs?.target === "_blank"
           content = (
             <a
               key={`link-${index}`}
               href={safeHref(mark.attrs?.href as string | undefined) ?? "#"}
               target={(mark.attrs?.target as string) || undefined}
-              rel={mark.attrs?.target === "_blank" ? "noopener noreferrer" : undefined}
+              rel={newTab ? "noopener noreferrer" : undefined}
             >
               {content}
+              {/* #481 (WCAG 3.2.5): say so before the reader lands somewhere else. */}
+              {newTab && !options.linkContinues && <span className="sr-only">{NEW_TAB_LABEL}</span>}
             </a>
           )
           break
+        }
         // #418: one theme colour (the theme styles `<mark>`), so no colour from the mark:
         // the schema has no `color` attr and the API drops any.
         case "highlight":
@@ -80,19 +99,19 @@ function applyMarks(text: React.ReactNode, node: PMNode, index: number): React.R
  * a date chip is a `<time>` with the site's format (`label`, from `labelDateChips`) or the
  * default one. Only a path on this site is ever a link.
  */
-export function renderInlineNode(node: PMNode, index: number): React.ReactNode {
+export function renderInlineNode(node: PMNode, index: number, options: MarkOptions = {}): React.ReactNode {
   const attrs = (node.attrs ?? {}) as Record<string, unknown>
   const label = normalizeInlineLabel(attrs.label)
   if (node.type === MENTION_NODE) {
     if (!label) return null
-    return <React.Fragment key={index}>{applyMarks(<span className="gl-mention">{label}</span>, node, index)}</React.Fragment>
+    return <React.Fragment key={index}>{applyMarks(<span className="gl-mention">{label}</span>, node, index, options)}</React.Fragment>
   }
   if (node.type === CONTENT_LINK_NODE) {
     const text = label ?? ""
     if (!text) return null
     const href = typeof attrs.href === "string" && /^\/(?!\/)/.test(attrs.href) ? safeHref(attrs.href) : undefined
     const content = href ? <a className="gl-content-link" href={href}>{text}</a> : text
-    return <React.Fragment key={index}>{applyMarks(content, node, index)}</React.Fragment>
+    return <React.Fragment key={index}>{applyMarks(content, node, index, options)}</React.Fragment>
   }
   if (node.type === DATE_CHIP_NODE) {
     const chip = dateChipAttrs(attrs)
@@ -106,6 +125,7 @@ export function renderInlineNode(node: PMNode, index: number): React.ReactNode {
           </time>,
           node,
           index,
+          options,
         )}
       </React.Fragment>
     )
@@ -144,8 +164,10 @@ export function renderContent(content: PMNode[] | undefined): React.ReactNode {
 
   let paragraphsSeen = 0
   return content.map((node, index) => {
+    const href = newTabHref(node)
+    const options = { linkContinues: href !== null && newTabHref(content[index + 1]) === href }
     if (node.type === "text") {
-      return renderTextNode(node, index)
+      return renderTextNode(node, index, options)
     }
 
     // Nested paragraphs (inside a blockquote or list item) render inline, without <p>,
@@ -171,7 +193,7 @@ export function renderContent(content: PMNode[] | undefined): React.ReactNode {
     }
 
     if (node.type === MENTION_NODE || node.type === CONTENT_LINK_NODE || node.type === DATE_CHIP_NODE) {
-      return renderInlineNode(node, index)
+      return renderInlineNode(node, index, options)
     }
 
     // #422: its number and anchors come from the doc (`FootnotesContext`); nothing for a stale one.

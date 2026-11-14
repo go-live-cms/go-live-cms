@@ -6,6 +6,7 @@
 // <script> only mounts it (no inline script, admin CSP #161).
 import Head from "@/layouts/Page/Head.astro"
 import { SITE_TITLE } from "@/consts"
+import { getSiteSettings } from "@/lib/siteSettings"
 import GLLogo from "@gl-admin/assets/gl-logo.svg?raw"
 import "@gl-admin/assets/styles/pages/login.scss"
 
@@ -15,6 +16,9 @@ interface Props {
 }
 
 const { title, description } = Astro.props
+// The site's language (#481, WCAG 3.1.1), like the theme's pages: shared with any other
+// settings read on this request, and the default when they can't be read.
+const { language } = await getSiteSettings(Astro.locals)
 
 // Emailed links hold a token (in the fragment, but be safe), and /login may
 // carry a redirect: never cache these pages.
@@ -22,7 +26,7 @@ Astro.response.headers.set("Cache-Control", "no-store")
 ---
 
 <!doctype html>
-<html lang="en">
+<html lang={language}>
 <head>
 <!-- noindex: Head then emits robots noindex and no canonical/og:url (#137). -->
 <Head title={`${title} - ${SITE_TITLE}`} description={description} noindex>

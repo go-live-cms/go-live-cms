@@ -333,7 +333,8 @@ are the most fragile part of the codebase. **Before editing anything under
   the shared media picker (`components/media/MediaPicker.tsx`, #423, UI only) show "No alt text"; the
   library's filter is `?alt=missing`. `AltTextField` (panel and detail page) holds the alt
   text and "Decorative image"; an empty alt saves as empty (name and description still
-  can't be cleared). The public `ImageBlock` renders `alt=""` when `doc.media[id].decorative`.
+  can't be cleared). The public `ImageBlock` renders `alt=""` when `doc.media[id].decorative`; otherwise the
+  block's alt, else the library's (`doc.media[id].alt`, #481), else no `alt` at all (`imageAlt`).
   Home reads the count through `GET /home/needs-attention` (#324).
 - **Home's feeds (#324):** "Continue where you left off" is `getContinueEditing` (the posts
   you last worked on, from the API's activity log: "Edited 2 hours ago" is when *you* did),
@@ -401,7 +402,9 @@ are the most fragile part of the codebase. **Before editing anything under
 - **Heading anchors, related/adjacent posts (#351):** `BlockRenderer` gives every heading an
   `id` from `blocks/utils/headingAnchors.ts` (slug of the text, Latin accents dropped, other
   scripts kept, `-2`/`-3` for repeats, reserved ids skipped); a layout that also builds a
-  table of contents passes its `headings` so both agree. Older/newer and related posts come
+  table of contents passes its `headings` so both agree. The page title is the one `<h1>` (#481): a Heading 1
+  block (or a missing or invalid level) renders as an `h2`, and `headingLevel` gives the TOC the same level;
+  an embed's note id (`embedNoteId`) is never a heading's. Older/newer and related posts come
   from the API's `/public/posts/:id/adjacent` and `/related` through `lib/relatedPosts.ts`
   (`loadPostEnd`, every part fails soft).
 - **Numbered pagination (#349):** lists page through `GET /public/posts/type/:type?page=N`
@@ -832,7 +835,10 @@ are the most fragile part of the codebase. **Before editing anything under
   Focus rings are `--focus-ring` (global `:focus-visible`; menu rows `mixins.menu-row`'s inset ring).
   **`axe-core`** (exact dev dependency) runs in vitest: `gl-admin/components/ui/axe.test.tsx` renders
   components with react-dom into jsdom (contrast off: `tokens.test.ts` owns it); add new shared
-  components and editor chrome there. Remaining findings: the Post-MVP issues linked from #144.
+  components and editor chrome there. The public site (#481): `src/components/blocks/axe.test.tsx` (a post
+  body with the audited blocks) and `themes/default/theme.astro.test.ts` (every default-theme layout,
+  rendered whole, axe loaded into a JSDOM window). Remaining findings: the Post-MVP issues linked from
+  #144 (video captions: #507).
 - **Editor announcements and shortcuts (#477):** a live region must be in the page, empty, before
   it speaks, and should speak transitions, not every render. The top bar's `SaveAnnouncer`
   (`EditorTopBar.tsx`, rules in `saveAnnouncement`) is the one status region for the save state and

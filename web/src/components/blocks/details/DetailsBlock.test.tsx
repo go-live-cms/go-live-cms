@@ -48,14 +48,15 @@ describe("DetailsBlock (#421)", () => {
   it("is closed unless the block says open: true (no script: the browser toggles it)", () => {
     const html = render(doc())
     expect(html).toContain(`<details id="b-${CLOSED}"><summary>Who owns a post?</summary><p>The person who created it.</p></details>`)
-    expect(render(doc({ open: "yes" }))).toContain(`<details id="b-${DETAILS}"><summary></summary>`)
+    expect(render(doc({ open: "yes" }))).toContain(`<details id="b-${DETAILS}"><summary><span class="sr-only">Details</span></summary>`)
     expect(html).not.toContain("<script")
   })
 
-  it("keeps only the caption marks in the summary, and renders an empty one as an empty <summary>", () => {
+  it("keeps only the caption marks in the summary; an empty one is named \"Details\", visually hidden (#481)", () => {
     const html = render(doc({ summary: [{ type: "text", text: "x", marks: [{ type: "code" }, { type: "italic" }] }, { type: "image", attrs: { src: "/a.png" } }] }))
     expect(html).toContain("<summary><em>x</em></summary>")
-    expect(render(doc({}))).toContain("<summary></summary>")
+    expect(render(doc({}))).toContain('<summary><span class="sr-only">Details</span></summary>')
+    expect(render(doc({ summary: [{ type: "text", text: "   " }] }))).toContain('<summary><span class="sr-only">Details</span></summary>')
   })
 
   it("renders nothing when none of its blocks can be rendered", () => {

@@ -2,7 +2,7 @@ import React, { useContext } from "react"
 import { captionRuns, isImageAlign, isMediaMissing } from "@gl-admin/lib/blocks-spec"
 import type { BlockComponentProps } from "../types"
 import { renderContent } from "../utils/contentRenderer"
-import { blockMediaFor, ImageInGalleryContext, ImageSizesContext, isFirstImageBlock, responsiveImageAttrs } from "../utils/responsiveImage"
+import { blockMediaFor, imageAlt, ImageInGalleryContext, ImageSizesContext, isFirstImageBlock, responsiveImageAttrs } from "../utils/responsiveImage"
 
 const ImageBlock: React.FC<BlockComponentProps> = ({ block, doc, anchorId }) => {
   const attrs = block.attrs as Record<string, unknown>
@@ -15,8 +15,8 @@ const ImageBlock: React.FC<BlockComponentProps> = ({ block, doc, anchorId }) => 
   const title = attrs?.title as string | undefined
   const media = blockMediaFor(doc, attrs?.mediaId)
   // A decorative image (#325) is skipped by screen readers whatever alt text the block
-  // was inserted with.
-  const alt = media?.decorative ? "" : (attrs?.alt as string) || ""
+  // was inserted with; any other falls back to the library's alt text (#481).
+  const alt = imageAlt(attrs?.alt, media)
 
   // srcset/sizes from the media's variants and object-position from its
   // focal point, when the API attached them (#255); src is always the

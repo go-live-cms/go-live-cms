@@ -56,7 +56,21 @@ describe("HeadingBlock ids", () => {
     expect(render(d)).toContain('<h3 id="three"')
   })
 
-  it("renders an out-of-range level as an h1", () => {
-    expect(render(doc({ id: "a", text: "Odd", level: 9 }))).toContain('<h1 id="odd"')
+  // #481: the page's title is its one <h1>.
+  it("renders a Heading 1 block as an h2, beside the H2s it sits among", () => {
+    const html = render(doc({ id: "a", text: "Big", level: 1 }, { id: "b", text: "Next" }))
+    expect(html).toContain('<h2 id="big"')
+    expect(html).toContain('<h2 id="next"')
+    expect(html).not.toContain("<h1")
+  })
+
+  it("renders a missing or out-of-range level as an h2", () => {
+    const d = doc({ id: "a", text: "Odd", level: 9 }, { id: "b", text: "Zero", level: 0 }, { id: "c", text: "None" })
+    delete (d.blocks.c as { attrs: Record<string, unknown> }).attrs.level
+    const html = render(d)
+    expect(html).toContain('<h2 id="odd"')
+    expect(html).toContain('<h2 id="zero"')
+    expect(html).toContain('<h2 id="none"')
+    expect(html).not.toContain("<h1")
   })
 })

@@ -30,7 +30,7 @@ const isEmpty = query !== '' && total === 0
   <div class="container">
     <div class="measure search-page">
       <h1 class="title search-title">Search</h1>
-      <SearchForm id="search-q" value={query} label="Search posts and pages" autofocus={query === ''} />
+      <SearchForm id="search-q" value={query} label="Search posts and pages" />
 
       {hasResults && (
         <>

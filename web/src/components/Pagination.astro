@@ -3,8 +3,13 @@
  * The numbered pager under a public list (#349): "← Newer · 1 2 3 … 5 · Page 1 of 5 ·
  * Older →". Shared by every list (front page, post types; terms #348, authors #350,
  * search #145); the theme styles the class names (.pagination, .page-link, .page-num,
- * .page-status). Nothing renders for a single page. URLs and the window come from
- * src/lib/pagination.ts.
+ * .page-status, and .page-link.is-disabled for an end with nowhere to go). Nothing renders
+ * for a single page. URLs and the window come from src/lib/pagination.ts.
+ *
+ * For screen readers (#481): the arrows are aria-hidden, every number is named "Page N"
+ * (the number stays the visible text), and an end with nowhere to go is hidden whole: it's
+ * text, not a control, so there is nothing to say "disabled" about. The space beside an
+ * arrow is part of the label's string: Astro drops one between an expression and a tag.
  */
 import { pageLinks, pagePath, pageWindow } from '@/lib/pagination'
 
@@ -28,17 +33,17 @@ const withQuery = (href: string) => `${href}${query}`
 
 {totalPages > 1 && (
   <nav class="pagination" aria-label="Pages">
-    {links.newer ? <a href={withQuery(links.newer)} class="page-link" rel="prev">← {previousLabel}</a> : <span class="page-link" aria-disabled="true">← {previousLabel}</span>}
+    {links.newer ? <a href={withQuery(links.newer)} class="page-link" rel="prev"><span aria-hidden="true">←</span>{` ${previousLabel}`}</a> : <span class="page-link is-disabled" aria-hidden="true">← {previousLabel}</span>}
     {slots.map((slot) =>
       slot === 'gap' ? (
         <span class="page-link page-num" aria-hidden="true">…</span>
       ) : slot === page ? (
-        <a href={withQuery(pagePath(basePath, slot))} class="page-link page-num" aria-current="page">{slot}</a>
+        <a href={withQuery(pagePath(basePath, slot))} class="page-link page-num" aria-label={`Page ${slot}`} aria-current="page">{slot}</a>
       ) : (
-        <a href={withQuery(pagePath(basePath, slot))} class="page-link page-num">{slot}</a>
+        <a href={withQuery(pagePath(basePath, slot))} class="page-link page-num" aria-label={`Page ${slot}`}>{slot}</a>
       ),
     )}
     <span class="page-status">Page {page} of {totalPages}</span>
-    {links.older ? <a href={withQuery(links.older)} class="page-link" rel="next">{nextLabel} →</a> : <span class="page-link" aria-disabled="true">{nextLabel} →</span>}
+    {links.older ? <a href={withQuery(links.older)} class="page-link" rel="next">{`${nextLabel} `}<span aria-hidden="true">→</span></a> : <span class="page-link is-disabled" aria-hidden="true">{nextLabel} →</span>}
   </nav>
 )}

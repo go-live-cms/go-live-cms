@@ -1,6 +1,6 @@
 import { focalPosition, isBlockDecorative, isMediaMissing, normalizeFocal, type BlockDocV1 } from "@gl-admin/lib/blocks-spec"
 import { blockFileFor } from "./mediaFile"
-import { isFirstImageBlock, responsiveImageAttrs, type ResponsiveImageAttrs } from "./responsiveImage"
+import { imageAlt, isFirstImageBlock, responsiveImageAttrs, type ResponsiveImageAttrs } from "./responsiveImage"
 
 // The image of a cover or media & text (#427). They store only a media id, so the URL,
 // variants and size come from the `media` map the API attaches to a served doc, the same place
@@ -10,7 +10,8 @@ import { isFirstImageBlock, responsiveImageAttrs, type ResponsiveImageAttrs } fr
 export interface ContainerImage {
   /** Null when the lookup failed: the block's blocks still render, without the picture. */
   image: ResponsiveImageAttrs | null
-  alt: string
+  /** Undefined when nothing describes a non-decorative image (`imageAlt`). */
+  alt: string | undefined
   eager: boolean
 }
 
@@ -28,6 +29,6 @@ export function containerImageFor(doc: BlockDocV1, block: { id: string; type: "c
   const image = responsiveImageAttrs(file.url, file.media, sizes)
   const focal = normalizeFocal(attrs.focal)
   if (focal) image.objectPosition = focalPosition(focal)
-  const decorative = isBlockDecorative(block.type, attrs.decorative) || file.media.decorative === true
-  return { image, alt: decorative || typeof attrs.alt !== "string" ? "" : attrs.alt, eager }
+  // "" only when decorative; else the block's alt, else the library's (#481).
+  return { image, alt: imageAlt(attrs.alt, file.media, isBlockDecorative(block.type, attrs.decorative)), eager }
 }

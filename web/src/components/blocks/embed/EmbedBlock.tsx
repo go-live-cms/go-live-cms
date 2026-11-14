@@ -2,6 +2,7 @@ import React from "react"
 import { captionRuns, EMBED_PROVIDER_SPECS, embedFrameLabel, embedIconOf, embedTargetOf, normalizeEmbedTitle } from "@gl-admin/lib/blocks-spec"
 import type { BlockComponentProps } from "../types"
 import { renderContent } from "../utils/contentRenderer"
+import { embedNoteId } from "../utils/headingAnchors"
 
 /**
  * An embed (#425, the canvas's "Published · media & embeds"): a placeholder until the reader
@@ -26,6 +27,8 @@ const EmbedBlock: React.FC<BlockComponentProps> = ({ block, anchorId }) => {
   const title = stored ?? spec.kind
   const caption = captionRuns(attrs.caption)
   const className = ["embed-frame", spec.card && "is-card", spec.compact && "is-compact"].filter(Boolean).join(" ")
+  // The note says where Load connects: the button's description (#481), not just text beside it.
+  const noteId = embedNoteId(block.id) ?? undefined
 
   return (
     <figure id={anchorId} className="embed-block">
@@ -37,10 +40,10 @@ const EmbedBlock: React.FC<BlockComponentProps> = ({ block, anchorId }) => {
           {spec.kind}
         </span>
         <p className="embed-title">{title}</p>
-        <button type="button" className={`btn ${spec.card ? "btn-secondary" : "btn-primary"}`} data-embed-load="" aria-label={`${spec.load}: ${title}`}>
+        <button type="button" className={`btn ${spec.card ? "btn-secondary" : "btn-primary"}`} data-embed-load="" aria-label={`${spec.load}: ${title}`} aria-describedby={noteId}>
           {spec.load}
         </button>
-        <span className="embed-note">Loading it connects to {spec.host}</span>
+        <span className="embed-note" id={noteId}>Loading it connects to {spec.host}</span>
       </div>
       {caption.length > 0 && <figcaption>{renderContent(caption)}</figcaption>}
     </figure>

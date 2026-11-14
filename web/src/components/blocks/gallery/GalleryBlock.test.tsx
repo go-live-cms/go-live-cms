@@ -43,12 +43,14 @@ describe("GalleryBlock (#424)", () => {
     expect(html.indexOf("</ul>")).toBeLessThan(html.indexOf("Six "))
   })
 
-  it("keeps each image's own alt and caption; an image with no alt publishes alt=\"\"", () => {
+  it("keeps each image's own alt and caption; an image with no alt falls back to the library's, else has none (#481)", () => {
     const html = render(doc())
     expect(html).toContain('alt="A red roof"')
     expect(html).toContain("<figcaption>October</figcaption>")
     expect(html).toContain('src="/uploads/media/b.jpg"')
-    expect(html).toMatch(/src="\/uploads\/media\/b\.jpg"[^>]*alt=""/)
+    expect(html).not.toMatch(/src="\/uploads\/media\/b\.jpg"[^>]*\balt=/)
+    const media = { "2": { media_path: "/uploads/media/b.jpg", width: 800, height: 600, alt: "A blue door" } }
+    expect(render(doc({ media }))).toMatch(/src="\/uploads\/media\/b\.jpg"[^>]*alt="A blue door"/)
   })
 
   it("an image's own width doesn't apply inside the grid", () => {

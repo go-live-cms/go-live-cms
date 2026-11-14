@@ -5,7 +5,7 @@
  * always gives the same ids, on every render. Tested in headingAnchors.test.ts.
  */
 import { createContext } from "react"
-import { blockAnchorId, blocksInReadingOrder, FOOTNOTES_TITLE_ID, type Block, type BlockDocV1 } from "@gl-admin/lib/blocks-spec"
+import { blockAnchorId, blocksInReadingOrder, FOOTNOTES_TITLE_ID, isSafeBlockId, type Block, type BlockDocV1 } from "@gl-admin/lib/blocks-spec"
 
 // Block id → element id for the doc being rendered; BlockRenderer provides it and
 // HeadingBlock reads it. Empty outside a BlockRenderer (no ids).
@@ -24,6 +24,15 @@ export interface TocEntry {
   text: string
   // H3s under an H2 (always empty for an H3).
   children: TocEntry[]
+}
+
+/**
+ * The id of an embed's "Loading it connects to …" note, which describes its Load button
+ * (#481, `aria-describedby`); null for a block id that isn't safe in an id. Headings never
+ * take one (`headingAnchors`).
+ */
+export function embedNoteId(blockId: unknown): string | null {
+  return isSafeBlockId(blockId) ? `embed-note-${blockId}` : null
 }
 
 // Used when a heading's text leaves nothing to slug (empty, or only punctuation).
@@ -71,11 +80,14 @@ export function headingText(block: Block): string {
   return text.replace(/\s+/g, " ").trim()
 }
 
-// The level a heading renders at: attrs.level as a whole number 1-6, else 1. HeadingBlock
-// and the table of contents both read it here, so the outline matches the markup.
+// The level a heading renders at: attrs.level as a whole number 2-6. The page's title is
+// its one <h1> (WCAG 1.3.1, #481), so a Heading 1 block renders as an h2, and a missing or
+// invalid level falls back to h2 too. Only level 1 moves: an H2 stays an H2, so a post's
+// outline and the theme's heading styles stay as they were. HeadingBlock and the table of
+// contents both read it here, so the outline matches the markup.
 export function headingLevel(block: Block): number {
   const level = Number((block.attrs as Record<string, unknown> | undefined)?.level)
-  return Number.isInteger(level) && level >= 1 && level <= 6 ? level : 1
+  return Number.isInteger(level) && level >= 2 && level <= 6 ? level : 2
 }
 
 /**
@@ -109,7 +121,13 @@ export function headingAnchors(doc: BlockDocV1 | null | undefined, reserved: Ite
   const anchors: HeadingAnchor[] = []
   // The order BlockRenderer renders: blocks_order and each container's children (a
   // heading in a group gets an anchor too, #414), each id once.
-  for (const blockId of blocksInReadingOrder(doc)) {
+  const inOrder = blocksInReadingOrder(doc)
+  // An embed's note id (#481), at any depth: taken before any heading claims one.
+  for (const blockId of inOrder) {
+    const note = doc.blocks[blockId]?.type === "embed" ? embedNoteId(blockId) : null
+    if (note) used.add(note)
+  }
+  for (const blockId of inOrder) {
     const block = doc.blocks[blockId] as Block | undefined
     if (!block || block.type !== "heading") continue
     const text = headingText(block)

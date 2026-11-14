@@ -227,7 +227,7 @@ interface BlockComponentProps {
   The default theme styles them (`themes/default/styles/theme.css`).
 - **Details (#421, `details/`):** the browser's own `<details id="b-<id>" [open]>` (only
   with `attrs.open: true`), its `<summary>` first (the runs, caption marks only; an empty one
-  is an empty `<summary>`, so the browser shows no "Details" label of its own), then its
+  holds only `<span class="sr-only">Details</span>`, #481: no visible label, but a name), then its
   blocks through `renderBlock`. No script: the browser opens and closes it (a click, ↵ or Space
   on the summary). Nothing renders when none of its blocks does. The default theme styles
   `details`/`summary` (rules, a chevron that turns).
@@ -258,7 +258,8 @@ interface BlockComponentProps {
   `footnoteIndex`: a reference with no note, a note nothing refers to and an empty note render nothing, so no link can dangle. `headingAnchors` keeps a heading off
   these ids in a post with footnotes. `footnote/` is only for what renders one block at a time (History).
 - **Inline marks (`utils/contentRenderer.tsx`):** bold `<strong>`, italic `<em>`, underline `<u>`,
-  strike `<s>`, code `<code>`, link `<a>` (`safeHref`), and since #418 highlight `<mark>` (no
+  strike `<s>`, code `<code>`, link `<a>` (`safeHref`; one with `target="_blank"` ends with
+  `<span class="sr-only"> (opens in a new tab)</span>`, #481), and since #418 highlight `<mark>` (no
   style: the theme's one colour), superscript `<sup>` and subscript `<sub>`, nested in schema
   order (a link inside a highlight). Any other mark renders its text only.
 - **Video, audio, file (#423, "Published · media & embeds"):** they store only a media id, so
@@ -275,7 +276,8 @@ interface BlockComponentProps {
 - **Embeds (#425, `embed/`, "Published · media & embeds"):** `figure.embed-block > div.embed-frame` (`.is-card`
   for X, `.is-compact` for SoundCloud and Spotify) with `.embed-provider`, `p.embed-title`, the Load
   button (`[data-embed-load]`, `.btn.btn-primary`, X's `.btn-secondary`) and `.embed-note` ("Loading it
-  connects to youtube.com"), then `figcaption`. **No third-party request on page load:** no iframe,
+  connects to youtube.com"; `id="embed-note-<block id>"`, the button's `aria-describedby`, #481, an id
+  headings never take), then `figcaption`. **No third-party request on page load:** no iframe,
   image or provider address in the markup, only `data-embed-provider` and `data-embed-ref`.
   `/gl-embeds.js` (from `BlockRenderer`, once per page with an embed, #484) builds the player from its own
   per-provider templates on click, adds `.is-loaded`, `role="region"` and moves focus in; X loads its

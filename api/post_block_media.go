@@ -1,7 +1,8 @@
 // post_block_media.go attaches what the public renderer needs about the
 // images in a published block doc (#255): each image block stores only its
 // mediaId and src, so the variants (for srcset), the intrinsic size, the
-// focal point (for object-position) and decorative (alt="", #325) are looked
+// focal point (for object-position), decorative (alt="", #325) and the library's alt
+// text (the fallback for a block without its own, #481) are looked
 // up when the doc is served and
 // added under the doc's "media" key, keyed by media id:
 //
@@ -26,6 +27,7 @@ import (
 	"encoding/json"
 	"sort"
 	"strconv"
+	"strings"
 
 	db "github.com/go-live-cms/go-live-cms/db/sqlc"
 )
@@ -40,6 +42,11 @@ type BlockMedia struct {
 	// Decorative (#325): the renderer outputs alt="" whatever the block's alt
 	// says, so marking an image decorative applies without republishing.
 	Decorative bool `json:"decorative,omitempty"`
+	// Alt (#481): the media library's alt text, trimmed, which an image, cover or media
+	// & text block without its own alt falls back to (so alt text added in the library
+	// later reaches posts already published). Only for media an image-type block shows,
+	// and never for a decorative image.
+	Alt string `json:"alt,omitempty"`
 
 	// For a video, audio or file block (#423) only, so an image's entry stays as it
 	// was: the type and size for the file's "PDF · 240 KB", its name (the label's
@@ -94,16 +101,18 @@ func isBlockDocShape(doc map[string]interface{}) bool {
 // blockDocMediaIDs returns the mediaIds of the doc's media blocks (image, video, audio,
 // file, cover, media & text), at any depth (the flat map).
 func blockDocMediaIDs(doc map[string]interface{}) []int64 {
-	ids, _ := blockDocMediaRefs(doc)
+	ids, _, _ := blockDocMediaRefs(doc)
 	return ids
 }
 
-// blockDocMediaRefs returns the mediaIds of the doc's media blocks, and which of them a
-// video, audio or file block shows (their entries carry the file info).
-func blockDocMediaRefs(doc map[string]interface{}) ([]int64, map[int64]bool) {
+// blockDocMediaRefs returns the mediaIds of the doc's media blocks, which of them a
+// video, audio or file block shows (their entries carry the file info), and which an
+// image, cover or media & text block shows (their entries carry the library's alt, #481).
+func blockDocMediaRefs(doc map[string]interface{}) ([]int64, map[int64]bool, map[int64]bool) {
 	blocks, _ := doc["blocks"].(map[string]interface{})
 	var ids []int64
 	fileInfo := map[int64]bool{}
+	imageInfo := map[int64]bool{}
 	for _, raw := range blocks {
 		block, _ := raw.(map[string]interface{})
 		blockType := stringOf(block["type"])
@@ -113,12 +122,14 @@ func blockDocMediaRefs(doc map[string]interface{}) ([]int64, map[int64]bool) {
 		attrs, _ := block["attrs"].(map[string]interface{})
 		if id, ok := blockMediaID(attrs["mediaId"]); ok {
 			ids = append(ids, id)
-			if !imageBlockTypes[blockType] {
+			if imageBlockTypes[blockType] {
+				imageInfo[id] = true
+			} else {
 				fileInfo[id] = true
 			}
 		}
 	}
-	return ids, fileInfo
+	return ids, fileInfo, imageInfo
 }
 
 // blockMediaID reads a mediaId attribute (a JSON number, or a numeric string
@@ -156,16 +167,20 @@ func blockMediaID(v interface{}) (int64, bool) {
 func (server *Server) attachBlockMedia(ctx context.Context, docs ...map[string]interface{}) {
 	perDoc := make([][]int64, len(docs))
 	fileInfo := map[int64]bool{}
+	imageInfo := map[int64]bool{}
 	seen := map[int64]bool{}
 	var ids []int64
 	for i, doc := range docs {
 		if doc == nil {
 			continue
 		}
-		var info map[int64]bool
-		perDoc[i], info = blockDocMediaRefs(doc)
-		for id := range info {
+		var files, images map[int64]bool
+		perDoc[i], files, images = blockDocMediaRefs(doc)
+		for id := range files {
 			fileInfo[id] = true
+		}
+		for id := range images {
+			imageInfo[id] = true
 		}
 		for _, id := range perDoc[i] {
 			if !seen[id] {
@@ -204,6 +219,9 @@ func (server *Server) attachBlockMedia(ctx context.Context, docs ...map[string]i
 				Variants:   publicVariants(server.config.UploadPath, resizedOnly(variantsResponse(row.Variants))),
 				FocalPoint: focalPointFrom(row.FocalX, row.FocalY),
 				Decorative: row.Decorative,
+			}
+			if !row.Decorative && imageInfo[id] {
+				entry.Alt = strings.TrimSpace(row.Alt)
 			}
 			if fileInfo[id] {
 				entry.MimeType = row.MimeType
