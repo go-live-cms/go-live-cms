@@ -139,7 +139,8 @@ the collab server.
   `published_post_count` per row), `CountMedia` (GET /media's `total`, now the filtered
   count) and `CountMissingAltMedia` (`GET /media/missing-alt`, content roles:
   `{media_count, published_post_count}`, published = `post_status`, via `post_media`).
-  `BlockMedia.decorative` makes the public renderer emit `alt=""`.
+  `BlockMedia.decorative` makes the public renderer emit `alt=""`; `BlockMedia.alt` (#481, the library's trimmed alt,
+  never for a decorative image) is the fallback for a block without its own.
 - **Media usage (#176, `000028`):** `post_media` is one row per (post, media): `order` 0 =
   featured image, > 0 = content link, and `blocks` (jsonb `[{"id","type"}]`) = the content
   blocks showing it, in document order, for the order-0 row too. `SyncPostContentMedia`

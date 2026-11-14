@@ -23,6 +23,9 @@ export interface BlockMedia {
   focal_point?: { x: number; y: number } | null
   // The image needs no alt text: rendered alt="" (#325).
   decorative?: boolean
+  // The media library's alt text (#481), absent when it has none or is decorative: what a
+  // block without its own alt falls back to (`imageAlt`).
+  alt?: string
   // For a video, audio or file block only (#423, `utils/mediaFile.ts`): the type and
   // size ("PDF · 240 KB"), the media's name and the uploaded file's name.
   mime_type?: string
@@ -51,6 +54,21 @@ export interface ResponsiveImageAttrs {
   width?: number
   height?: number
   objectPosition?: string
+}
+
+/**
+ * An image's `alt` attribute (#481, WCAG 1.1.1): "" only when it is decorative (the block
+ * or the media says so); else the block's own alt text, else the media library's. With
+ * neither it is undefined, so the `<img>` has no alt at all: an image nobody described is
+ * reported as an unlabelled image rather than hidden as if it were decorative (the editor
+ * and the library flag it as "No alt text", #325).
+ */
+export function imageAlt(blockAlt: unknown, media: BlockMedia | undefined, decorative = false): string | undefined {
+  if (decorative || media?.decorative === true) return ""
+  const own = typeof blockAlt === "string" ? blockAlt.trim() : ""
+  if (own) return own
+  const library = typeof media?.alt === "string" ? media.alt.trim() : ""
+  return library || undefined
 }
 
 // blockMediaFor returns the media info the API attached for an image

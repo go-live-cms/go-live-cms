@@ -12,10 +12,9 @@ interface Props {
   value?: string
   placeholder?: string
   compact?: boolean
-  autofocus?: boolean
 }
 
-const { id, label, value = '', placeholder = 'Search the blog', compact = false, autofocus = false } = Astro.props
+const { id, label, value = '', placeholder = 'Search the blog', compact = false } = Astro.props
 ---
 
 <form role="search" class:list={['search-form', { 'search-form--compact': compact }]} action={SEARCH_PATH} method="get">
@@ -30,7 +29,6 @@ const { id, label, value = '', placeholder = 'Search the blog', compact = false,
     maxlength={MAX_QUERY_LENGTH}
     autocomplete="off"
     enterkeyhint="search"
-    autofocus={autofocus}
   />
   {compact ? (
     <button type="submit" class="btn btn-primary" aria-label="Search">

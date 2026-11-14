@@ -1072,7 +1072,8 @@ These are always available and don't need registration:
 | `media_text`   | An image beside blocks, stacked on phones (`div.media-text > figure.media-text-media + div.media-text-body`, `is-media-right`) |
 
 **Every theme styles the three #419 blocks** and defines `.sr-only` (the callout says its
-tone in a visually hidden span): they render with only their classes
+tone in a visually hidden span, and since #481 an empty details summary is named "Details" and a link
+that opens a new tab says so, both in one; the pager's end with nowhere to go is `.page-link.is-disabled`): they render with only their classes
 (`themes/textBlocks.test.ts` fails otherwise). The
 default theme's callout fills and icon colours are `colors.*.info` / `infoBg` (and `success`,
 `warning`, `danger`), `--color-info` / `--color-info-bg` in its stylesheet, checked for

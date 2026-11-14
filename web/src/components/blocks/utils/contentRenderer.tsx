@@ -10,6 +10,9 @@ import { DEFAULT_DATE_SETTINGS } from "../../../lib/siteDates"
 import { FOOTNOTE_REF_NODE } from "@gl-admin/lib/blocks-spec/footnotes"
 import { FootnoteRefMark } from "./footnotes"
 
+// Visually hidden at the end of a link that opens a new tab (every theme defines `.sr-only`).
+export const NEW_TAB_LABEL = " (opens in a new tab)"
+
 /**
  * Render a single text node with its marks (bold, italic, link, code, etc.)
  * Marks are applied in order, wrapping the content progressively
@@ -42,18 +45,22 @@ function applyMarks(text: React.ReactNode, node: PMNode, index: number): React.R
         case "underline":
           content = <u key={`underline-${index}`}>{content}</u>
           break
-        case "link":
+        case "link": {
+          const newTab = mark.attrs?.target === "_blank"
           content = (
             <a
               key={`link-${index}`}
               href={safeHref(mark.attrs?.href as string | undefined) ?? "#"}
               target={(mark.attrs?.target as string) || undefined}
-              rel={mark.attrs?.target === "_blank" ? "noopener noreferrer" : undefined}
+              rel={newTab ? "noopener noreferrer" : undefined}
             >
               {content}
+              {/* #481 (WCAG 3.2.5): say so before the reader lands somewhere else. */}
+              {newTab && <span className="sr-only">{NEW_TAB_LABEL}</span>}
             </a>
           )
           break
+        }
         // #418: one theme colour (the theme styles `<mark>`), so no colour from the mark:
         // the schema has no `color` attr and the API drops any.
         case "highlight":

@@ -475,7 +475,7 @@ Shared media block behaviour, written once:
 
 - **Alt text** (#325): optional alt plus "Decorative image"; a missing alt is flagged on
   the block, in its toolbar and in the panel ("Errors & empty states", "An image without
-  alt text"), and published as `alt=""`. Gallery images are checked one by one.
+  alt text"). Published, it falls back to the media library's alt text (#481); `alt=""` is only for a decorative image, and an image with no alt anywhere has no `alt` attribute (reported as unlabelled, never silently decorative). Gallery images are checked one by one.
 - **Missing media** ("A media file that's missing"): "The file is missing" with Replace
   in the editor; left out of the published page with its caption (2.10).
 - **Focal point** (cover, media & text): the media's own `focal_point` (#255) by default,

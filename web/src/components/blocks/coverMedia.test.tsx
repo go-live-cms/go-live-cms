@@ -152,9 +152,14 @@ describe("MediaTextBlock (#427)", () => {
     expect(render(doc(mediaText({ focal: { x: 50, y: 55 } }), [MEDIA], withMedia))).toContain("object-position:50% 55%")
   })
 
-  it("a decorative one has an empty alt; a block with no alt text publishes alt=\"\"", () => {
+  it("a decorative one has an empty alt; one with no alt text falls back to the library's, else has none (#481)", () => {
     expect(render(doc(mediaText({ decorative: true }), [MEDIA], withMedia))).toContain('alt=""')
-    expect(render(doc(mediaText({ alt: undefined }), [MEDIA], withMedia))).toContain('alt=""')
+    const library = { media: { "2": { ...withMedia.media["2"], alt: "Dunes at dusk" } } }
+    expect(render(doc(mediaText({ alt: undefined }), [MEDIA], library))).toContain('alt="Dunes at dusk"')
+    expect(render(doc(mediaText({ decorative: true }), [MEDIA], library))).toContain('alt=""')
+    const none = render(doc(mediaText({ alt: undefined }), [MEDIA], withMedia))
+    expect(none).toContain("<img")
+    expect(none).not.toMatch(/<img[^>]*\balt=/)
   })
 
   it("is left out, blocks and all, when its image was deleted", () => {

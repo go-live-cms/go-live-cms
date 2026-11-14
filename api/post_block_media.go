@@ -1,7 +1,8 @@
 // post_block_media.go attaches what the public renderer needs about the
 // images in a published block doc (#255): each image block stores only its
 // mediaId and src, so the variants (for srcset), the intrinsic size, the
-// focal point (for object-position) and decorative (alt="", #325) are looked
+// focal point (for object-position), decorative (alt="", #325) and the library's alt
+// text (the fallback for a block without its own, #481) are looked
 // up when the doc is served and
 // added under the doc's "media" key, keyed by media id:
 //
@@ -26,6 +27,7 @@ import (
 	"encoding/json"
 	"sort"
 	"strconv"
+	"strings"
 
 	db "github.com/go-live-cms/go-live-cms/db/sqlc"
 )
@@ -40,6 +42,10 @@ type BlockMedia struct {
 	// Decorative (#325): the renderer outputs alt="" whatever the block's alt
 	// says, so marking an image decorative applies without republishing.
 	Decorative bool `json:"decorative,omitempty"`
+	// Alt (#481): the media library's alt text, trimmed, which an image, cover or media
+	// & text block without its own alt falls back to (so alt text added in the library
+	// later reaches posts already published). Never set for a decorative image.
+	Alt string `json:"alt,omitempty"`
 
 	// For a video, audio or file block (#423) only, so an image's entry stays as it
 	// was: the type and size for the file's "PDF · 240 KB", its name (the label's
@@ -204,6 +210,9 @@ func (server *Server) attachBlockMedia(ctx context.Context, docs ...map[string]i
 				Variants:   publicVariants(server.config.UploadPath, resizedOnly(variantsResponse(row.Variants))),
 				FocalPoint: focalPointFrom(row.FocalX, row.FocalY),
 				Decorative: row.Decorative,
+			}
+			if !row.Decorative {
+				entry.Alt = strings.TrimSpace(row.Alt)
 			}
 			if fileInfo[id] {
 				entry.MimeType = row.MimeType

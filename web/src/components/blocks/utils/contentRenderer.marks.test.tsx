@@ -57,3 +57,15 @@ describe("inline marks in the public renderer (#418)", () => {
     expect(html([text("plain", { type: "spoiler" })])).toBe("plain")
   })
 })
+
+describe("links that open a new tab (#481)", () => {
+  it("say so in visually hidden text, inside the link", () => {
+    expect(html([text("Docs", { type: "link", attrs: { href: "https://example.org/docs", target: "_blank" } })])).toBe(
+      '<a href="https://example.org/docs" target="_blank" rel="noopener noreferrer">Docs<span class="sr-only"> (opens in a new tab)</span></a>',
+    )
+  })
+
+  it("a link in the same tab says nothing more", () => {
+    expect(html([text("Docs", { type: "link", attrs: { href: "/docs" } })])).toBe('<a href="/docs">Docs</a>')
+  })
+})

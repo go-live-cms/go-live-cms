@@ -13,8 +13,9 @@ const HeadingBlock: React.FC<BlockComponentProps> = ({ block, getBlockContent, a
 
   const style: React.CSSProperties = textAlign ? { textAlign } : {}
 
-  // Levels outside 1-6 render as an h1, as before.
-  const Tag = `h${headingLevel(block)}` as "h1" | "h2" | "h3" | "h4" | "h5" | "h6"
+  // h2-h6: a Heading 1 block, and a level outside 1-6, render as an h2 (#481: the page
+  // title is the only <h1>).
+  const Tag = `h${headingLevel(block)}` as "h2" | "h3" | "h4" | "h5" | "h6"
   return (
     <Tag key={block.id} id={id ?? anchorId} className={blockColorClassOf(attrs)} style={style}>
       {/* The heading's own id is its slug (#351, the table of contents' links); the block

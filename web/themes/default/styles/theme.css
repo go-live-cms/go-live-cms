@@ -909,7 +909,7 @@ body {
   color: var(--color-background);
   font-weight: 600;
 }
-.page-link[aria-disabled="true"] {
+.page-link.is-disabled {
   color: var(--color-text-muted);
 }
 /* "Page 1 of 5" stands in for the numbers on a phone. */
@@ -1386,8 +1386,11 @@ body {
   color: #ffffff;
   text-decoration: none;
 }
+/* White on the image, with a dark ring around it (#481): a white ring alone vanishes on a
+   light picture, a dark one on a dark picture; together one always shows. */
 .site .cover :focus-visible {
   outline-color: #ffffff;
+  box-shadow: 0 0 0 6px #000000;
 }
 
 /* Media & text (#427): the media and its blocks side by side, the media above on phones. */
