@@ -157,8 +157,8 @@ builder templates.
 **In:** global styles (colours, typography, layout widths, spacing, radius) in light and
 dark; templates for every public route kind except the 500 page; template parts (header,
 footer, and any part an admin makes); the site blocks; drafts, preview, one publish,
-versions, restore; reset; #336 integration; activity; caching hooks; admin screens (named,
-not drawn).
+versions, restore; reset; #336 integration; activity; caching hooks; admin screens (drawn
+on the design canvases, section 13).
 
 **Not in this design:**
 
@@ -288,7 +288,17 @@ Problem 2 is fixed by a small contract, which the default theme adopts first:
   builder, so it ships early (T9).
 - **Site block styles.** A theme styles the site blocks' markup (`themes/README.md` gains the
   markup, as for content blocks). The default theme's `theme.css` styles all of them, and
-  `layoutBlocks.test.ts`-style tests check that every `var()` is defined.
+  `layoutBlocks.test.ts`-style tests check that every `var()` is defined. The markup reuses
+  the default theme components' classes (`site-title`, `site-nav`, `post-list` and
+  `post-item`, `pagination`, `byline`, `post-terms`, `post-nav`), so a block template and a
+  code layout render the same HTML, which is what T17's parity check needs. The default
+  theme canvas's "Site blocks" boards name each block's markup (13.1).
+- **The theme lays out a part.** A part's top-level blocks are arranged by the theme's
+  styles for that part, not by a block: the default theme puts the header part's blocks in
+  one row (as `site-header-inner` does today) and the footer part's in its columns. That
+  holds whether the part renders through `<TemplatePart>` in a code layout or through a
+  `template_part` block in a block template, so v1 needs no row or stack block (13.1). T2
+  settles the hook, such as a wrapper element per part slug that the theme can style.
 
 ### 3.6 Plugin-system 8.7, point by point
 
@@ -529,7 +539,8 @@ CREATE TABLE site_template_media (
 
 The site logo is a site setting (`settings.site_logo_media_id`, `ON DELETE SET NULL`), so code
 themes can show it too. It is edited in Settings › General and in the `site_logo` block's
-panel. Its "Used in" entry is "Site logo".
+panel, and either one changes it at once: it is a setting, not part of the design draft or
+its publish. Its "Used in" entry is "Site logo".
 
 ### 5.2 Why not posts of a hidden type
 
@@ -690,8 +701,9 @@ names are added to the head as `<link rel="preload">` when the theme declares th
 ### 6.5 Editing
 
 A form, not a collab document. `PUT /site-design/global-styles` takes the whole draft with
-`base_revision`. A stale one gets 409 `styles_changed` and the other admin's draft is shown,
-like #319's byline. Two admins editing styles at the same moment is rare, and colours don't
+`base_revision`. The form saves as you go (debounced, no Save button) and the preview
+reloads after each save (13.1). A stale one gets 409 `styles_changed` and the other admin's
+draft is shown, like #319's byline. Two admins editing styles at the same moment is rare, and colours don't
 merge meaningfully character by character.
 
 ---
@@ -827,8 +839,12 @@ an admin who doesn't want one item in a release discards it first.
    API checks the token **and** that its user is still an admin. Posts and pages are still
    the published ones.
 4. Every previewed response is `Cache-Control: private, no-store` with `X-Robots-Tag:
-   noindex`, and carries a fixed banner ("Previewing unpublished design · Exit preview").
-   Exit clears the cookie.
+   noindex`, and carries a fixed banner ("Previewing unpublished design · only you can see
+   it", with **Exit preview**). Exit clears the cookie. The banner is core markup
+   (`gl-preview-banner`) with core's own fixed colours, never the theme's tokens, since
+   those are what is being previewed and may fail contrast. It sits in the page's flow above
+   the header, not over it, and Exit is a plain POST form, so it works without scripts (the
+   default theme canvas draws it).
 
 The Site editor shows the preview in a frame (same origin, so the admin CSP gains
 `frame-src 'self'`) with Desktop and Phone widths and Light and Dark. It reloads the frame
@@ -938,13 +954,19 @@ the Site editor.
 
 ---
 
-## 13. Admin screens the redesign canvas needs
+## 13. Admin screens and their boards
 
-The redesign canvas has a Themes board whose active card has **Customize** and **View
-site**, with nothing drawn behind Customize. It has no Appearance section (Menus, #347, was
-built without a board) and nothing for templates, styles or previews. The default theme
-canvas has no logo and no site-block markup. The blocks canvas has no site blocks. To be
-drawn (T1), not drawn here:
+Drawn under T1 (#483). Each board has its states (empty, loading, error, read-only, another
+admin present) and, where the canvas has both, light and dark:
+
+| Canvas | Boards | Covers |
+|---|---|---|
+| [GoLive Admin Redesign](https://claude.ai/artifact/XcdvESjJxeGK5dPAed7QtF), row 8 "Site editor" | Site editor · overview; · global styles; · template; · template part; Publish site design, reset & discard; New template & the page Template field; Site editor · history | items 1 to 9 below |
+| the same canvas, existing boards | Settings (the Site logo field), Sidebar (Appearance: Themes, Site editor, Menus), Themes (Customize opens the overview) | items 10, 11 |
+| [GoLive Default Theme](https://claude.ai/artifact/8J1ovgRB7YPYVjpDGRXZku), row 5 and row 1 | Site blocks & preview banner (1280 and 375, light and dark); Header · with a logo | the banner, the logo header, the site blocks' markup |
+| [GoLive Blocks](https://claude.ai/artifact/F2x5Yx7DKiPs64VFsUwEpi), rows 2 to 5 | Editor · site blocks (light, dark); Published · site blocks (1280 and 375, light and dark) | placeholders, the part card, query settings, each block's toolbar and Block tab |
+
+What the boards settled is in 13.1; the sections it changes point here.
 
 **Redesign canvas**
 
@@ -973,8 +995,7 @@ drawn (T1), not drawn here:
    version" for a code default; an unbuildable block in a template (#213's notice);
    another admin editing (presence).
 10. **Settings › General**: the Site logo field.
-11. **Appearance navigation**: where Menus and Site editor sit in the sidebar (today Themes
-    is under Workspace, and Menus has no board).
+11. **Appearance navigation**: where Menus and Site editor sit in the sidebar.
 
 **Default theme canvas:** the preview banner; the header with a logo; the published markup
 of the query loop, pagination, navigation and the post blocks (most match existing
@@ -985,6 +1006,57 @@ settings) and in the 1280 and 375 published sections.
 
 Phone width: the overview and the history read at 375. Editing templates and styles is
 desktop-only in v1, with "Use a larger screen to edit templates" (open question 2).
+
+### 13.1 Settled on the boards
+
+- **Sidebar.** Appearance sits between Content and Workspace, as `nav.ts` has it since
+  #347: **Themes** and **Site editor** (admins), then **Menus** (editors and admins).
+  Contributors have no Appearance section. An editor who opens the Site editor's address
+  gets the 403 page.
+- **Overview vocabulary.** Each template and part says what renders it now: "Theme layout ·
+  post/default" (a code layout), "Theme template · 404" or "Theme part · Paper's footer" (a
+  block template or part the theme ships, 5.7), "Customized", "Customized · changes not
+  published", "Default changed since you customized", "Resets on publish", and for
+  `front-page` without a template "Not customized · Home renders /". A customized `single`
+  row says the type's layout choice no longer applies (3.2), and a customized `archive` row
+  names the term layout that still renders category and tag pages. The 500 page is a note,
+  not a row. The header has History, Preview site and **Publish site design** with its
+  count. A row's menu has Edit, Preview, History, Discard changes, Reset to theme default,
+  and Delete only for an item never published (section 9).
+- **The template and part editors** are the post editor's chrome: breadcrumb (Site editor /
+  Templates / Archive), status pill, presence, a **View** switch **Edit · Split · Preview**
+  (Split puts the preview frame beside the canvas; Preview shows it instead), the settings
+  panel with **Template** (or **Part**) and **Block** tabs, a More menu (History, Open the
+  published page, Discard changes, Start over from the theme default, Reset to theme
+  default) and Publish site design. The preview frame has Desktop/Phone, Light/Dark and a
+  picker for which post or page it shows. A part opened from a template's card has a way
+  back to that template, and "Used in N templates" opens a list of them.
+- **Inserting a query loop** first asks which posts: "This page's list" (`inherit`) or
+  "Posts I choose", as Columns asks for a layout.
+- **Parts are laid out by the theme** (3.5): the default theme puts the header part's
+  blocks in one row and the footer part's in its columns, so v1 needs no row or stack
+  block. The editor shows a part's blocks stacked, with Split or Preview for the real
+  layout.
+- **The site logo is a setting, everywhere.** Replacing it in the `site_logo` block's panel
+  replaces `site_logo_media_id` at once, as Settings › General does: it isn't part of the
+  design draft or its publish (5.1, 11).
+- **Global styles save as you go** (6.5): each change saves the whole draft with
+  `base_revision`, debounced, and reloads the preview. There is no Save button. A failed
+  save keeps the typed value and offers Try again; leaving with an unsaved change asks
+  first. On `styles_changed` the form shows the other admin's version, names them and the
+  change that wasn't saved.
+- **Publish dialog.** Refusals come first and alone (an empty template, a part slug that
+  resolves to nothing), each with Open; contrast warnings come after they're fixed, with
+  the failing pairs and **Publish anyway**. A failed flush says nothing was published.
+- **Names of new templates and parts.** The saved slug is the typed name in lower case
+  with every other run of characters turned into a hyphen, up to 64 characters, shown as
+  it's typed. It can't change later, because pages store it (`block:<name>`, section 10).
+  A new page template starts from the theme's page or blank; a new part starts empty.
+- **Phones.** At 375 the overview and the history are read-only, except that **Publish site
+  design** works there: its dialog is a list. Editing and restoring need a larger screen.
+- **Site blocks' markup** reuses the default theme components' classes (3.5). The only new
+  ones are `site-logo`, `site-logo-block`, `site-tagline`, `site-nav.is-column`,
+  `query-no-results` and core's `gl-preview-banner` (8.3).
 
 ---
 
@@ -1252,7 +1324,8 @@ working answer this design assumes until someone raises them.
 
 1. **Contrast at publish. Decided: warn and allow.** Publishing with a failing pair needs an
    explicit confirmation naming the pairs (6.3, 8.2).
-2. **Phones.** Editing templates and styles is desktop-only in v1 (assumed). A phone editing
+2. **Phones.** Editing templates and styles is desktop-only in v1 (assumed). At 375 the
+   overview and history are read-only, but Publish site design works (13.1). A phone editing
    path could come later.
 3. **Custom CSS.** Not offered (assumed). WordPress has "Additional CSS". If wanted, it needs
    its own sanitizer and would be the only free-form CSS on the site.
