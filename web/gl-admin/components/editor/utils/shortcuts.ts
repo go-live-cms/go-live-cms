@@ -1,4 +1,10 @@
-import { isMacOS } from "@tiptap/core"
+/**
+ * Whether "Mod" is ⌘: prosemirror-keymap's own test (an iPad or iPhone with a keyboard
+ * too), not TipTap's isMacOS, which only matches "Mac" and would label ⌘ keys "Ctrl".
+ */
+export function isMacPlatform(): boolean {
+  return typeof navigator !== "undefined" && /Mac|iP(hone|[oa]d)/.test(navigator.platform)
+}
 
 // The editor's keyboard shortcuts in one place (#477): the keymaps bind these strings
 // (floatingToolbar.ts, BlockNavigation.ts, blockActions.ts, OpenLinkModal.ts), the block
@@ -74,7 +80,7 @@ const SPOKEN_NAMES: Record<string, string> = {
  * ⌃ ⌥ ⇧ ⌘, then the key). `spoken`: in words, for screen readers ("Command Shift P",
  * "Ctrl Up arrow").
  */
-export function formatKeys(keys: string, mac: boolean = isMacOS(), spoken = false): string {
+export function formatKeys(keys: string, mac: boolean = isMacPlatform(), spoken = false): string {
   // The key itself may be "-" or ","; split off the modifiers only.
   const parts = keys.split(/-(?!$)/)
   const key = parts.pop() ?? ""
@@ -133,10 +139,10 @@ export function shortcutSections(): ShortcutSection[] {
       ],
     },
     {
-      title: "Anywhere",
+      title: "Outside the text",
       rows: [
-        { keys: [KEYS.commandPalette], label: "Outside the text: search and jump (command palette)" },
-        { keys: ["?"], label: "Outside the text: this list" },
+        { keys: [KEYS.commandPalette], label: "Search and jump (command palette)" },
+        { keys: ["?"], label: "In the editor, outside a field: this list" },
       ],
     },
   ]
@@ -146,7 +152,7 @@ export function shortcutSections(): ShortcutSection[] {
  * The editable text's accessible description (Editor.tsx): the keys out of it, so a
  * screen reader user hears where the toolbars are without opening the reference.
  */
-export function editorKeysHint(mac: boolean = isMacOS()): string {
+export function editorKeysHint(mac: boolean = isMacPlatform()): string {
   const say = (keys: string) => formatKeys(keys, mac, true)
   return `${say(KEYS.floatingToolbar)} moves to the toolbar. ${say(KEYS.selectBlock)} selects the block. Every shortcut: question mark outside the text, or the block menu's Keyboard shortcuts.`
 }
@@ -166,12 +172,18 @@ export function onShortcutReferenceOpen(open: () => void): () => void {
 
 /**
  * "?" opens the reference only where it would type nothing: not in a field, the editor's
- * text or anything else editable, and without Ctrl, ⌘ or Alt.
+ * text or anything else editable, nor in an open menu or list (their typeahead takes keys),
+ * and without Ctrl, ⌘ or Alt.
  */
 export function isShortcutReferenceKey(event: Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "altKey" | "target">): boolean {
   if (event.key !== "?" || event.ctrlKey || event.metaKey || event.altKey) return false
   const target = event.target
   if (!(target instanceof Element)) return true
-  if (target.closest("input, textarea, select, [contenteditable]:not([contenteditable='false']), [role='textbox'], [role='combobox']")) return false
+  if (
+    target.closest(
+      "input, textarea, select, [contenteditable]:not([contenteditable='false']), [role='textbox'], [role='combobox'], [role='menu'], [role='listbox']"
+    )
+  )
+    return false
   return true
 }

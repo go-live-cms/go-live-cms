@@ -24,10 +24,17 @@ const blockTypeOptions: CommandSelectOption[] = catalogSelectOptions(
  * The options for the block holding the caret: inside a quote, a list or a callout the
  * picker names that block first ("Quote"), not "Select…" / "Block type: none" (#477).
  */
+const optionsByValue = new Map<TurnIntoValue, CommandSelectOption[]>()
 export function blockTypeOptionsFor(value: TurnIntoValue): CommandSelectOption[] {
   if (blockTypeOptions.some((option) => option.value === value)) return blockTypeOptions
-  const current = catalogSelectOptions(turnIntoEntries().filter((entry) => entry.id === value))
-  return current.length > 0 ? [...current, ...blockTypeOptions] : blockTypeOptions
+  // Built once per block type: the toolbar re-renders on every transaction.
+  let options = optionsByValue.get(value)
+  if (!options) {
+    const current = catalogSelectOptions(turnIntoEntries().filter((entry) => entry.id === value))
+    options = current.length > 0 ? [...current, ...blockTypeOptions] : blockTypeOptions
+    optionsByValue.set(value, options)
+  }
+  return options
 }
 
 /** The callout's Type picker (#419, "Type Warning ▾" on the blocks canvas): each tone with its icon. */

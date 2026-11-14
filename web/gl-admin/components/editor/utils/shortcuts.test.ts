@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { Editor } from "@tiptap/core"
 import { TextSelection } from "@tiptap/pm/state"
 import { schemaExtensions } from "@gl-admin/lib/collaboration/schema"
@@ -12,6 +12,7 @@ import {
   MARK_SHORTCUTS,
   editorKeysHint,
   formatKeys,
+  isMacPlatform,
   isShortcutReferenceKey,
   shortcutSections,
 } from "./shortcuts"
@@ -156,9 +157,38 @@ describe("the ? key", () => {
     for (const target of [input, textarea, editable, inside]) expect(isShortcutReferenceKey(event(target))).toBe(false)
   })
 
+  it("leaves an open menu's or list's typeahead alone", () => {
+    for (const role of ["menu", "listbox"]) {
+      const list = document.createElement("div")
+      list.setAttribute("role", role)
+      const item = document.createElement("button")
+      list.appendChild(item)
+      expect(isShortcutReferenceKey(event(item))).toBe(false)
+    }
+  })
+
   it("leaves Ctrl ? and other keys alone", () => {
     expect(isShortcutReferenceKey(event(document.body, { ctrlKey: true }))).toBe(false)
     expect(isShortcutReferenceKey(event(document.body, { key: "/" }))).toBe(false)
+  })
+})
+
+describe("which keyboard is a Mac's", () => {
+  // prosemirror-keymap binds Mod to ⌘ on an iPad or iPhone too: the labels must agree.
+  it.each([
+    ["MacIntel", true],
+    ["iPad", true],
+    ["iPhone", true],
+    ["Win32", false],
+    ["Linux x86_64", false],
+  ])("%s", (platform, mac) => {
+    const spy = vi.spyOn(navigator, "platform", "get").mockReturnValue(platform as string)
+    try {
+      expect(isMacPlatform()).toBe(mac)
+      expect(formatKeys(KEYS.duplicate)).toBe(mac ? "⌘D" : "Ctrl D")
+    } finally {
+      spy.mockRestore()
+    }
   })
 })
 

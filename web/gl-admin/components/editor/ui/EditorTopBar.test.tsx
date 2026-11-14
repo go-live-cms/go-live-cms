@@ -283,6 +283,13 @@ describe("save state announcements (#477)", () => {
       "You're offline. Your edits wait in this tab and are sent when you're back online.",
       "Back online.",
     ])
+    // The browser back before the socket: lost already, so only "Reconnecting".
+    expect(run([at("online"), at("offline"), at("reconnecting"), at("online")])).toEqual([
+      null,
+      "You're offline. Your edits wait in this tab and are sent when you're back online.",
+      "Reconnecting. Your edits wait in this tab.",
+      "Back online.",
+    ])
     // View-only: nothing waits.
     expect(run([at("online", null, true), at("offline", null, true), at("online", null, true)])).toEqual([null, "You're offline.", "Back online."])
   })

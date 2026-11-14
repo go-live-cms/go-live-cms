@@ -34,9 +34,9 @@ export function ShortcutReferenceDialog({ isOpen, onClose }: { isOpen: boolean; 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Keyboard shortcuts" size="medium">
       <div className="editor-shortcuts">
-        {shortcutSections().map((section) => (
-          <section key={section.title} className="editor-shortcuts__section" aria-labelledby={`editor-shortcuts-${section.title}`}>
-            <h3 id={`editor-shortcuts-${section.title}`} className="editor-shortcuts__title">
+        {shortcutSections().map((section, i) => (
+          <section key={section.title} className="editor-shortcuts__section" aria-labelledby={`editor-shortcuts-${i}`}>
+            <h3 id={`editor-shortcuts-${i}`} className="editor-shortcuts__title">
               {section.title}
             </h3>
             <dl className="editor-shortcuts__list">

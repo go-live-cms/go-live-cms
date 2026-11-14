@@ -217,7 +217,9 @@ export function saveAnnouncement(memory: AnnouncerMemory | null, next: Announcer
   let message: string | null = null
   if (memory.connection !== next.connection) {
     if (next.connection === "reconnecting") {
-      message = next.viewOnly ? "Connection lost. Reconnecting." : "Connection lost. Reconnecting. Your edits wait in this tab."
+      // From offline (the browser is back, the socket isn't yet) it was already lost.
+      const lead = memory.connection === "offline" ? "Reconnecting." : "Connection lost. Reconnecting."
+      message = next.viewOnly ? lead : `${lead} Your edits wait in this tab.`
     } else if (next.connection === "offline") {
       message = next.viewOnly
         ? "You're offline."
