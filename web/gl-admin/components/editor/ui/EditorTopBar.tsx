@@ -1,4 +1,5 @@
-import { useState, type CSSProperties, type ReactNode } from "react"
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react"
+import { createPortal } from "react-dom"
 import { Link } from "react-router-dom"
 import Button, { IconButton } from "@gl-admin/components/ui/Button"
 import Menu, { MenuItem, MenuSeparator } from "@gl-admin/components/ui/Menu"
@@ -11,6 +12,7 @@ import { toast } from "@gl-admin/components/ui/Toast"
 import { CheckIcon, ChevronDownIcon, ClockIcon, DangerIcon, LockIcon } from "@gl-admin/components/ui/icons"
 import type { CollabUser } from "@gl-admin/components/editor/utils/useCollabPresence"
 import type { ConnectionView } from "@gl-admin/components/editor/utils/connectionState"
+import ShortcutReference from "./ShortcutReference"
 import "@gl-admin/assets/styles/components/editor/editor-top-bar.scss"
 
 // The editor's top bar (#341, "Post editor" on the redesign canvas): breadcrumb and
@@ -128,7 +130,9 @@ export const ArchiveIcon = ({ size = 12 }: { size?: number }) => (
   </svg>
 )
 
-// The status next to the actions: always says what is happening to your edits.
+// The status next to the actions: always says what is happening to your edits. Drawn only:
+// it changes on every store and, offline, on every keystroke, so screen readers hear
+// SaveAnnouncer instead (#477).
 export function SaveState({
   mode,
   saveStatus,
@@ -194,10 +198,75 @@ export function SaveState({
       </>
     )
   }
-  return (
-    <span role="status" className={`editor-top-bar__save${tone ? ` editor-top-bar__save--${tone}` : ""}`}>
-      {content}
-    </span>
+  return <span className={`editor-top-bar__save${tone ? ` editor-top-bar__save--${tone}` : ""}`}>{content}</span>
+}
+
+type AnnouncerInput = Pick<EditorTopBarProps, "connection" | "saveStatus" | "viewOnly">
+export type AnnouncerMemory = { connection: EditorTopBarProps["connection"]; errored: boolean }
+
+/**
+ * What the save state's live region says when the state changes (#477, WCAG 4.1.3): only
+ * the transitions that matter. Losing the connection (reconnecting, then offline), getting
+ * it back, the latest edits failing to save, and saving again after that. Saving / Saved on
+ * every store and the offline count of waiting edits stay silent; so do opening the post
+ * (connecting → online) and a session that ended (its dialog says so).
+ */
+export function saveAnnouncement(memory: AnnouncerMemory | null, next: AnnouncerInput): { memory: AnnouncerMemory; message: string | null } {
+  const errored = !next.viewOnly && next.saveStatus === "error"
+  if (!memory) return { memory: { connection: next.connection, errored }, message: null }
+  const lost = (c: AnnouncerMemory["connection"]) => c === "reconnecting" || c === "offline"
+  let message: string | null = null
+  if (memory.connection !== next.connection) {
+    if (next.connection === "reconnecting") {
+      // From offline (the browser is back, the socket isn't yet) it was already lost.
+      const lead = memory.connection === "offline" ? "Reconnecting." : "Connection lost. Reconnecting."
+      message = next.viewOnly ? lead : `${lead} Your edits wait in this tab.`
+    } else if (next.connection === "offline") {
+      message = next.viewOnly
+        ? "You're offline."
+        : "You're offline. Your edits wait in this tab and are sent when you're back online."
+    } else if (next.connection === "online" && lost(memory.connection)) {
+      message = "Back online."
+    }
+  }
+  // Only while connected: offline, the edits wait, and the connection message says so.
+  const connected = next.connection === "online"
+  let stillErrored = memory.errored
+  if (connected && errored && !memory.errored) {
+    message = message ? `${message} Latest edits not saved.` : "Latest edits not saved."
+    stillErrored = true
+  } else if (memory.errored && !next.viewOnly && next.saveStatus === "saved") {
+    message = message ? `${message} Edits saved.` : "Edits saved."
+    stillErrored = false
+  } else if (next.viewOnly) {
+    stillErrored = false
+  }
+  return { memory: { connection: next.connection, errored: stillErrored }, message }
+}
+
+/**
+ * The save state for screen readers: one visually hidden status region that stays in the
+ * page whatever the top bar shows (view-only, a session that ended, History open), so the
+ * region exists before anything is put in it and no message is lost to a remount.
+ */
+export function SaveAnnouncer({ connection, saveStatus, viewOnly }: AnnouncerInput) {
+  const memory = useRef<AnnouncerMemory | null>(null)
+  const [message, setMessage] = useState("")
+  useEffect(() => {
+    const step = saveAnnouncement(memory.current, { connection, saveStatus, viewOnly })
+    memory.current = step.memory
+    const said = step.message
+    // The same words twice in a row: change the text, or the region stays quiet.
+    if (said) setMessage((previous) => (previous === said ? `${said} ` : said))
+  }, [connection, saveStatus, viewOnly])
+  // On <body>, exempt from a dialog's inert (#480, like the toaster): a connection lost while
+  // a dialog is open must still be heard, and inside the header it would be inert then.
+  if (typeof document === "undefined") return null
+  return createPortal(
+    <span role="status" className="editor-top-bar__sr" data-testid="save-announcer" data-inert-exempt="">
+      {message}
+    </span>,
+    document.body
   )
 }
 
@@ -346,6 +415,8 @@ export default function EditorTopBar({
 
   return (
     <header className="editor-top-bar">
+      <SaveAnnouncer connection={connection} saveStatus={mode === "edit" ? saveStatus : null} viewOnly={viewOnly} />
+      <ShortcutReference />
       <nav aria-label="Breadcrumb" className="editor-top-bar__crumbs">
         <Link to={listHref} className="editor-top-bar__crumb-link">
           {listLabel}

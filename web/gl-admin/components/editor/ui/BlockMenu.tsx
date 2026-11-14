@@ -19,11 +19,12 @@ import {
   setBlockColor,
   type BlockRef,
 } from "../utils/blockActions"
+import { KEYS, formatKeys, openShortcutReference } from "../utils/shortcuts"
 import "@gl-admin/assets/styles/components/ui/menu.scss"
 
 // The block menu (#356, "Editor menus & states" › Block menu): opened from the drag
 // handle. Colour ›, Comment (#192, when the post has comments), Duplicate, Copy link to
-// block, Move to, Delete, and under them "Last edited by <name> · <when>" (#328, from the
+// block, Move to, Delete, Keyboard shortcuts (#477), and under them "Last edited by <name> · <when>" (#328, from the
 // API through BlockEditsContext; no line for a block with no attribution). Every action
 // finds the block by its id when it runs (blockActions.ts), so a collaborator's edit while
 // the menu is open never makes it act on another block.
@@ -44,12 +45,12 @@ export const COLOR_LABELS: Record<BlockColorToken, string> = {
   red: "Red",
 }
 
-const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent)
+// The keys the editor binds (utils/shortcuts.ts), as the menu shows them.
 export const SHORTCUTS = {
-  comment: isMac ? "⌘M" : "Ctrl M",
-  duplicate: isMac ? "⌘D" : "Ctrl D",
-  moveTo: isMac ? "⇧⌘P" : "Ctrl Shift P",
-  delete: "Del",
+  comment: formatKeys(KEYS.comment),
+  duplicate: formatKeys(KEYS.duplicate),
+  moveTo: formatKeys(KEYS.moveTo),
+  delete: formatKeys(KEYS.deleteBlockForward),
 }
 
 const ITEM = "[role='menuitem']:not([aria-disabled='true']), [role='menuitemradio']"
@@ -247,6 +248,18 @@ export default function BlockMenu({ editor, target, anchor, postUrl, onClose, on
           }
         >
           Delete
+        </Item>
+        <div role="separator" className="gl-menu__separator" />
+        {/* The shortcut reference (#477): "?" outside the text opens it too. */}
+        <Item
+          hint="?"
+          onHover={() => setColorsOpen(false)}
+          onSelect={() => {
+            onClose(false)
+            openShortcutReference()
+          }}
+        >
+          Keyboard shortcuts
         </Item>
         {lastEdited && (
           // Not a menu item (a menu owns only items, groups and separators): role none,

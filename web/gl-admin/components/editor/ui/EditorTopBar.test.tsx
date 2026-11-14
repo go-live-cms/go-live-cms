@@ -2,7 +2,8 @@ import { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { MemoryRouter } from "react-router-dom"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import EditorTopBar from "./EditorTopBar"
+import EditorTopBar, { saveAnnouncement, type AnnouncerMemory } from "./EditorTopBar"
+import { openShortcutReference } from "../utils/shortcuts"
 
 // The scheduled pill reads the site's time zone.
 vi.mock("@gl-admin/lib/api/settings", () => ({
@@ -57,7 +58,7 @@ function renderBar(postStatus: string, settingsPending: boolean, contentPending 
       </MemoryRouter>
     )
   )
-  return container.querySelector('[role="status"]')?.textContent ?? ""
+  return container.querySelector(".editor-top-bar__save")?.textContent ?? ""
 }
 const statusPill = () => container.querySelector(".editor-top-bar__crumbs .gl-pill")?.textContent
 
@@ -241,5 +242,145 @@ describe("offline count and jump to cursor (#356)", () => {
     renderBar("draft", false, false, people)
     expect(container.querySelectorAll(".editor-presence button")).toHaveLength(0)
     expect(container.querySelector('[role="group"]')?.getAttribute("aria-label")).toBe("3 people in this post")
+  })
+})
+
+// #477: one persistent, visually hidden status region says only the transitions that
+// matter; the visible save state is drawn only.
+describe("save state announcements (#477)", () => {
+  type Step = Parameters<typeof saveAnnouncement>[1]
+  const run = (steps: Step[]) => {
+    let memory: AnnouncerMemory | null = null
+    const said: (string | null)[] = []
+    for (const step of steps) {
+      const next = saveAnnouncement(memory, step)
+      memory = next.memory
+      said.push(next.message)
+    }
+    return said
+  }
+  const at = (connection: Step["connection"], saveStatus: Step["saveStatus"] = "saved", viewOnly = false): Step => ({
+    connection,
+    saveStatus,
+    viewOnly,
+  })
+
+  it("says nothing when the post opens, or for Saving and Saved on every store", () => {
+    expect(run([at("connecting", null), at("online", null), at("online", "saving"), at("online", "saved"), at("online", "saving"), at("online", null)])).toEqual([
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+    ])
+  })
+
+  it("online → reconnecting → offline → back online", () => {
+    expect(run([at("online"), at("reconnecting"), at("offline"), at("online")])).toEqual([
+      null,
+      "Connection lost. Reconnecting. Your edits wait in this tab.",
+      "You're offline. Your edits wait in this tab and are sent when you're back online.",
+      "Back online.",
+    ])
+    // The browser back before the socket: lost already, so only "Reconnecting".
+    expect(run([at("online"), at("offline"), at("reconnecting"), at("online")])).toEqual([
+      null,
+      "You're offline. Your edits wait in this tab and are sent when you're back online.",
+      "Reconnecting. Your edits wait in this tab.",
+      "Back online.",
+    ])
+    // View-only: nothing waits.
+    expect(run([at("online", null, true), at("offline", null, true), at("online", null, true)])).toEqual([null, "You're offline.", "Back online."])
+  })
+
+  it("Saved → error, once, and Saved again after it", () => {
+    expect(run([at("online"), at("online", "error"), at("online", "saving"), at("online", "error"), at("online", "saving"), at("online", "saved")])).toEqual([
+      null,
+      "Latest edits not saved.",
+      null,
+      null,
+      null,
+      "Edits saved.",
+    ])
+  })
+
+  it("an ended session says nothing (its dialog does)", () => {
+    expect(run([at("online"), at("ended")])).toEqual([null, null])
+  })
+
+  // Portaled to <body>, exempt from a dialog's inert (#480).
+  const regions = () => document.querySelectorAll('[data-testid="save-announcer"]')
+  const region = () => regions()[0]!
+
+  it("is one region that stays mounted: view-only, ended, History open", () => {
+    renderBar("draft", false)
+    const first = region()
+    expect(regions()).toHaveLength(1)
+    expect(first.getAttribute("role")).toBe("status")
+    expect(first.hasAttribute("data-inert-exempt")).toBe(true)
+    // The visible save state is no live region.
+    expect(container.querySelector(".editor-top-bar__save")!.closest("[role=status], [aria-live]")).toBeNull()
+    for (const props of [
+      { viewOnly: true },
+      { connection: "ended" },
+      { viewing: { label: "Viewing version", onBack: noop, onRestore: noop } },
+      { connection: "offline" },
+    ]) {
+      renderBar("draft", false, false, props)
+      expect(region()).toBe(first)
+    }
+    expect(region().textContent).toContain("You're offline.")
+  })
+
+  it("speaks the offline count only once, not on every keystroke", () => {
+    renderBar("draft", false, false, { connection: "offline", unsyncedCount: 1 })
+    const said = region().textContent
+    renderBar("draft", false, false, { connection: "offline", unsyncedCount: 2 })
+    renderBar("draft", false, false, { connection: "offline", unsyncedCount: 3 })
+    expect(region().textContent).toBe(said)
+  })
+})
+
+describe("the shortcut reference (#477)", () => {
+  const dialog = () => document.querySelector<HTMLElement>('[role="dialog"]')
+  const press = (target: EventTarget, init: KeyboardEventInit = {}) =>
+    act(() => {
+      target.dispatchEvent(new KeyboardEvent("keydown", { key: "?", bubbles: true, cancelable: true, ...init }))
+    })
+
+  it("opens on ? outside text, lists the keys, and closes on Esc", () => {
+    renderBar("draft", false)
+    const button = container.querySelector<HTMLButtonElement>('[aria-label="Post settings"]')!
+    button.focus()
+    press(button)
+    expect(dialog()?.textContent).toContain("Keyboard shortcuts")
+    expect(dialog()!.textContent).toContain("Alt F10")
+    expect(dialog()!.textContent).toContain("Ctrl Shift P")
+    expect(dialog()!.textContent).toContain("Ctrl M")
+    act(() => {
+      document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }))
+    })
+    expect(dialog()).toBeNull()
+  })
+
+  it("types a ? in a field instead", () => {
+    renderBar("draft", false)
+    const input = document.createElement("input")
+    container.appendChild(input)
+    input.focus()
+    press(input)
+    expect(dialog()).toBeNull()
+    input.remove()
+  })
+
+  it("opens from the block menu's entry", () => {
+    renderBar("draft", false)
+    act(() => openShortcutReference())
+    expect(dialog()?.textContent).toContain("Keyboard shortcuts")
+    // A dialog makes the rest of the page inert (#480); the save announcer still speaks.
+    const announcer = document.querySelector('[data-testid="save-announcer"]')!
+    expect(announcer.closest("[inert]")).toBeNull()
+    expect(container.querySelector(".editor-top-bar__crumbs")!.closest("[inert]")).not.toBeNull()
   })
 })

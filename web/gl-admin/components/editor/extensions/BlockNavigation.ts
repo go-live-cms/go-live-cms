@@ -13,6 +13,7 @@ import {
   type EditorBlock,
 } from "../utils/blockTree"
 import { applyBlockMove } from "../utils/blockMoveSync"
+import { KEYS } from "../utils/shortcuts"
 
 // The keyboard model for blocks at any depth (#417; the canvas's "Keyboard" › "Moving
 // between blocks" and "Toolbar and settings"; design `docs/design/block-library.md` 3.5):
@@ -82,7 +83,7 @@ export const BlockSelectionKeys = Extension.create({
       return run(deleteBlockTr(this.editor.state, block))
     }
     return {
-      Enter: () => {
+      [KEYS.enterBlock]: () => {
         const { state } = this.editor
         const block = selectedBlock(state)
         if (!block) return false
@@ -93,10 +94,10 @@ export const BlockSelectionKeys = Extension.create({
         const tr = editBlockTr(state, block)
         return tr ? run(tr) : false
       },
-      ArrowUp: arrow(-1),
-      ArrowDown: arrow(1),
-      Backspace: remove,
-      Delete: remove,
+      [KEYS.previousBlock]: arrow(-1),
+      [KEYS.nextBlock]: arrow(1),
+      [KEYS.deleteBlock]: remove,
+      [KEYS.deleteBlockForward]: remove,
     }
   },
 })
@@ -128,7 +129,7 @@ export const BlockNavigationKeys = Extension.create<
       return true
     }
     return {
-      Escape: () => {
+      [KEYS.selectBlock]: () => {
         const { state } = this.editor
         const selected = selectedBlock(state)
         if (selected) {
@@ -142,10 +143,10 @@ export const BlockNavigationKeys = Extension.create<
         this.editor.view.dispatch(selectBlock(state, block))
         return true
       },
-      "Mod-Shift-ArrowUp": move(-1),
-      "Mod-Shift-ArrowDown": move(1),
+      [KEYS.moveBlockUp]: move(-1),
+      [KEYS.moveBlockDown]: move(1),
       // "Toolbar and settings": open or close the settings panel on the Block tab.
-      "Mod-Shift-,": () => {
+      [KEYS.blockSettings]: () => {
         const toggle = this.storage.toggleBlockSettings
         if (!toggle) return false
         toggle()

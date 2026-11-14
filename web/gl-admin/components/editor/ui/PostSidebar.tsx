@@ -16,6 +16,7 @@ import type { Editor as TiptapEditor } from "@tiptap/core"
 import Tabs from "@gl-admin/components/ui/Tabs"
 import type { PostSEOSettings } from "@gl-admin/lib/api/types"
 import { EXCERPT_GUIDE, softCount } from "@gl-admin/lib/postSeo"
+import CountAnnouncer from "@gl-admin/components/ui/CountAnnouncer"
 import { IconButton } from "@gl-admin/components/ui/Button"
 import { CalendarIcon, CloseIcon } from "@gl-admin/components/ui/icons"
 import { PostStatusPill } from "@gl-admin/components/ui/PostStatus"
@@ -312,12 +313,14 @@ export default function PostSidebar({
           <label htmlFor="post-description">
             Excerpt <span className="post-settings__hint">· optional</span>
           </label>
-          <span id="post-description-count" className={`post-settings__excerpt-count${excerptCount.over ? " is-over" : ""}`} aria-live="polite">
+          {/* The field's description, not a live region (#477): CountAnnouncer speaks near the guide. */}
+          <span id="post-description-count" className={`post-settings__excerpt-count${excerptCount.over ? " is-over" : ""}`}>
             <span className="post-seo__sr">{excerptCount.spoken}</span>
             <span aria-hidden="true">
               {excerptCount.count} / {EXCERPT_GUIDE}
             </span>
           </span>
+          {!readOnly && <CountAnnouncer count={excerptCount.count} limit={EXCERPT_GUIDE} />}
         </div>
         <textarea
           id="post-description"

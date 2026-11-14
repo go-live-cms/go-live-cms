@@ -2,10 +2,12 @@ import React, { useEffect, useId, useState } from "react"
 import MediaPicker from "@gl-admin/components/media/MediaPicker"
 import { getMediaById, getMediaSocialPreviewURL } from "@gl-admin/lib/api/media"
 import type { Media, PostSEOSettings } from "@gl-admin/lib/api/types"
+import CountAnnouncer from "@gl-admin/components/ui/CountAnnouncer"
 import {
   SEO_DESCRIPTION_GUIDE,
   SEO_TITLE_GUIDE,
   canonicalUrlError,
+  charCount,
   cutAtWord,
   previewAddress,
   seoFallbacks,
@@ -40,9 +42,14 @@ interface PostSeoPanelProps {
   error?: string | null
 }
 
+// The guides are soft: past them, search results may cut the text off.
+export const SEO_OVER_NOTE = "Search results may cut it off."
+
+// The field's description (its aria-describedby), not a live region: every keystroke would
+// be read out. CountAnnouncer speaks near and past the guide (#477).
 function Counter({ id, count }: { id: string; count: SoftCount }) {
   return (
-    <span id={id} className={`post-seo__count${count.over ? " is-over" : ""}`} aria-live="polite">
+    <span id={id} className={`post-seo__count${count.over ? " is-over" : ""}`}>
       {count.over && (
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M12 3 2 20h20zM12 10v4M12 17h.01" />
@@ -206,6 +213,8 @@ export default function PostSeoPanel({
         <div className="post-seo__row post-seo__row--baseline">
           <label htmlFor={ids.title}>SEO title</label>
           <Counter id={ids.titleCount} count={titleCount} />
+          {/* What's typed here, not the post title it falls back to. */}
+          {!readOnly && <CountAnnouncer count={charCount(seo.seo_title)} limit={SEO_TITLE_GUIDE} overNote={SEO_OVER_NOTE} />}
         </div>
         <input
           id={ids.title}
@@ -233,6 +242,7 @@ export default function PostSeoPanel({
         <div className="post-seo__row post-seo__row--baseline">
           <label htmlFor={ids.desc}>Meta description</label>
           <Counter id={ids.descCount} count={{ ...descCount, over: descOver }} />
+          {!readOnly && <CountAnnouncer count={charCount(seo.seo_description)} limit={SEO_DESCRIPTION_GUIDE} overNote={SEO_OVER_NOTE} />}
         </div>
         <textarea
           id={ids.desc}

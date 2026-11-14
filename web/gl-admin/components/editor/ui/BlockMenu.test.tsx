@@ -134,7 +134,7 @@ describe("BlockMenu: Comment (#192)", () => {
   it("offers Comment (Ctrl M) after Colour when the post has comments, and opens it for that block", () => {
     const onComment = vi.fn()
     const { onClose } = open(at(1), { onComment })
-    expect(labels()).toEqual(["Colour", "Comment", "Duplicate", "Copy link to block", "Move to", "Delete"])
+    expect(labels()).toEqual(["Colour", "Comment", "Duplicate", "Copy link to block", "Move to", "Delete", "Keyboard shortcuts"])
     expect(item("Comment").textContent).toContain("Ctrl M")
     act(() => item("Comment").click())
     expect(onClose).toHaveBeenCalledWith(false)
@@ -159,7 +159,7 @@ describe("BlockMenu: Comment (#192)", () => {
 describe("BlockMenu (#356)", () => {
   it("offers Colour, Duplicate, Copy link to block, Move to and Delete, with shortcuts", () => {
     open(at(1), { postUrl: "http://site.test/post/7" })
-    expect(labels()).toEqual(["Colour", "Duplicate", "Copy link to block", "Move to", "Delete"])
+    expect(labels()).toEqual(["Colour", "Duplicate", "Copy link to block", "Move to", "Delete", "Keyboard shortcuts"])
     expect(item("Duplicate").textContent).toContain("Ctrl D")
     expect(item("Move to").textContent).toContain("Ctrl Shift P")
     expect(item("Colour").getAttribute("aria-haspopup")).toBe("menu")

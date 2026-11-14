@@ -1,6 +1,7 @@
 import { Extension, type Editor } from "@tiptap/core"
 import type React from "react"
 import { nextRovingIndex } from "@gl-admin/components/ui/a11y"
+import { KEYS } from "./shortcuts"
 
 // Keyboard access to the editor's floating toolbars (#144): the selection's bubble menu
 // ("Format text"), the block-type toolbar and the media, embed and Custom HTML toolbars.
@@ -95,7 +96,7 @@ export const FloatingToolbarKeys = Extension.create({
   name: "floatingToolbarKeys",
   addKeyboardShortcuts() {
     return {
-      "Alt-F10": () => focusFloatingToolbar(this.editor),
+      [KEYS.floatingToolbar]: () => focusFloatingToolbar(this.editor),
     }
   },
 })

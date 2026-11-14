@@ -1,6 +1,7 @@
 import { forwardRef, useState, type ReactNode, type TextareaHTMLAttributes } from "react"
 import { FieldMessage, describedBy } from "@gl-admin/components/ui/Input"
 import { useStableId } from "@gl-admin/components/ui/a11y"
+import CountAnnouncer from "@gl-admin/components/ui/CountAnnouncer"
 import "@gl-admin/assets/styles/components/ui/input.scss"
 
 type TextareaProps = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "title"> & {
@@ -34,11 +35,13 @@ const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function Textare
           {label}
           {optional && <span className="gl-input__optional"> (optional)</span>}
         </label>
+        {/* The field's description, not a live region: CountAnnouncer speaks near the limit (#477). */}
         {maxCount !== undefined && (
-          <span id={countId} className={`gl-field__count${over ? " is-over" : ""}`} aria-live="polite">
+          <span id={countId} className={`gl-field__count${over ? " is-over" : ""}`}>
             {count} / {maxCount}
           </span>
         )}
+        {maxCount !== undefined && <CountAnnouncer count={count} limit={maxCount} />}
       </div>
       <textarea
         ref={ref}

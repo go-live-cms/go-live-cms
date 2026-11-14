@@ -1240,7 +1240,8 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
         />
       )}
       {connection === "offline" && !contentReadOnly && (
-        <Notice tone="warning" live="alert" className="post-editor__banner" title="You're offline">
+        // Not a live region (#477): the top bar's announcer says "offline" once, when it happens.
+        <Notice tone="warning" live="none" className="post-editor__banner" title="You're offline">
           Your edits wait in this tab and are sent when you're back online. Keep this tab open until then. You can
           {formData.post_status === "published" ? " update" : " publish"} once you're connected.
         </Notice>

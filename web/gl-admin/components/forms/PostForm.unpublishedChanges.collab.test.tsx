@@ -99,7 +99,7 @@ const until = async (check: () => boolean, what: string, timeoutMs = 6000) => {
 }
 const bar = () => container.querySelector(".editor-top-bar")
 const barText = () => bar()?.textContent ?? ""
-const saveState = () => bar()?.querySelector('[role="status"]')?.textContent ?? ""
+const saveState = () => bar()?.querySelector(".editor-top-bar__save")?.textContent ?? ""
 const pm = () => container.querySelector(".ProseMirror")
 
 const post: Post = {

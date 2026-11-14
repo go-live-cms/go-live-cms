@@ -2194,6 +2194,11 @@
     font-size: 12px;
   }
 
+  // The result count's live region (#477).
+  &__sr {
+    @include mixins.visually-hidden;
+  }
+
   &__empty {
     display: flex;
     flex-direction: column;

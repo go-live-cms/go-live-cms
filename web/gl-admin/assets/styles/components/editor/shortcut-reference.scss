@@ -1,0 +1,78 @@
+@use "@gl-admin/assets/styles/mixins";
+
+// The editor's keyboard shortcut reference (#477): a Modal body of sections, each a list
+// of "what it does" and its keys, in the menus' kbd style (sidebar, command palette).
+
+.editor-shortcuts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+
+  &__title {
+    color: var(--text-secondary);
+    font-size: var(--type-caption);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    line-height: var(--type-caption-lh);
+    margin: 0 0 var(--space-1);
+    text-transform: uppercase;
+  }
+
+  &__list {
+    margin: 0;
+  }
+
+  &__row {
+    align-items: baseline;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    gap: var(--space-3);
+    justify-content: space-between;
+    padding: 6px 0;
+
+    &:last-child {
+      border-bottom: 0;
+    }
+  }
+
+  &__label {
+    color: var(--text-primary);
+    font-size: var(--type-body);
+    line-height: var(--type-body-lh);
+    margin: 0;
+  }
+
+  &__value {
+    flex-shrink: 0;
+    margin: 0;
+  }
+
+  &__keys {
+    align-items: center;
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    justify-content: flex-end;
+  }
+
+  &__key {
+    background: var(--background);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: var(--type-caption);
+    line-height: var(--type-caption-lh);
+    padding: 0 5px;
+    white-space: nowrap;
+  }
+
+  &__or {
+    color: var(--text-secondary);
+    font-size: var(--type-caption);
+  }
+
+  &__sr {
+    @include mixins.visually-hidden;
+  }
+}

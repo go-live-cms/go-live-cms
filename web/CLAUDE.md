@@ -821,6 +821,20 @@ are the most fragile part of the codebase. **Before editing anything under
   **`axe-core`** (exact dev dependency) runs in vitest: `gl-admin/components/ui/axe.test.tsx` renders
   components with react-dom into jsdom (contrast off: `tokens.test.ts` owns it); add new shared
   components and editor chrome there. Remaining findings: the Post-MVP issues linked from #144.
+- **Editor announcements and shortcuts (#477):** a live region must be in the page, empty, before
+  it speaks, and should speak transitions, not every render. The top bar's `SaveAnnouncer`
+  (`EditorTopBar.tsx`, rules in `saveAnnouncement`) is the one status region for the save state and
+  stays mounted when view-only, ended or in History: reconnecting, offline, back online, "Latest
+  edits not saved" and "Edits saved" after it; the visible `SaveState` and the offline banner are
+  not live. Character counters (`Textarea`, the excerpt, SEO title and description) are the
+  field's description only; `components/ui/CountAnnouncer.tsx` speaks near or over the limit once
+  typing pauses (`lib/countAnnouncement.ts`). The slash and + menus' `InsertMenuStatus` reads the
+  result count after a pause. **Shortcuts:** `components/editor/utils/shortcuts.ts` `KEYS` are the
+  strings the keymaps bind (block keys, ⌥F10, link, block menu), so the reference can't drift;
+  `MARK_SHORTCUTS` are TipTap's, pressed in a real editor by `shortcuts.test.ts`. A new editor
+  shortcut goes in `KEYS` and `shortcutSections`. The reference (`ui/ShortcutReference.tsx`, a
+  `Modal`) opens on "?" outside text and from the block menu's Keyboard shortcuts; the editable
+  text's description names ⌥F10 (`editorKeysHint`).
 - **Routes, forms and feedback (#479, #480):** every routed page calls `usePageTitle("…")`
   (`lib/hooks/usePageTitle.ts`; `routeFocus.test.tsx` fails on a route whose page doesn't), and
   `AppLayout`'s `useRouteFocus` moves focus to the new page's `<h1>` (or `<main>` after 3 s) on a path
