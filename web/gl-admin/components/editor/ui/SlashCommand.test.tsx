@@ -233,8 +233,7 @@ describe("the slash menu", () => {
     makeEditor()
     type("/map")
     expect(options()).toHaveLength(0)
-    const status = document.querySelector('[role="status"]')!
-    expect(status.textContent).toContain("No blocks match “map”")
+    expect(document.querySelector(".editor-insert__empty")!.textContent).toContain("No blocks match “map”")
     expect(document.querySelector(".editor-insert__footer")!.textContent).toBe("esc closes the menu and keeps “/map” as text")
     // The menu doesn't take them (the editor's own keys do).
     const key = (k: string) => list.current!.onKeyDown({ event: new KeyboardEvent("keydown", { key: k }) })

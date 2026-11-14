@@ -20,6 +20,16 @@ const blockTypeOptions: CommandSelectOption[] = catalogSelectOptions(
   turnIntoEntries().filter((entry) => entry.type === "paragraph" || entry.type === "heading")
 )
 
+/**
+ * The options for the block holding the caret: inside a quote, a list or a callout the
+ * picker names that block first ("Quote"), not "Select…" / "Block type: none" (#477).
+ */
+export function blockTypeOptionsFor(value: TurnIntoValue): CommandSelectOption[] {
+  if (blockTypeOptions.some((option) => option.value === value)) return blockTypeOptions
+  const current = catalogSelectOptions(turnIntoEntries().filter((entry) => entry.id === value))
+  return current.length > 0 ? [...current, ...blockTypeOptions] : blockTypeOptions
+}
+
 /** The callout's Type picker (#419, "Type Warning ▾" on the blocks canvas): each tone with its icon. */
 export const calloutToneOptions: CommandSelectOption[] = CALLOUT_TONES.map((tone) => ({
   value: tone,
@@ -33,9 +43,9 @@ function calloutToneAt(editor: TiptapEditor): CalloutTone | null {
   return callout ? normalizeCalloutTone(callout.node.attrs.tone) : null
 }
 
-// Alignment icons as inline SVGs
+// Alignment icons as inline SVGs: decoration, the buttons are named (#477).
 const AlignLeftIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true" focusable="false">
     <line x1="3" y1="6" x2="21" y2="6" />
     <line x1="3" y1="12" x2="15" y2="12" />
     <line x1="3" y1="18" x2="18" y2="18" />
@@ -43,7 +53,7 @@ const AlignLeftIcon = () => (
 )
 
 const AlignCenterIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true" focusable="false">
     <line x1="3" y1="6" x2="21" y2="6" />
     <line x1="6" y1="12" x2="18" y2="12" />
     <line x1="4" y1="18" x2="20" y2="18" />
@@ -51,7 +61,7 @@ const AlignCenterIcon = () => (
 )
 
 const AlignRightIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true" focusable="false">
     <line x1="3" y1="6" x2="21" y2="6" />
     <line x1="9" y1="12" x2="21" y2="12" />
     <line x1="6" y1="18" x2="21" y2="18" />
@@ -121,7 +131,7 @@ const BlockTypeToolbar = ({ editor }: BlockTypeToolbarProps) => {
         onKeyDown={(e) => onFloatingToolbarKeyDown(e, editor)}
       >
         <CommandSelect
-          options={blockTypeOptions}
+          options={blockTypeOptionsFor(blockType)}
           value={blockType}
           label="Block type"
           onChange={(option: CommandSelectOption) => {

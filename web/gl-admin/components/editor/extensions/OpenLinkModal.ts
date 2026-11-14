@@ -1,4 +1,5 @@
 import { Extension } from '@tiptap/core';
+import { KEYS } from '../utils/shortcuts';
 
 declare module '@tiptap/core' {
   interface Commands<ReturnType> {
@@ -31,7 +32,7 @@ export const OpenLinkModal = Extension.create<{
 
   addKeyboardShortcuts() {
     return {
-      'Mod-k': () => {
+      [KEYS.link]: () => {
         const href = this.editor.getAttributes('link')?.href ?? '';
         this.options.onOpen?.(href);
         return true;

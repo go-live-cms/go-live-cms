@@ -1,3 +1,5 @@
+@use "@gl-admin/assets/styles/mixins";
+
 // The editor's top bar (#341): 48px, sticky, one divider under it. Wraps at phone
 // width (the breadcrumb on its own line, the actions under it).
 
@@ -14,6 +16,11 @@
   position: sticky;
   top: 0;
   z-index: var(--z-sticky);
+
+  // The save state's live region (#477): heard, never seen.
+  &__sr {
+    @include mixins.visually-hidden;
+  }
 
   &__crumbs {
     align-items: center;

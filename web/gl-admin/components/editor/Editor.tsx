@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle, useCallback } from "react"
+import { useEffect, useId, useMemo, useRef, useState, forwardRef, useImperativeHandle, useCallback } from "react"
 import { EditorContent, useEditor } from "@tiptap/react"
 import type { Editor as TiptapEditor } from "@tiptap/core"
 import { blockAPIClient } from "@gl-admin/lib/api/blockAPI"
@@ -36,6 +36,7 @@ import CharacterCount from "./ui/CharacterCount"
 import MediaPickerHost from "./ui/MediaPickerHost"
 import { getExtensions } from "./utils/extensions"
 import { scrollToCollaborator } from "./utils/cursorAwareness"
+import { editorKeysHint } from "./utils/shortcuts"
 import { reloadPage } from "./utils/reloadPage"
 import { editorSchema } from "./utils/editorSchema"
 import Notice from "@gl-admin/components/ui/Notice"
@@ -188,6 +189,7 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
 ) {
   const [isPublishing, setIsPublishing] = useState(false)
   const [saveState, setSaveState] = useState<SaveState>(null)
+  const keysHintId = useId()
   const [droppedCount, setDroppedCount] = useState(0)
   // The count the user dismissed: a different count (a restore) shows the notice again.
   const [droppedDismissed, setDroppedDismissed] = useState(0)
@@ -265,6 +267,8 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
           role: "textbox",
           "aria-multiline": "true",
           "aria-label": "Post content",
+          // The keys that leave the text (#477), in its description: read when it's focused.
+          ...(readOnly ? {} : { "aria-describedby": keysHintId }),
         },
       },
     },
@@ -528,6 +532,12 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
       )}
       {!readOnly && <MediaPickerHost editor={editor} postId={postId} />}
 
+      {!readOnly && (
+        // The text's accessible description (aria-describedby): hidden, still read.
+        <p id={keysHintId} hidden>
+          {editorKeysHint()}
+        </p>
+      )}
       <div className="editor-wrapper">
         {commentsLive && comments ? (
           <BlockComments editor={editor} store={comments}>

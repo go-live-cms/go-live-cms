@@ -7,12 +7,13 @@ import { authManager } from "@gl-admin/lib/auth"
 import { getActiveTheme, menuEntries, type CatalogEntry } from "../blocks/catalog"
 import { gutterAccepts, insertFromGutter } from "../utils/blockGutter"
 import type { BlockRef } from "../utils/blockActions"
-import { InsertMenuFooter, InsertMenuList, optionId, useInsertMenu } from "./InsertMenu"
+import { InsertMenuFooter, InsertMenuList, InsertMenuStatus, optionId, useInsertMenu } from "./InsertMenu"
 
 // The + menu (#415, "+ in the margin, opened from the keyboard"): the block catalog under
 // the gutter's + with its own search field, which has focus and is the combobox for the
 // list. Typing filters, ↑↓ move across groups, ↵ inserts (into the line + is on when it's
-// empty, else on a new line below it), Esc closes and returns focus to +, Tab closes.
+// empty, else on a new line below it), Esc closes and returns focus to +, Tab closes. The
+// result count is read out once typing pauses (InsertMenuStatus, #477).
 
 type Props = {
   editor: TiptapEditor
@@ -77,7 +78,10 @@ export default function AddBlockMenu({ editor, target, anchor, onClose, entries:
 
   const hasOptions = menu.options.length > 0
   return createPortal(
-    <div ref={menuRef} className="editor-insert editor-insert--add" style={style}>
+    // A non-modal dialog (+ says aria-haspopup="dialog", #477): a search field and the list
+    // it controls. Esc, Tab and a click outside close it.
+    <div ref={menuRef} role="dialog" aria-label="Add a block" className="editor-insert editor-insert--add" style={style}>
+      <InsertMenuStatus menu={menu} query={query} />
       <div className="editor-insert__search">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
           <circle cx="11" cy="11" r="7" />

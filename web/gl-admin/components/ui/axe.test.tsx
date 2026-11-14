@@ -14,6 +14,12 @@ import Tabs from "./Tabs"
 import BubbleMenu from "@gl-admin/components/editor/ui/BubbleMenu"
 import CommandSelect from "@gl-admin/components/editor/ui/CommandSelect"
 import FeaturedImage from "@gl-admin/components/editor/ui/FeaturedImage"
+import { MemoryRouter } from "react-router-dom"
+import EditorTopBar from "@gl-admin/components/editor/ui/EditorTopBar"
+import AddBlockMenu from "@gl-admin/components/editor/ui/AddBlockMenu"
+import BlockTypeToolbar from "@gl-admin/components/editor/ui/BlockTypeToolbar"
+import { ShortcutReferenceDialog } from "@gl-admin/components/editor/ui/ShortcutReference"
+import { CORE_BLOCKS } from "@gl-admin/components/editor/blocks/catalog"
 
 // Automated accessibility checks (#144): axe-core on the shared UI components and the
 // editor chrome fixed under #144, rendered with react-dom into jsdom, so a regression in
@@ -27,6 +33,10 @@ vi.mock("@tiptap/react/menus", () => ({
 }))
 // The picker is a dialog of its own (checked with Modal); here only what opens it.
 vi.mock("@gl-admin/components/media/MediaPicker", () => ({ default: () => null }))
+// The top bar's status pill reads the site's time zone.
+vi.mock("@gl-admin/lib/api/settings", () => ({
+  getSettings: async () => ({ site_language: "en-US", site_timezone: "UTC", date_format: "month_day_year" }),
+}))
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -196,5 +206,99 @@ describe("axe: editor chrome (#144)", () => {
     const placeholder = container.querySelector<HTMLElement>("[role='button'][aria-label='Set featured image']")
     expect(placeholder?.tabIndex).toBe(0)
     expect(await violations(container)).toEqual([])
+  })
+})
+
+// #477: the editor's announcements, the + menu, the block-type picker in a quote and the
+// shortcut reference.
+describe("axe: editor announcements and shortcuts (#477)", () => {
+  let editor: Editor
+
+  beforeEach(() => {
+    editor = new Editor({
+      element: document.createElement("div"),
+      extensions: Object.values(schemaExtensions({ collaborating: false })),
+      content: {
+        type: "doc",
+        content: [
+          { type: "paragraph", attrs: { "data-block-id": "blk-0477-axe-000001" }, content: [{ type: "text", text: "alpha" }] },
+          {
+            type: "blockquote",
+            attrs: { "data-block-id": "blk-0477-axe-000002" },
+            content: [{ type: "paragraph", content: [{ type: "text", text: "quoted" }] }],
+          },
+        ],
+      },
+    })
+  })
+  afterEach(() => editor.destroy())
+
+  const topBar = (props: Partial<Parameters<typeof EditorTopBar>[0]> = {}) => (
+    <MemoryRouter>
+      <EditorTopBar
+        listLabel="Posts"
+        listHref="/content/post"
+        title="A post"
+        postStatus="draft"
+        mode="edit"
+        saveStatus="saved"
+        connection="online"
+        live
+        collabUsers={[]}
+        viewOnly={false}
+        canPublish
+        isPublishing={false}
+        isSaving={false}
+        settingsOpen={false}
+        onSettingsToggle={() => {}}
+        onSave={() => {}}
+        onPublish={() => {}}
+        {...props}
+      />
+    </MemoryRouter>
+  )
+
+  it("the top bar: one status region, whatever it shows (offline, view-only, History)", async () => {
+    for (const props of [
+      { connection: "offline" as const, unsyncedCount: 3 },
+      { viewOnly: true },
+      { connection: "ended" as const },
+      { viewing: { label: "Viewing version", onBack: () => {}, onRestore: () => {} } },
+    ]) {
+      await render(topBar(props))
+      expect(container.querySelectorAll("[role='status']")).toHaveLength(1)
+      expect(await violations(container)).toEqual([])
+    }
+  })
+
+  it("the + menu, open: a named dialog with its search and status", async () => {
+    const anchor = { current: document.createElement("button") }
+    document.body.appendChild(anchor.current)
+    const target = { id: "blk-0477-axe-000001", pos: 0 }
+    await render(<AddBlockMenu editor={editor} target={target} anchor={anchor} onClose={() => {}} entries={CORE_BLOCKS.slice(0, 6)} />)
+    const dialog = document.querySelector("[role='dialog'][aria-label='Add a block']")
+    expect(dialog?.querySelector("[role='status']")).not.toBeNull()
+    expect(await violations(dialog!)).toEqual([])
+    anchor.current.remove()
+  })
+
+  it("the block-type toolbar in a quote names the quote, and its icons are hidden", async () => {
+    editor.view.dispatch(editor.state.tr.setSelection(TextSelection.create(editor.state.doc, 11)))
+    await render(<BlockTypeToolbar editor={editor} />)
+    const trigger = container.querySelector(".editor-select__trigger")!
+    expect(trigger.getAttribute("aria-label")).toBe("Block type: Quote")
+    expect(trigger.textContent).toContain("Quote")
+    for (const svg of container.querySelectorAll("button[aria-label^='Align'] svg")) {
+      expect(svg.getAttribute("aria-hidden")).toBe("true")
+      expect(svg.getAttribute("focusable")).toBe("false")
+    }
+    expect(await violations(container)).toEqual([])
+  })
+
+  it("the shortcut reference, open", async () => {
+    await render(<ShortcutReferenceDialog isOpen onClose={() => {}} />)
+    const dialog = document.querySelector("[role='dialog']")!
+    expect(dialog.textContent).toContain("Keyboard shortcuts")
+    expect(await violations()).toEqual([])
   })
 })

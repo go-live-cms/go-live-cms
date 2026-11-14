@@ -187,9 +187,13 @@ export default function DragHandle({
             type="button"
             className={`editor-gutter__add${addFor ? " is-open" : ""}${showAdd ? "" : " is-hidden"}`}
             tabIndex={showAdd ? undefined : -1}
+            // Hidden (opacity 0) on a gallery's image: out of the tab order and of the
+            // accessibility tree alike (#477).
+            aria-hidden={showAdd ? undefined : true}
             title="Add a block below"
             aria-label="Add block"
-            aria-haspopup="listbox"
+            // A dialog: a search field plus the list it controls (AddBlockMenu).
+            aria-haspopup="dialog"
             aria-expanded={!!addFor}
             // A click, or Space / Enter from the keyboard (a button's own).
             onClick={() => (addFor ? closeAdd(false) : openAdd())}
@@ -209,6 +213,8 @@ export default function DragHandle({
             aria-haspopup="menu"
             aria-expanded={!!menuFor}
             tabIndex={showDrag || menuFor ? undefined : -1}
+            // Hidden (opacity 0) on an empty line: screen readers mustn't find it either (#477).
+            aria-hidden={showDrag || menuFor ? undefined : true}
             onClick={() => (menuFor ? closeMenu(false) : openMenu())}
             onKeyDown={onHandleKeyDown}
           >

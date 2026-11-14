@@ -14,6 +14,7 @@ import {
   type EditorBlock,
 } from "./blockTree"
 import { applyBlockMove } from "./blockMoveSync"
+import { KEYS } from "./shortcuts"
 
 // The block menu's actions (#356, "Editor menus & states" › Block menu). Each one is a
 // single ProseMirror transaction on the block, so ySyncPlugin sends it as one Yjs
@@ -223,7 +224,7 @@ export const BlockActions = Extension.create<Record<string, never>, BlockActions
 
   addKeyboardShortcuts() {
     return {
-      "Mod-d": () => {
+      [KEYS.duplicate]: () => {
         if (!this.editor.isEditable) return false
         const block = editorBlockAtSelection(this.editor.state)
         if (!block) return false
@@ -231,7 +232,7 @@ export const BlockActions = Extension.create<Record<string, never>, BlockActions
         // Never the browser's bookmark dialog from inside the editor.
         return true
       },
-      "Mod-m": () => {
+      [KEYS.comment]: () => {
         const open = this.storage.openComment
         if (!this.editor.isEditable || !open) return false
         const block = editorBlockAtSelection(this.editor.state)
@@ -239,7 +240,7 @@ export const BlockActions = Extension.create<Record<string, never>, BlockActions
         open(refOf(block))
         return true
       },
-      "Mod-Shift-p": () => {
+      [KEYS.moveTo]: () => {
         const open = this.storage.openMoveTo
         if (!this.editor.isEditable || !open) return false
         const block = editorBlockAtSelection(this.editor.state)

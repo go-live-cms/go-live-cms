@@ -102,13 +102,15 @@ describe("PostSeoPanel", () => {
     expect(q(".post-seo__card img")).toBeNull()
   })
 
-  it("typing updates the preview and the aria-live counter, past the guide without blocking", () => {
+  it("typing updates the preview and the counter (the field's description), past the guide without blocking", () => {
     render()
     const title = byLabel("SEO title")!
     type(title, "Real-time collaboration in GoLive: how two editors share one draft, live")
     expect(changes.at(-1)!.seo_title).toBe("Real-time collaboration in GoLive: how two editors share one draft, live")
     const counter = document.getElementById(title.getAttribute("aria-describedby")!.split(" ")[1])!
-    expect(counter.getAttribute("aria-live")).toBe("polite")
+    // Not a live region (#477): CountAnnouncer speaks near and past the guide, once typing pauses.
+    expect(counter.hasAttribute("aria-live")).toBe(false)
+    expect(counter.closest("[role=status], [aria-live]")).toBeNull()
     expect(counter.classList.contains("is-over")).toBe(true)
     expect(counter.textContent).toContain("72 of 60 characters. Search results may cut it off.")
     expect(title.className).toContain("is-over")
@@ -118,6 +120,31 @@ describe("PostSeoPanel", () => {
     type(desc, "Own description")
     expect(changes.at(-1)!.seo_description).toBe("Own description")
     expect(q(".post-seo__serp-desc")!.textContent).toBe("Own description")
+  })
+
+  it("says the count only near or past the guide, once typing pauses (#477)", () => {
+    vi.useFakeTimers()
+    try {
+      render()
+      const title = byLabel("SEO title")!
+      const region = () => title.closest(".post-settings__field")!.querySelector('[role="status"]')!
+      // In the page, empty, from the start.
+      expect(region().textContent).toBe("")
+      type(title, "Short")
+      act(() => vi.advanceTimersByTime(2000))
+      expect(region().textContent).toBe("")
+      type(title, "a".repeat(55))
+      act(() => vi.advanceTimersByTime(300))
+      // Still typing: nothing yet.
+      expect(region().textContent).toBe("")
+      act(() => vi.advanceTimersByTime(1000))
+      expect(region().textContent).toBe("5 characters left.")
+      type(title, "a".repeat(72))
+      act(() => vi.advanceTimersByTime(1000))
+      expect(region().textContent).toBe("12 characters over the limit of 60. Search results may cut it off.")
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it("Hide from search engines is a switch with its note as the description", () => {

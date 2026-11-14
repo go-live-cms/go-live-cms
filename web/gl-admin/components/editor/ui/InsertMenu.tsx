@@ -83,8 +83,9 @@ export function InsertMenuList({ menu, query, idPrefix, onPick }: ListProps) {
   }, [menu.active, idPrefix])
 
   if (menu.options.length === 0) {
+    // Drawn only: InsertMenuStatus, in the menu from the start, says it (#477).
     return (
-      <div role="status" className="editor-insert__empty">
+      <div className="editor-insert__empty">
         <b>No blocks match “{query.trim()}”</b>
         <span>Check the spelling, or delete the search to see every block.</span>
       </div>
@@ -144,6 +145,41 @@ export function InsertMenuList({ menu, query, idPrefix, onPick }: ListProps) {
           })}
         </div>
       ))}
+    </div>
+  )
+}
+
+/** How long typing in the search must pause before the result count is read out. */
+export const RESULT_COUNT_DELAY_MS = 500
+
+/** What the status region says for a search: nothing until something is typed. */
+export function insertMenuStatus(query: string, count: number): string {
+  const trimmed = query.trim()
+  if (!trimmed) return ""
+  if (count === 0) return `No blocks match ${trimmed}`
+  return `${count} block${count === 1 ? "" : "s"} match ${trimmed}`
+}
+
+/**
+ * The menu's status region (#477, WCAG 4.1.3): mounted with the menu, empty, so a screen
+ * reader is already listening when it speaks; then the result count (or "No blocks match")
+ * once typing pauses, not on every key.
+ */
+export function InsertMenuStatus({ menu, query }: { menu: InsertMenuState; query: string }) {
+  const count = menu.options.length
+  const [message, setMessage] = useState("")
+  useEffect(() => {
+    const next = insertMenuStatus(query, count)
+    if (!next) {
+      setMessage("")
+      return
+    }
+    const timer = setTimeout(() => setMessage(next), RESULT_COUNT_DELAY_MS)
+    return () => clearTimeout(timer)
+  }, [query, count])
+  return (
+    <div role="status" className="editor-insert__sr">
+      {message}
     </div>
   )
 }

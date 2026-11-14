@@ -3,7 +3,7 @@ import { Extension, type Editor } from "@tiptap/core"
 import { PluginKey } from "prosemirror-state"
 import { Suggestion } from "../utils/suggestion"
 import type { CatalogEntry, InsertRange } from "../blocks/catalog"
-import { InsertMenuFooter, InsertMenuList, optionId, useInsertMenu } from "./InsertMenu"
+import { InsertMenuFooter, InsertMenuList, InsertMenuStatus, optionId, useInsertMenu } from "./InsertMenu"
 
 // The slash menu (#415, "Inserting blocks"): "/" on an empty line or after a space opens the
 // block catalog; what follows the slash searches it. Focus stays in the text, so the
@@ -68,6 +68,7 @@ export const SlashCommandList = forwardRef<SlashCommandListRef, Props>(function 
 
   return (
     <div className="editor-insert slash-command-list">
+      <InsertMenuStatus menu={menu} query={query} />
       <InsertMenuList menu={menu} query={query} idPrefix={SLASH_MENU_ID} onPick={command} />
       <InsertMenuFooter
         menu={menu}

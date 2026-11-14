@@ -10,6 +10,7 @@ import { BlockNodeViews } from "../extensions/BlockNodeViews"
 import { BlockNavigationKeys, BlockSelectionKeys } from "../extensions/BlockNavigation"
 import { editorBlockById, refOfBlock } from "../utils/blockTree"
 import DragHandle from "./DragHandle"
+import { RESULT_COUNT_DELAY_MS } from "./InsertMenu"
 
 // The handle → block menu wiring (#356), on the gutter plugin (#417). jsdom has no layout,
 // so instead of a pointer, `hover` shows the gutter at a block the way the plugin does when
@@ -148,10 +149,14 @@ describe("DragHandle (#356)", () => {
 describe("+ in the margin (#415)", () => {
   it("is a button beside the handle that opens the block list with its own search field, focused", async () => {
     expect(addButton().nextElementSibling).toBe(handle())
-    expect(addButton().getAttribute("aria-haspopup")).toBe("listbox")
+    expect(addButton().getAttribute("aria-haspopup")).toBe("dialog")
+    expect(addButton().hasAttribute("aria-hidden")).toBe(false)
     act(() => addButton().click())
     await placed()
     expect(addMenu()).not.toBeNull()
+    // The dialog + names in aria-haspopup (#477), with its name.
+    expect(addMenu()!.getAttribute("role")).toBe("dialog")
+    expect(addMenu()!.getAttribute("aria-label")).toBe("Add a block")
     expect(addButton().getAttribute("aria-expanded")).toBe("true")
     expect(document.activeElement).toBe(search())
     expect(search().getAttribute("aria-controls")).toBe(addMenu()!.querySelector('[role="listbox"]')!.id)
@@ -179,6 +184,9 @@ describe("+ in the margin (#415)", () => {
     // Callout by its keyword "info" (#419), Image by its name, Gallery by its keyword "images" (#424),
     // Media & text by its keyword "image and text" (#427).
     expect(names()).toEqual(["Callout", "Image", "Gallery", "Media & text"])
+    // The count, once typing pauses (#477).
+    await act(() => new Promise((resolve) => setTimeout(resolve, RESULT_COUNT_DELAY_MS + 20)))
+    expect(addMenu()!.querySelector('[role="status"]')!.textContent).toBe("4 blocks match i")
     typeInto(search(), "l")
     // Three names ("list") in Text, one keyword ("line") in Layout.
     expect(names()).toEqual(["Bulleted list", "Numbered list", "To-do list", "Divider"])
@@ -201,6 +209,8 @@ describe("+ in the margin (#415)", () => {
     // An empty line has + but no drag handle.
     expect(handle().className).toContain("is-hidden")
     expect(handle().tabIndex).toBe(-1)
+    // Out of the accessibility tree too (#477), and back once the line has text.
+    expect(handle().getAttribute("aria-hidden")).toBe("true")
     act(() => addButton().click())
     await placed()
     typeInto(search(), "heading 2")
@@ -214,7 +224,12 @@ describe("+ in the margin (#415)", () => {
     act(() => addButton().click())
     await placed()
     typeInto(search(), "map")
-    expect(addMenu()!.querySelector('[role="status"]')!.textContent).toContain("No blocks match “map”")
+    expect(addMenu()!.querySelector(".editor-insert__empty")!.textContent).toContain("No blocks match “map”")
+    // The status region was there, empty, before this; it speaks once typing pauses (#477).
+    const status = addMenu()!.querySelector('[role="status"]')!
+    expect(status.textContent).toBe("")
+    await act(() => new Promise((resolve) => setTimeout(resolve, RESULT_COUNT_DELAY_MS + 20)))
+    expect(status.textContent).toBe("No blocks match map")
     expect(search().getAttribute("aria-expanded")).toBe("false")
     key(search(), "Enter")
     expect(addMenu()).not.toBeNull()
@@ -309,7 +324,7 @@ describe("the gutter at any depth (#417)", () => {
     act(() => addButton().click())
     await placed()
     typeInto(search(), "group")
-    expect(addMenu()!.querySelector('[role="status"]')!.textContent).toContain("No blocks match")
+    expect(addMenu()!.querySelector(".editor-insert__empty")!.textContent).toContain("No blocks match")
     key(search(), "Escape")
     hover(GROUP)
     act(() => addButton().click())
