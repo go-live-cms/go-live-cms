@@ -10,7 +10,6 @@ interface Props {
   alt?: string
   mirror_horizontally?: boolean
   mirror_vertically?: boolean
-  onClick?: (e: React.MouseEvent<HTMLDivElement>) => void
 }
 
 export const Icon: React.FC<Props> = ({
@@ -22,7 +21,6 @@ export const Icon: React.FC<Props> = ({
   alt,
   mirror_horizontally = false,
   mirror_vertically = false,
-  onClick
 }) => {
   const [svgContent, setSvgContent] = useState<string>("")
   const [iconLoaded, setIconLoaded] = useState(false);
@@ -63,8 +61,8 @@ export const Icon: React.FC<Props> = ({
 
   return (
     <span
+      // No onClick (#480): a span can't be focused. Put the icon in a button.
       className={`gl-icon ${className}`}
-      onClick={onClick}
       style={{
         color: "var(--text-primary)",
         transform: transforms.join(" "),

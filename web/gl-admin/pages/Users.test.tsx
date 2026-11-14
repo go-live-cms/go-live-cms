@@ -138,7 +138,7 @@ describe("change role", () => {
     it("opens from the role cell and sends the new role", async () => {
         const success = vi.spyOn(toast, "success")
         api.changeUserRole.mockResolvedValue({ user: { ...MEMBERS[1], role: "contributor" } })
-        await click(byLabel("Role for Ana Costa: Editor. Change role"))
+        await click(byLabel("Editor: change role for Ana Costa"))
         expect(dialog()?.textContent).toContain("Change Ana Costa's role")
         const checked = dialog()!.querySelector<HTMLInputElement>("input[type='radio']:checked")!
         expect(checked.value).toBe("editor")

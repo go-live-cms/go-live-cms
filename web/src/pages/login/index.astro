@@ -16,8 +16,9 @@ const { allowSignup } = await getSiteSettings(Astro.locals)
       <p class="gl-admin-login__subtitle">to {SITE_TITLE}</p>
     </header>
 
-    <!-- Why the admin signed this tab out (?reason=, lib/loginPage.ts). -->
-    <div id="noticeMessage" class="gl-notice gl-notice--info" role="status" hidden>
+    <!-- Why the admin signed this tab out (?reason=, lib/loginPage.ts). Not a live
+         region (it starts hidden): AccountError's status announcer reads it. -->
+    <div id="noticeMessage" class="gl-notice gl-notice--info" hidden>
       <span class="gl-notice__icon" aria-hidden="true">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
           ><circle cx="12" cy="12" r="9"></circle><path d="M12 11v5M12 8h.01"></path></svg

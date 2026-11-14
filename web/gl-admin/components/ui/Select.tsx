@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useRef, useState, type CSSProperties, type FC, type KeyboardEvent, type ReactNode } from "react"
-import { nextRovingIndex, typeaheadIndex, useClickOutside, useFloating, useStableId } from "@gl-admin/components/ui/a11y"
+import { installInputModality, nextRovingIndex, typeaheadIndex, useClickOutside, useFloating, useStableId } from "@gl-admin/components/ui/a11y"
 import { FieldMessage, describedBy } from "@gl-admin/components/ui/Input"
 import { CheckIcon, ChevronDownIcon } from "@gl-admin/components/ui/icons"
 import "@gl-admin/assets/styles/components/ui/select.scss"
@@ -32,6 +32,10 @@ export const Listbox = forwardRef<HTMLDivElement, ListboxProps>(function Listbox
   { id, options, value, activeIndex, onPick, onHover, style, label, empty },
   ref
 ) {
+  // The active option's ring while the keyboard drives the list (#480; app.tsx installs
+  // it too, for the editor's menus and the palette).
+  useEffect(() => installInputModality(), [])
+
   // Keep the active option in view while arrowing through a long list.
   useEffect(() => {
     document.getElementById(optionId(id, activeIndex))?.scrollIntoView?.({ block: "nearest" })

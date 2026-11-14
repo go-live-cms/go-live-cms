@@ -1,4 +1,4 @@
-import { forwardRef, useMemo, useState, useCallback, useEffect, type InputHTMLAttributes, type ReactNode } from "react"
+import { forwardRef, useId, useMemo, useRef, useState, useCallback, useEffect, type InputHTMLAttributes, type ReactNode } from "react"
 import { getInputMask, getValidationPattern, type InputMaskType } from "@gl-admin/utils/inputMasks"
 import "@gl-admin/assets/styles/components/ui/input.scss"
 
@@ -21,9 +21,11 @@ export type InputProps = Omit<InputHTMLAttributes<HTMLInputElement>, "title" | "
   unmasked?: boolean
 }
 
+// role="alert" (#479): the message is read when it appears or changes, wherever focus
+// is; the field's aria-describedby reads it again when the field is focused.
 export function FieldError({ id, children }: { id: string; children: ReactNode }) {
   return (
-    <span id={id} className="gl-field__error">
+    <span id={id} className="gl-field__error" role="alert">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
         <circle cx="12" cy="12" r="9" />
         <path d="M12 8v4M12 16h.01" />
@@ -161,8 +163,25 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
       [onKeyDown]
     )
 
-    const inputId = id ?? `input-${name || type}`
+    // useId (#479): two unnamed inputs of one type used to share `input-text`, and a
+    // label pointed at the wrong one.
+    const generatedId = useId()
+    const inputId = id ?? `input-${generatedId.replace(/[^a-zA-Z0-9_-]/g, "")}`
+    // The red edge also shows a value the mask's pattern rejects, but only an error
+    // message marks the field invalid for screen readers: "invalid" needs a reason.
     const invalid = Boolean(error) || !isValid()
+    const ariaInvalid = error ? true : undefined
+    const masked = !unmasked && hydrated && IMaskInput
+
+    // The masked input replaces the plain one once react-imask loads; keep focus on
+    // the field if it had it.
+    const wasFocused = useRef(false)
+    wasFocused.current = focused
+    useEffect(() => {
+      if (masked && wasFocused.current) document.getElementById(inputId)?.focus()
+      // Only the swap matters.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [Boolean(masked)])
 
     return (
       <div
@@ -177,7 +196,9 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
           .filter(Boolean)
           .join(" ")}
       >
-        {unmasked ? (
+        {/* The masked input loads lazily; until it does (#479) a plain one holds its
+            place, so the label always points at a field Tab can reach. */}
+        {!masked ? (
           <input
             id={inputId}
             ref={ref}
@@ -187,7 +208,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             placeholder={placeholder}
             value={value}
             defaultValue={defaultValue}
-            aria-invalid={invalid || undefined}
+            aria-invalid={ariaInvalid}
             aria-describedby={describedBy(inputId, hint, error, ariaDescribedBy)}
             onFocus={handleFocus}
             onBlur={handleBlur}
@@ -195,18 +216,17 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             onChange={handleChange}
             {...rest}
           />
-        ) : /* The masked input loads lazily; hold its place until it does. */ !hydrated || !IMaskInput ? (
-          <span className="gl-input__field" aria-hidden="true" />
         ) : (
           <IMaskInput
             id={inputId}
             ref={ref}
             type={type === "password" ? "password" : "text"}
             className="gl-input__field"
+            name={name}
             placeholder={placeholder}
             value={value as any}
             defaultValue={defaultValue}
-            aria-invalid={invalid || undefined}
+            aria-invalid={ariaInvalid}
             aria-describedby={describedBy(inputId, hint, error, ariaDescribedBy)}
             onFocus={handleFocus}
             onBlur={handleBlur}

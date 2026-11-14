@@ -5,6 +5,7 @@ import type { User } from "@gl-admin/lib/api/types"
 import UserForm from "@gl-admin/components/forms/UserForm"
 import { AuthManager } from "@gl-admin/lib/auth"
 import { ToastContainer, useToast } from "@gl-admin/components/Toast"
+import { usePageTitle } from "@gl-admin/lib/hooks/usePageTitle"
 
 export default function EditUser() {
     const { id } = useParams<{ id: string }>()
@@ -13,6 +14,7 @@ export default function EditUser() {
     const [loading, setLoading] = useState(true)
     const accessToken = AuthManager.getInstance().getAccessToken() || ""
     const { toasts, showError, removeToast } = useToast()
+    usePageTitle(user ? `Edit user: ${user.full_name || user.username}` : loading ? "Loading…" : "User not found")
 
     useEffect(() => {
         const fetchUser = async () => {

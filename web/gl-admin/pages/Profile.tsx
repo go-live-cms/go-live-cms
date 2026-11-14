@@ -33,6 +33,7 @@ import {
   type PasswordFields,
   type ProfileFields,
 } from "@gl-admin/lib/profile"
+import { usePageTitle } from "@gl-admin/lib/hooks/usePageTitle"
 import "@gl-admin/assets/styles/pages/workspace.scss"
 import "@gl-admin/assets/styles/pages/profile.scss"
 
@@ -93,8 +94,9 @@ export default function Profile() {
   const [devicesError, setDevicesError] = useState<string | null>(null)
   const [devicesNotice, setDevicesNotice] = useState<string | null>(null)
 
+  usePageTitle("My profile")
+
   useEffect(() => {
-    document.title = "GoLive Admin | My profile"
     let cancelled = false
     getMe()
       .then(({ user }) => {

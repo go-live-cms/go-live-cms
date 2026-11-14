@@ -1,5 +1,5 @@
 import { useEffect, useRef, type ReactNode, type RefObject } from "react"
-import { useEscape, useFocusTrap, useStableId } from "@gl-admin/components/ui/a11y"
+import { useEscape, useFocusTrap, useInertOthers, useStableId } from "@gl-admin/components/ui/a11y"
 import { IconButton } from "@gl-admin/components/ui/Button"
 import { CloseIcon } from "@gl-admin/components/ui/icons"
 import "@gl-admin/assets/styles/components/ui/modal.scss"
@@ -43,7 +43,8 @@ export function useScrollLock(active: boolean) {
 }
 
 // A modal dialog (#144): focus moves in on open and is trapped there, Escape and the
-// close button close it, and focus returns to what opened it.
+// close button close it, and focus returns to what opened it. The rest of the page is
+// inert meanwhile (#480; it renders in place, see useInertOthers).
 export default function Modal({
   isOpen,
   onClose,
@@ -60,10 +61,15 @@ export default function Modal({
   ...aria
 }: ModalProps) {
   const ref = useRef<HTMLDivElement>(null)
+  const overlayRef = useRef<HTMLDivElement>(null)
   const id = useStableId("dialog")
 
   useScrollLock(isOpen)
   useEscape(isOpen, onClose)
+  // Before the trap: its cleanup gives focus back to the opener, which must not be
+  // inert by then (cleanups run in this order). The page behind can't be reached or
+  // read meanwhile (#480).
+  useInertOthers(overlayRef, isOpen)
   useFocusTrap(ref, isOpen, { initialFocus, preferIn: ".gl-modal__content" })
 
   if (!isOpen) return null
@@ -73,6 +79,7 @@ export default function Modal({
   const described = description && showHeader && (title || showCloseButton)
   return (
     <div
+      ref={overlayRef}
       className="gl-modal-overlay"
       // mousedown, not click: a text selection dragged out of the dialog shouldn't close it.
       onMouseDown={(e) => {

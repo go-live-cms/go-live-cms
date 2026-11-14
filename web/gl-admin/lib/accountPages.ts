@@ -221,6 +221,54 @@ export function describeAccountError(err: unknown): string {
   return "Something went wrong. Please try again."
 }
 
+// Which inputs (by name) an error is about (#479), for formUi.showError: true when
+// it could be any of them, false when it's about none (the server, the link).
+export type ErrorFields = boolean | string[]
+
+export function accountErrorFields(err: unknown): ErrorFields {
+  if (!(err instanceof ApiError)) return false // unreachable, or our own bug
+  if (err.code === "username_taken" || err.code === "username_unavailable") return ["username"]
+  if (err.code === "email_registered" || err.code === "email_taken") return ["email"]
+  if (err.code === "invalid_token" || err.code === "signup_disabled") return false
+  if (err.status === 429 || err.status >= 500) return false
+  return true
+}
+
+// A validation message and the field it's about.
+export type FieldProblem = { message: string; fields: string[] }
+
+// The password rules' message, on the password field unless only the confirmation
+// differs (validateNewPassword checks the password itself first).
+export function passwordProblem(
+  password: string,
+  confirm: string,
+  details: readonly (string | null | undefined)[] = []
+): FieldProblem | null {
+  const message = validatePassword(password, confirm, details)
+  if (!message) return null
+  const aboutPassword = validatePassword(password, password, details) !== null
+  return { message, fields: [aboutPassword ? "password" : "confirm_password"] }
+}
+
+export function acceptInvitationProblem(fields: AcceptInvitationFields, email?: string): FieldProblem | null {
+  const message = validateAcceptInvitation(fields, email)
+  if (!message) return null
+  const username = fields.username.trim()
+  const fullName = fields.full_name.trim()
+  if (message.startsWith("Username")) return { message, fields: ["username"] }
+  if (message.startsWith("Full name")) return { message, fields: ["full_name"] }
+  return passwordProblem(fields.password, fields.confirm_password, [username, fullName, email])
+}
+
+export function registrationProblem(fields: RegisterFields): FieldProblem | null {
+  const message = validateRegistration(fields)
+  if (!message) return null
+  if (message.startsWith("Your name")) return { message, fields: ["full_name"] }
+  if (message.startsWith("Username")) return { message, fields: ["username"] }
+  if (message === "Enter a valid email address.") return { message, fields: ["email"] }
+  return passwordProblem(fields.password, fields.confirm_password, [fields.username.trim(), fields.full_name.trim(), fields.email.trim()])
+}
+
 export function roleLabel(role: string): string {
   return USER_ROLE_OPTIONS.find((o) => o.value === role)?.label ?? role
 }
@@ -292,11 +340,15 @@ export function formUi(doc: Document, form: HTMLFormElement, idleLabel: string, 
   const inputs = Array.from(form.querySelectorAll<HTMLInputElement>("input")).filter((i) => !i.readOnly)
   const win = doc.defaultView!
   let announceTimer: number | undefined
+  const statusAnnouncer = doc.getElementById("statusAnnouncer")
+  let statusTimer: number | undefined
 
   // Adds or removes the error from each input's aria-describedby, keeping
-  // what the markup put there (a password field's hint).
-  const setInvalid = (invalid: boolean) => {
+  // what the markup put there (a password field's hint). Only the fields the
+  // error is about are marked (#479): a taken username isn't the password's fault.
+  const setInvalid = (which: ErrorFields) => {
     for (const input of inputs) {
+      const invalid = which === true || (Array.isArray(which) && which.includes(input.name))
       input.closest(".gl-input")?.classList.toggle("is-invalid", invalid)
       const ids = (input.getAttribute("aria-describedby") ?? "").split(/\s+/).filter((id) => id && id !== "errorMessage")
       if (invalid) {
@@ -311,12 +363,15 @@ export function formUi(doc: Document, form: HTMLFormElement, idleLabel: string, 
   }
 
   return {
-    // fields: false for an error about the page rather than what was typed
-    // (a failed invitation preview), so untouched fields don't turn red.
-    showError(message: string, { fields = true }: { fields?: boolean } = {}) {
+    // fields: the names of the inputs the error is about (the first is focused),
+    // true when it can't tell which (a 400 from the API), or false for an error
+    // about the page rather than what was typed (a failed invitation preview, the
+    // server unreachable), so untouched fields don't turn red.
+    showError(message: string, { fields = true }: { fields?: ErrorFields } = {}) {
       errorText.textContent = message
       error.hidden = false
       setInvalid(fields)
+      if (Array.isArray(fields)) inputs.find((i) => fields.includes(i.name))?.focus()
       // A live region only speaks when its text changes: clear, then set.
       win.clearTimeout(announceTimer)
       announcer.textContent = ""
@@ -328,6 +383,17 @@ export function formUi(doc: Document, form: HTMLFormElement, idleLabel: string, 
       error.hidden = true
       errorText.textContent = ""
       setInvalid(false)
+    },
+    // A notice that isn't an error (why the page signed you out), through the
+    // always-present polite announcer: a live region that was hidden, then shown,
+    // isn't read by every screen reader (#479).
+    announce(message: string) {
+      if (!statusAnnouncer) return
+      win.clearTimeout(statusTimer)
+      statusAnnouncer.textContent = ""
+      statusTimer = win.setTimeout(() => {
+        statusAnnouncer.textContent = message
+      }, 100)
     },
     setLoading(loading: boolean) {
       button.disabled = loading
@@ -364,7 +430,7 @@ export function mountForgotPasswordPage(doc: Document = document): void {
     ui.hideError()
     const email = field(form, "email").trim()
     if (!/^\S+@\S+\.\S+$/.test(email)) {
-      ui.showError("Enter the email address of your account.")
+      ui.showError("Enter the email address of your account.", { fields: ["email"] })
       return
     }
     ui.setLoading(true)
@@ -372,7 +438,7 @@ export function mountForgotPasswordPage(doc: Document = document): void {
       await requestPasswordReset(email)
     } catch (err) {
       ui.setLoading(false)
-      ui.showError(describeAccountError(err))
+      ui.showError(describeAccountError(err), { fields: accountErrorFields(err) })
       return
     }
     // Same text whether or not the email has an account (the API doesn't say).
@@ -412,9 +478,9 @@ export function mountResetPasswordPage(doc: Document = document, navigate: Navig
     e.preventDefault()
     ui.hideError()
     const password = field(form, "password")
-    const invalid = validatePassword(password, field(form, "confirm_password"))
+    const invalid = passwordProblem(password, field(form, "confirm_password"))
     if (invalid) {
-      ui.showError(invalid)
+      ui.showError(invalid.message, { fields: invalid.fields })
       return
     }
     ui.setLoading(true)
@@ -426,7 +492,7 @@ export function mountResetPasswordPage(doc: Document = document, navigate: Navig
         showInvalidLink(doc, form)
         return
       }
-      ui.showError(describeAccountError(err))
+      ui.showError(describeAccountError(err), { fields: accountErrorFields(err) })
       return
     }
     dropLinkToken(win)
@@ -503,9 +569,9 @@ export async function mountAcceptInvitePage(
       password: field(form, "password"),
       confirm_password: field(form, "confirm_password"),
     }
-    const invalid = validateAcceptInvitation(fields, invitedEmail)
+    const invalid = acceptInvitationProblem(fields, invitedEmail)
     if (invalid) {
-      ui.showError(invalid)
+      ui.showError(invalid.message, { fields: invalid.fields })
       return
     }
     ui.setLoading(true)
@@ -517,7 +583,7 @@ export async function mountAcceptInvitePage(
         showInvalidLink(doc, form)
         return
       }
-      ui.showError(describeAccountError(err))
+      ui.showError(describeAccountError(err), { fields: accountErrorFields(err) })
       return
     }
     dropLinkToken(win)
@@ -606,9 +672,9 @@ export function mountRegisterPage(doc: Document = document): void {
       password: field(form, "password"),
       confirm_password: field(form, "confirm_password"),
     }
-    const invalid = validateRegistration(fields)
+    const invalid = registrationProblem(fields)
     if (invalid) {
-      ui.showError(invalid)
+      ui.showError(invalid.message, { fields: invalid.fields })
       return
     }
     ui.setLoading(true)
@@ -620,8 +686,8 @@ export function mountRegisterPage(doc: Document = document): void {
         showSignupClosed(doc, form)
         return
       }
-      ui.showError(describeAccountError(err))
-      if (err instanceof ApiError && err.code === "username_unavailable") doc.getElementById("username")?.focus()
+      // A taken username or email: that field is marked and focused.
+      ui.showError(describeAccountError(err), { fields: accountErrorFields(err) })
       return
     }
     ui.setLoading(false)

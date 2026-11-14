@@ -810,6 +810,23 @@ are the most fragile part of the codebase. **Before editing anything under
   **`axe-core`** (exact dev dependency) runs in vitest: `gl-admin/components/ui/axe.test.tsx` renders
   components with react-dom into jsdom (contrast off: `tokens.test.ts` owns it); add new shared
   components and editor chrome there. Remaining findings: the Post-MVP issues linked from #144.
+- **Routes, forms and feedback (#479, #480):** every routed page calls `usePageTitle("…")`
+  (`lib/hooks/usePageTitle.ts`; `routeFocus.test.tsx` fails on a route whose page doesn't), and
+  `AppLayout`'s `useRouteFocus` moves focus to the new page's `<h1>` (or `<main>` after 3 s) on a path
+  change, unless the page took focus itself. The editor pages render a visually hidden `<h1>`
+  (`lib/editorHeading.ts`: "Edit post: …"). `aria-activedescendant` lists (Select/Combobox `Listbox`,
+  the slash/+/@ menus, the palette) get the inset ring on `[data-active="true"]` / `.is-active` while
+  `<html data-input-modality="keyboard">` (`a11y.ts` `installInputModality`; the mouse keeps only the
+  fill): it's in `mixins.menu-row`, so a new list row gets it by using the mixin. Modal and Drawer
+  render in place and make the rest of the page `inert` (`useInertOthers`; skips `[data-inert-exempt]`,
+  the toaster, and anything holding `.ProseMirror`). `Input` ids are `useId`; `aria-invalid` only with an
+  `error`, whose `FieldError` is `role="alert"`; after any form submit the first invalid field gets
+  focus (`installSubmitFocus`). Combobox's Escape with the list closed does nothing (a dialog closes).
+  Toasts: errors and toasts with an action stay until dismissed; **F6** (`TOASTER_SHORTCUT`) goes to the
+  newest toast and back. Tooltips are hoverable (a 120 ms hide delay) and describe the target's first
+  focusable element, any component. Account pages: `formUi.showError(message, { fields })` marks only
+  the named inputs (`accountErrorFields`, the `*Problem` validators) and focuses the first; notices go
+  through `#statusAnnouncer` (`AccountError.astro`), never a live region that starts hidden.
 - The admin Content list route `/content/:typeName` keys its component by `typeName`
   (`ContentByType` in `app.tsx`) so switching post types remounts + refetches.
 

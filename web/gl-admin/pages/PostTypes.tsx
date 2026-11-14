@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useState } from "react"
-import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
 import Button from "@gl-admin/components/ui/Button"
 import Input from "@gl-admin/components/ui/Input"
 import Checkbox from "@gl-admin/components/ui/Checkbox"
@@ -23,6 +22,7 @@ import {
   validatePostTypeDraft,
   type PostTypeDraft,
 } from "@gl-admin/lib/postTypes"
+import { usePageTitle } from "@gl-admin/lib/hooks/usePageTitle"
 import "@gl-admin/assets/styles/pages/workspace.scss"
 
 // Post types (#343, the Post types board): the list, and a panel beside it that
@@ -36,16 +36,13 @@ import "@gl-admin/assets/styles/pages/workspace.scss"
 type Row = PostType & { fields?: null }
 
 export default function PostTypes() {
-  const { baseTitle } = useGoLive()
   const [types, setTypes] = useState<PostType[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<unknown>(null)
   // null: the panel is closed; "new": creating; otherwise the name being edited.
   const [open, setOpen] = useState<string | null>(null)
 
-  useEffect(() => {
-    document.title = `${baseTitle} Post types`
-  }, [])
+  usePageTitle("Post types")
 
   const load = useCallback(async () => {
     setLoadError(null)

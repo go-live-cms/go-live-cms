@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, type DragEvent } from "react"
 import { useSearchParams } from "react-router-dom"
-import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
 import MediaGrid, { type UploadingFile } from "@gl-admin/components/media/MediaGrid"
 import MediaPanel from "@gl-admin/components/media/MediaPanel"
 import { DeleteMediaDialog } from "@gl-admin/components/media/mediaActions"
@@ -20,6 +19,7 @@ import { useListParams } from "@gl-admin/lib/hooks/useListParams"
 import { useMediaQuery } from "@gl-admin/lib/hooks/useMediaQuery"
 import { MOBILE_QUERY } from "@gl-admin/components/sidebar/Sidebar"
 import type { Media as MediaItem } from "@gl-admin/lib/types"
+import { usePageTitle } from "@gl-admin/lib/hooks/usePageTitle"
 import "@gl-admin/assets/styles/pages/content-list.scss"
 import "@gl-admin/assets/styles/pages/media.scss"
 
@@ -34,7 +34,6 @@ const PAGE_SIZE = 24
 const ACCEPT = "image/*,video/*,audio/*,.pdf,.doc,.docx,.txt"
 
 export default function Media() {
-  const { baseTitle } = useGoLive()
   const user = useAuthUser()
   // Every content role may upload (requireContentAuthor in the API, #135); editing or
   // deleting someone else's media is still moderators only (canWriteMedia).
@@ -63,9 +62,7 @@ export default function Media() {
   const [searchText, setSearchText] = useState(search)
   const fileInput = useRef<HTMLInputElement>(null)
 
-  useEffect(() => {
-    document.title = `${baseTitle} Media`
-  }, [baseTitle])
+  usePageTitle("Media")
 
   // Updates from the URL as it is when the timer fires, so a filter picked during the
   // pause isn't overwritten. (react-router's functional setSearchParams hands back the

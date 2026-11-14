@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
-import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
 import AltTextField from "@gl-admin/components/media/AltTextField"
 import FocalPointPicker, { FocalCropPreviews, formatFocalPoint } from "@gl-admin/components/media/FocalPointPicker"
 import { KindIcon } from "@gl-admin/components/media/MediaCard"
@@ -29,6 +28,7 @@ import {
 import { canWriteMedia } from "@gl-admin/lib/roles"
 import { useAuthUser } from "@gl-admin/lib/hooks/useAuthUser"
 import type { FocalPoint, Media } from "@gl-admin/lib/types"
+import { usePageTitle } from "@gl-admin/lib/hooks/usePageTitle"
 import "@gl-admin/assets/styles/pages/media.scss"
 
 // A media file's detail page (#342, the "Media detail" board): the focal point with crop
@@ -49,7 +49,6 @@ export default function MediaDetail() {
   const { id } = useParams<{ id: string }>()
   const mediaId = /^\d+$/.test(id ?? "") ? Number(id) : null
   const navigate = useNavigate()
-  const { baseTitle } = useGoLive()
   const user = useAuthUser()
 
   const [media, setMedia] = useState<Media | null>(null)
@@ -84,9 +83,7 @@ export default function MediaDetail() {
     }
   }, [mediaId, reload])
 
-  useEffect(() => {
-    document.title = `${baseTitle} ${media?.name ?? "Media"}`
-  }, [baseTitle, media?.name])
+  usePageTitle(media?.name ?? "Media")
 
   if (mediaId === null) return <NotFoundPage />
   if (loadError) return <ErrorPage error={loadError} onRetry={() => setReload((n) => n + 1)} />

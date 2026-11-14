@@ -30,7 +30,7 @@ const contains = (option: SelectOption, query: string) => option.label.toLowerCa
 
 // A text field that filters a list as you type (authors, categories, a parent page).
 // Focus stays in the input: ArrowDown/ArrowUp open and move, Enter picks, Escape
-// closes the list (a second Escape clears the text).
+// closes the list (with the list closed it isn't handled here, so a dialog closes).
 export default function Combobox({
   label,
   options,
@@ -75,15 +75,13 @@ export default function Combobox({
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Escape") {
+      // Only an open list is this field's to close. Closed, Escape goes on to whatever
+      // holds the field (a dialog closes) and the value stays (#479): clearing it is
+      // deleting the text.
       if (open) {
         e.preventDefault()
         e.stopPropagation()
         close()
-      } else if (text) {
-        e.preventDefault()
-        e.stopPropagation()
-        onChange(null)
-        setQuery(null)
       }
       return
     }

@@ -70,7 +70,7 @@ describe("InviteUserModal", () => {
   it("sends the role picked", async () => {
     api.createInvitation.mockResolvedValue({ invitation: { email: "tom@example.com" }, email_sent: true })
     await render()
-    await type(dialog().querySelector<HTMLInputElement>("input[id='input-email']")!, " tom@example.com ")
+    await type(dialog().querySelector<HTMLInputElement>("input[name='email']")!, " tom@example.com ")
     await act(async () => dialog().querySelector<HTMLInputElement>("input[type='radio'][value='editor']")!.click())
     expect(cards().find((c) => c.checked)?.name).toBe("Editor")
 
@@ -83,7 +83,7 @@ describe("InviteUserModal", () => {
 
   it("names the fix instead of sending an incomplete address", async () => {
     await render()
-    await type(dialog().querySelector<HTMLInputElement>("input[id='input-email']")!, "maya@golive")
+    await type(dialog().querySelector<HTMLInputElement>("input[name='email']")!, "maya@golive")
     const send = Array.from(document.querySelectorAll("button")).find((b) => b.textContent === "Send invite")!
     await act(async () => send.click())
     await settle()

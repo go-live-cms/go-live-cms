@@ -59,6 +59,15 @@
     box-shadow: inset 0 0 0 2px var(--focus-ring);
   }
 
+  // The same ring on the active option of a list that keeps focus in its field
+  // (aria-activedescendant: Select, Combobox, the slash/+/@ menus, the palette; #480),
+  // while the keyboard drives it (a11y.ts installInputModality). The mouse gets only
+  // the hover fill, as before.
+  :root[data-input-modality="keyboard"] &[data-active="true"],
+  :root[data-input-modality="keyboard"] &.is-active {
+    box-shadow: inset 0 0 0 2px var(--focus-ring);
+  }
+
   &[aria-disabled="true"] {
     cursor: not-allowed;
     opacity: 0.5;

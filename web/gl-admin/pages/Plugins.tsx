@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
 import {
   deletePluginData,
   disablePlugin,
@@ -42,6 +41,7 @@ import Skeleton from "@gl-admin/components/ui/Skeleton"
 import EmptyState from "@gl-admin/components/ui/EmptyState"
 import NavIcon from "@gl-admin/components/sidebar/NavIcon"
 import { ErrorPage } from "@gl-admin/components/errors/ErrorPages"
+import { usePageTitle } from "@gl-admin/lib/hooks/usePageTitle"
 import "@gl-admin/assets/styles/pages/workspace.scss"
 import "@gl-admin/assets/styles/pages/plugins.scss"
 
@@ -54,7 +54,6 @@ import "@gl-admin/assets/styles/pages/plugins.scss"
 // GET /plugins/:slug/usage, read when the dialog opens for a plugin with blocks.
 
 const PluginsPage = () => {
-  const { baseTitle } = useGoLive()
   const [plugins, setPlugins] = useState<Plugin[] | null>(null)
   const [loadError, setLoadError] = useState<unknown>(null)
   const [enabling, setEnabling] = useState<Plugin | null>(null)
@@ -74,10 +73,11 @@ const PluginsPage = () => {
     }
   }, [])
 
+  usePageTitle("Plugins")
+
   useEffect(() => {
-    document.title = `${baseTitle} Plugins`
     load()
-  }, [baseTitle, load])
+  }, [load])
 
   const replace = (updated: Plugin) => setPlugins((list) => list?.map((p) => (p.slug === updated.slug ? updated : p)) ?? null)
 

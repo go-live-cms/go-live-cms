@@ -145,6 +145,7 @@ type SidebarNavProps = {
 
 // The sidebar's content, shared by the desktop column and the phone drawer.
 export function SidebarNav({ sections, current, onSearch = openCommandPalette }: SidebarNavProps) {
+  const idPrefix = `gl-nav-section-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`
   return (
     <div className="gl-sidebar">
       <div className="gl-sidebar__top">
@@ -158,9 +159,21 @@ export function SidebarNav({ sections, current, onSearch = openCommandPalette }:
         </button>
       </div>
       <nav className="gl-sidebar__nav" aria-label="Admin">
+        {/* A labelled section is a group named by its label (#480), announced as you
+            enter it. Not headings: they would come before the page's <h1>. Ids are
+            per copy (the phone drawer and the gallery repeat the nav). */}
         {sections.map((section) => (
-          <div key={section.key} className="gl-sidebar__section">
-            {section.label && <span className="gl-sidebar__heading">{section.label}</span>}
+          <div
+            key={section.key}
+            className="gl-sidebar__section"
+            role={section.label ? "group" : undefined}
+            aria-labelledby={section.label ? `${idPrefix}-${section.key}` : undefined}
+          >
+            {section.label && (
+              <span id={`${idPrefix}-${section.key}`} className="gl-sidebar__heading">
+                {section.label}
+              </span>
+            )}
             {section.items.map((item) =>
               item.children ? (
                 <NavGroup key={item.key} item={item} current={current} />

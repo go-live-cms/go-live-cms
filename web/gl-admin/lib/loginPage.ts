@@ -78,7 +78,7 @@ export function mountLoginPage(
   const win = doc.defaultView!
   const form = doc.getElementById("loginForm") as HTMLFormElement
   const ui = formUi(doc, form, "Sign in", "Signing in…")
-  const inputs = Array.from(form.querySelectorAll<HTMLInputElement>("input"))
+
   const target = () => redirectTarget(win.location.search, win.location.origin)
 
   // The access token isn't stored, so "already signed in?" means a refresh
@@ -96,6 +96,8 @@ export function mountLoginPage(
     const text = noticeBox.querySelector<HTMLElement>("[data-notice-text]") ?? noticeBox
     text.textContent = notice
     noticeBox.hidden = false
+    // The box isn't a live region (it starts hidden): the page's announcer reads it.
+    ui.announce(notice)
   }
 
   // Coming Back from the admin restores this page from the bfcache with the
@@ -113,8 +115,10 @@ export function mountLoginPage(
     const password = (formData.get("password") as string | null) ?? ""
 
     if (!username || !password) {
-      ui.showError("Enter your username and password.")
-      ;(username ? inputs[1] : inputs[0])?.focus()
+      // Only the empty ones are marked; the first is focused.
+      ui.showError("Enter your username and password.", {
+        fields: [username ? "" : "username", password ? "" : "password"].filter(Boolean),
+      })
       return
     }
 
@@ -135,6 +139,9 @@ export function mountLoginPage(
     }
 
     ui.setLoading(false)
-    ui.showError(describeLoginError(result))
+    // A wrong username or password could be either field; the rest (too many
+    // attempts, the server) are about neither.
+    const either = result.status === 401 || result.status === 400
+    ui.showError(describeLoginError(result), { fields: either })
   })
 }
