@@ -63,6 +63,12 @@ describe("heading ids across nested docs (problem 4)", () => {
     expect(docElementIds(doc(heading("heading-001", "x")))).toEqual(["b-heading-001"])
   })
 
+  it("a nested doc's headings skip the outer doc's embed notes (#481)", () => {
+    const page = html(doc(embed("embed-0001"), nested("n1", doc(heading("ph1", "Embed note embed 0001")))))
+    expect(page).toContain('id="embed-note-embed-0001"')
+    expect(ids(page)).toEqual(["embed-note-embed-0001-2"])
+  })
+
   it("pageHeadingAnchors gives docs rendered side by side the same rule", () => {
     const [template, post] = pageHeadingAnchors([doc(heading("t", "Intro")), doc(heading("p", "Intro"), heading("q", "Content"))], ["content"])
     expect(template.map((h) => h.id)).toEqual(["intro"])

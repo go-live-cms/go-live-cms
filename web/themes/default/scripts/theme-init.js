@@ -40,10 +40,16 @@
     root.setAttribute("data-theme", resolved)
     root.setAttribute("data-theme-preference", preference)
     var buttons = document.querySelectorAll("[data-theme-choice]")
+    var current = ""
     for (var i = 0; i < buttons.length; i++) {
       var on = buttons[i].getAttribute("data-theme-choice") === preference
       buttons[i].setAttribute("aria-pressed", on ? "true" : "false")
+      if (on && !current) current = (buttons[i].textContent || "").trim()
     }
+    // The header's toggle names the current choice (#481): "Theme: Dark". The server
+    // renders plain "Theme" (it can't know the reader's choice, and the page is cached).
+    var toggle = document.querySelector("[data-theme-menu-toggle]")
+    if (toggle && current) toggle.setAttribute("aria-label", "Theme: " + current)
   }
 
   root.setAttribute("data-js", "")

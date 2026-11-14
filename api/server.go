@@ -76,6 +76,11 @@ type Server struct {
 	// installed theme blocks prepareForStore validates. Empty in test mode.
 	themeBlocks ThemeBlockManifest
 
+	// themeTokens is web/themes/tokens.manifest.json (global_styles.go, #485): each
+	// theme's declared tokens, which global styles may override. Empty in test mode (no
+	// theme supports global styles); tests set it.
+	themeTokens ThemeTokenManifest
+
 	// maxUploadBytes is config.MaxUploadSize parsed once (media uploads).
 	maxUploadBytes int64
 	// mediaReplaceMu serializes POST /media/:id/replace, so two replaces of
@@ -250,6 +255,17 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 			server.logger.Warn("no theme block manifest; theme block attrs are not validated", "path", themeBlockManifestPath)
 		}
 		server.themeBlocks = manifest
+
+		tokens, found, err := LoadThemeTokenManifest(themeTokenManifestPath)
+		if err != nil {
+			return nil, err
+		}
+		if found {
+			server.logger.Info("loaded theme token manifest", "path", themeTokenManifestPath, "themes", len(tokens.Themes))
+		} else {
+			server.logger.Warn("no theme token manifest; no theme supports global styles", "path", themeTokenManifestPath)
+		}
+		server.themeTokens = tokens
 
 		themesPath := filepath.Join("web", "themes")
 		discoveredThemes, err := ScanThemesDirectory(themesPath)
@@ -510,6 +526,7 @@ func (server *Server) setupRoutes() error {
 	// Theme module routes (see themes_routes.go for complete definitions)
 	server.registerThemeRoutes(v1)
 	server.registerPluginRoutes(v1)
+	server.registerSiteDesignRoutes(v1)
 
 	// Navigation menus (see menus_routes.go)
 	server.registerMenuRoutes(v1)

@@ -120,10 +120,10 @@ describe("headingAnchors", () => {
     ])
   })
 
-  it("reads the level as the renderer does (string levels too; out of range is 1)", () => {
-    const d = doc(h("a", "Two"), h("b", "Nine", 9))
+  it("reads the level as the renderer does (string levels too; 1 and out of range are 2, #481)", () => {
+    const d = doc(h("a", "Two"), h("b", "Nine", 9), h("c", "One", 1))
     ;(d.blocks.a as { attrs: Record<string, unknown> }).attrs.level = "3"
-    expect(headingAnchors(d).map((a) => a.level)).toEqual([3, 1])
+    expect(headingAnchors(d).map((a) => a.level)).toEqual([3, 2, 2])
   })
 
   it("is empty for no doc", () => {
@@ -154,15 +154,23 @@ describe("tableOfContents", () => {
     expect(tableOfContents(anchors(h("a", "Lead", 3), h("b", "One"), h("c", "Two"))).map((e) => e.id)).toEqual(["lead", "one", "two"])
   })
 
-  it("leaves out H1 and H4+ and headings without text", () => {
-    const toc = tableOfContents(anchors(h("a", "Title", 1), h("b", "One"), h("c", "Deep", 4), h("d", ""), h("e", "Two"), h("f", "Three")))
+  it("leaves out H4+ and headings without text", () => {
+    const toc = tableOfContents(anchors(h("a", "One"), h("c", "Deep", 4), h("d", ""), h("e", "Two"), h("f", "Three")))
     expect(toc.map((e) => e.id)).toEqual(["one", "two", "three"])
     expect(toc[0].children).toEqual([])
   })
 
+  it("lists a Heading 1 block as the H2 it renders as (#481)", () => {
+    const toc = tableOfContents(anchors(h("a", "Big", 1), h("b", "Under", 3), h("c", "Two")))
+    expect(toc).toEqual([
+      { id: "big", text: "Big", children: [{ id: "under", text: "Under", children: [] }] },
+      { id: "two", text: "Two", children: [] },
+    ])
+  })
+
   it("is empty below three entries (counting nested ones)", () => {
     expect(tableOfContents(anchors(h("a", "One"), h("b", "Two")))).toEqual([])
-    expect(tableOfContents(anchors(h("a", "One"), h("b", "Deep", 4), h("c", "Title", 1)))).toEqual([])
+    expect(tableOfContents(anchors(h("a", "One"), h("b", "Deep", 4), h("c", "", 1)))).toEqual([])
     expect(tableOfContents(anchors(h("a", "One"), h("b", "One A", 3), h("c", "One B", 3)))).toHaveLength(1)
     expect(tableOfContents([])).toEqual([])
   })

@@ -17,7 +17,7 @@ declare namespace App {
 
     // The site's published global styles for the active theme (#484, #485), which a theme's
     // base layout merges into its tokens with resolveThemeTokens (lib/themeTokens.ts).
-    // NO_GLOBAL_STYLES (empty) until #485 stores them.
+    // From GET /themes/active's global_styles (published only); NO_GLOBAL_STYLES when none.
     globalStyles?: import("./lib/themeTokens").GlobalStyles
 
     // Phase 2: Theme functions

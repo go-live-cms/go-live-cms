@@ -40,6 +40,40 @@ describe("ImageBlock", () => {
     expect(html(false)).toContain('alt="A"')
   })
 
+  // #481 (WCAG 1.1.1): alt="" means decorative, so it is never a stand-in for "nobody wrote one".
+  describe("alt text", () => {
+    const withMedia = (blockAlt: unknown, media: Record<string, unknown> | null) => {
+      const block = image({ mediaId: 12, alt: blockAlt })
+      const doc = {
+        doc_version: 1,
+        blocks_order: [first.id, block.id],
+        blocks: { [first.id]: first, [block.id]: block },
+        ...(media ? { media: { "12": { media_path: "/uploads/a.png", width: 0, height: 0, ...media } } } : {}),
+      } as unknown as BlockDocV1
+      return renderToStaticMarkup(<ImageBlock block={block} doc={doc} renderContent={renderContent} getBlockContent={getBlockContent} renderBlock={() => null} />)
+    }
+
+    it("the block's own alt text wins over the library's", () => {
+      expect(withMedia("Block words", { alt: "Library words" })).toContain('alt="Block words"')
+    })
+
+    it("an image without its own falls back to the media library's alt text", () => {
+      expect(withMedia(undefined, { alt: "Library words" })).toContain('alt="Library words"')
+      expect(withMedia("   ", { alt: "Library words" })).toContain('alt="Library words"')
+    })
+
+    it("a decorative image is alt=\"\" even with alt text in the block or the library", () => {
+      expect(withMedia("Block words", { alt: "Library words", decorative: true })).toContain('alt=""')
+    })
+
+    it("with no alt text anywhere it has no alt attribute: unlabelled, not decorative", () => {
+      for (const html of [withMedia(undefined, {}), withMedia("", null)]) {
+        expect(html).toContain("<img")
+        expect(html).not.toMatch(/\balt=/)
+      }
+    })
+  })
+
   it("renders an old image (no caption, no width) as the bare <img> it always was", () => {
     const html = render(ImageBlock, image({}, 1))
     expect(html).toBe('<img src="/uploads/a.png" loading="lazy" decoding="async" alt="A"/>')

@@ -3,68 +3,20 @@ import themeConfig, { type ThemeColors } from "./theme.config"
 import { cssName, themeCssVariables } from "@/lib/themeTokens"
 import { AVATAR_COLORS } from "./lib/avatar"
 import { BLOCK_COLOR_TOKENS } from "@gl-admin/lib/blocks-spec"
+import { CONTRAST_PAIRS, CONTRAST_TEXT, contrastFailures, contrastRatio as contrast, declaredTokens } from "@/lib/globalStyles"
 
 // The default theme's colours (#345) must keep the WCAG AA contrast the Foundations
 // board promises, in both themes. Same check as gl-admin/assets/styles/tokens.test.ts
 // does for the admin.
 
-function luminance(hex: string): number {
-  const [r, g, b] = [1, 3, 5].map((i) => {
-    const c = parseInt(hex.slice(i, i + 2), 16) / 255
-    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
-  })
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b
-}
-
-function contrast(a: string, b: string): number {
-  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x)
-  return (hi + 0.05) / (lo + 0.05)
-}
-
-const TEXT = 4.5 // AA, normal text
-const UI = 3 // AA, control edges and focus indicators
+const TEXT = CONTRAST_TEXT
 
 type Key = keyof ThemeColors
 
-// [foreground, background, minimum]: every pairing theme.css uses for text.
-const PAIRS: [Key, Key, number][] = [
-  ["text", "background", TEXT],
-  ["text", "surface", TEXT],
-  ["text", "surface2", TEXT],
-  ["text", "highlight", TEXT], // search matches, and highlighted text (#418) with links in it
-  ["textMuted", "background", TEXT],
-  ["textMuted", "surface", TEXT],
-  ["textMuted", "surface2", TEXT],
-  ["secondary", "background", TEXT],
-  ["secondary", "surface", TEXT],
-  ["secondary", "surface2", TEXT], // inline code
-  ["secondary", "primarySubtle", TEXT], // the chosen theme in the header menu
-  ["primary", "background", TEXT], // links, eyebrows
-  ["primary", "surface", TEXT],
-  ["primaryHover", "background", TEXT],
-  ["onPrimary", "primary", TEXT], // primary buttons, skip link
-  ["onPrimary", "primaryHover", TEXT],
-  ["borderStrong", "background", UI], // outline buttons
-  ["focus", "background", UI],
-  ["focus", "surface", UI],
-  // Callouts (#419): the page's text on each fill, links in it, and the tone's icon (a
-  // graphic, so 3:1) on its fill.
-  ["text", "infoBg", TEXT],
-  ["text", "successBg", TEXT],
-  ["text", "warningBg", TEXT],
-  ["text", "dangerBg", TEXT],
-  ["primary", "infoBg", TEXT],
-  ["primary", "successBg", TEXT],
-  ["primary", "warningBg", TEXT],
-  ["primary", "dangerBg", TEXT],
-  ["info", "infoBg", UI],
-  ["success", "successBg", UI],
-  ["warning", "warningBg", UI],
-  ["danger", "dangerBg", UI],
-  // To-do checkboxes (#419): the box edge on the page, the tick on a checked box.
-  ["borderStrong", "surface", UI],
-  ["onPrimary", "primary", UI],
-]
+// [foreground, background, minimum]: every pairing theme.css uses for text. Core's list
+// (src/lib/globalStyles.ts), which global styles (#485) check an admin's palette against
+// and the API's copy matches (globalStyleVectors.json); a pairing theme.css adds goes there.
+const PAIRS = CONTRAST_PAIRS as readonly (readonly [Key, Key, number])[]
 
 describe.each(["light", "dark"] as const)("%s colours", (theme) => {
   const colors = themeConfig.colors[theme]
@@ -106,6 +58,13 @@ describe.each(["light", "dark"] as const)("%s block colours", (theme) => {
     const css = themeCssVariables(themeConfig)
     expect(css).toContain(`--block-red:${palette.red.text};`)
     expect(css).toContain(`--block-red-background:${palette.red.background};`)
+  })
+})
+
+// Global styles (#485) warn on the same pairs: with no override, the default theme has none.
+describe("global styles contrast", () => {
+  it("finds no failing pair in the theme's own palettes", () => {
+    expect(contrastFailures({ tokens: declaredTokens(themeConfig) }, {})).toEqual([])
   })
 })
 

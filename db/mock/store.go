@@ -852,6 +852,21 @@ func (mr *MockStoreMockRecorder) CreateEmailChangeToken(arg0, arg1 interface{}) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateEmailChangeToken", reflect.TypeOf((*MockStore)(nil).CreateEmailChangeToken), arg0, arg1)
 }
 
+// CreateGlobalStyleVersion mocks base method.
+func (m *MockStore) CreateGlobalStyleVersion(arg0 context.Context, arg1 db.CreateGlobalStyleVersionParams) (db.GlobalStyleVersion, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateGlobalStyleVersion", arg0, arg1)
+	ret0, _ := ret[0].(db.GlobalStyleVersion)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateGlobalStyleVersion indicates an expected call of CreateGlobalStyleVersion.
+func (mr *MockStoreMockRecorder) CreateGlobalStyleVersion(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateGlobalStyleVersion", reflect.TypeOf((*MockStore)(nil).CreateGlobalStyleVersion), arg0, arg1)
+}
+
 // CreateMedia mocks base method.
 func (m *MockStore) CreateMedia(arg0 context.Context, arg1 db.CreateMediaParams) (db.Medium, error) {
 	m.ctrl.T.Helper()
@@ -1210,6 +1225,21 @@ func (m *MockStore) CreateSignupRequest(arg0 context.Context, arg1 db.CreateSign
 func (mr *MockStoreMockRecorder) CreateSignupRequest(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateSignupRequest", reflect.TypeOf((*MockStore)(nil).CreateSignupRequest), arg0, arg1)
+}
+
+// CreateSiteDesignRelease mocks base method.
+func (m *MockStore) CreateSiteDesignRelease(arg0 context.Context, arg1 db.CreateSiteDesignReleaseParams) (db.SiteDesignRelease, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateSiteDesignRelease", arg0, arg1)
+	ret0, _ := ret[0].(db.SiteDesignRelease)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateSiteDesignRelease indicates an expected call of CreateSiteDesignRelease.
+func (mr *MockStoreMockRecorder) CreateSiteDesignRelease(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateSiteDesignRelease", reflect.TypeOf((*MockStore)(nil).CreateSiteDesignRelease), arg0, arg1)
 }
 
 // CreateTaxonomyTerm mocks base method.
@@ -2022,6 +2052,20 @@ func (mr *MockStoreMockRecorder) EnsureDefaultCategory(arg0, arg1 interface{}) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnsureDefaultCategory", reflect.TypeOf((*MockStore)(nil).EnsureDefaultCategory), arg0, arg1)
 }
 
+// EnsureGlobalStyles mocks base method.
+func (m *MockStore) EnsureGlobalStyles(arg0 context.Context, arg1 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "EnsureGlobalStyles", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// EnsureGlobalStyles indicates an expected call of EnsureGlobalStyles.
+func (mr *MockStoreMockRecorder) EnsureGlobalStyles(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnsureGlobalStyles", reflect.TypeOf((*MockStore)(nil).EnsureGlobalStyles), arg0, arg1)
+}
+
 // ExecTx mocks base method.
 func (m *MockStore) ExecTx(arg0 context.Context, arg1 func(*db.Queries) error) error {
 	m.ctrl.T.Helper()
@@ -2139,6 +2183,36 @@ func (m *MockStore) GetFeaturedImage(arg0 context.Context, arg1 int64) (db.GetFe
 func (mr *MockStoreMockRecorder) GetFeaturedImage(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFeaturedImage", reflect.TypeOf((*MockStore)(nil).GetFeaturedImage), arg0, arg1)
+}
+
+// GetGlobalStyles mocks base method.
+func (m *MockStore) GetGlobalStyles(arg0 context.Context, arg1 string) (db.GlobalStyle, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetGlobalStyles", arg0, arg1)
+	ret0, _ := ret[0].(db.GlobalStyle)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetGlobalStyles indicates an expected call of GetGlobalStyles.
+func (mr *MockStoreMockRecorder) GetGlobalStyles(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetGlobalStyles", reflect.TypeOf((*MockStore)(nil).GetGlobalStyles), arg0, arg1)
+}
+
+// GetGlobalStylesForUpdate mocks base method.
+func (m *MockStore) GetGlobalStylesForUpdate(arg0 context.Context, arg1 string) (db.GlobalStyle, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetGlobalStylesForUpdate", arg0, arg1)
+	ret0, _ := ret[0].(db.GlobalStyle)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetGlobalStylesForUpdate indicates an expected call of GetGlobalStylesForUpdate.
+func (mr *MockStoreMockRecorder) GetGlobalStylesForUpdate(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetGlobalStylesForUpdate", reflect.TypeOf((*MockStore)(nil).GetGlobalStylesForUpdate), arg0, arg1)
 }
 
 // GetLatestPostAccessRequest mocks base method.
@@ -4757,6 +4831,21 @@ func (mr *MockStoreMockRecorder) MergeTaxonomyTermsTx(arg0, arg1 interface{}) *g
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MergeTaxonomyTermsTx", reflect.TypeOf((*MockStore)(nil).MergeTaxonomyTermsTx), arg0, arg1)
 }
 
+// NextGlobalStyleVersionNo mocks base method.
+func (m *MockStore) NextGlobalStyleVersionNo(arg0 context.Context, arg1 string) (int32, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NextGlobalStyleVersionNo", arg0, arg1)
+	ret0, _ := ret[0].(int32)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// NextGlobalStyleVersionNo indicates an expected call of NextGlobalStyleVersionNo.
+func (mr *MockStoreMockRecorder) NextGlobalStyleVersionNo(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NextGlobalStyleVersionNo", reflect.TypeOf((*MockStore)(nil).NextGlobalStyleVersionNo), arg0, arg1)
+}
+
 // Ping mocks base method.
 func (m *MockStore) Ping(arg0 context.Context) error {
 	m.ctrl.T.Helper()
@@ -4783,6 +4872,21 @@ func (m *MockStore) PrunePostBlockEdits(arg0 context.Context, arg1 db.PrunePostB
 func (mr *MockStoreMockRecorder) PrunePostBlockEdits(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PrunePostBlockEdits", reflect.TypeOf((*MockStore)(nil).PrunePostBlockEdits), arg0, arg1)
+}
+
+// PublishGlobalStylesTx mocks base method.
+func (m *MockStore) PublishGlobalStylesTx(arg0 context.Context, arg1 db.PublishGlobalStylesTxParams) (db.PublishGlobalStylesTxResult, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PublishGlobalStylesTx", arg0, arg1)
+	ret0, _ := ret[0].(db.PublishGlobalStylesTxResult)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PublishGlobalStylesTx indicates an expected call of PublishGlobalStylesTx.
+func (mr *MockStoreMockRecorder) PublishGlobalStylesTx(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishGlobalStylesTx", reflect.TypeOf((*MockStore)(nil).PublishGlobalStylesTx), arg0, arg1)
 }
 
 // PublishPostTx mocks base method.
@@ -5700,6 +5804,21 @@ func (mr *MockStoreMockRecorder) SetPostVersionBlockDoc(arg0, arg1 interface{}) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetPostVersionBlockDoc", reflect.TypeOf((*MockStore)(nil).SetPostVersionBlockDoc), arg0, arg1)
 }
 
+// SetPublishedGlobalStyles mocks base method.
+func (m *MockStore) SetPublishedGlobalStyles(arg0 context.Context, arg1 db.SetPublishedGlobalStylesParams) (db.GlobalStyle, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetPublishedGlobalStyles", arg0, arg1)
+	ret0, _ := ret[0].(db.GlobalStyle)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SetPublishedGlobalStyles indicates an expected call of SetPublishedGlobalStyles.
+func (mr *MockStoreMockRecorder) SetPublishedGlobalStyles(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetPublishedGlobalStyles", reflect.TypeOf((*MockStore)(nil).SetPublishedGlobalStyles), arg0, arg1)
+}
+
 // SetPublishedVersionOnPost mocks base method.
 func (m *MockStore) SetPublishedVersionOnPost(arg0 context.Context, arg1 db.SetPublishedVersionOnPostParams) error {
 	m.ctrl.T.Helper()
@@ -6021,6 +6140,21 @@ func (m *MockStore) UpdateDiscoveredPlugin(arg0 context.Context, arg1 db.UpdateD
 func (mr *MockStoreMockRecorder) UpdateDiscoveredPlugin(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateDiscoveredPlugin", reflect.TypeOf((*MockStore)(nil).UpdateDiscoveredPlugin), arg0, arg1)
+}
+
+// UpdateGlobalStylesDraft mocks base method.
+func (m *MockStore) UpdateGlobalStylesDraft(arg0 context.Context, arg1 db.UpdateGlobalStylesDraftParams) (db.GlobalStyle, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateGlobalStylesDraft", arg0, arg1)
+	ret0, _ := ret[0].(db.GlobalStyle)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdateGlobalStylesDraft indicates an expected call of UpdateGlobalStylesDraft.
+func (mr *MockStoreMockRecorder) UpdateGlobalStylesDraft(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateGlobalStylesDraft", reflect.TypeOf((*MockStore)(nil).UpdateGlobalStylesDraft), arg0, arg1)
 }
 
 // UpdateMedia mocks base method.

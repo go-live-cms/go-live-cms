@@ -234,7 +234,7 @@ func TestAttachBlockMedia_CoverAndMediaText(t *testing.T) {
 		DoAndReturn(func(_ context.Context, ids []int64) ([]db.Medium, error) {
 			require.ElementsMatch(t, []int64{21, 23, 404}, ids)
 			return []db.Medium{
-				{ID: 21, MediaPath: "/app/uploads/media/towers.jpg", Width: 1500, Height: 1000, MimeType: "image/jpeg", Name: "private name"},
+				{ID: 21, MediaPath: "/app/uploads/media/towers.jpg", Width: 1500, Height: 1000, MimeType: "image/jpeg", Name: "private name", Alt: "  Towers at noon "},
 				{ID: 23, MediaPath: "/app/uploads/media/dunes.jpg", Width: 1200, Height: 1500, MimeType: "image/jpeg"},
 			}, nil
 		})
@@ -247,5 +247,7 @@ func TestAttachBlockMedia_CoverAndMediaText(t *testing.T) {
 	require.Equal(t, int32(1500), media["21"].Width)
 	require.Empty(t, media["21"].MimeType, "an image's entry carries no file info")
 	require.Empty(t, media["21"].Name)
+	require.Equal(t, "Towers at noon", media["21"].Alt, "the library's alt, trimmed: the fallback for a block without one (#481)")
+	require.Empty(t, media["23"].Alt)
 	require.Equal(t, []int64{404}, doc["media_missing"])
 }

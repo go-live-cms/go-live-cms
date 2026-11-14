@@ -653,11 +653,19 @@ const tokens = themeCssVariables(resolveThemeTokens(themeConfig, Astro.locals.gl
 `themeCssVariables` writes three rules (`:root` light, `prefers-color-scheme: dark` unless
 `data-theme="light"`, and `[data-theme="dark"]`). `resolveThemeTokens` merges the site's
 published **global styles** into your config first. The middleware puts them in
-`Astro.locals.globalStyles` once per request; it is empty until global styles are stored
-(#485), and then `resolveThemeTokens` returns your config unchanged. An override only
-changes tokens your config declares (it never adds one), and a value that could break out
-of the `<style>` element is never emitted. Say you do this with `supports.globalStyles:
-true`; the Site editor tells admins a theme without it doesn't support global styles.
+`Astro.locals.globalStyles` once per request (the published override `GET /themes/active`
+serves); with none, `resolveThemeTokens` returns your config unchanged. An override only
+changes tokens your config declares (it never adds one), each to a value of its kind
+(`#rrggbb`, a length or `clamp()` of lengths, a line height from 1 to 2.5), so nothing can
+break out of the `<style>` element. Say you do this with `supports.globalStyles: true`;
+the Site editor tells admins a theme without it doesn't support global styles.
+
+Fonts are chosen by id. List the ones admins may pick in `fontOptions` (`{ id, label,
+stack }`, ids `^[a-z0-9][a-z0-9-]{0,39}$`); ship their `@font-face` in your stylesheet, so
+only the chosen ones load. Core always adds `system-sans`, `system-serif` and
+`system-mono`. The API reads your declared tokens and font options from
+`themes/tokens.manifest.json`: run `npm run themes:manifest` in `web/` after changing
+them, and commit the file.
 
 **2. Every script and style in `assets`.** Whatever the page shell needs (stylesheets, the
 dark mode script, anything else) is registered in `config.assets`, with `blocking: true`
@@ -1080,7 +1088,8 @@ These are always available and don't need registration:
 | `media_text`   | An image beside blocks, stacked on phones (`div.media-text > figure.media-text-media + div.media-text-body`, `is-media-right`) |
 
 **Every theme styles the three #419 blocks** and defines `.sr-only` (the callout says its
-tone in a visually hidden span): they render with only their classes
+tone in a visually hidden span, and since #481 an empty details summary is named "Details" and a link
+that opens a new tab says so, both in one; the pager's end with nowhere to go is `.page-link.is-disabled`): they render with only their classes
 (`themes/textBlocks.test.ts` fails otherwise). The
 default theme's callout fills and icon colours are `colors.*.info` / `infoBg` (and `success`,
 `warning`, `danger`), `--color-info` / `--color-info-bg` in its stylesheet, checked for

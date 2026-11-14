@@ -5,6 +5,12 @@ import { getContainerRenderer as reactRenderer } from "@astrojs/react"
 import { loadRenderers } from "astro:container"
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 import themeConfig from "./theme.config"
+import { readFileSync } from "node:fs"
+import { createRequire } from "node:module"
+import { JSDOM } from "jsdom"
+
+// axe-core's browser build, evaluated in a JSDOM window (the layout axe checks, #481).
+const AXE_SOURCE = readFileSync(createRequire(import.meta.url).resolve("axe-core/axe.min.js"), "utf8")
 
 // The site settings (#330); a test may change them for one render.
 const SITE = { title: "Field Notes", tagline: "", postsPerPage: 10, urlStructure: "slug", language: "en-US", timeZone: "UTC", dateFormat: "month_day_year" }
@@ -406,14 +412,14 @@ describe("front page", () => {
     expect(html).toMatch(/class="feature has-media"[\s\S]*Post 1/)
     expect(html).toContain('<h2 id="more-posts" class="section-title list-heading">More posts</h2>')
     expect(html).toContain('<a href="/post/p3">Post 3</a>')
-    expect(html).toContain('<span class="page-link" aria-disabled="true">← Newer</span>')
-    expect(html).toContain('<a href="/" class="page-link page-num" aria-current="page">1</a>')
-    expect(html).toContain('<a href="/page/3/" class="page-link page-num">3</a>')
+    expect(html).toContain('<span class="page-link is-disabled" aria-hidden="true">← Newer</span>')
+    expect(html).toContain('<a href="/" class="page-link page-num" aria-label="Page 1" aria-current="page">1</a>')
+    expect(html).toContain('<a href="/page/3/" class="page-link page-num" aria-label="Page 3">3</a>')
     expect(html).toContain('<span class="page-link page-num" aria-hidden="true">…</span>')
-    expect(html).toContain('<a href="/page/5/" class="page-link page-num">5</a>')
+    expect(html).toContain('<a href="/page/5/" class="page-link page-num" aria-label="Page 5">5</a>')
     expect(html).not.toContain('href="/page/4/"')
     expect(html).toContain('<span class="page-status">Page 1 of 5</span>')
-    expect(html).toContain('<a href="/page/2/" class="page-link" rel="next">Older →</a>')
+    expect(html).toContain('<a href="/page/2/" class="page-link" rel="next">Older <span aria-hidden="true">→</span></a>')
     const head = html.slice(0, html.indexOf("</head>"))
     expect(head).toContain('<link rel="canonical" href="http://web:4321/">')
     expect(head).toContain('<link rel="next" href="http://web:4321/page/2/">')
@@ -432,8 +438,8 @@ describe("front page", () => {
   it("links back to newer pages and has no pager for a single page", async () => {
     const page3 = { posts: [item(9)], total: 21, page: 3, totalPages: 3, basePath: "/", links: { newer: "/page/2/" }, siteTitle: "Field Notes" }
     const html = await render(Home, { title: "Field Notes · Page 3", description: "d", list: page3 })
-    expect(html).toContain('<a href="/page/2/" class="page-link" rel="prev">← Newer</a>')
-    expect(html).toContain('<span class="page-link" aria-disabled="true">Older →</span>')
+    expect(html).toContain('<a href="/page/2/" class="page-link" rel="prev"><span aria-hidden="true">←</span> Newer</a>')
+    expect(html).toContain('<span class="page-link is-disabled" aria-hidden="true">Older →</span>')
     expect(html).toContain('<link rel="canonical" href="http://web:4321/page/3/">')
     expect(html).toContain('<link rel="prev" href="http://web:4321/page/2/">')
 
@@ -464,9 +470,9 @@ describe("author page", () => {
     const list = { posts: [item(11)], total: 25, page: 2, totalPages: 3, basePath: "/author/admin", links: { newer: "/author/admin", older: "/author/admin/page/3/" }, siteTitle: "Field Notes" }
     const html = await render(AuthorLayout, { author: { ...author, bio: "", website: "javascript:alert(1)" }, postCount: 25, list, title: "t", description: "d" })
     expect(html).toContain("Page 2 · 25 posts")
-    expect(html).toContain('<a href="/author/admin/page/3/" class="page-link" rel="next">Older →</a>')
-    expect(html).toContain('<a href="/author/admin" class="page-link" rel="prev">← Newer</a>')
-    expect(html).toContain('<a href="/author/admin/page/2/" class="page-link page-num" aria-current="page">2</a>')
+    expect(html).toContain('<a href="/author/admin/page/3/" class="page-link" rel="next">Older <span aria-hidden="true">→</span></a>')
+    expect(html).toContain('<a href="/author/admin" class="page-link" rel="prev"><span aria-hidden="true">←</span> Newer</a>')
+    expect(html).toContain('<a href="/author/admin/page/2/" class="page-link page-num" aria-label="Page 2" aria-current="page">2</a>')
     expect(html).not.toContain("javascript:")
     expect(html).not.toContain("author-bio")
     expect(html).not.toContain("every post by")
@@ -512,7 +518,7 @@ describe("term page (#348)", () => {
     const html = await render(TermLayout, { term: category, postCount: 14, list, title: "Product updates | Field Notes", description: "d" })
     expect(html).toMatch(/<header class="archive-header term-header">\s*<span class="eyebrow">Category<\/span>\s*<h1 class="title">Product updates<\/h1>\s*<p class="dek">What’s new in GoLive, when it ships\.<\/p>\s*<p class="meta">14 posts<\/p>/)
     expect(html).toContain('<h2 class="post-item-title"><a href="/post/p2">Post 2</a></h2>')
-    expect(html).toContain('<a href="/category/product-updates/page/2/" class="page-link" rel="next">Older →</a>')
+    expect(html).toContain('<a href="/category/product-updates/page/2/" class="page-link" rel="next">Older <span aria-hidden="true">→</span></a>')
     expect(html).not.toContain("That’s every post")
   })
 
@@ -614,8 +620,8 @@ describe("search layout (#145)", () => {
 
   it("pages with the query kept on every link", async () => {
     const html = await render(SearchLayout, data({ page: 2, totalPages: 3, pageQuery: "?q=alt+text&type=post" }))
-    expect(html).toContain('<a href="/search?q=alt+text&#38;type=post" class="page-link" rel="prev">← Previous</a>')
-    expect(html).toContain('<a href="/search/page/3/?q=alt+text&#38;type=post" class="page-link" rel="next">Next →</a>')
+    expect(html).toContain('<a href="/search?q=alt+text&#38;type=post" class="page-link" rel="prev"><span aria-hidden="true">←</span> Previous</a>')
+    expect(html).toContain('<a href="/search/page/3/?q=alt+text&#38;type=post" class="page-link" rel="next">Next <span aria-hidden="true">→</span></a>')
     expect(html).toContain("· Page 2")
   })
 
@@ -640,6 +646,8 @@ describe("search layout (#145)", () => {
   it("an empty query shows the form alone", async () => {
     const html = await render(SearchLayout, data({ query: "", results: [], total: 0 }))
     expect(html).toContain('class="search-form"')
+    // No autofocus (#481): it would put screen-reader users past the header on arrival.
+    expect(html).not.toContain("autofocus")
     expect(html).not.toContain("No results for")
     expect(html).not.toContain("search-results")
   })
@@ -731,4 +739,39 @@ describe("layout snapshots (#484)", () => {
       .replace(/<meta name="generator" content="Astro v[^"]*">/, '<meta name="generator" content="Astro">')
     await expect(html).toMatchFileSnapshot(`./__snapshots__/layouts/${name}.html`)
   })
+
+  // axe-core over every layout, whole (#481): the page as served, in a JSDOM window with axe
+  // loaded into it (this project runs in node). jsdom does no layout, so contrast is off
+  // (tokens.test.ts owns it). The post adds the blocks the #144 audit found problems in.
+  const a11yPost = {
+    ...full,
+    published_blocks: (() => {
+      const d = docWithHeadings([1, "A heading 1 block"], [2, "Second"], [3, "Third"])
+      const blocks = d.blocks as Record<string, unknown>
+      blocks["image-00001"] = { id: "image-00001", type: "image", version: 2, attrs: { src: "/uploads/media/kite.jpg", mediaId: 5 } }
+      blocks["details-001"] = { id: "details-001", type: "details", version: 1, attrs: { summary: [] }, children: ["para-000002"] }
+      blocks["para-000002"] = { id: "para-000002", type: "paragraph", version: 1, attrs: { pm: { type: "paragraph", content: [{ type: "text", text: "Inside the details." }] } } }
+      blocks["para-000001"] = { id: "para-000001", type: "paragraph", version: 1, attrs: { pm: { type: "paragraph", content: [{ type: "text", text: "Docs", marks: [{ type: "link", attrs: { href: "https://example.org", target: "_blank" } }] }] } } }
+      blocks["embed-00001"] = { id: "embed-00001", type: "embed", version: 1, attrs: { provider: "youtube", ref: "dQw4w9WgXcQ" } }
+      d.blocks_order.push("image-00001", "details-001", "para-000001", "embed-00001")
+      return { ...d, media: { "5": { media_path: "/uploads/media/kite.jpg", width: 800, height: 600, alt: "A red kite" } } }
+    })(),
+  }
+  const AXE_KINDS: [string, unknown, Record<string, unknown>][] = [...KINDS, ["post-sidebar (audit blocks)", PostSidebar, { ...postProps, post: a11yPost }]]
+
+  it.each(AXE_KINDS)("%s has no axe violations", async (_name, component, props) => {
+    const html = await container.renderToString(component as any, { props, request, locals: { activeTheme: "default", themeAssets: themeConfig.assets } })
+    const dom = new JSDOM(html, { runScripts: "outside-only", url: "http://web:4321/" })
+    dom.window.eval(AXE_SOURCE)
+    const axe = (dom.window as unknown as { axe: typeof import("axe-core") }).axe
+    const result = await axe.run(dom.window.document, {
+      runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa", "best-practice"] },
+      rules: { "color-contrast": { enabled: false } },
+    })
+    expect(result.violations.map((v) => ({ id: v.id, nodes: v.nodes.map((n) => n.html) }))).toEqual([])
+    // One <h1> per page (#481): a Heading 1 block in the body is an h2.
+    expect(dom.window.document.querySelectorAll("h1")).toHaveLength(1)
+    dom.window.close()
+    // A whole page through axe in jsdom takes a few seconds under the full suite's load.
+  }, 30_000)
 })

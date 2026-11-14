@@ -42,6 +42,25 @@ type ExtensionSetting struct {
 	ChangedAt     time.Time       `json:"changed_at"`
 }
 
+type GlobalStyle struct {
+	ThemeSlug          string          `json:"theme_slug"`
+	Draft              json.RawMessage `json:"draft"`
+	DraftRevision      int64           `json:"draft_revision"`
+	Published          json.RawMessage `json:"published"`
+	PublishedVersionID sql.NullInt64   `json:"published_version_id"`
+	ChangedBy          sql.NullInt64   `json:"changed_by"`
+	ChangedAt          time.Time       `json:"changed_at"`
+}
+
+type GlobalStyleVersion struct {
+	ID        int64           `json:"id"`
+	ThemeSlug string          `json:"theme_slug"`
+	ReleaseID int64           `json:"release_id"`
+	VersionNo int32           `json:"version_no"`
+	Styles    json.RawMessage `json:"styles"`
+	CreatedAt time.Time       `json:"created_at"`
+}
+
 type Medium struct {
 	ID               int64           `json:"id"`
 	Name             string          `json:"name"`
@@ -419,6 +438,14 @@ type SignupRequest struct {
 	TokenHash      []byte    `json:"token_hash"`
 	ExpiresAt      time.Time `json:"expires_at"`
 	CreatedAt      time.Time `json:"created_at"`
+}
+
+type SiteDesignRelease struct {
+	ID          int64           `json:"id"`
+	ThemeSlug   string          `json:"theme_slug"`
+	PublishedBy sql.NullInt64   `json:"published_by"`
+	PublishedAt time.Time       `json:"published_at"`
+	Summary     json.RawMessage `json:"summary"`
 }
 
 type TaxonomyTerm struct {

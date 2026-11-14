@@ -32,8 +32,11 @@ type ActiveThemeWithSettingsResponse struct {
 	Config      json.RawMessage `json:"config"`
 	Active      bool            `json:"active"`
 	Settings    interface{}     `json:"settings"`
-	CreatedAt   string          `json:"created_at"`
-	ChangedAt   string          `json:"changed_at"`
+	// GlobalStyles is the theme's *published* override (#485, design 6.2), which the
+	// middleware hands to resolveThemeTokens. Never the draft: this route is public.
+	GlobalStyles json.RawMessage `json:"global_styles"`
+	CreatedAt    string          `json:"created_at"`
+	ChangedAt    string          `json:"changed_at"`
 }
 
 // ThemeSettingResponse represents a theme setting
@@ -74,17 +77,18 @@ func toThemeResponse(theme db.Theme) ThemeResponse {
 
 func toActiveThemeWithSettingsResponse(theme db.GetActiveThemeWithSettingsRow) ActiveThemeWithSettingsResponse {
 	return ActiveThemeWithSettingsResponse{
-		ID:          theme.ID,
-		Name:        theme.Name,
-		Slug:        theme.Slug,
-		Description: theme.Description.String,
-		Version:     theme.Version,
-		Author:      theme.Author.String,
-		Config:      theme.Config,
-		Active:      theme.Active,
-		Settings:    themeSettingsObject(theme.Settings),
-		CreatedAt:   theme.CreatedAt.Format(time.RFC3339),
-		ChangedAt:   theme.ChangedAt.Format(time.RFC3339),
+		ID:           theme.ID,
+		Name:         theme.Name,
+		Slug:         theme.Slug,
+		Description:  theme.Description.String,
+		Version:      theme.Version,
+		Author:       theme.Author.String,
+		Config:       theme.Config,
+		Active:       theme.Active,
+		Settings:     themeSettingsObject(theme.Settings),
+		GlobalStyles: emptyObjectIfBlank(theme.GlobalStyles),
+		CreatedAt:    theme.CreatedAt.Format(time.RFC3339),
+		ChangedAt:    theme.ChangedAt.Format(time.RFC3339),
 	}
 }
 

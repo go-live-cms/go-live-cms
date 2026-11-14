@@ -84,8 +84,11 @@ describe("text on a cover (4.5:1 with the overlay)", () => {
     expect(contrast(0x11, 255)).toBeGreaterThanOrEqual(4.5)
   })
 
-  it("focus stays visible on the image", () => {
+  it("focus stays visible on the image, light or dark: white with a dark ring around it (#481)", () => {
     expect(rule(".site .cover :focus-visible")).toContain("outline-color: #ffffff")
+    // The ring (box-shadow 6px) reaches past the outline (2px, offset 2px), so dark shows
+    // on both sides of the white.
+    expect(rule(".site .cover :focus-visible")).toMatch(/box-shadow:\s*0 0 0 6px #000000/)
   })
 })
 
