@@ -223,6 +223,117 @@ export function useFloating(
   }
 }
 
+// How the user last moved through the page (#480), as `data-input-modality` on <html>:
+// "keyboard" after a key, "pointer" after a press or a real mouse move. Lists driven
+// by aria-activedescendant (Select, Combobox, the slash/+/@ menus, the palette) keep
+// focus in their field, so :focus-visible never reaches the active option; the shared
+// menu-row style (mixins.scss) draws the focus ring on it while this says "keyboard",
+// and only the hover fill for the mouse. Installed once (AppLayout, and Listbox for
+// anything that renders one outside the shell).
+let modalityInstalled = false
+export function installInputModality(doc: Document = document) {
+  if (modalityInstalled || typeof doc === "undefined") return
+  modalityInstalled = true
+  const root = doc.documentElement
+  const set = (value: "keyboard" | "pointer") => {
+    if (root.dataset.inputModality !== value) root.dataset.inputModality = value
+  }
+  set("keyboard")
+  doc.addEventListener("keydown", (e) => {
+    // A modifier alone (Ctrl before a click) says nothing about the next move.
+    if (!["Control", "Shift", "Alt", "Meta"].includes(e.key)) set("keyboard")
+  }, true)
+  doc.addEventListener("pointerdown", () => set("pointer"), true)
+  // Only a move the user made: browsers send synthetic moves (no movement) when the
+  // page scrolls under a still pointer, e.g. while the arrows scroll a list.
+  doc.addEventListener("mousemove", (e) => {
+    if (e.movementX !== 0 || e.movementY !== 0) set("pointer")
+  }, true)
+}
+
+// Makes everything outside `ref` inert while `active` (#480): Modal and Drawer render
+// in place (not portaled), so this walks up from the dialog and marks each ancestor's
+// other children. Nested dialogs stack (a count per element), and the old state comes
+// back on close. Skipped: anything marked `data-inert-exempt` (the toaster, whose live
+// regions must still speak), and anything holding the block editor's ProseMirror view
+// (collaboration rules: nothing but the editor touches its DOM; aria-modal and the focus
+// trap cover it). Its ancestors' other children are still marked.
+const inertCounts = new Map<Element, number>()
+export function useInertOthers(ref: RefObject<HTMLElement | null>, active: boolean) {
+  useEffect(() => {
+    const dialog = ref.current
+    if (!active || !dialog) return
+    const marked: Element[] = []
+    for (let node: Element = dialog; node.parentElement && node !== document.body; node = node.parentElement) {
+      for (const sibling of Array.from(node.parentElement.children)) {
+        if (sibling === node || sibling.matches("script, style, [data-inert-exempt]")) continue
+        if (sibling.matches(".ProseMirror") || sibling.querySelector(".ProseMirror")) continue
+        const count = inertCounts.get(sibling) ?? 0
+        if (count === 0) {
+          if (sibling.hasAttribute("inert")) continue // inert on its own: not ours to undo
+          sibling.setAttribute("inert", "")
+        }
+        inertCounts.set(sibling, count + 1)
+        marked.push(sibling)
+      }
+    }
+    return () => {
+      for (const el of marked) {
+        const count = (inertCounts.get(el) ?? 1) - 1
+        if (count > 0) {
+          inertCounts.set(el, count)
+        } else {
+          inertCounts.delete(el)
+          el.removeAttribute("inert")
+        }
+      }
+    }
+  }, [ref, active])
+}
+
+// After a submit that fails (#479, WCAG 3.3.1): focus moves to the first field the form
+// marks invalid, whose error is read with it (aria-describedby). One listener for every
+// admin form (installed by AppLayout): it watches the submitted form for a while, so an
+// error the API sends back later counts too. It doesn't take focus from somewhere else:
+// only from the form, its submit button (a dialog's footer, `form=`) or nowhere (a
+// disabled button dropped it), and not when focus is already on an invalid field.
+export const SUBMIT_FOCUS_WATCH_MS = 5000
+const INVALID = '[aria-invalid="true"]:not([disabled])'
+
+export function focusFirstInvalid(form: HTMLFormElement): boolean {
+  const first = form.querySelector<HTMLElement>(INVALID)
+  if (!first) return false
+  const active = form.ownerDocument.activeElement as HTMLElement | null
+  if (active && form.contains(active) && active.matches(INVALID)) return true
+  const fromHere =
+    !active || active === form.ownerDocument.body || form.contains(active) || (active as HTMLButtonElement).form === form
+  if (fromHere) first.focus()
+  return true
+}
+
+let submitFocusInstalled = false
+export function installSubmitFocus(doc: Document = document) {
+  if (submitFocusInstalled) return
+  submitFocusInstalled = true
+  doc.addEventListener(
+    "submit",
+    (e) => {
+      const form = e.target
+      if (!(form instanceof HTMLFormElement)) return
+      const observer = new MutationObserver(() => focusFirstInvalid(form) && stop())
+      const timer = setTimeout(() => stop(), SUBMIT_FOCUS_WATCH_MS)
+      function stop() {
+        observer.disconnect()
+        clearTimeout(timer)
+      }
+      observer.observe(form, { subtree: true, childList: true, attributes: true, attributeFilter: ["aria-invalid"] })
+      // Errors React draws in the same task as the submit.
+      requestAnimationFrame(() => focusFirstInvalid(form) && stop())
+    },
+    true
+  )
+}
+
 // A stable id for aria wiring, with a readable prefix; `given` wins.
 export function useStableId(prefix: string, given?: string): string {
   const id = useReactId()

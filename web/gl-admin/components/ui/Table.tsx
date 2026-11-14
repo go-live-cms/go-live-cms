@@ -108,7 +108,6 @@ export default function Table<T extends Record<string, any>>({
         return (
           <tr
             key={key}
-            aria-selected={selectable ? isSelected : undefined}
             className={[isSelected ? "is-selected" : "", onRowDoubleClick ? "is-clickable" : "", rowClassName?.(row) ?? ""].filter(Boolean).join(" ") || undefined}
             onDoubleClick={() => onRowDoubleClick?.(row)}
           >

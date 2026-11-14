@@ -28,6 +28,7 @@ import { SidebarNav } from "@gl-admin/components/sidebar/Sidebar"
 import { buildNavigation } from "@gl-admin/components/sidebar/nav"
 import { ForbiddenPage, NotFoundPage, ServerErrorPage } from "@gl-admin/components/errors/ErrorPages"
 import type { TaxonomyType } from "@gl-admin/lib/api/types"
+import { usePageTitle } from "@gl-admin/lib/hooks/usePageTitle"
 import "@gl-admin/assets/styles/pages/ui-gallery.scss"
 
 // Dev-only (#338): every shared component, side by side in the light and dark themes.
@@ -387,6 +388,7 @@ function Panel({ theme }: { theme: "light" | "dark" }) {
 }
 
 export default function UiGallery() {
+  usePageTitle("UI components")
   return (
     <div className="gl-gallery">
       <header className="gl-gallery__header">

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
-import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
 import type { PostUrlStructure } from "@gl-admin/lib/api/settings"
 import { bulkPosts, getCreditedAuthors, getPostCounts, getPosts, searchPosts } from "@gl-admin/lib/api/posts"
 import { getCollaborations } from "@gl-admin/lib/api/postAccess"
@@ -62,6 +61,7 @@ import {
 } from "@gl-admin/lib/contentList"
 import { postPath } from "@/lib/seo"
 import type { ApiMeta, Post, PostType as PostTypeInfo } from "@gl-admin/lib/api/types"
+import { usePageTitle } from "@gl-admin/lib/hooks/usePageTitle"
 import "@gl-admin/assets/styles/pages/content-list.scss"
 
 // The posts list (#340): status tabs with counts, search (#145, the full-text index plus
@@ -122,7 +122,6 @@ const REVIEW_FILTER_OPTIONS: FilterOption[] = [{ id: "pending", label: "Review r
 
 function PostsList({ typeName, postType, title }: ListProps) {
   const navigate = useNavigate()
-  const { baseTitle } = useGoLive()
   const user = useAuthUser()
   const role = user?.role
   const moderator = isContentModerator(role)
@@ -149,9 +148,7 @@ function PostsList({ typeName, postType, title }: ListProps) {
   const [refresh, setRefresh] = useState(0)
   const retryList = useRef<() => void>(() => {})
 
-  useEffect(() => {
-    document.title = `${baseTitle} ${plural}`
-  }, [baseTitle, plural])
+  usePageTitle(plural)
 
   useEffect(() => {
     let live = true

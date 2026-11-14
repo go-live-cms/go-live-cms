@@ -53,6 +53,7 @@ describe("mountLoginPage", () => {
         <div id="noticeMessage" hidden><span data-notice-text></span></div>
         <div id="errorMessage" hidden><span data-error-text></span></div>
         <div id="errorAnnouncer"></div>
+        <div id="statusAnnouncer" role="status"></div>
         <div class="gl-input"><input id="username" name="username" /></div>
         <div class="gl-input"><input id="password" name="password" /></div>
         <button type="submit"><span data-spinner hidden></span><span data-label>Sign in</span></button>
@@ -94,6 +95,8 @@ describe("mountLoginPage", () => {
     mountLoginPage(document, auth({ success: false, status: 429, retryAfterSeconds: 30 }) as never, vi.fn())
     await submit(form, "admin", "secret")
     expect(errorText()).toBe("Too many sign-in attempts. Try again in 30 seconds.")
+    // About neither field (#479).
+    expect(form.querySelector("[aria-invalid]")).toBeNull()
   })
 
   it("asks for both fields before sending", async () => {
@@ -104,6 +107,9 @@ describe("mountLoginPage", () => {
     expect(a.login).not.toHaveBeenCalled()
     expect(errorText()).toBe("Enter your username and password.")
     expect(document.activeElement?.id).toBe("password")
+    // Only the empty one is marked (#479).
+    expect(document.getElementById("password")!.getAttribute("aria-invalid")).toBe("true")
+    expect(document.getElementById("username")!.hasAttribute("aria-invalid")).toBe(false)
   })
 
   it("goes to the redirect target once signed in", async () => {
@@ -123,5 +129,13 @@ describe("mountLoginPage", () => {
     mountLoginPage(document, auth({ success: true }) as never, vi.fn())
     expect(document.getElementById("noticeMessage")!.hidden).toBe(false)
     expect(document.querySelector("[data-notice-text]")!.textContent).toMatch(/account is ready/)
+  })
+
+  it("reads the notice through the always-present announcer (#479)", async () => {
+    window.history.replaceState(null, "", "/login?reason=password-reset")
+    render()
+    mountLoginPage(document, auth({ success: true }) as never, vi.fn())
+    await new Promise((r) => setTimeout(r, 150))
+    expect(document.getElementById("statusAnnouncer")!.textContent).toMatch(/password was reset/)
   })
 })

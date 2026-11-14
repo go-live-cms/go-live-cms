@@ -3,6 +3,8 @@ import { useParams, useNavigate } from "react-router-dom"
 import { getPostById } from "@gl-admin/lib/api/posts"
 import type { Post } from "@gl-admin/lib/api/types"
 import PostForm from "@gl-admin/components/forms/PostForm"
+import { editorHeading } from "@gl-admin/lib/editorHeading"
+import { usePageTitle } from "@gl-admin/lib/hooks/usePageTitle"
 import "@gl-admin/assets/styles/components/editor/post-editor.scss"
 
 export default function EditPage() {
@@ -11,6 +13,8 @@ export default function EditPage() {
   const [post, setPost] = useState<Post | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const heading = editorHeading("edit", "page", post?.title)
+  usePageTitle(post ? heading : loading ? "Loading…" : error ? "Error" : "Page not found")
 
   useEffect(() => {
     const fetchPost = async () => {
@@ -81,5 +85,11 @@ export default function EditPage() {
     )
   }
 
-  return <PostForm mode="edit" initialData={post} onSuccess={handleSuccess} onError={handleError} />
+  return (
+    <>
+      {/* The editor's title is a field, not a heading (#480). */}
+      <h1 className="gl-visually-hidden">{heading}</h1>
+      <PostForm mode="edit" initialData={post} onSuccess={handleSuccess} onError={handleError} />
+    </>
+  )
 }

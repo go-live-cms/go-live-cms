@@ -14,6 +14,14 @@ import Tabs from "./Tabs"
 import BubbleMenu from "@gl-admin/components/editor/ui/BubbleMenu"
 import CommandSelect from "@gl-admin/components/editor/ui/CommandSelect"
 import FeaturedImage from "@gl-admin/components/editor/ui/FeaturedImage"
+import { MemoryRouter } from "react-router-dom"
+import Input from "./Input"
+import Combobox from "./Combobox"
+import Tooltip from "./Tooltip"
+import Drawer from "./Drawer"
+import { Toaster, dismissToast, toast } from "./Toast"
+import { SidebarNav } from "@gl-admin/components/sidebar/Sidebar"
+import { buildNavigation } from "@gl-admin/components/sidebar/nav"
 
 // Automated accessibility checks (#144): axe-core on the shared UI components and the
 // editor chrome fixed under #144, rendered with react-dom into jsdom, so a regression in
@@ -27,6 +35,7 @@ vi.mock("@tiptap/react/menus", () => ({
 }))
 // The picker is a dialog of its own (checked with Modal); here only what opens it.
 vi.mock("@gl-admin/components/media/MediaPicker", () => ({ default: () => null }))
+vi.mock("@gl-admin/lib/hooks/useAuthUser", () => ({ useAuthUser: () => null }))
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -147,6 +156,91 @@ describe("axe: shared UI components (#144)", () => {
     }
     await render(<Controls />)
     expect(await violations(container)).toEqual([])
+  })
+})
+
+describe("axe: forms, feedback and structure (#479, #480)", () => {
+  it("Input with an error, and two unnamed inputs (no duplicate ids)", async () => {
+    await render(
+      <form>
+        <Input title="Email" unmasked value="maya@golive" onChange={() => {}} error="“maya@golive” isn't a complete email address." />
+        <Input title="Display name" unmasked hint="Shown on your posts." />
+        <Input title="Nickname" unmasked />
+      </form>
+    )
+    expect(container.querySelector("[role='alert']")).not.toBeNull()
+    expect(await violations(container)).toEqual([])
+  })
+
+  it("Combobox, open", async () => {
+    await render(
+      <Combobox
+        label="New owner"
+        value={null}
+        onChange={() => {}}
+        options={[
+          { value: "1", label: "Ana Costa" },
+          { value: "2", label: "Kenji Sato" },
+        ]}
+      />
+    )
+    const input = container.querySelector<HTMLInputElement>("[role='combobox']")!
+    input.focus()
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }))
+    })
+    expect(input.getAttribute("aria-activedescendant")).not.toBeNull()
+    expect(await violations(container)).toEqual([])
+  })
+
+  it("Toaster with an error and an action", async () => {
+    await render(<Toaster />)
+    let ids: string[] = []
+    await act(async () => {
+      ids = [toast.error("Couldn't publish"), toast.success("Moved to trash", { action: { label: "Undo", onClick: () => {} } })]
+    })
+    expect(container.querySelectorAll(".gl-toast")).toHaveLength(2)
+    expect(await violations(container)).toEqual([])
+    await act(async () => ids.forEach(dismissToast))
+  })
+
+  it("Tooltip, shown, on a component", async () => {
+    await render(
+      <Tooltip content="Editing" detail="Click to jump to cursor">
+        <button type="button">Ana Costa</button>
+      </Tooltip>
+    )
+    await act(async () => {
+      container.querySelector(".gl-tooltip-target")!.dispatchEvent(new MouseEvent("mouseover", { bubbles: true, relatedTarget: document.body }))
+    })
+    expect(document.querySelector("[role='tooltip']")).not.toBeNull()
+    expect(await violations()).toEqual([])
+  })
+
+  it("the sidebar's labelled section groups", async () => {
+    await render(
+      <MemoryRouter>
+        <SidebarNav sections={buildNavigation({ role: "admin", taxonomyTypes: [] })} current={null} onSearch={() => {}} />
+      </MemoryRouter>
+    )
+    expect(container.querySelector("[role='group'][aria-labelledby]")).not.toBeNull()
+    expect(await violations(container)).toEqual([])
+  })
+
+  it("a drawer over a page made inert", async () => {
+    await render(
+      <>
+        <nav aria-label="Admin">
+          <a href="/">Home</a>
+        </nav>
+        <p>Posts</p>
+        <Drawer isOpen onClose={() => {}} title="Version history">
+          <button type="button">Restore</button>
+        </Drawer>
+      </>
+    )
+    expect(container.querySelector("nav")!.hasAttribute("inert")).toBe(true)
+    expect(await violations()).toEqual([])
   })
 })
 
