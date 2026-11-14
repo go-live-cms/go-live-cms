@@ -51,11 +51,11 @@ describe.each([
     expect(html).toMatch(/id="errorAnnouncer"[^>]*role="alert"/)
   })
 
-  it("sets <html lang> from the site language, en-US when it can't be read (#481)", async () => {
+  it("sets <html lang> from the site language, the last one read when it can't be read (#481)", async () => {
     api.getSettings.mockResolvedValue({ site_title: "GoLive", site_language: "pt-BR" })
     expect(await render(page)).toMatch(/<html lang="pt-BR">/)
     api.getSettings.mockRejectedValue(new Error("down"))
-    expect(await render(page)).toMatch(/<html lang="en-US">/)
+    expect(await render(page)).toMatch(/<html lang="pt-BR">/)
   })
 
   it("keeps the existing logo and is not indexed", async () => {

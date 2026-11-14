@@ -4,7 +4,7 @@ import Header from "./Header.astro"
 import Footer from "./Footer.astro"
 
 import "@/assets/styles/global.css"
-import { getSiteSettings } from "@/lib/siteSettings"
+import { getSiteLanguage } from "@/lib/siteSettings"
 
 import type { ImageMetadata } from "astro"
 
@@ -17,7 +17,7 @@ interface Props {
 
 const { title, description, image, noindex } = Astro.props
 // The site's language (#481, WCAG 3.1.1), like the theme's pages.
-const { language } = await getSiteSettings(Astro.locals)
+const language = await getSiteLanguage(Astro.locals)
 ---
 
 <!doctype html>
