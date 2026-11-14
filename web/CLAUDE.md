@@ -388,7 +388,23 @@ are the most fragile part of the codebase. **Before editing anything under
   `themes/default/theme.astro.test.ts`'s whole-page snapshots** (`__snapshots__/layouts/`);
   Astro whitespace is fragile (an expression or a component at the end of `<body>` adds or
   drops a space), so check them after any `base.astro` edit.
-- **Default public theme (#345):** tokens live in `themes/default/theme.config.ts` and
+- **Site blocks I (#488, design `docs/design/theme-builder.md` 4):** site title, tagline, logo, navigation, search and
+  template part, core Block Spec types (`gl-admin/lib/blocks-spec/siteBlocks.ts`, `siteBlockVectors.json` shared with
+  Go). In the one schema, but offered only in templates and parts: catalog entries carry `contexts` (`SITE_BLOCKS`, the
+  **Site** group; `menuEntries({ context })`, a post by default) and the editor's kind is `SiteBlockContext`
+  (`getExtensions({ docKind })`, "post" until the Site editor, #493). No parse rules, so paste can't make one. Editor
+  views are labelled placeholders (`SiteBlockViews.ts`; inert in a post, and they say so), the Block tab
+  `ui/SiteBlockSettings.tsx`. **On the page they render only from a `SiteRenderContext`** (`src/components/blocks/
+  utils/siteContext.ts`) passed as `BlockRenderer`'s `site` by a block template's layout (#491), which fills it before
+  the synchronous render with `src/lib/siteRenderContext.ts` (`loadSiteRenderContext`: the request's settings, each
+  navigation location's menu once, the parts and menus by id the resolve route attaches). Without one (a post's body)
+  each renders nothing. Markup: `src/components/blocks/README.md`; default theme rules: the "site blocks (#488)"
+  section of `themes/default/styles/theme.css` (`themes/default/siteBlocks.test.ts`). Collab rules:
+  `gl-admin/lib/collaboration/CLAUDE.md`.
+- **Site logo (#488):** Settings › General's **Site logo** (`components/settings/SiteLogoField.tsx`, rules
+  `lib/siteLogo.ts`): the media picker (images only), Replace and Remove, saved with the page as
+  `site_logo_media_id` (sent only when it changed, like the front page). `GET /settings` answers it with `site_logo`
+  (its media's public path, size, variants, alt), which `getSiteSettings(...).logo` reads for the Site logo block.- **Default public theme (#345):** tokens live in `themes/default/theme.config.ts` and
   become CSS custom properties in `base.astro` (core's `src/lib/themeTokens.ts`); `styles/theme.css` is plain
   CSS served as is and only reads `var(--…)` (`tokens.test.ts` checks 4.5:1 in both
   palettes and that every `var()` is defined). Fonts are self-hosted under

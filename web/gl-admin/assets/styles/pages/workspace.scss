@@ -373,6 +373,69 @@
     color: var(--warning-text);
   }
 
+  // The site logo (#488, the canvas's Settings › General): the image, its file and the
+  // two actions in one bordered row.
+  &__logo-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  &__optional {
+    color: var(--text-secondary);
+    font-weight: 400;
+  }
+
+  &__logo {
+    align-items: center;
+    border: 1px solid var(--border-strong);
+    border-radius: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    padding: var(--space-2);
+  }
+
+  &__logo-preview {
+    background: var(--background-subtle);
+    border-radius: 6px;
+    box-shadow: inset 0 0 0 1px var(--border-color);
+    display: grid;
+    flex: none;
+    height: 56px;
+    place-items: center;
+    width: 56px;
+
+    img {
+      max-height: 40px;
+      max-width: 40px;
+      object-fit: contain;
+    }
+  }
+
+  &__logo-file {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 160px;
+  }
+
+  &__logo-name {
+    font-weight: 500;
+    overflow-wrap: anywhere;
+  }
+
+  &__logo-meta,
+  &__logo-help {
+    color: var(--text-secondary);
+    font-size: var(--type-caption, 12px);
+    line-height: 16px;
+  }
+
+  & &__logo-remove {
+    color: var(--danger-text);
+  }
+
   // The date presets in a row, each labelled with today's date in that format.
   & &__date-format {
     display: flex;

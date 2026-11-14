@@ -25,6 +25,7 @@ import { BlockNavigationKeys, BlockSelectionKeys } from "../extensions/BlockNavi
 import { NodeSelectionGuard } from "../extensions/NodeSelectionGuard"
 import { FloatingToolbarKeys } from "./floatingToolbar"
 import { EmptyContainerFill } from "../extensions/CoverMediaBlocks"
+import { SiteBlockContext } from "../extensions/SiteBlocks"
 import { authManager } from "@gl-admin/lib/auth"
 import { tiptapExtensionRegistry } from "./extensionRegistry"
 import { installedThemeBlockEditors } from "@gl-admin/lib/theme-blocks/editorBlocks"
@@ -49,7 +50,9 @@ export const EMPTY_POST_HINT = "Type / for blocks, or start writing"
 export const EMPTY_LINE_HINT = "Type / for blocks"
 export const DETAILS_CONTENT_HINT = "Hidden content. Type / to add blocks."
 
-const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkModalOpen }) => {
+// `docKind` (#488): the kind of document the editor holds. A post until the Site editor (#493)
+// passes "template" or "part"; it decides which site blocks the menus offer and how their views read.
+const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkModalOpen, docKind = "post" }: any) => {
   return () => {
     let slashEntries: { role: string | null; theme: string; plugins: ReadonlySet<string>; entries: CatalogEntry[] } | null = null
     // The schema-defining extensions are shared with the collab server
@@ -115,7 +118,17 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
       schema.dateChip,
       schema.footnoteRef,
       schema.footnotes,
+      // #488: the site blocks (in every document's schema; inert in a post) and their command.
+      schema.siteTitle,
+      schema.siteTagline,
+      schema.siteLogo,
+      schema.navigation,
+      schema.search,
+      schema.templatePart,
+      schema.siteBlockCommands,
       schema.blockId,
+      // #488: which kind of document this editor holds (a post until the Site editor, #493); no schema.
+      SiteBlockContext.configure({ kind: docKind }),
       BlockNodeViews,
       // #320: the mention's current name and the site's date format; no schema.
       InlineNodeViews,
@@ -156,6 +169,12 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
             case "file":
             case "embed":
             case "html":
+            case "siteTitle":
+            case "siteTagline":
+            case "siteLogo":
+            case "navigation":
+            case "search":
+            case "templatePart":
               return ""
             case "imageCaption":
             case "tableCaption":
@@ -224,7 +243,7 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
             // The enabled plugins (#456): a new Set on every change, so identity is the key.
             const plugins = getEnabledPlugins()
             if (!slashEntries || slashEntries.role !== role || slashEntries.theme !== theme || slashEntries.plugins !== plugins) {
-              slashEntries = { role, theme, plugins, entries: menuEntries({ role, theme, plugins }) }
+              slashEntries = { role, theme, plugins, entries: menuEntries({ role, theme, plugins, context: docKind }) }
             }
             return slashEntries.entries.filter(slotAcceptsAt(editor))
           },
@@ -290,12 +309,15 @@ export const getExtensions = ({
   placeholder,
   setUrl,
   setIsLinkModalOpen,
+  docKind,
 }: {
   collabProvider: any
   maxChars?: number
   placeholder?: string
   setUrl?: (url: string) => void
   setIsLinkModalOpen?: (open: boolean) => void
+  /** #488: a post (the default), a block template or a part. */
+  docKind?: "post" | "template" | "part"
 }) => {
-  return extensions({ collabProvider, maxChars, placeholder, setUrl, setIsLinkModalOpen })
+  return extensions({ collabProvider, maxChars, placeholder, setUrl, setIsLinkModalOpen, docKind })
 }

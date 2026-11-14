@@ -7,6 +7,7 @@ import { Details } from "../../components/editor/extensions/DetailsBlock"
 import Subscript from "@tiptap/extension-subscript"
 import Superscript from "@tiptap/extension-superscript"
 import { getCoreSchema, schemaExtensions } from "./schema"
+import { SITE_BLOCK_NODE_NAMES } from "../blocks-spec/siteBlocks"
 import { Group } from "../../components/editor/extensions/GroupBlock"
 import { Footnote } from "../../components/editor/extensions/FootnotesBlock"
 import { GlTable, GlTableRow, TableBlock, TableCaption } from "../../components/editor/extensions/TableBlock"
@@ -350,6 +351,36 @@ describe("schemaFingerprint (#416)", () => {
       expect(getCoreSchema().nodes.mediaText.spec.content).toMatch(/\*$/)
     })
 
+    it("the site blocks (#488) changed it: six node types, named by the doc and every container that holds flow", () => {
+      // The schema as it was before #488: none of the six, and no content expression naming them.
+      const after = getCoreSchema()
+      const names = Object.values(SITE_BLOCK_NODE_NAMES)
+      const unnamed = (content: string | undefined) => (content ?? "").replace(new RegExp(` \\| (${names.join("|")})\\b`, "g"), "")
+      let nodes = after.spec.nodes
+      for (const name of names) nodes = nodes.remove(name)
+      nodes.forEach((name, spec) => {
+        if (spec.content && unnamed(spec.content) !== spec.content) nodes = nodes.update(name, { ...spec, content: unnamed(spec.content) })
+      })
+      const before = new Schema({ nodes, marks: after.spec.marks, topNode: after.spec.topNode })
+      for (const name of names) {
+        expect(before.nodes[name], name).toBeUndefined()
+        expect(after.nodes[name], name).toBeDefined()
+        expect(describeSchemaForFingerprint(after)).toContain(name)
+        // One schema whatever the document (design 7.4): the doc and a group hold every one.
+        expect(after.nodes.doc.spec.content, name).toContain(name)
+        expect(after.nodes.group.spec.content, name).toContain(name)
+      }
+      expect(schemaFingerprint(before)).not.toBe(core)
+      // A tab that didn't know an attr would rewrite the element and lose it: refused too.
+      for (const [name, attr] of [["siteTitle", "level"], ["siteLogo", "width"], ["navigation", "menuId"], ["search", "button"], ["templatePart", "slug"]] as const) {
+        const spec = after.spec.nodes.get(name)!
+        const { [attr]: _dropped, ...attrs } = spec.attrs as Record<string, unknown>
+        const without = new Schema({ nodes: after.spec.nodes.update(name, { ...spec, attrs: attrs as NonNullable<typeof spec.attrs> }), marks: after.spec.marks, topNode: after.spec.topNode })
+        expect(schemaFingerprint(without), `${name}.${attr}`).not.toBe(core)
+      }
+      // No parse rules (design 4.4): paste can't make one.
+      for (const name of names) expect(after.nodes[name].spec.parseDOM ?? [], name).toEqual([])
+    })
     it("the video, audio and file blocks (#423) changed it: three node types, named by the doc and a group", () => {
       // The schema as it was before #423 (and #421): no media nodes, no details, and the doc and the group name
       // only the table next to `block`.

@@ -23,6 +23,8 @@ import { CoverSettings, MediaTextSettings } from "./CoverMediaSettings"
 import { galleryImageCount } from "../extensions/GalleryBlock"
 import { FOOTNOTES_HELP, footnotesBlockAtSelection, footnotesNoteCount } from "../extensions/FootnotesBlock"
 import EmbedBlockSettings from "./EmbedBlockSettings"
+import SiteBlockSettings from "./SiteBlockSettings"
+import { isSiteBlockNode } from "@gl-admin/lib/blocks-spec/siteBlocks"
 import {
   ancestorBlocks,
   blockSpecTypeOf,
@@ -230,6 +232,9 @@ export default function BlockSettingsPanel({ editor }: { editor: TiptapEditor })
         <CoverSettings editor={editor} block={block} />
       ) : block.node.type.name === "mediaText" ? (
         <MediaTextSettings editor={editor} block={block} />
+      ) : isSiteBlockNode(block.node.type.name) ? (
+        // #488: what each site block is set to show; the data itself is the site's.
+        <SiteBlockSettings key={ref.id ?? ref.pos} editor={editor} node={block.node} blockRef={ref} />
       ) : (
         <p className="post-settings__hint">This block has no settings here. Its toolbar has its options.</p>
       )}

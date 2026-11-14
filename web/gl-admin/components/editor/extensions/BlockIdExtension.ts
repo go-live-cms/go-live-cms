@@ -2,6 +2,7 @@ import { Extension } from "@tiptap/core"
 import { Plugin, PluginKey } from "prosemirror-state"
 import { isChangeOrigin } from "@tiptap/extension-collaboration"
 import { CONTAINER_NODE_NAMES, isBlockNode } from "@gl-admin/lib/blocks-spec/nesting"
+import { SITE_BLOCK_NODE_NAMES } from "@gl-admin/lib/blocks-spec/siteBlocks"
 
 const blockIdPluginKey = new PluginKey("blockId")
 
@@ -140,6 +141,8 @@ export const BlockIdExtension = Extension.create({
           "spacer",
           // #422: a note's id is the `footnoteId` of the references to it.
           "footnote",
+          // #488
+          ...Object.values(SITE_BLOCK_NODE_NAMES),
           ...CONTAINER_NODE_NAMES,
         ],
         attributes: {

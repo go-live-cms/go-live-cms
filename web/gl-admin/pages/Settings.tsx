@@ -15,6 +15,7 @@ import Button from "@gl-admin/components/ui/Button"
 import EmptyState from "@gl-admin/components/ui/EmptyState"
 import UnsavedChangesBar from "@gl-admin/components/ui/UnsavedChangesBar"
 import FrontPageField from "@gl-admin/components/settings/FrontPageField"
+import SiteLogoField from "@gl-admin/components/settings/SiteLogoField"
 import RedirectsSection from "@gl-admin/components/settings/RedirectsSection"
 import { CheckIcon, ExternalIcon, WarningIcon } from "@gl-admin/components/ui/icons"
 import { errorMessage } from "@gl-admin/lib/api/errors"
@@ -270,6 +271,12 @@ const SettingsPage: React.FC = () => {
                     maxLength={SITE_TAGLINE_MAX}
                     value={draft.site_tagline}
                     onChange={(e: any) => update({ site_tagline: inputValue(e) })}
+                  />
+                  {/* #488, the canvas's Settings › General: the image the Site logo block shows. */}
+                  <SiteLogoField
+                    value={draft.site_logo_media_id ?? null}
+                    saved={settings?.site_logo ?? null}
+                    onChange={(id) => update({ site_logo_media_id: id })}
                   />
 
                   <div className="is-wide gl-settings__address-field">

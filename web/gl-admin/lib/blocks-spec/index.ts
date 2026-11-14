@@ -16,6 +16,26 @@ import {
 import { EMBED_PROVIDERS, isValidEmbedRef, normalizeEmbedTitle, type EmbedProvider } from "./embeds"
 import { isSnippetId } from "./customHtml"
 import {
+  isBlockDocKind,
+  isMenuId,
+  isMenuLocation,
+  isTemplatePartSlug,
+  normalizeSiteText,
+  SEARCH_BUTTON_MAX_LENGTH,
+  SEARCH_LABEL_MAX_LENGTH,
+  SEARCH_PLACEHOLDER_MAX_LENGTH,
+  siteBlockKindIssues,
+  SITE_LOGO_DEFAULT_WIDTH,
+  SITE_LOGO_MAX_WIDTH,
+  SITE_LOGO_MIN_WIDTH,
+  type BlockDocKind,
+  type NavigationAttrs,
+  type SearchAttrs,
+  type SiteLogoAttrs,
+  type SiteTitleAttrs,
+  type TemplatePartAttrs,
+} from "./siteBlocks"
+import {
   COVER_ALIGNS,
   COVER_OVERLAY_MAX,
   COVER_OVERLAY_MIN,
@@ -35,6 +55,7 @@ export * from "./embeds"
 export * from "./footnotes"
 export * from "./customHtml"
 export * from "./coverMedia"
+export * from "./siteBlocks"
 
 // Block Spec v1 - Authoritative Types
 export type BlockID = string
@@ -71,6 +92,12 @@ export type KnownBlockType =
   | "footnote"
   | "cover"
   | "media_text"
+  | "site_title"
+  | "site_tagline"
+  | "site_logo"
+  | "navigation"
+  | "search"
+  | "template_part"
 
 /** BlockType allows known types + arbitrary custom types from themes */
 export type BlockType = KnownBlockType | (string & {})
@@ -670,6 +697,18 @@ export type Block =
   | MediaTextBlock
   | CustomBlock
 
+/**
+ * The site blocks (#488, `siteBlocks.ts`): flow atoms, their attrs as `normalizeSiteBlockAttrs`
+ * writes them. Not in `Block` (like the embed and custom HTML blocks): they reach it as a
+ * `CustomBlock`, and their renderers and the bridge read them through the normalizer.
+ */
+export type SiteTitleBlock = BaseBlock<"site_title", SiteTitleAttrs>
+export type SiteTaglineBlock = BaseBlock<"site_tagline", Record<string, never>>
+export type SiteLogoBlock = BaseBlock<"site_logo", SiteLogoAttrs>
+export type NavigationBlock = BaseBlock<"navigation", NavigationAttrs>
+export type SearchBlock = BaseBlock<"search", SearchAttrs>
+export type TemplatePartBlock = BaseBlock<"template_part", TemplatePartAttrs>
+
 export interface BlockDocV1 {
   doc_version: 1 // spec version
   blocks_order: BlockID[]
@@ -1030,6 +1069,65 @@ export const zHtml = zBase.extend({
   attrs: z.object({ snippetId: z.string().refine(isSnippetId, "is not a snippet id").optional() }).strict(),
 })
 
+// Site blocks (#488, siteBlocks.ts). Strict, each attr as `normalizeSiteBlockAttrs` writes it
+// (defaults left out), so a value the bridge never writes is caught here before the store.
+const zSiteText = (max: number) => z.string().refine((text) => normalizeSiteText(text, max) === text, "must be plain text, trimmed and within the length limit")
+
+export const zSiteTitle = zBase.extend({
+  type: z.literal("site_title"),
+  attrs: z.object({ level: z.union([z.literal(1), z.literal(2)]).optional(), link: z.literal(false).optional() }).strict(),
+})
+
+export const zSiteTagline = zBase.extend({
+  type: z.literal("site_tagline"),
+  attrs: z.object({}).strict(),
+})
+
+export const zSiteLogo = zBase.extend({
+  type: z.literal("site_logo"),
+  attrs: z
+    .object({
+      width: z
+        .number()
+        .int()
+        .min(SITE_LOGO_MIN_WIDTH)
+        .max(SITE_LOGO_MAX_WIDTH)
+        .refine((width) => width !== SITE_LOGO_DEFAULT_WIDTH, "the default width is left out")
+        .optional(),
+      link: z.literal(false).optional(),
+    })
+    .strict(),
+})
+
+export const zNavigation = zBase.extend({
+  type: z.literal("navigation"),
+  attrs: z
+    .object({
+      location: z.string().refine(isMenuLocation, "is not a menu location").optional(),
+      menuId: z.number().refine(isMenuId, "is not a menu id").optional(),
+      layout: z.literal("column").optional(),
+      overlay: z.literal("never").optional(),
+    })
+    .strict()
+    .refine((attrs) => attrs.location === undefined || attrs.menuId === undefined, "a location or a menu, not both"),
+})
+
+export const zSearch = zBase.extend({
+  type: z.literal("search"),
+  attrs: z
+    .object({
+      label: zSiteText(SEARCH_LABEL_MAX_LENGTH).optional(),
+      placeholder: zSiteText(SEARCH_PLACEHOLDER_MAX_LENGTH).optional(),
+      button: zSiteText(SEARCH_BUTTON_MAX_LENGTH).optional(),
+    })
+    .strict(),
+})
+
+export const zTemplatePart = zBase.extend({
+  type: z.literal("template_part"),
+  attrs: z.object({ slug: z.string().refine(isTemplatePartSlug, "is not a part slug").optional() }).strict(),
+})
+
 /**
  * Catch-all for theme/custom block types not in the known set. Any version: a theme
  * block keeps the version its theme wrote even when that theme isn't installed here.
@@ -1073,6 +1171,12 @@ const knownBlockSchemas: Record<KnownBlockType, z.ZodTypeAny> = {
   footnote: zFootnote,
   cover: zCover,
   media_text: zMediaText,
+  site_title: zSiteTitle,
+  site_tagline: zSiteTagline,
+  site_logo: zSiteLogo,
+  navigation: zNavigation,
+  search: zSearch,
+  template_part: zTemplatePart,
 }
 
 // A known type must match its own schema; only other types fall back to the custom
@@ -1113,16 +1217,25 @@ export interface ValidateOptions {
    * declared attrs.
    */
   themeBlocks?: ThemeBlockLookup
+  /**
+   * What the doc is (#488, design 4.2): a post's body (the default), a block template or a
+   * template part. Some site blocks may only sit in some kinds (`siteBlockKindIssues`); in a
+   * post they are inert, never an error.
+   */
+  kind?: BlockDocKind
 }
 
 // Utility functions. Both throw a ZodError on invalid input and otherwise return the
 // input itself, never a stripped copy.
-export function validateBlockDoc(doc: unknown, { themeBlocks }: ValidateOptions = {}): BlockDocV1 {
+export function validateBlockDoc(doc: unknown, { themeBlocks, kind = "post" }: ValidateOptions = {}): BlockDocV1 {
+  if (!isBlockDocKind(kind)) throw new Error(`unknown block doc kind: ${String(kind)}`)
   zBlockDocV1.parse(doc)
   // How blocks nest (#414, design 2.3): references, one parent each, no cycles, what each
   // container holds. The same checks as the API's (nestingVectors.json). Repeats within
   // one list are not an error here only after `dedupeBlockRefs`, which the store runs first.
   const issues: z.ZodIssue[] = nestingIssues(doc).map((issue) => ({ code: z.ZodIssueCode.custom, ...issue }))
+  // Where site blocks may sit (#488, design 4.2; siteBlockVectors.json, the API's too).
+  for (const issue of siteBlockKindIssues(doc, kind)) issues.push({ code: z.ZodIssueCode.custom, ...issue })
   if (themeBlocks) {
     for (const [key, block] of Object.entries((doc as BlockDocV1).blocks)) {
       const spec = isExtensionBlockType(block.type) ? themeBlocks(block.type) : undefined

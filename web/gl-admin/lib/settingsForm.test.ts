@@ -33,6 +33,7 @@ const saved: SettingsDraft = {
   editor_allowed_embeds: ["youtube"],
   allow_signup: false,
   front_page_id: null,
+  site_logo_media_id: null,
 }
 
 describe("allowed embeds (#425)", () => {
@@ -134,6 +135,16 @@ it("toUpdateRequest sends the front page only when it changed", () => {
   expect(toUpdateRequest({ ...withFront, front_page_id: null }, withFront)).toMatchObject({ front_page_id: null })
   expect(toUpdateRequest(withFront, saved)).toMatchObject({ front_page_id: 12 })
   expect(toUpdateRequest(withFront)).toMatchObject({ front_page_id: 12 })
+})
+
+// #488: the logo, after the tagline, sent only when it changed (the API looks it up).
+it("names the site logo after the tagline, and sends it only when it changed", () => {
+  expect(changedFields(saved, { ...saved, site_logo_media_id: 7, site_tagline: "x" })).toEqual(["tagline", "site logo"])
+  const withLogo = { ...saved, site_logo_media_id: 7 }
+  expect(toUpdateRequest({ ...withLogo, site_title: "New" }, withLogo)).not.toHaveProperty("site_logo_media_id")
+  expect(toUpdateRequest({ ...withLogo, site_logo_media_id: null }, withLogo)).toMatchObject({ site_logo_media_id: null })
+  expect(toUpdateRequest(withLogo, saved)).toMatchObject({ site_logo_media_id: 7 })
+  expect(toDraft({ id: 1, created_at: "", changed_at: "", site_address: "", ...saved, site_logo_media_id: undefined } as never).site_logo_media_id).toBeNull()
 })
 
 describe("time zones", () => {

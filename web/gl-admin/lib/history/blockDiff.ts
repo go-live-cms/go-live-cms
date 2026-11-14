@@ -17,6 +17,7 @@
 import { CALLOUT_TONE_LABELS, normalizeGalleryColumns, type Block, type BlockDocV1 } from "../blocks-spec"
 // The nesting table only: pure, no imports of its own, so the worker stays small.
 import { isContainerType } from "../blocks-spec/nesting"
+import { isSiteBlockType, normalizeSiteBlockAttrs, SITE_BLOCK_LABELS, SITE_BLOCK_TYPES } from "../blocks-spec/siteBlocks"
 import { EMBED_PROVIDER_SPECS, embedTargetOf } from "../blocks-spec/embeds"
 // Pure too.
 import { COLUMNS_LAYOUT_LABELS, isColumnsLayout, spacerPx, type ColumnsLayout } from "../blocks-spec/layoutBlocks"
@@ -253,6 +254,8 @@ const TYPE_LABELS: Record<string, string> = {
   embed: "Embed",
   // #428
   html: "Custom HTML",
+  // #488
+  ...SITE_BLOCK_LABELS,
   // #426
   columns: "Columns",
   column: "Column",
@@ -264,7 +267,8 @@ const TYPE_LABELS: Record<string, string> = {
 }
 
 /** The media blocks without text of their own (#423): their caption or label is diffed instead. */
-const MEDIA_ONLY = new Set(["image", "video", "audio", "file", "embed", "html"])
+// The site blocks (#488) have no text either: their attrs are compared on their own.
+const MEDIA_ONLY = new Set(["image", "video", "audio", "file", "embed", "html", ...SITE_BLOCK_TYPES])
 /** The blocks whose caption is a word diff (an image's, a table's, a video's, an audio block's). */
 const CAPTIONED = new Set(["image", "table", "video", "audio", "embed"])
 
@@ -326,6 +330,15 @@ function attrChanges(v: Block, w: Block): AttrChange[] {
     return typeof align === "string" && align !== "left" ? (ALIGN_LABELS[align] ?? align) : "Left"
   }
 
+  // #488: a site block's every attr, as stored (what it shows is the site's, not the post's).
+  if (isSiteBlockType(v.type) && v.type === w.type) {
+    const before = normalizeSiteBlockAttrs(v.type, va)
+    const after = normalizeSiteBlockAttrs(v.type, wa)
+    for (const key of [...new Set([...Object.keys(before), ...Object.keys(after)])].sort()) {
+      add(key, key.charAt(0).toUpperCase() + key.slice(1), display(before[key]), display(after[key]))
+    }
+    return out
+  }
   switch (v.type) {
     case "paragraph":
       add("textAlign", "Alignment", textAlign(v), textAlign(w))

@@ -426,6 +426,7 @@ type Setting struct {
 	EditorAllowedEmbeds     []string       `json:"editor_allowed_embeds"`
 	AllowSignup             bool           `json:"allow_signup"`
 	FrontPageID             sql.NullInt64  `json:"front_page_id"`
+	SiteLogoMediaID         sql.NullInt64  `json:"site_logo_media_id"`
 }
 
 type SignupRequest struct {

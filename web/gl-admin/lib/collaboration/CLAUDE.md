@@ -248,7 +248,8 @@ kept so references in code stay valid.
 - Every block node type needs the **`data-block-id`** attr (added globally by
   `BlockIdExtension` to paragraph/heading/blockquote/codeBlock/horizontalRule/image/
   bullet_list/ordered_list/listItem, callout/pullQuote/taskList/taskItem (#419), tableBlock (#420),
-  video/audio/file (#423), embed (#425), html (#428), buttons/spacer (#426) and every container, `CONTAINER_NODE_NAMES`). Custom/theme nodes must declare it too or
+  video/audio/file (#423), embed (#425), html (#428), buttons/spacer (#426), the site blocks (#488,
+  `SITE_BLOCK_NODE_NAMES`) and every container, `CONTAINER_NODE_NAMES`). Custom/theme nodes must declare it too or
   `schema.nodeFromJSON` throws "Unsupported attribute".
 - **Callout, pull quote, to-do list (#419, three flow blocks).** Schema in `schemaExtensions`
   (`components/editor/extensions/Callout.ts`, `PullQuote.ts`, `TodoList.ts`: TipTap's TaskList/
@@ -587,7 +588,36 @@ kept so references in code stay valid.
     Preview, the locked preview, read-only), `extensions/HtmlBlock.collab.test.ts` (a client writing
     the Yjs doc directly, a move, a restart), `lib/htmlSnippetsStore.test.ts`,
     `src/components/blocks/html/HtmlBlock.test.tsx`, Go `post_html_snippets_test.go`.
-- **Inline nodes (#320, `components/editor/extensions/InlineNodes.ts`, rules in
+- **Site blocks I (#488, `components/editor/extensions/SiteBlocks.ts`, views `SiteBlockViews.ts`, Block tab
+  `ui/SiteBlockSettings.tsx`, rules `blocks-spec/siteBlocks.ts`, design `docs/design/theme-builder.md` 4, 7.4).**
+  `siteTitle`, `siteTagline`, `siteLogo`, `navigation`, `search`, `templatePart` (Block Spec `site_title`, …,
+  `template_part`): flow atoms outside the `block` group (`STANDALONE_FLOW_NODE_NAMES`), every attr a node attr, last
+  writer wins. What they show is the site's (Settings, the menus, the published parts), read on the page from the
+  `SiteRenderContext` (`src/components/blocks/utils/siteContext.ts`), never stored in the block.
+  - **One schema whatever the document (design 7.4):** they are in `schemaExtensions()`, so a post's doc can hold one.
+    The post catalog doesn't offer them (`contexts`, `menuEntries({ context })`; the editor's kind is
+    `SiteBlockContext`, a post until the Site editor, #493), and **no parse rule** creates one (like Custom HTML), so
+    paste can't: a copy of one pastes nothing (`SiteBlocks.test.ts`). One written into a post's Yjs doc directly
+    syncs, **stores** (`validateBlockDoc`'s default kind is `post`, where site blocks are inert, never an error, or
+    every later store of that post would be `kept-invalid`) and renders nothing (no context on a post's body). The
+    view says so ("… only works in the Site editor").
+  - **Attrs are canonical, defaults left out** (`normalizeSiteBlockAttrs`, the bridge both ways, the API's
+    `sanitizeSiteBlockAttrs`; `siteBlockVectors.json` pins both): `navigation` holds **one** of `menuId` and
+    `location`, and two people picking at once (both set) keeps `menuId`, everywhere; the Block tab clears the other
+    in the same transaction.
+  - **Where they may sit** (`validateBlockDoc(doc, { kind })`, Go `prepareForStoreAs`): a `template_part` never in a
+    part, referenced or not, so parts can't recurse. The collab store stores posts only until #490 adds the
+    template document kind, which must pass its kind.
+  - **Old data:** like `callout` in #419, a stored pre-#376 custom block whose type is one of the six names
+    (`navigation`, `search`, …) now reads as the site block: its `pm` and `text` are dropped by the bridge and
+    the API. No such type shipped in a theme; check before restoring an old backup that had one.
+  - **Stale clients:** a bundle from before #488 lacks the six nodes (and a narrower doc and containers); the
+    fingerprint guard (#416) refuses it (`schemaFingerprint.test.ts`), so open tabs reload once after the deploy.
+  - Tests: `blocks-spec/siteBlocks.test.ts` (the vectors, kinds), `extensions/SiteBlocks.test.ts` (schema, bridge,
+    views, paste), `extensions/SiteBlocks.collab.test.tsx` (a client writing one into a post's doc on the relay: every
+    peer, the stored doc, nothing rendered; two people on one block's settings; a restart),
+    `src/components/blocks/siteBlocks.test.tsx`, `src/lib/siteRenderContext.test.ts`, `themes/default/siteBlocks.test.ts`,
+    Go `post_blocks_site_test.go`.- **Inline nodes (#320, `components/editor/extensions/InlineNodes.ts`, rules in
   `blocks-spec/inlineNodes.ts`): `mention` {userId, label}, `contentLink` {postId, label},
   `dateChip` {date, time, reminder}.** Inline **atoms** in the `inline` group, so they live in a
   text block's `pm` (paragraph, heading, list item, quote, pull quote, table cell; never a

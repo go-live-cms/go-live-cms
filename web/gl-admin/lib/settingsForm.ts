@@ -20,12 +20,14 @@ export type SettingsDraft = Pick<
   | "editor_allowed_embeds"
   | "allow_signup"
   | "front_page_id"
+  | "site_logo_media_id"
 >
 
 // In form order.
 const FIELDS: { key: keyof SettingsDraft; label: string }[] = [
   { key: "site_title", label: "site title" },
   { key: "site_tagline", label: "tagline" },
+  { key: "site_logo_media_id", label: "site logo" },
   { key: "site_language", label: "language" },
   { key: "site_timezone", label: "time zone" },
   { key: "date_format", label: "date format" },
@@ -72,6 +74,7 @@ export function toDraft(settings: Settings): SettingsDraft {
     editor_allowed_embeds: knownEmbedProviders(settings.editor_allowed_embeds),
     allow_signup: settings.allow_signup ?? false,
     front_page_id: settings.front_page_id ?? null,
+    site_logo_media_id: settings.site_logo_media_id ?? null,
   }
 }
 
@@ -117,11 +120,14 @@ export function validateDraft(draft: SettingsDraft): string | null {
 // The PUT body: every edited field (the API keeps what's absent), the tagline trimmed as
 // the API stores it. The front page (#336) only when it changed: the API checks that a
 // chosen page is published, and a saved one may have been unpublished since, which
-// mustn't stop the other fields from saving.
+// mustn't stop the other fields from saving. The site logo (#488) likewise: the API checks
+// it is an image, and only a change needs that lookup.
 export function toUpdateRequest(draft: SettingsDraft, saved?: SettingsDraft | null) {
-  const { front_page_id, ...rest } = draft
-  const body = { ...rest, site_tagline: draft.site_tagline.trim() }
-  return saved && saved.front_page_id === front_page_id ? body : { ...body, front_page_id }
+  const { front_page_id, site_logo_media_id, ...rest } = draft
+  const body: Record<string, unknown> = { ...rest, site_tagline: draft.site_tagline.trim() }
+  if (!saved || saved.front_page_id !== front_page_id) body.front_page_id = front_page_id
+  if (!saved || saved.site_logo_media_id !== site_logo_media_id) body.site_logo_media_id = site_logo_media_id
+  return body as Omit<SettingsDraft, "front_page_id" | "site_logo_media_id"> & Partial<Pick<SettingsDraft, "front_page_id" | "site_logo_media_id">>
 }
 
 // "UTC−3", "UTC+5:45", "UTC" for the zone's offset at `at`.

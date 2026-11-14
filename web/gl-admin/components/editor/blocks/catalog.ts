@@ -11,6 +11,7 @@ import { EMBED_ICONS, MEDIA_BLOCK_ICONS, type EmbedProvider } from "@gl-admin/li
 import { requestEmbedFieldFocus, takeEmbedFieldFocus } from "./embedLinks"
 import { requestHtmlFieldFocus, takeHtmlFieldFocus } from "./htmlSnippets"
 import { currentAllowedEmbeds } from "@gl-admin/lib/editorSettings"
+import { SITE_BLOCK_CONTEXTS, SITE_BLOCK_ICONS, SITE_BLOCK_LABELS, type BlockDocKind, type SiteBlockType } from "@gl-admin/lib/blocks-spec/siteBlocks"
 
 // The block catalog (#415, docs/design/block-library.md 3.1): every block the editor can
 // insert, in one list. The slash menu, the + menu in the gutter, Turn into (turnInto.ts)
@@ -26,7 +27,7 @@ import { currentAllowedEmbeds } from "@gl-admin/lib/editorSettings"
 //     id: "group",            // unique in the catalog; also Turn into's value
 //     type: "group",          // the Block Spec type it creates
 //     name: "Group",          // what the menus show, and what search matches
-//     group: "layout",        // text | media | layout | embeds | advanced
+//     group: "layout",        // text | media | layout | embeds | site | advanced
 //     keywords: ["container", "section"],
 //     icon: { path: "M4 8V4h4…" },  // a 24×24 stroke path, or { glyph: "H1" }
 //     insert: (editor, range) => editor.chain().focus().deleteRange(range).insertContent({ type: "group", … }).run(),
@@ -37,7 +38,7 @@ import { currentAllowedEmbeds } from "@gl-admin/lib/editorSettings"
 // no appendTransaction, no writes around the editor (rules 7 and 11 in
 // lib/collaboration/CLAUDE.md).
 
-export type BlockGroup = "text" | "media" | "layout" | "embeds" | "advanced"
+export type BlockGroup = "text" | "media" | "layout" | "embeds" | "site" | "advanced"
 
 /** The menus' groups, in the order the design shows them ("Inserting blocks"). */
 export const BLOCK_GROUPS: readonly { id: BlockGroup; label: string }[] = [
@@ -45,6 +46,8 @@ export const BLOCK_GROUPS: readonly { id: BlockGroup; label: string }[] = [
   { id: "media", label: "Media" },
   { id: "layout", label: "Layout" },
   { id: "embeds", label: "Embeds" },
+  // #488 (the blocks canvas's "Site blocks" board): offered only in templates and parts.
+  { id: "site", label: "Site" },
   { id: "advanced", label: "Advanced" },
 ]
 
@@ -86,6 +89,13 @@ export interface CatalogEntry {
    * docs/design/plugin-system.md 4.3: `MenuContext.plugins`).
    */
   plugin?: string
+  /**
+   * The kinds of document it is offered in (#488, design theme-builder.md 4.4). Absent: every
+   * kind (a post, a template, a part). The site blocks are templates and parts only
+   * (`SITE_BLOCK_CONTEXTS`), so the post editor never offers them; one written into a post
+   * anyway is inert there.
+   */
+  contexts?: readonly BlockDocKind[]
   /** False while the site has switched this block off (an embed provider off Allowed embeds, #425). */
   available?: () => boolean
   insert: (editor: Editor, range: InsertRange) => void
@@ -493,10 +503,40 @@ export const CORE_BLOCKS: readonly CatalogEntry[] = [
   },
 ]
 
-/** The whole catalog: the core blocks, then every installed theme block (lib/theme-blocks), then every installed plugin block (lib/plugins). */
+/**
+ * The Site group (#488, design theme-builder.md 4.4): the blocks the page fills from site
+ * data. Offered in templates and parts only (`contexts`), so never in a post's menus; the
+ * editor shows labelled placeholders. Kept out of `CORE_BLOCKS`, which is what a post offers.
+ */
+export const SITE_BLOCKS: readonly CatalogEntry[] = [
+  siteEntry("site_title", ["name", "site name", "home"]),
+  siteEntry("site_tagline", ["description", "slogan"]),
+  siteEntry("site_logo", ["image", "brand", "home"]),
+  siteEntry("navigation", ["menu", "links", "nav"]),
+  siteEntry("search", ["find", "form"]),
+  siteEntry("template_part", ["header", "footer", "part"]),
+]
+
+function siteEntry(type: SiteBlockType, keywords: readonly string[]): CatalogEntry {
+  return {
+    id: type.replace(/_/g, "-"),
+    type,
+    name: SITE_BLOCK_LABELS[type],
+    group: "site",
+    keywords,
+    icon: { path: SITE_BLOCK_ICONS[type] },
+    contexts: SITE_BLOCK_CONTEXTS[type],
+    insert: (editor, range) => {
+      chain(editor, range).insertSiteBlock(type).run()
+    },
+  }
+}
+
+/** The whole catalog: the core blocks, the site blocks (#488), then every installed theme block (lib/theme-blocks), then every installed plugin block (lib/plugins). */
 export function catalogEntries(): CatalogEntry[] {
   return [
     ...CORE_BLOCKS,
+    ...SITE_BLOCKS,
     ...installedThemeBlockEditors.map((editor) => editor.entry),
     ...installedPluginBlockEditors.map((editor) => editor.entry),
   ]
@@ -535,6 +575,13 @@ export interface MenuContext {
   plugins?: ReadonlySet<string>
   /** The slot being inserted into accepts this block (#414's nesting table). */
   accepts?: (entry: CatalogEntry) => boolean
+  /** The kind of document being edited (#488): only entries offered there. Default: a post. */
+  context?: BlockDocKind
+}
+
+/** Whether `entry` is offered in a document of `kind` (#488, design 4.4). */
+export function offeredIn(entry: CatalogEntry, kind: BlockDocKind = "post"): boolean {
+  return !entry.contexts || entry.contexts.includes(kind)
 }
 
 /** The entries a menu offers in `context`, in catalog order. */
@@ -546,6 +593,7 @@ export function menuEntries(context: MenuContext, entries: readonly CatalogEntry
       (entry.available?.() ?? true) &&
       (!entry.theme || entry.theme === (context.theme ?? "default")) &&
       (!entry.plugin || plugins.has(entry.plugin)) &&
+      offeredIn(entry, context.context) &&
       (context.accepts?.(entry) ?? true)
   )
 }

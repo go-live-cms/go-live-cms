@@ -18,6 +18,9 @@ SET
   -- The front page (#336): set_front_page says whether the request names one;
   -- front_page_id NULL then means "the latest posts".
   front_page_id = CASE WHEN sqlc.arg('set_front_page')::boolean THEN sqlc.narg('front_page_id')::bigint ELSE front_page_id END,
+  -- The site logo (#488): set_site_logo says whether the request names one;
+  -- site_logo_media_id NULL then means none.
+  site_logo_media_id = CASE WHEN sqlc.arg('set_site_logo')::boolean THEN sqlc.narg('site_logo_media_id')::bigint ELSE site_logo_media_id END,
   changed_at = now()
 WHERE id = 1
 RETURNING *;

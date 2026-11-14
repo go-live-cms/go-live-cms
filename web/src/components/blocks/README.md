@@ -288,7 +288,19 @@ interface BlockComponentProps {
   (never a client's value: the working copy has only a snippet id). Nothing renders without it, so
   a snippet id that isn't the post's shows nothing. The admin's own markup is styled by the theme's
   normal rules and its own classes.
-- **Cover, media & text (#427, "Published · media & embeds", `cover/`, `media_text/`):** `div.cover`
+- **Site blocks (#488, the blocks canvas's "Published site blocks"; `site_title/`, `site_tagline/`,
+  `site_logo/`, `navigation/`, `search/`, `template_part/`):** they render only inside a block template
+  or a part, from the `SiteRenderContext` its layout passes as `BlockRenderer`'s `site`
+  (`utils/siteContext.ts`, filled before the render by `src/lib/siteRenderContext.ts`). **A post's body
+  has none, so in a post every one renders nothing.** Nested renderers inherit it; `site={null}` clears
+  it (a post's body inside a template, #489). The markup is the default theme header's own pieces:
+  `p.site-title-block > a.site-title` (or `h1`/`h2.title.site-title-block`), `p.site-tagline`,
+  `a.site-logo-block > img.site-logo` (named "<site>, home"; a `span` and a named image when it doesn't
+  link; nothing without a logo), `div.nav-block > nav.site-nav` (`is-column`; the header's `nav-group`
+  disclosure for children; with `has-overlay` a `details.nav-overlay` menu button for phones, no script),
+  `form.search-form.search-block` (a GET to `/search`, the label visually hidden), and
+  `header|footer|div.template-part.template-part--<slug>` around the resolved part's own `BlockRenderer`
+  (nothing inside a part: no recursion). A missing menu, part or logo renders nothing.- **Cover, media & text (#427, "Published · media & embeds", `cover/`, `media_text/`):** `div.cover`
   (`alignwide` / `alignfull`, `--dim` the overlay as a fraction) with the image, then `div.cover-inner`
   holding the blocks; `div.media-text` (`is-media-right`) with `figure.media-text-media` first, so it
   sits above the text on phones, then `div.media-text-body`. The image comes from the `media` map

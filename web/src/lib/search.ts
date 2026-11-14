@@ -18,7 +18,9 @@ import { normalizeUrlStructure, postPath, termPath, type UrlStructure } from "./
 import { getSiteSettings } from "./siteSettings"
 import { DEFAULT_DATE_SETTINGS, formatSiteDate, type DateSettings } from "./siteDates"
 
-export const SEARCH_PATH = "/search"
+import { MAX_QUERY_LENGTH, SEARCH_PATH } from "./searchPath"
+
+export { MAX_QUERY_LENGTH, SEARCH_PATH }
 
 export type SearchType = "all" | "post" | "page"
 
@@ -84,7 +86,6 @@ export interface SearchPageData {
 }
 
 // The longest query the page sends; the API cuts at the same length.
-export const MAX_QUERY_LENGTH = 200
 
 // ?q= as the page uses it: whitespace collapsed, at most MAX_QUERY_LENGTH characters.
 export function normalizeQuery(raw: string | null | undefined): string {

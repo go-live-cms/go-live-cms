@@ -1,0 +1,163 @@
+{
+  "description": "Site blocks I (#488, docs/design/theme-builder.md 4.1-4.2). Read by blocks-spec/siteBlocks.test.ts (normalizeSiteBlockAttrs, validateBlockDoc with a kind) and api/post_blocks_site_test.go (the sanitizer, prepareForStoreAs). `attrs`: what a block of `type` with `input` keeps, defaults left out. `kinds`: whether a doc of `kind` stores.",
+  "attrs": [
+    { "name": "site_title: the defaults are left out", "type": "site_title", "input": { "level": 0, "link": true }, "expected": {} },
+    { "name": "site_title: an H1 that doesn't link", "type": "site_title", "input": { "level": 1, "link": false }, "expected": { "level": 1, "link": false } },
+    { "name": "site_title: an H2", "type": "site_title", "input": { "level": 2 }, "expected": { "level": 2 } },
+    { "name": "site_title: a level it doesn't have, a string level, a link that isn't a boolean", "type": "site_title", "input": { "level": 3, "link": "no" }, "expected": {} },
+    { "name": "site_title: a numeric string isn't a level", "type": "site_title", "input": { "level": "2" }, "expected": {} },
+    { "name": "site_title: anything else is dropped, text and handlers included", "type": "site_title", "input": { "text": "My site", "pm": { "type": "paragraph" }, "onclick": "alert(1)", "href": "javascript:alert(1)" }, "expected": {} },
+    { "name": "site_tagline: no attrs at all", "type": "site_tagline", "input": { "text": "Notes", "level": 2 }, "expected": {} },
+    { "name": "site_logo: a width and no link", "type": "site_logo", "input": { "width": 120, "link": false }, "expected": { "width": 120, "link": false } },
+    { "name": "site_logo: the default width is left out", "type": "site_logo", "input": { "width": 48, "link": true }, "expected": {} },
+    { "name": "site_logo: too narrow is clamped", "type": "site_logo", "input": { "width": 10 }, "expected": { "width": 32 } },
+    { "name": "site_logo: too wide is clamped", "type": "site_logo", "input": { "width": 9000 }, "expected": { "width": 600 } },
+    { "name": "site_logo: a fraction is rounded", "type": "site_logo", "input": { "width": 100.4 }, "expected": { "width": 100 } },
+    { "name": "site_logo: rounding to the default leaves it out", "type": "site_logo", "input": { "width": 47.6 }, "expected": {} },
+    { "name": "site_logo: a string width is dropped", "type": "site_logo", "input": { "width": "120" }, "expected": {} },
+    { "name": "site_logo: no media of its own: the logo is the site's", "type": "site_logo", "input": { "mediaId": 4, "src": "javascript:alert(1)", "alt": "x" }, "expected": {} },
+    { "name": "navigation: a theme location", "type": "navigation", "input": { "location": "primary" }, "expected": { "location": "primary" } },
+    { "name": "navigation: a menu by id, in a column, never folded", "type": "navigation", "input": { "menuId": 7, "layout": "column", "overlay": "never" }, "expected": { "menuId": 7, "layout": "column", "overlay": "never" } },
+    { "name": "navigation: both set keeps the menu", "type": "navigation", "input": { "location": "primary", "menuId": 7 }, "expected": { "menuId": 7 } },
+    { "name": "navigation: a bad menu id falls back to the location", "type": "navigation", "input": { "location": "footer", "menuId": 0 }, "expected": { "location": "footer" } },
+    { "name": "navigation: negative, fractional and string ids are dropped", "type": "navigation", "input": { "menuId": 1.5 }, "expected": {} },
+    { "name": "navigation: a string id is dropped", "type": "navigation", "input": { "menuId": "7" }, "expected": {} },
+    { "name": "navigation: a location that isn't a name is dropped", "type": "navigation", "input": { "location": "../admin" }, "expected": {} },
+    { "name": "navigation: a location with a space is dropped", "type": "navigation", "input": { "location": "main menu", "menuId": -3 }, "expected": {} },
+    { "name": "navigation: the defaults are left out", "type": "navigation", "input": { "location": "primary_2", "layout": "row", "overlay": "phone" }, "expected": { "location": "primary_2" } },
+    { "name": "navigation: an unknown layout and overlay are dropped, and so are stored links", "type": "navigation", "input": { "layout": "grid", "overlay": "always", "items": [{ "url": "javascript:alert(1)" }], "href": "javascript:alert(1)" }, "expected": {} },
+    { "name": "search: three texts", "type": "search", "input": { "label": "Search the blog", "placeholder": "Search the blog", "button": "Search" }, "expected": { "label": "Search the blog", "placeholder": "Search the blog", "button": "Search" } },
+    { "name": "search: control characters become spaces, then it's trimmed", "type": "search", "input": { "label": "  Find\u0007things\n " }, "expected": { "label": "Find things" } },
+    { "name": "search: the button is capped at 40 code points", "type": "search", "input": { "button": "abcdefghijklmnopqrstuvwxyzabcdefghijklmno" }, "expected": { "button": "abcdefghijklmnopqrstuvwxyzabcdefghijklmn" } },
+    { "name": "search: the label is capped at 80 code points, not UTF-16 units", "type": "search", "input": { "label": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀" }, "expected": { "label": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀" } },
+    { "name": "search: markup is kept as text (the page escapes it)", "type": "search", "input": { "button": "<b>Go</b>" }, "expected": { "button": "<b>Go</b>" } },
+    { "name": "search: empty, blank and non-string texts are dropped", "type": "search", "input": { "label": "", "placeholder": "   ", "button": 5, "action": "https://evil.example/" }, "expected": {} },
+    { "name": "template_part: a slug", "type": "template_part", "input": { "slug": "header" }, "expected": { "slug": "header" } },
+    { "name": "template_part: a slug with a dash and an underscore", "type": "template_part", "input": { "slug": "promo_bar-2" }, "expected": { "slug": "promo_bar-2" } },
+    { "name": "template_part: upper case isn't a slug", "type": "template_part", "input": { "slug": "Header" }, "expected": {} },
+    { "name": "template_part: a path isn't a slug, and its content is never stored", "type": "template_part", "input": { "slug": "../header", "blocks": {}, "html": "<script>alert(1)</script>" }, "expected": {} }
+  ],
+  "kinds": [
+    {
+      "name": "a post holding every site block stores: they are inert there",
+      "kind": "post",
+      "valid": true,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["title-0001", "tag-000001", "logo-00001", "nav-000001", "search-0001", "part-00001"],
+        "blocks": {
+          "title-0001": { "id": "title-0001", "type": "site_title", "version": 1, "attrs": { "level": 1 } },
+          "tag-000001": { "id": "tag-000001", "type": "site_tagline", "version": 1, "attrs": {} },
+          "logo-00001": { "id": "logo-00001", "type": "site_logo", "version": 1, "attrs": { "width": 120 } },
+          "nav-000001": { "id": "nav-000001", "type": "navigation", "version": 1, "attrs": { "location": "primary" } },
+          "search-0001": { "id": "search-0001", "type": "search", "version": 1, "attrs": { "button": "Go" } },
+          "part-00001": { "id": "part-00001", "type": "template_part", "version": 1, "attrs": { "slug": "header" } }
+        }
+      }
+    },
+    {
+      "name": "a template holding every site block, some in a group and a column",
+      "kind": "template",
+      "valid": true,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["part-00001", "group-0001", "cols-00001", "part-00002"],
+        "blocks": {
+          "part-00001": { "id": "part-00001", "type": "template_part", "version": 1, "attrs": { "slug": "header" } },
+          "group-0001": { "id": "group-0001", "type": "group", "version": 1, "attrs": {}, "children": ["title-0001", "tag-000001", "part-00003"] },
+          "title-0001": { "id": "title-0001", "type": "site_title", "version": 1, "attrs": {} },
+          "tag-000001": { "id": "tag-000001", "type": "site_tagline", "version": 1, "attrs": {} },
+          "part-00003": { "id": "part-00003", "type": "template_part", "version": 1, "attrs": { "slug": "promo" } },
+          "cols-00001": { "id": "cols-00001", "type": "columns", "version": 1, "attrs": {}, "children": ["col-000001", "col-000002"] },
+          "col-000001": { "id": "col-000001", "type": "column", "version": 1, "attrs": {}, "children": ["logo-00001", "nav-000001"] },
+          "col-000002": { "id": "col-000002", "type": "column", "version": 1, "attrs": {}, "children": ["search-0001"] },
+          "logo-00001": { "id": "logo-00001", "type": "site_logo", "version": 1, "attrs": {} },
+          "nav-000001": { "id": "nav-000001", "type": "navigation", "version": 1, "attrs": { "menuId": 3, "layout": "column" } },
+          "search-0001": { "id": "search-0001", "type": "search", "version": 1, "attrs": {} },
+          "part-00002": { "id": "part-00002", "type": "template_part", "version": 1, "attrs": { "slug": "footer" } }
+        }
+      }
+    },
+    {
+      "name": "a part (a header) holding the identity blocks, navigation and search",
+      "kind": "part",
+      "valid": true,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["group-0001", "search-0001"],
+        "blocks": {
+          "group-0001": { "id": "group-0001", "type": "group", "version": 1, "attrs": {}, "children": ["logo-00001", "title-0001", "nav-000001"] },
+          "logo-00001": { "id": "logo-00001", "type": "site_logo", "version": 1, "attrs": { "link": false } },
+          "title-0001": { "id": "title-0001", "type": "site_title", "version": 1, "attrs": {} },
+          "nav-000001": { "id": "nav-000001", "type": "navigation", "version": 1, "attrs": { "location": "primary" } },
+          "search-0001": { "id": "search-0001", "type": "search", "version": 1, "attrs": {} }
+        }
+      }
+    },
+    {
+      "name": "a part can't hold a template part",
+      "kind": "part",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["title-0001", "part-00001"],
+        "blocks": {
+          "title-0001": { "id": "title-0001", "type": "site_title", "version": 1, "attrs": {} },
+          "part-00001": { "id": "part-00001", "type": "template_part", "version": 1, "attrs": { "slug": "header" } }
+        }
+      }
+    },
+    {
+      "name": "a part can't hold a template part inside a group either",
+      "kind": "part",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["group-0001"],
+        "blocks": {
+          "group-0001": { "id": "group-0001", "type": "group", "version": 1, "attrs": {}, "children": ["part-00001"] },
+          "part-00001": { "id": "part-00001", "type": "template_part", "version": 1, "attrs": { "slug": "footer" } }
+        }
+      }
+    },
+    {
+      "name": "a part can't keep an unreferenced template part, which the next store could reference again",
+      "kind": "part",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["title-0001"],
+        "blocks": {
+          "title-0001": { "id": "title-0001", "type": "site_title", "version": 1, "attrs": {} },
+          "part-00001": { "id": "part-00001", "type": "template_part", "version": 1, "attrs": {} }
+        }
+      }
+    },
+    {
+      "name": "a site block holds no blocks, in any kind",
+      "kind": "template",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["nav-000001"],
+        "blocks": {
+          "nav-000001": { "id": "nav-000001", "type": "navigation", "version": 1, "attrs": {}, "children": ["para-00001"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "Hello" } }
+        }
+      }
+    },
+    {
+      "name": "a site block holds no blocks in a post either",
+      "kind": "post",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["title-0001"],
+        "blocks": {
+          "title-0001": { "id": "title-0001", "type": "site_title", "version": 1, "attrs": {}, "children": ["para-00001"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "Hello" } }
+        }
+      }
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 import { NodeSelection } from "@tiptap/pm/state"
 import type { Editor as TiptapEditor } from "@tiptap/core"
 import { embedEntryId, findEntry, turnIntoEntries, type CatalogEntry } from "../blocks/catalog"
+import { siteBlockTypeOfNode } from "@gl-admin/lib/blocks-spec/siteBlocks"
 
 // Turn into (the selection toolbar's and the block-type toolbar's picker) reads the block
 // catalog (#415): the options are the catalog entries that have a `turnInto`, the value
@@ -22,6 +23,9 @@ export const computeTurnIntoFromSelection = (editor: TiptapEditor): TurnIntoValu
     if (node.type.name === "embed") return embedEntryId(node.attrs.provider)
     // #428
     if (node.type.name === "html") return "html"
+    // #488: the site entry's id ("site-title", "template-part").
+    const siteType = siteBlockTypeOfNode(node.type.name)
+    if (siteType) return siteType.replace(/_/g, "-")
     if (node.type.name === "horizontalRule") return "divider"
     if (node.type.name === "codeBlock") return "code-block"
     if (node.type.name === "blockquote") return "quote"

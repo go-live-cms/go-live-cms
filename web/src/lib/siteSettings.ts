@@ -8,6 +8,7 @@ import { SITE_TITLE } from "@/consts"
 import { DEFAULT_DATE_SETTINGS, normalizeDateSettings, type DateSettings } from "@/lib/siteDates"
 import { log } from "@/lib/log"
 import { knownEmbedProviders, type EmbedProvider } from "@gl-admin/lib/blocks-spec/embeds"
+import type { BlockMedia } from "@/components/blocks/utils/responsiveImage"
 
 export interface SiteSettings extends DateSettings {
   title: string
@@ -24,6 +25,35 @@ export interface SiteSettings extends DateSettings {
   // The sites embeds may come from (#425): the public CSP's frame-src. Empty when the
   // settings can't be read, so a failed lookup never widens what a page may frame.
   allowedEmbeds: EmbedProvider[]
+  // The site logo (#488, `site_logo_media_id`): its media as the API attaches block media,
+  // and its alt text. Null for none, a deleted one, or settings that can't be read.
+  logo: SiteLogo | null
+}
+
+export interface SiteLogo {
+  id: number
+  media: BlockMedia
+  alt: string
+}
+
+/** The API's `site_logo` (settings_presenters.go), or null for anything that isn't one. */
+export function normalizeSiteLogo(value: unknown): SiteLogo | null {
+  if (!value || typeof value !== "object") return null
+  const logo = value as Record<string, unknown>
+  const id = logo.id
+  const path = logo.media_path
+  if (typeof id !== "number" || !Number.isInteger(id) || id <= 0 || typeof path !== "string" || path === "") return null
+  const size = (n: unknown) => (typeof n === "number" && Number.isFinite(n) && n > 0 ? Math.round(n) : 0)
+  return {
+    id,
+    media: {
+      media_path: path,
+      width: size(logo.width),
+      height: size(logo.height),
+      variants: logo.variants && typeof logo.variants === "object" ? (logo.variants as BlockMedia["variants"]) : undefined,
+    },
+    alt: typeof logo.alt === "string" ? logo.alt.trim() : "",
+  }
 }
 
 // Error pages render this too, and an unreachable API is a common cause of a 500: give
@@ -60,6 +90,7 @@ async function loadSiteSettings(): Promise<SiteSettings> {
     allowSignup: settings?.allow_signup === true,
     frontPageId: Number.isInteger(settings?.front_page_id) && (settings?.front_page_id as number) > 0 ? (settings?.front_page_id as number) : null,
     allowedEmbeds: knownEmbedProviders(settings?.editor_allowed_embeds),
+    logo: normalizeSiteLogo(settings?.site_logo),
     ...normalizeDateSettings({
       language: settings ? settings.site_language : (lastKnownLanguage ?? undefined),
       timeZone: settings?.site_timezone,
