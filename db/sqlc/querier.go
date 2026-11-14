@@ -138,6 +138,7 @@ type Querier interface {
 	// Email change (#334): the confirmation link goes to the new address; the change
 	// happens only when it is redeemed (ConfirmEmailChangeTx).
 	CreateEmailChangeToken(ctx context.Context, arg CreateEmailChangeTokenParams) (EmailChangeToken, error)
+	CreateGlobalStyleVersion(ctx context.Context, arg CreateGlobalStyleVersionParams) (GlobalStyleVersion, error)
 	// variants is NULL for media without generated variants, stored as {}.
 	CreateMedia(ctx context.Context, arg CreateMediaParams) (Medium, error)
 	CreateMenu(ctx context.Context, arg CreateMenuParams) (Menu, error)
@@ -169,6 +170,7 @@ type Querier interface {
 	// Open signup (#191): the account is created only when the emailed link is
 	// redeemed (ConfirmSignupTx).
 	CreateSignupRequest(ctx context.Context, arg CreateSignupRequestParams) (SignupRequest, error)
+	CreateSiteDesignRelease(ctx context.Context, arg CreateSiteDesignReleaseParams) (SiteDesignRelease, error)
 	// Taxonomy Terms Management
 	CreateTaxonomyTerm(ctx context.Context, arg CreateTaxonomyTermParams) (TaxonomyTerm, error)
 	// Taxonomy Types Management
@@ -251,6 +253,8 @@ type Querier interface {
 	// A post of type "post" without a category gets the default one (Uncategorized). The
 	// other types may have none. Called by every writer of a post's terms.
 	EnsureDefaultCategory(ctx context.Context, postIds []int64) (int64, error)
+	// The row a theme's first save updates. Idempotent.
+	EnsureGlobalStyles(ctx context.Context, themeSlug string) error
 	// Writes the runs of the oldest events not fanned out yet: one per plugin enabled and
 	// subscribed now. A post.saved gets no run for a plugin that already has a pending
 	// post.saved run for that post: the hook reads the post when it runs, so one is enough
@@ -264,7 +268,8 @@ type Querier interface {
 	// Ends a claimed reminder (sent, skipped, or failed for good), only under this claim.
 	FinishReminder(ctx context.Context, arg FinishReminderParams) (int64, error)
 	GetActiveTheme(ctx context.Context) (Theme, error)
-	// Get active theme with its settings
+	// Get active theme with its settings, and its *published* global styles (#485): this
+	// route is public, so it never reads global_styles.draft.
 	GetActiveThemeWithSettings(ctx context.Context) (GetActiveThemeWithSettingsRow, error)
 	GetAnySessionByRefreshTokenHash(ctx context.Context, refreshTokenHash []byte) (Session, error)
 	// The editor's review notice: the post's latest request when it is open, or when a
@@ -272,6 +277,10 @@ type Querier interface {
 	// applies). Names are joined now; NULL for a member removed since.
 	GetCurrentReviewRequest(ctx context.Context, postID int64) (GetCurrentReviewRequestRow, error)
 	GetFeaturedImage(ctx context.Context, postID int64) (GetFeaturedImageRow, error)
+	// Global styles (#485, 000056, docs/design/theme-builder.md section 6). Written by the
+	// site design routes (api/site_design_handlers.go); values are validated there first.
+	GetGlobalStyles(ctx context.Context, themeSlug string) (GlobalStyle, error)
+	GetGlobalStylesForUpdate(ctx context.Context, themeSlug string) (GlobalStyle, error)
 	// The member's newest request for the post (the view-only notice's state).
 	GetLatestPostAccessRequest(ctx context.Context, arg GetLatestPostAccessRequestParams) (PostAccessRequest, error)
 	GetLatestPublishedVersion(ctx context.Context, postID int64) (GetLatestPublishedVersionRow, error)
@@ -748,6 +757,7 @@ type Querier interface {
 	// incompatible, with the last valid manifest kept. No row when it already was, for
 	// these files.
 	MarkPluginInvalid(ctx context.Context, arg MarkPluginInvalidParams) (MarkPluginInvalidRow, error)
+	NextGlobalStyleVersionNo(ctx context.Context, themeSlug string) (int32, error)
 	// Deletes the rows of blocks that aren't in the post's new block_doc (keep_ids: every
 	// key of its "blocks", hidden blocks included).
 	PrunePostBlockEdits(ctx context.Context, arg PrunePostBlockEditsParams) error
@@ -901,6 +911,7 @@ type Querier interface {
 	SetPostTypeActiveByRegisteredBy(ctx context.Context, arg SetPostTypeActiveByRegisteredByParams) error
 	// Inside a publish, before the version is used: the working copy with its markup.
 	SetPostVersionBlockDoc(ctx context.Context, arg SetPostVersionBlockDocParams) error
+	SetPublishedGlobalStyles(ctx context.Context, arg SetPublishedGlobalStylesParams) (GlobalStyle, error)
 	// Publishing also makes the post public: post_status follows the snapshot, so a
 	// post published from the editor is not left as 'draft' in the database. The
 	// published settings are the version's (#358); without a version (a post created
@@ -970,6 +981,9 @@ type Querier interface {
 	// nothing changed, including when another replica has just applied the same change:
 	// prev's FOR UPDATE waits for it and the WHERE then sees its values.
 	UpdateDiscoveredPlugin(ctx context.Context, arg UpdateDiscoveredPluginParams) (UpdateDiscoveredPluginRow, error)
+	// Optimistic: no row when base_revision is stale (another admin saved since), and the
+	// handler answers 409 styles_changed with the current draft.
+	UpdateGlobalStylesDraft(ctx context.Context, arg UpdateGlobalStylesDraftParams) (GlobalStyle, error)
 	UpdateMedia(ctx context.Context, arg UpdateMediaParams) (Medium, error)
 	// Metadata-only update used by PUT /media/:id. The file columns (media_path,
 	// file_size, mime_type, dimensions, original_filename) are set on upload and

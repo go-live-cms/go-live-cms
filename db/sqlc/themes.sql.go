@@ -162,34 +162,38 @@ func (q *Queries) GetActiveTheme(ctx context.Context) (Theme, error) {
 }
 
 const getActiveThemeWithSettings = `-- name: GetActiveThemeWithSettings :one
-SELECT 
+SELECT
   t.id, t.name, t.slug, t.description, t.version, t.author, t.config, t.active, t.created_at, t.changed_at,
   COALESCE(
     jsonb_object_agg(ts.setting_key, ts.setting_value) FILTER (WHERE ts.id IS NOT NULL),
     '{}'::jsonb
-  ) as settings
+  ) as settings,
+  COALESCE(gs.published, '{}'::jsonb)::jsonb AS global_styles
 FROM themes t
 LEFT JOIN theme_settings ts ON t.id = ts.theme_id
+LEFT JOIN global_styles gs ON gs.theme_slug = t.slug
 WHERE t.active = true
-GROUP BY t.id
+GROUP BY t.id, gs.published
 LIMIT 1
 `
 
 type GetActiveThemeWithSettingsRow struct {
-	ID          int64           `json:"id"`
-	Name        string          `json:"name"`
-	Slug        string          `json:"slug"`
-	Description sql.NullString  `json:"description"`
-	Version     string          `json:"version"`
-	Author      sql.NullString  `json:"author"`
-	Config      json.RawMessage `json:"config"`
-	Active      bool            `json:"active"`
-	CreatedAt   time.Time       `json:"created_at"`
-	ChangedAt   time.Time       `json:"changed_at"`
-	Settings    interface{}     `json:"settings"`
+	ID           int64           `json:"id"`
+	Name         string          `json:"name"`
+	Slug         string          `json:"slug"`
+	Description  sql.NullString  `json:"description"`
+	Version      string          `json:"version"`
+	Author       sql.NullString  `json:"author"`
+	Config       json.RawMessage `json:"config"`
+	Active       bool            `json:"active"`
+	CreatedAt    time.Time       `json:"created_at"`
+	ChangedAt    time.Time       `json:"changed_at"`
+	Settings     interface{}     `json:"settings"`
+	GlobalStyles json.RawMessage `json:"global_styles"`
 }
 
-// Get active theme with its settings
+// Get active theme with its settings, and its *published* global styles (#485): this
+// route is public, so it never reads global_styles.draft.
 func (q *Queries) GetActiveThemeWithSettings(ctx context.Context) (GetActiveThemeWithSettingsRow, error) {
 	row := q.db.QueryRowContext(ctx, getActiveThemeWithSettings)
 	var i GetActiveThemeWithSettingsRow
@@ -205,6 +209,7 @@ func (q *Queries) GetActiveThemeWithSettings(ctx context.Context) (GetActiveThem
 		&i.CreatedAt,
 		&i.ChangedAt,
 		&i.Settings,
+		&i.GlobalStyles,
 	)
 	return i, err
 }

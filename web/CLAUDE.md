@@ -364,10 +364,22 @@ are the most fragile part of the codebase. **Before editing anything under
   `<figcaption>`, and `<cite>` as the last child of `<blockquote>`. The image toolbar is
   `components/editor/ui/ImageToolbar.tsx` (shown on a selected image; the text bubble
   menu hides then, and in a caption shows only bold/italic/link).
+- **Global styles (#485, `src/lib/globalStyles.ts`, design `docs/design/theme-builder.md`
+  section 6):** the override grammar, validator, contrast (`CONTRAST_PAIRS`, which the
+  default theme's `tokens.test.ts` checks) and groups, the same rules as the API's
+  `api/global_styles.go`, pinned by **`src/lib/globalStyleVectors.json`** (both test suites
+  read it; read it with `JSON.parse`, not a JSON import, or `"__proto__"` becomes a
+  prototype). `resolveThemeTokens` accepts per token only its kind (colour, length, line
+  height) and resolves font ids through `config.fontOptions` then `SYSTEM_FONT_STACKS`.
+  `themes/tokens.manifest.json` (declared tokens + font options per theme, for the API) is
+  generated with the block manifest (`npm run themes:manifest`, `--check` in `build`;
+  `installedThemeTokens.test.ts` fails on a stale one): regenerate it after changing a
+  theme's tokens or `fontOptions`.
 - **Theme contract (#484, `themes/README.md` "The theme contract", design
   `docs/design/theme-builder.md` 3.5):** core emits tokens (`src/lib/themeTokens.ts`:
   `themeCssVariables(resolveThemeTokens(config, Astro.locals.globalStyles))`; the middleware
-  sets `globalStyles`, `NO_GLOBAL_STYLES` until #485; `supports.globalStyles`), scripts are
+  sets `globalStyles` from `/themes/active`'s published `global_styles`, else
+  `NO_GLOBAL_STYLES`; `supports.globalStyles`), scripts are
   `config.assets` with `blocking` for `<head>` (`src/lib/themeAssets.ts`,
   `components/ThemeScripts.astro`), `components/TemplatePart.astro` renders its slot until
   #491, and nested `BlockRenderer`s share one page scope (`blocks/utils/pageScope.ts`: heading

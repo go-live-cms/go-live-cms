@@ -283,6 +283,55 @@ func TestHTMLSnippetRoutesRequireRole(t *testing.T) {
 	}
 }
 
+// siteDesignRoutes are the site design routes (#485, design section 12): every method is
+// requireSiteAdmin, and none is under /public. The draft's only readers are these (and,
+// with #486, GET /site-design/draft by preview token); the published styles' only public
+// read is GET /themes/active (TestDraftGlobalStylesNeverPublic proves the draft isn't
+// there or on any /public route).
+var siteDesignRoutes = map[string]string{
+	"GET /api/v1/site-design/global-styles": "requireSiteAdmin: the draft",
+	"PUT /api/v1/site-design/global-styles": "requireSiteAdmin",
+	"POST /api/v1/site-design/publish":      "requireSiteAdmin",
+}
+
+func TestSiteDesignRoutesRequireAdmin(t *testing.T) {
+	store := mockdb.NewMockStore(gomock.NewController(t))
+	server := newTestServer(t, store)
+	editor := db.User{ID: 53, Username: "editor", Role: RoleEditor}
+	contributor := db.User{ID: 54, Username: "contributor", Role: RoleContributor}
+	store.EXPECT().GetUser(gomock.Any(), editor.ID).AnyTimes().Return(editor, nil)
+	store.EXPECT().GetUser(gomock.Any(), contributor.ID).AnyTimes().Return(contributor, nil)
+
+	registered := map[string]bool{}
+	for _, route := range server.router.Routes() {
+		if !strings.Contains(route.Path, "site-design") {
+			continue
+		}
+		key := route.Method + " " + route.Path
+		registered[key] = true
+		_, listed := siteDesignRoutes[key]
+		require.True(t, listed, "%s is a site design route missing from siteDesignRoutes", key)
+		require.False(t, strings.HasPrefix(route.Path, "/public"), "the site design draft is never public: %s", key)
+
+		t.Run(key, func(t *testing.T) {
+			body := `{"styles":{},"base_revision":0}`
+			recorder := httptest.NewRecorder()
+			server.router.ServeHTTP(recorder, httptest.NewRequest(route.Method, routeExample(route.Path), strings.NewReader(body)))
+			require.Equal(t, http.StatusUnauthorized, recorder.Code, "%s answers without a token", key)
+			for _, caller := range []db.User{editor, contributor} {
+				request := httptest.NewRequest(route.Method, routeExample(route.Path), strings.NewReader(body))
+				addAuthorization(t, request, server.tokenMaker, authorizationTypeBearer, caller.ID, caller.Username, time.Minute)
+				recorder = httptest.NewRecorder()
+				server.router.ServeHTTP(recorder, request)
+				require.Equal(t, http.StatusForbidden, recorder.Code, "%s answers a %s", key, caller.Role)
+			}
+		})
+	}
+	for key := range siteDesignRoutes {
+		require.True(t, registered[key], "siteDesignRoutes lists %s, which is no longer a route", key)
+	}
+}
+
 // routeExample fills a route template's parameters: /posts/:id/meta becomes
 // /posts/1/meta.
 func routeExample(path string) string {

@@ -1515,6 +1515,51 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   (route audits), `public_cache_db_test.go` (real DB: every publish path, settings, menus,
   drafts never cached, a failed purge doesn't fail the write).
 
+## Global styles and site design publish (#485, `000056`, `global_styles.go`, `site_design_*.go`, design `docs/design/theme-builder.md` 5.1, 6, 8.2, 12)
+
+- **Tables:** `global_styles` (one row per theme slug, no FK: a removed theme keeps its
+  design; `draft` + `draft_revision`, `published` + `published_version_id`),
+  `global_style_versions` (per publish that changed styles, `version_no` per theme) and
+  `site_design_releases` (one per publish; `summary` = group names and counts, never
+  values). #490/#492 add templates and parts to the same release. The draft is **never**
+  in `theme_settings` or `extension_settings` (both public).
+- **Declared tokens** come from `web/themes/tokens.manifest.json` (generated with the block
+  manifest by `npm run themes:manifest` from each `theme.config.ts`: tokens with their
+  defaults, `fontOptions`, `supports.globalStyles`; `LoadThemeTokenManifest` in `NewServer`,
+  missing = warning and no theme supports global styles, invalid = startup error). Handler
+  tests get an empty one; set `server.themeTokens` (`fixtureThemeTokens`).
+- **Grammar (`ValidateGlobalStyles`, 6.3):** colours `#rrggbb` (lowercased); lengths a
+  number with px/rem/em/%/vw or `clamp(<len>, <len or len + len>, <len>)` (spaces only,
+  respaced on write); line heights a JSON number 1–2.5; fonts a theme `fontOptions` id or
+  a core system id (`system-sans|serif|mono`). Only keys the theme declares, at paths core
+  can style; anything else is 400 `unknown_token` (never dropped). Order rules on the merged
+  values when comparable (same plain unit): `contentWidth ≤ wideWidth ≤ container`, spacing
+  steps non-decreasing (400 `token_order`). Errors name the first path in sorted key order.
+  **`web/src/lib/globalStyleVectors.json` pins Go and the web's `globalStyles.ts`**: same
+  codes, paths, messages, contrast pairs and groups (`TestGlobalStyleVectors`). Change both
+  with the vectors.
+- **Routes** (all `requireSiteAdmin`, `siteDesignRoutes` in `route_auth_test.go`):
+  `GET /site-design/global-styles` (declared tokens + defaults, font options, draft,
+  revision, published, failing contrast pairs); `PUT` (`{styles, base_revision}`: the whole
+  draft; stale → 409 `styles_changed` with `current`; same draft → no new revision; theme
+  not in the manifest or without `supports.globalStyles` → 409
+  `global_styles_unsupported`, except `{}`, so a stale draft can be cleared; throttled `global_styles_updated` on the theme id with
+  `groups`); `POST /site-design/publish` (`{confirm_contrast}`): nothing changed → 409
+  `nothing_to_publish`; the draft re-validated (a token the theme stopped declaring → 409
+  `styles_invalid`, `reason`, `path`); **contrast is a warning**: failing pairs → 409
+  `contrast_unconfirmed` with `pairs`, unless `confirm_contrast: true`; then
+  `PublishGlobalStylesTx` (row `FOR UPDATE`, revision re-checked → `ErrGlobalStylesChanged`
+  = 409 `styles_changed`), the purge after commit (`publicCachePurgeRoutes`) and
+  `site_design_published` on the release id (`theme_slug`, `global_styles_groups`,
+  `contrast_failures`). Activity object type `site_design` is admin-only in the feed.
+- **Contrast pairs** (`contrastPairs`) are core's `CONTRAST_PAIRS`, the list the default
+  theme's `tokens.test.ts` checks, plus each block colour as text on background/surface/
+  surface2 and the text on its fill; pairs naming an undeclared colour are skipped.
+- **Public read:** only the *published* override, as `global_styles` on `GET /themes/active`
+  (`GetActiveThemeWithSettings` joins `global_styles.published`; cached, purged by publish
+  and theme activation). `TestDraftGlobalStylesNeverPublic` walks every `/public` and
+  `/themes` GET route, signed in and not, for a draft marker.
+
 ## Gotchas
 
 - **Themes are discovered from disk** on startup (`ScanThemesDirectory("web/themes")`,
