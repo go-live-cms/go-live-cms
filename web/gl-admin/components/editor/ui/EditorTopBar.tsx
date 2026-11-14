@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react"
+import { createPortal } from "react-dom"
 import { Link } from "react-router-dom"
 import Button, { IconButton } from "@gl-admin/components/ui/Button"
 import Menu, { MenuItem, MenuSeparator } from "@gl-admin/components/ui/Menu"
@@ -258,10 +259,14 @@ export function SaveAnnouncer({ connection, saveStatus, viewOnly }: AnnouncerInp
     // The same words twice in a row: change the text, or the region stays quiet.
     if (said) setMessage((previous) => (previous === said ? `${said} ` : said))
   }, [connection, saveStatus, viewOnly])
-  return (
-    <span role="status" className="editor-top-bar__sr" data-testid="save-announcer">
+  // On <body>, exempt from a dialog's inert (#480, like the toaster): a connection lost while
+  // a dialog is open must still be heard, and inside the header it would be inert then.
+  if (typeof document === "undefined") return null
+  return createPortal(
+    <span role="status" className="editor-top-bar__sr" data-testid="save-announcer" data-inert-exempt="">
       {message}
-    </span>
+    </span>,
+    document.body
   )
 }
 

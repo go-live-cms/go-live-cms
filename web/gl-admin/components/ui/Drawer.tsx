@@ -1,5 +1,5 @@
 import { useRef, type ReactNode, type RefObject } from "react"
-import { useEscape, useFocusTrap, useStableId } from "@gl-admin/components/ui/a11y"
+import { useEscape, useFocusTrap, useInertOthers, useStableId } from "@gl-admin/components/ui/a11y"
 import { IconButton } from "@gl-admin/components/ui/Button"
 import { CloseIcon } from "@gl-admin/components/ui/icons"
 import { useScrollLock } from "@gl-admin/components/ui/Modal"
@@ -44,10 +44,15 @@ export default function Drawer({
   className = "",
 }: DrawerProps) {
   const ref = useRef<HTMLDivElement>(null)
+  const overlayRef = useRef<HTMLDivElement>(null)
   const id = useStableId("drawer")
 
   useScrollLock(isOpen)
   useEscape(isOpen, onClose)
+  // Before the trap: its cleanup gives focus back to the opener, which must not be
+  // inert by then (cleanups run in this order). The page behind can't be reached or
+  // read meanwhile (#480).
+  useInertOthers(overlayRef, isOpen)
   useFocusTrap(ref, isOpen, { initialFocus, preferIn: ".gl-drawer__content" })
 
   if (!isOpen) return null
@@ -56,6 +61,7 @@ export default function Drawer({
 
   return (
     <div
+      ref={overlayRef}
       className={`gl-drawer-overlay gl-drawer-overlay--${side}`}
       onMouseDown={(e) => {
         if (closeOnBackdrop && e.target === e.currentTarget) onClose()

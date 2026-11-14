@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
-import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
 import { getPosts } from "@gl-admin/lib/api/posts"
 import { getCollaborations } from "@gl-admin/lib/api/postAccess"
 import Table, { type TableColumnWithRender } from "@gl-admin/components/ui/Table"
@@ -28,6 +27,7 @@ import { MODERATOR_TABS, findTab, lastEdited, markCollaborations, tabCount, ALL_
 import { buildPageTree, type PageRow } from "@gl-admin/lib/pageTree"
 import { postPath } from "@/lib/seo"
 import type { Post, PostType } from "@gl-admin/lib/api/types"
+import { usePageTitle } from "@gl-admin/lib/hooks/usePageTitle"
 import "@gl-admin/assets/styles/pages/content-list.scss"
 
 // The Pages list (#340): every page of a hierarchical type as a tree (post_parent,
@@ -74,7 +74,6 @@ type PagesProps = { typeName: string; postType?: PostType }
 
 export default function Pages({ typeName, postType }: PagesProps) {
   const navigate = useNavigate()
-  const { baseTitle } = useGoLive()
   const user = useAuthUser()
   const moderator = isContentModerator(user?.role)
   const canCreate = canCreateContent(user?.role)
@@ -96,9 +95,7 @@ export default function Pages({ typeName, postType }: PagesProps) {
   const [error, setError] = useState<unknown>(null)
   const [attempt, setAttempt] = useState(0)
 
-  useEffect(() => {
-    document.title = `${baseTitle} ${plural}`
-  }, [baseTitle, plural])
+  usePageTitle(plural)
 
   useEffect(() => {
     let live = true

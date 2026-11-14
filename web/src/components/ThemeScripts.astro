@@ -1,0 +1,24 @@
+---
+/**
+ * A theme's registered scripts (`assets.scripts`, #484): `placement="head"` renders the
+ * render-blocking ones (`blocking: true`, e.g. the default theme's theme-init.js), each a
+ * plain `<script src>` so it runs before the first paint and survives a `script-src 'self'`
+ * CSP; `placement="body"` renders the rest, for the end of `<body>`. Rules: lib/themeAssets.ts.
+ */
+import { blockingScripts, bodyScripts, scriptDataAttributes, type ThemeScriptAsset } from '@/lib/themeAssets'
+
+interface Props {
+  scripts?: ThemeScriptAsset[]
+  placement: 'head' | 'body'
+}
+
+const { scripts, placement } = Astro.props
+---
+
+{placement === 'head'
+  ? blockingScripts(scripts).map((script) => (
+      <script src={script.src} type={script.type} {...scriptDataAttributes(script)} is:inline></script>
+    ))
+  : bodyScripts(scripts).map((script) => (
+      <script src={script.src} defer={script.defer} async={script.async} type={script.type} {...scriptDataAttributes(script)} is:inline></script>
+    ))}

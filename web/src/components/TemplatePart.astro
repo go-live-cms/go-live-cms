@@ -1,0 +1,21 @@
+---
+/**
+ * A customizable part of a code theme's page (#484, docs/design/theme-builder.md 3.5):
+ *
+ *   <TemplatePart slug="header"><SiteHeader … /></TemplatePart>
+ *
+ * renders the site's published part for `slug` when there is one (#491) and its slot, the
+ * theme's own markup, otherwise. Until #491 it is always the slot, with no markup of its own,
+ * so wrapping a header or footer in it changes nothing a reader gets. A slug that a part could
+ * never have (lib/templateParts.ts) is logged once and renders the slot.
+ */
+import { checkTemplatePartSlug } from '@/lib/templateParts'
+
+interface Props {
+  slug: string
+}
+
+checkTemplatePartSlug(Astro.props.slug)
+---
+
+<slot />

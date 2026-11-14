@@ -4,6 +4,8 @@ import { getPostById } from "@gl-admin/lib/api/posts"
 import type { Post } from "@gl-admin/lib/api/types"
 import PostForm from "@gl-admin/components/forms/PostForm"
 import { ErrorPage, NotFoundPage } from "@gl-admin/components/errors/ErrorPages"
+import { editorHeading } from "@gl-admin/lib/editorHeading"
+import { usePageTitle } from "@gl-admin/lib/hooks/usePageTitle"
 import "@gl-admin/assets/styles/components/editor/post-editor.scss"
 
 export default function EditContent() {
@@ -15,6 +17,9 @@ export default function EditContent() {
   // The post couldn't be loaded: the 404, 403 or generic error page (#339).
   const [loadError, setLoadError] = useState<unknown>(null)
   const [attempt, setAttempt] = useState(0)
+  const heading = editorHeading("edit", post?.post_type, post?.title)
+  // The error pages set their own title.
+  usePageTitle(post ? heading : loading ? "Loading…" : null)
 
   useEffect(() => {
     const fetchPost = async () => {
@@ -95,12 +100,16 @@ export default function EditContent() {
   }
 
   return (
-    <PostForm
-      mode="edit"
-      initialData={post}
-      onSuccess={handleSuccess}
-      onError={handleError}
-      contentType={post.post_type}
-    />
+    <>
+      {/* The editor's title is a field, not a heading (#480). */}
+      <h1 className="gl-visually-hidden">{heading}</h1>
+      <PostForm
+        mode="edit"
+        initialData={post}
+        onSuccess={handleSuccess}
+        onError={handleError}
+        contentType={post.post_type}
+      />
+    </>
   )
 }

@@ -1,6 +1,5 @@
 import React, { useCallback, useState, useEffect, useMemo } from "react"
 import { Link, useNavigate } from "react-router-dom"
-import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
 import Pagination from "@gl-admin/components/ui/Pagination"
 import UserRole from "@gl-admin/components/ui/UserRole"
 import Avatar from "@gl-admin/components/ui/Avatar"
@@ -26,6 +25,7 @@ import RemoveMemberModal from "@gl-admin/components/users/RemoveMemberModal"
 import { ToastContainer, useToast } from "@gl-admin/components/Toast"
 import { invitationSentNotice } from "@gl-admin/lib/invitations"
 import type { InvitationResult } from "@gl-admin/lib/api/invitations"
+import { usePageTitle } from "@gl-admin/lib/hooks/usePageTitle"
 import "@gl-admin/assets/styles/pages/workspace.scss"
 
 // Users (#148, restyled in #343, the "Users · invite" board). The route is admin-only
@@ -51,7 +51,6 @@ const SORT_OPTIONS = [
 const Users: React.FC = () => {
     const accessToken = AuthManager.getInstance().getAccessToken() || ""
     const navigate = useNavigate()
-    const { baseTitle } = useGoLive()
     const [inviteOpen, setInviteOpen] = useState(false)
     const [invitationsKey, setInvitationsKey] = useState(0)
     const [memberCount, setMemberCount] = useState<number | null>(null)
@@ -133,7 +132,8 @@ const Users: React.FC = () => {
                     <button
                         type="button"
                         className="gl-member__role"
-                        aria-label={`Role for ${memberName(row)}: ${roleLabel(row.role)}. Change role`}
+                        // Starts with the visible role (#480, WCAG 2.5.3 Label in Name).
+                        aria-label={`${roleLabel(row.role)}: change role for ${memberName(row)}`}
                         onClick={() => setRoleTarget(row)}
                     >
                         <UserRole role={row.role} />
@@ -212,9 +212,7 @@ const Users: React.FC = () => {
         [reloadKey]
     )
 
-    useEffect(() => {
-        document.title = `${baseTitle} Users`
-    }, [])
+    usePageTitle("Users")
 
     const subtitle = [
         memberCount !== null ? plural(memberCount, "member", "members") : null,

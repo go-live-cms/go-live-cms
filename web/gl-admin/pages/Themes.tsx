@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from "react"
-import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
 import {
   getThemes,
   getActiveTheme,
@@ -20,6 +19,7 @@ import { ExternalIcon } from "@gl-admin/components/ui/icons"
 import { errorMessage } from "@gl-admin/lib/api/errors"
 import { resetPageTemplates } from "@gl-admin/lib/hooks/usePageTemplates"
 import { plural } from "@gl-admin/utils/formatting"
+import { usePageTitle } from "@gl-admin/lib/hooks/usePageTitle"
 import "@gl-admin/assets/styles/pages/workspace.scss"
 import "@gl-admin/assets/styles/pages/themes.scss"
 
@@ -33,7 +33,6 @@ import "@gl-admin/assets/styles/pages/themes.scss"
 const variantLabel = (variant: string) => variant.charAt(0).toUpperCase() + variant.slice(1)
 
 const ThemesPage: React.FC = () => {
-  const { baseTitle } = useGoLive()
   const [themes, setThemes] = useState<Theme[]>([])
   const [activeTheme, setActiveTheme] = useState<ActiveThemeWithSettings | null>(null)
   const [loading, setLoading] = useState(true)
@@ -46,10 +45,12 @@ const ThemesPage: React.FC = () => {
   const [postLayout, setPostLayout] = useState("default")
   const [pageLayout, setPageLayout] = useState("default")
 
+  usePageTitle("Themes")
+
   useEffect(() => {
-    document.title = `${baseTitle} Themes`
     fetchData()
-  }, [baseTitle])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // refresh: reloading after an activation or a save. A failure then is a toast, not the
   // error page in place of themes that are still on screen.

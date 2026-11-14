@@ -62,7 +62,7 @@ async function render() {
 }
 
 const bar = () => container.querySelector<HTMLElement>("[role='region'][aria-label='Unsaved changes']")
-const field = (name: string) => container.querySelector<HTMLInputElement>(`input[id='input-${name}']`)!
+const field = (name: string) => container.querySelector<HTMLInputElement>(`input[name='${name}']`)!
 const button = (label: string) =>
   Array.from(container.querySelectorAll("button")).find((b) => b.textContent?.trim() === label) as HTMLButtonElement
 

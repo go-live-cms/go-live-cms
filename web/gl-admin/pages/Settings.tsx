@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from "react"
-import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
 import { getSettings, updateSettings, type Settings } from "@gl-admin/lib/api/settings"
 import { authManager } from "@gl-admin/lib/auth"
 import { setEditorSettings } from "@gl-admin/lib/editorSettings"
@@ -36,6 +35,7 @@ import {
   withEmbedProvider,
   type SettingsDraft,
 } from "@gl-admin/lib/settingsForm"
+import { usePageTitle } from "@gl-admin/lib/hooks/usePageTitle"
 import "@gl-admin/assets/styles/pages/workspace.scss"
 
 // General also has the Front page (#336, FrontPageField; not on the board), also set from
@@ -69,7 +69,6 @@ const URL_OPTIONS = URL_STRUCTURES.map((s) => ({
 const inputValue = (e: any): string => e.currentTarget?.value ?? e.target?.value ?? ""
 
 const SettingsPage: React.FC = () => {
-  const { baseTitle } = useGoLive()
   const [settings, setSettings] = useState<Settings | null>(null)
   const [draft, setDraft] = useState<SettingsDraft | null>(null)
   const [loadError, setLoadError] = useState<unknown>(null)
@@ -80,10 +79,12 @@ const SettingsPage: React.FC = () => {
     SECTIONS.find((s) => window.location.hash === `#gl-settings-${s.id}`)?.id ?? "general"
   )
 
+  usePageTitle("Settings")
+
   useEffect(() => {
-    document.title = `${baseTitle} Settings`
     fetchSettings()
-  }, [baseTitle])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const loaded = Boolean(draft && settings)
   useEffect(() => {

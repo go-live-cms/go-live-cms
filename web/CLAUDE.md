@@ -364,8 +364,19 @@ are the most fragile part of the codebase. **Before editing anything under
   `<figcaption>`, and `<cite>` as the last child of `<blockquote>`. The image toolbar is
   `components/editor/ui/ImageToolbar.tsx` (shown on a selected image; the text bubble
   menu hides then, and in a caption shows only bold/italic/link).
+- **Theme contract (#484, `themes/README.md` "The theme contract", design
+  `docs/design/theme-builder.md` 3.5):** core emits tokens (`src/lib/themeTokens.ts`:
+  `themeCssVariables(resolveThemeTokens(config, Astro.locals.globalStyles))`; the middleware
+  sets `globalStyles`, `NO_GLOBAL_STYLES` until #485; `supports.globalStyles`), scripts are
+  `config.assets` with `blocking` for `<head>` (`src/lib/themeAssets.ts`,
+  `components/ThemeScripts.astro`), `components/TemplatePart.astro` renders its slot until
+  #491, and nested `BlockRenderer`s share one page scope (`blocks/utils/pageScope.ts`: heading
+  ids unique across docs, `/gl-embeds.js` once). **The default theme's HTML is pinned by
+  `themes/default/theme.astro.test.ts`'s whole-page snapshots** (`__snapshots__/layouts/`);
+  Astro whitespace is fragile (an expression or a component at the end of `<body>` adds or
+  drops a space), so check them after any `base.astro` edit.
 - **Default public theme (#345):** tokens live in `themes/default/theme.config.ts` and
-  become CSS custom properties in `base.astro` (`tokens.ts`); `styles/theme.css` is plain
+  become CSS custom properties in `base.astro` (core's `src/lib/themeTokens.ts`); `styles/theme.css` is plain
   CSS served as is and only reads `var(--…)` (`tokens.test.ts` checks 4.5:1 in both
   palettes and that every `var()` is defined). Fonts are self-hosted under
   `themes/default/fonts/`. The Light / Dark / System switch is `scripts/theme-init.js`,
@@ -824,6 +835,23 @@ are the most fragile part of the codebase. **Before editing anything under
   shortcut goes in `KEYS` and `shortcutSections`. The reference (`ui/ShortcutReference.tsx`, a
   `Modal`) opens on "?" outside text and from the block menu's Keyboard shortcuts; the editable
   text's description names ⌥F10 (`editorKeysHint`).
+- **Routes, forms and feedback (#479, #480):** every routed page calls `usePageTitle("…")`
+  (`lib/hooks/usePageTitle.ts`; `routeFocus.test.tsx` fails on a route whose page doesn't), and
+  `AppLayout`'s `useRouteFocus` moves focus to the new page's `<h1>` (or `<main>` after 3 s) on a path
+  change, unless the page took focus itself. The editor pages render a visually hidden `<h1>`
+  (`lib/editorHeading.ts`: "Edit post: …"). `aria-activedescendant` lists (Select/Combobox `Listbox`,
+  the slash/+/@ menus, the palette) get the inset ring on `[data-active="true"]` / `.is-active` while
+  `<html data-input-modality="keyboard">` (`a11y.ts` `installInputModality`; the mouse keeps only the
+  fill): it's in `mixins.menu-row`, so a new list row gets it by using the mixin. Modal and Drawer
+  render in place and make the rest of the page `inert` (`useInertOthers`; skips `[data-inert-exempt]`,
+  the toaster, and anything holding `.ProseMirror`). `Input` ids are `useId`; `aria-invalid` only with an
+  `error`, whose `FieldError` is `role="alert"`; after any form submit the first invalid field gets
+  focus (`installSubmitFocus`). Combobox's Escape with the list closed does nothing (a dialog closes).
+  Toasts: errors and toasts with an action stay until dismissed; **F6** (`TOASTER_SHORTCUT`) goes to the
+  newest toast and back. Tooltips are hoverable (a 120 ms hide delay) and describe the target's first
+  focusable element, any component. Account pages: `formUi.showError(message, { fields })` marks only
+  the named inputs (`accountErrorFields`, the `*Problem` validators) and focuses the first; notices go
+  through `#statusAnnouncer` (`AccountError.astro`), never a live region that starts hidden.
 - The admin Content list route `/content/:typeName` keys its component by `typeName`
   (`ContentByType` in `app.tsx`) so switching post types remounts + refetches.
 

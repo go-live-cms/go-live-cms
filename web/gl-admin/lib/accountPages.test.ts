@@ -10,6 +10,10 @@ import {
   mountResetPasswordPage,
   mountVerifyEmailPage,
   readLinkToken,
+  accountErrorFields,
+  acceptInvitationProblem,
+  passwordProblem,
+  registrationProblem,
   validateAcceptInvitation,
   validatePassword,
   validateRegistration,
@@ -451,6 +455,11 @@ describe("accept invitation page", () => {
     expect(form.hidden).toBe(false)
     expect(navigate).not.toHaveBeenCalled()
     expect(form.querySelector("button")!.disabled).toBe(false)
+    // Only the username is wrong (#479): it alone is marked, and focused.
+    expect([...form.querySelectorAll("[aria-invalid='true']")].map((i) => i.id)).toEqual(["username"])
+    expect(document.getElementById("username")!.getAttribute("aria-describedby")).toBe("errorMessage")
+    expect(document.getElementById("password")!.hasAttribute("aria-describedby")).toBe(false)
+    expect(document.activeElement).toBe(document.getElementById("username"))
   })
 
   it("does nothing but show the panel without a token", async () => {
@@ -459,6 +468,43 @@ describe("accept invitation page", () => {
     await mountAcceptInvitePage(document, vi.fn())
     expect(fetchMock).not.toHaveBeenCalled()
     expect(visible("linkInvalid")).toBe(true)
+  })
+})
+
+describe("which fields an error marks (#479)", () => {
+  it("names the field each validation message is about", () => {
+    const ok = { username: "maya", full_name: "Maya Lin", password: "correct horse battery", confirm_password: "correct horse battery" }
+    expect(acceptInvitationProblem({ ...ok, username: "m" })?.fields).toEqual(["username"])
+    expect(acceptInvitationProblem({ ...ok, full_name: "" })?.fields).toEqual(["full_name"])
+    expect(acceptInvitationProblem({ ...ok, password: "short", confirm_password: "short" })?.fields).toEqual(["password"])
+    expect(acceptInvitationProblem({ ...ok, confirm_password: "correct horse battery!" })?.fields).toEqual(["confirm_password"])
+    expect(acceptInvitationProblem(ok)).toBeNull()
+    const reg = { ...ok, email: "maya@example.com" }
+    expect(registrationProblem({ ...reg, full_name: "" })?.fields).toEqual(["full_name"])
+    expect(registrationProblem({ ...reg, username: "maya!" })?.fields).toEqual(["username"])
+    expect(registrationProblem({ ...reg, email: "maya@" })?.fields).toEqual(["email"])
+    expect(registrationProblem({ ...reg, password: "maya@example.com", confirm_password: "maya@example.com" })?.fields).toEqual(["password"])
+    expect(passwordProblem("correct horse battery", "correct horse")?.fields).toEqual(["confirm_password"])
+  })
+
+  it("maps the API's answers to the field they're about, or none", () => {
+    expect(accountErrorFields(new ApiError("x", 409, null, "username_taken"))).toEqual(["username"])
+    expect(accountErrorFields(new ApiError("x", 409, null, "email_registered"))).toEqual(["email"])
+    expect(accountErrorFields(new ApiError("x", 400, null, "invalid_token"))).toBe(false)
+    expect(accountErrorFields(new ApiError("x", 429, null, null))).toBe(false)
+    expect(accountErrorFields(new ApiError("x", 503, null, null))).toBe(false)
+    expect(accountErrorFields(new TypeError("Failed to fetch"))).toBe(false)
+    expect(accountErrorFields(new ApiError("x", 400, null, null))).toBe(true)
+  })
+
+  it("marks and focuses only the mismatched confirmation", async () => {
+    setUrl(`/reset-password#token=${TOKEN}`)
+    const form = renderPage("resetForm", ["password", "confirm_password"])
+    mountResetPasswordPage(document, vi.fn())
+    fill({ password: "long-enough-pass", confirm_password: "long-enough-pazz" })
+    await submit(form)
+    expect([...form.querySelectorAll("[aria-invalid='true']")].map((i) => i.id)).toEqual(["confirm_password"])
+    expect(document.activeElement).toBe(document.getElementById("confirm_password"))
   })
 })
 

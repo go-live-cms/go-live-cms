@@ -1,6 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react"
 import { Link } from "react-router-dom"
-import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
 import PostStatus from "@gl-admin/components/ui/PostStatus"
 import Skeleton from "@gl-admin/components/ui/Skeleton"
 import EmptyState from "@gl-admin/components/ui/EmptyState"
@@ -20,6 +19,7 @@ import { editedPhrase } from "@gl-admin/lib/contentList"
 import { attentionItems, describeActivity, type AttentionItem } from "@gl-admin/lib/activityFeed"
 import { formatFullDate } from "@gl-admin/utils/formatting"
 import type { Post } from "@gl-admin/lib/api/types"
+import { usePageTitle } from "@gl-admin/lib/hooks/usePageTitle"
 import "@gl-admin/assets/styles/pages/home.scss"
 
 // Home (#9, #340, #324): quick actions, "Continue where you left off" (the posts you
@@ -46,7 +46,6 @@ type HomeData = {
 }
 
 export default function Dashboard() {
-  const { baseTitle } = useGoLive()
   const user = useAuthUser()
   const settings = useSiteSettings()
   const [data, setData] = useState<HomeData | null>(null)
@@ -57,9 +56,7 @@ export default function Dashboard() {
   const own = !isContentModerator(user?.role)
   const mine = own && user?.id ? { user_id: user.id } : {}
 
-  useEffect(() => {
-    document.title = `${baseTitle} Home`
-  }, [baseTitle])
+  usePageTitle("Home")
 
   useEffect(() => {
     let live = true

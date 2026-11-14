@@ -3,7 +3,8 @@
 import { experimental_AstroContainer as AstroContainer } from "astro/container"
 import { getContainerRenderer as reactRenderer } from "@astrojs/react"
 import { loadRenderers } from "astro:container"
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
+import themeConfig from "./theme.config"
 
 // The site settings (#330); a test may change them for one render.
 const SITE = { title: "Field Notes", tagline: "", postsPerPage: 10, urlStructure: "slug", language: "en-US", timeZone: "UTC", dateFormat: "month_day_year" }
@@ -40,6 +41,7 @@ const ErrorLayout = (await import("./layouts/error/default.astro")).default
 const AuthorLayout = (await import("./layouts/author/default.astro")).default
 const TermLayout = (await import("./layouts/term/default.astro")).default
 const SearchLayout = (await import("./layouts/search/default.astro")).default
+const ArchiveLayout = (await import("./layouts/archive/default.astro")).default
 
 const post = {
   id: 42,
@@ -656,5 +658,77 @@ describe("search layout (#145)", () => {
     expect(html).toContain("No results for “&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;&lt;img src=x onerror=alert(2)&gt;”")
     // The <title> too.
     expect(html).not.toMatch(/<title>[^<]*<script/)
+  })
+})
+
+// Every layout kind, rendered whole, with what the middleware puts in Astro.locals for the
+// default theme (its registered assets) and menus in both locations. Captured before #484
+// moved the tokens, the theme script and the header and footer behind the theme contract
+// (core's themeTokens, assets.scripts[].blocking, TemplatePart), which must not change a byte.
+describe("layout snapshots (#484)", () => {
+  beforeAll(() => {
+    // The footer's copyright year.
+    vi.useFakeTimers({ toFake: ["Date"] })
+    vi.setSystemTime(new Date("2026-11-14T12:00:00Z"))
+  })
+  afterAll(() => {
+    vi.useRealTimers()
+  })
+
+  beforeEach(() => {
+    getMenu.mockImplementation(async (location: string) =>
+      location === "primary"
+        ? { name: "Main", location, items: [link(1, "Guides", "/category/guides", [link(2, "Setup", "/page/setup")]), link(3, "About", "/page/about")] }
+        : { name: "Footer", location, items: [link(4, "Legal", "/page/legal", [link(5, "Privacy", "/page/privacy")]), link(6, "Contact", "/page/contact")] },
+    )
+    getSiteSettings.mockResolvedValue({ ...SITE, tagline: "Notes from the team" })
+    getAdjacentPosts.mockResolvedValue({ previous: listRow(41, "Analytics for every post"), next: null })
+    getRelatedPosts.mockResolvedValue([listRow(7, "Roles explained")])
+    getPublishedPosts.mockResolvedValue({ data: [{ ...post, title: "Recent one" }], meta: {} })
+  })
+
+  // A post with headings (one slugs to the theme's own #content) and an embed (the loader).
+  const doc = (() => {
+    const d = docWithHeadings([2, "Content"], [2, "How it works"], [3, "For writers"], [2, "What’s next"])
+    ;(d.blocks as Record<string, unknown>).e1 = { id: "e1", type: "embed", version: 1, attrs: { provider: "youtube", ref: "dQw4w9WgXcQ", title: "Two editors, one draft" } }
+    d.blocks_order.push("e1")
+    return d
+  })()
+  const full = { ...post, published_blocks: doc }
+  const linked = [
+    { id: 2, name: "Product updates", slug: "product-updates", taxonomy_type_name: "category", taxonomy_label: "Categories", href: "/category/product-updates" },
+    { id: 1, name: "Editor", slug: "editor", taxonomy_type_name: "tag", taxonomy_label: "Tags", href: "/tag/editor" },
+  ]
+  const postProps = { post: full, title: "Hello World · Field Notes", description: "An excerpt", terms: linked, authors, featuredImage: "https://example.org/uploads/a.jpg", siteTitle: "Field Notes", seo: { canonical: "http://web:4321/post/hello-world" } }
+  const pageProps = { ...postProps, post: { ...full, post_type: "page" }, terms: [], authors: [] }
+  const item = (id: number) => ({ post: { ...post, id, title: `Post ${id}` }, href: `/post/p${id}`, image: id === 1 ? "https://example.org/uploads/1.jpg" : null })
+  const list = (basePath: string) => ({ posts: [item(1), item(2), item(3)], total: 12, page: 1, totalPages: 2, basePath, links: { older: `${basePath === "/" ? "" : basePath}/page/2/` }, siteTitle: "Field Notes", siteTagline: "Notes from the team" })
+
+  const KINDS: [string, unknown, Record<string, unknown>][] = [
+    ["post-default", PostDefault, postProps],
+    ["post-sidebar", PostSidebar, postProps],
+    ["post-wide", PostWide, postProps],
+    ["page-default", PageDefault, pageProps],
+    ["page-fullwidth", PageFull, pageProps],
+    ["home", Home, { title: "Field Notes", description: "Notes from the team", list: list("/") }],
+    ["archive", ArchiveLayout, { title: "Posts · Field Notes", description: "d", heading: "Posts", postType: "post", list: list("/post") }],
+    ["author", AuthorLayout, { author: authors[0], postCount: 12, list: list("/author/admin"), title: "Ana Costa · Field Notes", description: "d" }],
+    ["term", TermLayout, { term: { id: 2, name: "Product updates", slug: "product-updates", description: "What’s new.", taxonomy: "category", taxonomy_label: "Categories", hierarchical: true }, postCount: 12, list: list("/category/product-updates"), title: "Product updates · Field Notes", description: "d" }],
+    ["search", SearchLayout, {
+      query: "alt", type: "all", counts: { all: 1, post: 1, page: 0 }, total: 1, page: 1, totalPages: 1, basePath: "/search", pageQuery: "?q=alt", siteTitle: "Field Notes", topics: [], recent: [],
+      results: [{ hit: { id: 1, title: "Writing alt text", slug: "writing-alt-text", post_type: "post", created_at: "", changed_at: "", title_html: "", excerpt_html: "" }, href: "/post/writing-alt-text", typeLabel: "Post", dateLabel: "Oct 15, 2026", titleHtml: "Writing <mark>alt</mark> text", excerptHtml: "…<mark>alt</mark>…" }],
+      chips: [{ type: "all", label: "All", count: 1, href: "/search?q=alt", current: true }],
+      title: "Search: alt · Field Notes", description: "Search Field Notes", seo: { noindex: true },
+    }],
+    ["error-404", ErrorLayout, { status: 404, title: "Page not found", message: "Gone." }],
+    ["error-500", ErrorLayout, { status: 500, title: "Something went wrong", message: "Oops." }],
+  ]
+
+  it.each(KINDS)("%s renders as before", async (name, component, props) => {
+    const html = (await container.renderToString(component as any, { props, request, locals: { activeTheme: "default", themeAssets: themeConfig.assets } }))
+      .replace(/\s+data-astro-source-(?:file|loc)="[^"]*"/g, "")
+      // The Astro version, so a framework bump alone doesn't fail these.
+      .replace(/<meta name="generator" content="Astro v[^"]*">/, '<meta name="generator" content="Astro">')
+    await expect(html).toMatchFileSnapshot(`./__snapshots__/layouts/${name}.html`)
   })
 })

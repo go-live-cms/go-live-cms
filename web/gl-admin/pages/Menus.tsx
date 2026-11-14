@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react"
-import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
 import {
   createMenu,
   deleteMenu,
@@ -45,6 +44,7 @@ import EmptyState from "@gl-admin/components/ui/EmptyState"
 import UnsavedChangesBar from "@gl-admin/components/ui/UnsavedChangesBar"
 import Menu, { MenuItem } from "@gl-admin/components/ui/Menu"
 import { MoreIcon, PencilIcon, PlusIcon, TrashIcon } from "@gl-admin/components/ui/icons"
+import { usePageTitle } from "@gl-admin/lib/hooks/usePageTitle"
 import "@gl-admin/assets/styles/pages/workspace.scss"
 import "@gl-admin/assets/styles/pages/menus.scss"
 
@@ -64,7 +64,6 @@ const STATUS_TEXT: Partial<Record<MenuDraftItem["status"], string>> = {
 const NO_MENU = ""
 
 const MenusPage: React.FC = () => {
-  const { baseTitle } = useGoLive()
   const [menus, setMenus] = useState<MenuData[]>([])
   const [locations, setLocations] = useState<MenuLocation[]>([])
   const [loading, setLoading] = useState(true)
@@ -121,10 +120,11 @@ const MenusPage: React.FC = () => {
     }
   }, [loadList, openMenu])
 
+  usePageTitle("Menus")
+
   useEffect(() => {
-    document.title = `${baseTitle} Menus`
     load()
-  }, [baseTitle, load])
+  }, [load])
 
   const switchMenu = (id: number) => {
     if (id === selectedId) return

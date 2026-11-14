@@ -17,6 +17,8 @@ import NewUser from "./pages/NewUser"
 import EditUser from "./pages/EditUser"
 import EditContent from "./pages/EditPost"
 import { useRouteClasses } from "./utils/useRouteClasses"
+import { focusOnce, useRouteFocus } from "@gl-admin/lib/hooks/useRouteFocus"
+import { installInputModality, installSubmitFocus } from "@gl-admin/components/ui/a11y"
 
 // Wrapper so the Content list remounts when the post type changes.
 // Route-level keys must come from params, which are only available inside <Routes>,
@@ -74,6 +76,15 @@ function AdminOnly({ area, children }: { area: string; children: ReactNode }) {
 function AppLayout() {
   const routeClasses = useRouteClasses()
   const { pathname } = useLocation()
+  // After a navigation, focus goes to the new page's <h1> (or <main>) (#480). Each
+  // page sets its own document.title (usePageTitle).
+  useRouteFocus(MAIN_CONTENT_ID)
+  // The keyboard cue on listbox options (#480: the editor's menus and the palette), and
+  // focus to the first invalid field after a failed submit (#479).
+  useEffect(() => {
+    installInputModality()
+    installSubmitFocus()
+  }, [])
 
   // Landmarks (#144): the sidebar is navigation beside <main>, never inside it, and the
   // first Tab stop skips it. The skip link focuses <main> itself (no URL hash: the router
@@ -82,10 +93,7 @@ function AppLayout() {
   const skipToContent = (event: MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault()
     const main = document.getElementById(MAIN_CONTENT_ID)
-    if (!main) return
-    main.tabIndex = -1
-    main.addEventListener("blur", () => main.removeAttribute("tabindex"), { once: true })
-    main.focus()
+    if (main) focusOnce(main)
   }
 
   return (

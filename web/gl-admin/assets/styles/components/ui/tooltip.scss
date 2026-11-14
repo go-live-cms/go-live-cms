@@ -18,7 +18,8 @@
   line-height: var(--type-footnote-lh);
   max-width: 280px;
   padding: 6px 10px;
-  pointer-events: none;
+  // Hoverable (#479, WCAG 1.4.13): the pointer can move onto it and read it.
+  pointer-events: auto;
   z-index: var(--z-tooltip);
 
   &,

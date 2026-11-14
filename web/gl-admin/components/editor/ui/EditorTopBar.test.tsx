@@ -309,12 +309,16 @@ describe("save state announcements (#477)", () => {
     expect(run([at("online"), at("ended")])).toEqual([null, null])
   })
 
-  const region = () => container.querySelector('[role="status"]')!
+  // Portaled to <body>, exempt from a dialog's inert (#480).
+  const regions = () => document.querySelectorAll('[data-testid="save-announcer"]')
+  const region = () => regions()[0]!
 
   it("is one region that stays mounted: view-only, ended, History open", () => {
     renderBar("draft", false)
     const first = region()
-    expect(container.querySelectorAll('[role="status"]')).toHaveLength(1)
+    expect(regions()).toHaveLength(1)
+    expect(first.getAttribute("role")).toBe("status")
+    expect(first.hasAttribute("data-inert-exempt")).toBe(true)
     // The visible save state is no live region.
     expect(container.querySelector(".editor-top-bar__save")!.closest("[role=status], [aria-live]")).toBeNull()
     for (const props of [
@@ -374,5 +378,9 @@ describe("the shortcut reference (#477)", () => {
     renderBar("draft", false)
     act(() => openShortcutReference())
     expect(dialog()?.textContent).toContain("Keyboard shortcuts")
+    // A dialog makes the rest of the page inert (#480); the save announcer still speaks.
+    const announcer = document.querySelector('[data-testid="save-announcer"]')!
+    expect(announcer.closest("[inert]")).toBeNull()
+    expect(container.querySelector(".editor-top-bar__crumbs")!.closest("[inert]")).not.toBeNull()
   })
 })

@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Link, useSearchParams } from "react-router-dom"
-import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
 import Button, { IconButton } from "@gl-admin/components/ui/Button"
 import Input from "@gl-admin/components/ui/Input"
 import FilterSelect from "@gl-admin/components/ui/FilterSelect"
@@ -22,6 +21,7 @@ import { useSiteSettings } from "@gl-admin/lib/hooks/useSiteSettings"
 import { childCount, findTermByName, flattenTermTree } from "@gl-admin/lib/taxonomy/terms"
 import { isCategoryType, isDefaultTerm, taxonomyIntro, termErrorMessage } from "@gl-admin/lib/taxonomyAdmin"
 import { plural } from "@gl-admin/utils/formatting"
+import { usePageTitle } from "@gl-admin/lib/hooks/usePageTitle"
 import "@gl-admin/assets/styles/pages/workspace.scss"
 import "@gl-admin/assets/styles/pages/taxonomies.scss"
 
@@ -42,7 +42,6 @@ const pluralNoun = (type: TaxonomyType) => type.label.trim().toLowerCase() || ty
 // URL structure) start post URLs, the default category has a badge and no Delete, and
 // flat types (tags) are selectable to merge or delete several at once.
 const Taxonomies: React.FC = () => {
-  const { baseTitle } = useGoLive()
   const canEdit = isContentModerator(useCurrentRole())
   const structure = useSiteSettings()?.post_url_structure
   const [searchParams, setSearchParams] = useSearchParams()
@@ -64,9 +63,7 @@ const Taxonomies: React.FC = () => {
   const visibleTypes = useMemo(() => types.filter((t) => t.show_ui), [types])
   const selectedType = visibleTypes.find((t) => t.name === searchParams.get("type")) ?? visibleTypes[0]
 
-  useEffect(() => {
-    document.title = `${baseTitle} ${selectedType?.label ?? "Taxonomies"}`
-  }, [selectedType?.label])
+  usePageTitle(selectedType?.label ?? "Taxonomies")
 
   const loadTypes = useCallback(async () => {
     setTypesLoading(true)

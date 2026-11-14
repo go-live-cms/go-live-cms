@@ -277,7 +277,7 @@ interface BlockComponentProps {
   button (`[data-embed-load]`, `.btn.btn-primary`, X's `.btn-secondary`) and `.embed-note` ("Loading it
   connects to youtube.com"), then `figcaption`. **No third-party request on page load:** no iframe,
   image or provider address in the markup, only `data-embed-provider` and `data-embed-ref`.
-  `/gl-embeds.js` (from `BlockRenderer`, for a post with an embed) builds the player from its own
+  `/gl-embeds.js` (from `BlockRenderer`, once per page with an embed, #484) builds the player from its own
   per-provider templates on click, adds `.is-loaded`, `role="region"` and moves focus in; X loads its
   widget then. Nothing renders for an empty block, an invalid one, or a provider the site no longer
   allows (the API empties those).

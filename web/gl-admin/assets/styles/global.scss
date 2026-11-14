@@ -2,6 +2,7 @@
 @use "./fonts";
 @use "./admin";
 @use "./tokens";
+@use "./mixins";
 @include tokens.emit;
 @include variables.emit;
 
@@ -65,6 +66,15 @@ samp {
 }
 
 // The skip link's target: focused from script only, it draws no ring around the page.
-main.admin-main:focus {
+// So is a page's heading after a route change (#480, app.tsx's useRouteFocus): it
+// isn't a control, so no ring.
+main.admin-main:focus,
+[data-route-focus]:focus {
   outline: none;
+}
+
+// Read by screen readers, not drawn (also in input.scss, which not every page loads):
+// the editor's page heading, the toasts' F6 hint.
+.gl-visually-hidden {
+  @include mixins.visually-hidden;
 }
