@@ -10,13 +10,15 @@ declare namespace App {
     // lines get it from src/middleware/requestContext.ts; this copy is for anything else.
     requestId?: string
 
-    // Phase 1: Theme assets
+    // Phase 1: Theme assets (the active theme's `assets`, lib/themeAssets.ts)
     activeTheme?: string
-    themeAssets?: {
-      styles?: Array<{ src: string; media?: string }>
-      scripts?: Array<{ src: string; defer?: boolean; async?: boolean; type?: string }>
-    }
+    themeAssets?: import("./lib/themeAssets").ThemeAssets
     themeCssPath?: string
+
+    // The site's published global styles for the active theme (#484, #485), which a theme's
+    // base layout merges into its tokens with resolveThemeTokens (lib/themeTokens.ts).
+    // NO_GLOBAL_STYLES (empty) until #485 stores them.
+    globalStyles?: import("./lib/themeTokens").GlobalStyles
 
     // Phase 2: Theme functions
     themeFunctions?: import("./lib/theme-api").ThemeFunctions

@@ -3,8 +3,10 @@
  *
  * The base theme for Go Live CMS (#345). The token values come from the "GoLive
  * Default Theme" design canvas (Foundations board). base.astro turns them into CSS
- * custom properties (tokens.ts), so styles/theme.css only uses var(--...).
+ * custom properties (core's src/lib/themeTokens.ts, with the site's global styles merged
+ * in), so styles/theme.css only uses var(--...).
  */
+import type { ThemeScriptAsset, ThemeStyleAsset } from "@/lib/themeAssets"
 
 export interface ThemeColors {
   primary: string
@@ -37,7 +39,7 @@ export interface ThemeColors {
 /**
  * Block colours (#356): the editor's block menu palette (Block Spec `BLOCK_COLOR_TOKENS`),
  * each a text colour (on `background`/`surface`) and a block fill (under `text`). They
- * become `--block-<token>` and `--block-<token>-background` (tokens.ts), read by the
+ * become `--block-<token>` and `--block-<token>-background` (src/lib/themeTokens.ts), read by the
  * `.gl-color-*` rules in styles/theme.css.
  */
 export type BlockColorPalette = Record<string, { text: string; background: string }>
@@ -82,17 +84,14 @@ export interface LayoutVariant {
   preview?: string
 }
 
-export interface ThemeAsset {
-  src: string
-  media?: string
-  defer?: boolean
-  async?: boolean
-  type?: string
-}
+// Registered styles and scripts (core's contract, src/lib/themeAssets.ts, #484). Every
+// script and style the page shell needs is here, so a layout the theme didn't write
+// includes what base.astro includes.
+export type ThemeAsset = ThemeStyleAsset & ThemeScriptAsset
 
 export interface ThemeAssets {
-  styles?: ThemeAsset[]
-  scripts?: ThemeAsset[]
+  styles?: ThemeStyleAsset[]
+  scripts?: ThemeScriptAsset[]
 }
 
 // A place in the theme's templates that shows a navigation menu (#347). The admin
@@ -120,6 +119,8 @@ export interface ThemeConfig {
     customBlocks: boolean
     darkMode: boolean
     childThemes: boolean
+    // base.astro merges the site's global styles into the tokens (resolveThemeTokens, #484).
+    globalStyles?: boolean
   }
 
   colors: {
@@ -155,6 +156,9 @@ export interface ThemeConfig {
   }
 }
 
+// Where the header's Light / Dark / System switch keeps the reader's choice.
+const DARK_MODE_STORAGE_KEY = "gl-theme-preference"
+
 export const themeConfig: ThemeConfig = {
   name: "Default Theme",
   description: "The default theme for Go Live CMS",
@@ -169,6 +173,15 @@ export const themeConfig: ThemeConfig = {
         media: "all",
       },
     ],
+    scripts: [
+      // Sets data-theme before the first paint (render-blocking, in <head>). A plain
+      // <script src>, never inline, so it works under a CSP of script-src 'self'.
+      {
+        src: "/themes/default/scripts/theme-init.js",
+        blocking: true,
+        data: { "storage-key": DARK_MODE_STORAGE_KEY },
+      },
+    ],
   },
 
   supports: {
@@ -176,6 +189,7 @@ export const themeConfig: ThemeConfig = {
     customBlocks: true,
     darkMode: true,
     childThemes: true,
+    globalStyles: true,
   },
 
   // Primary is a step between Radix Jade 11 and 12 so links pass 4.5:1 on background and
@@ -362,7 +376,7 @@ export const themeConfig: ThemeConfig = {
     strategy: "class",
     attribute: "data-theme",
     defaultMode: "system",
-    storageKey: "gl-theme-preference",
+    storageKey: DARK_MODE_STORAGE_KEY,
   },
 }
 

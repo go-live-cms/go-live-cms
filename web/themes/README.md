@@ -14,6 +14,7 @@ A comprehensive guide to building themes for Go Live CMS. Themes control the ent
   - [Rendering Content](#rendering-content)
   - [Accessing Theme Data in Layouts](#accessing-theme-data-in-layouts)
 - [Assets (CSS & JavaScript)](#assets-css--javascript)
+- [The theme contract](#the-theme-contract)
 - [Theme Functions (functions.ts)](#theme-functions-functionsts)
   - [setup()](#setup)
   - [beforeRender()](#beforerender)
@@ -597,6 +598,8 @@ assets: {
 | `defer`  | `boolean` | Defer script loading                                          |
 | `async`  | `boolean` | Async script loading                                          |
 | `type`   | `string`  | Script type (e.g. `"module"`)                                 |
+| `blocking` | `boolean` | Render-blocking: a plain `<script src>` in `<head>`, run before the first paint (e.g. setting `data-theme`). `defer`/`async` don't apply |
+| `data`   | `Record<string, string>` | `data-*` attributes, without the prefix: `{ "storage-key": "x" }` is `data-storage-key="x"` (names: lowercase letters, digits, `-`) |
 
 **Build your CSS however you want** — SCSS, Tailwind, PostCSS, plain CSS. The theme system only cares about the compiled output file. The middleware serves files from `web/themes/` with proper MIME types and caching headers.
 
@@ -613,6 +616,86 @@ assets: {
   <script src={script.src} defer={script.defer} async={script.async} type={script.type}></script>
 ))}
 ```
+
+With `blocking` scripts, use core's `ThemeScripts` instead, which puts each where it
+belongs (rules in `src/lib/themeAssets.ts`):
+
+```astro
+---
+import ThemeScripts from '@/components/ThemeScripts.astro'
+---
+<!-- In <head> -->
+<ThemeScripts scripts={Astro.locals.themeAssets?.scripts} placement="head" />
+<!-- Before </body> -->
+<ThemeScripts scripts={Astro.locals.themeAssets?.scripts} placement="body" />
+```
+
+---
+
+## The theme contract
+
+The site editor (#412, `docs/design/theme-builder.md` 3.5) renders pages with layouts your
+theme didn't write, and lets admins restyle the theme and customize its header and footer.
+For that, a theme hands core four things instead of doing them itself. The default theme
+adopts all of it (`themes/default/layouts/base.astro`). **A theme that adopts none of it
+still renders as before**: it just doesn't get the site editor's features.
+
+**1. Tokens through core.** Declare your tokens in `theme.config.ts` (the shape of
+[Design Tokens](#design-tokens--dark-mode): `colors.light`/`colors.dark`, optional
+`blockColors`, `typography`, `layout`, `spacing`, `radius`) and emit them with core's
+`src/lib/themeTokens.ts`:
+
+```astro
+---
+import themeConfig from '../theme.config'
+import { resolveThemeTokens, themeCssVariables } from '@/lib/themeTokens'
+const tokens = themeCssVariables(resolveThemeTokens(themeConfig, Astro.locals.globalStyles))
+---
+<style is:inline set:html={tokens}></style>
+```
+
+`themeCssVariables` writes three rules (`:root` light, `prefers-color-scheme: dark` unless
+`data-theme="light"`, and `[data-theme="dark"]`). `resolveThemeTokens` merges the site's
+published **global styles** into your config first. The middleware puts them in
+`Astro.locals.globalStyles` once per request; it is empty until global styles are stored
+(#485), and then `resolveThemeTokens` returns your config unchanged. An override only
+changes tokens your config declares (it never adds one), and a value that could break out
+of the `<style>` element is never emitted. Say you do this with `supports.globalStyles:
+true`; the Site editor tells admins a theme without it doesn't support global styles.
+
+**2. Every script and style in `assets`.** Whatever the page shell needs (stylesheets, the
+dark mode script, anything else) is registered in `config.assets`, with `blocking: true`
+for a script that must run before the first paint. A generic layout then includes what
+your base layout includes. Render them as [Assets](#assets-css--javascript) shows. A
+blocking script stays a `<script src>`, never inline, so it works under a CSP of
+`script-src 'self'`.
+
+**3. Template parts.** Wrap each part admins may replace in core's `TemplatePart`:
+
+```astro
+---
+import TemplatePart from '@/components/TemplatePart.astro'
+---
+<TemplatePart slug="header"><SiteHeader … /></TemplatePart>
+<TemplatePart slug="footer"><SiteFooter … /></TemplatePart>
+```
+
+It renders the published part for that slug when there is one (#491) and your markup
+otherwise, and has no markup of its own. Slugs are `^[a-z0-9][a-z0-9_-]{0,79}$`; `header`
+and `footer` are the ones every theme should offer.
+
+**4. One page, several docs.** A block template renders its own block doc and, inside it,
+the post's (and its parts'). `BlockRenderer` keeps two things unique per page, not per doc:
+
+- **Heading ids.** A `BlockRenderer` rendered inside another one's blocks skips the outer
+  renderer's heading ids and reserved ids. Pass your theme's own element ids (as the
+  default theme's `THEME_ELEMENT_IDS`) with `reservedIds`, or compute the list yourself
+  with `headingAnchors(doc, reserved)` and pass it as `headings` (a table of contents does
+  this so both agree). Docs rendered side by side, not nested, get page-unique ids from
+  `pageHeadingAnchors([first, second], reserved)` (`src/components/blocks/utils/pageScope.ts`).
+- **The embed loader.** `/gl-embeds.js` is added once, by the outermost renderer, after
+  its blocks, when any doc on the page has an embed; nested renderers report it instead of
+  adding their own.
 
 ---
 
@@ -1161,7 +1244,7 @@ colors: {
 `typography` adds `lineHeight` (tight, snug, normal, relaxed), `layout` adds
 `contentWidth`, `wideWidth` and `headerHeight`, and `spacing` / `radius` are scales. The
 default theme turns all of them into CSS custom properties in `base.astro`
-(`themes/default/tokens.ts`: `--color-text-muted`, `--color-surface-2`, `--size-2xl`,
+(core's `src/lib/themeTokens.ts`, see [The theme contract](#the-theme-contract): `--color-text-muted`, `--color-surface-2`, `--size-2xl`,
 `--leading-relaxed`, `--space-6`, `--radius-md`, …), so its stylesheet only reads
 `var(--…)`. `themes/default/tokens.test.ts` checks every text pairing for 4.5:1 in both
 palettes.
@@ -1184,8 +1267,17 @@ Set the theme before the first paint with a plain, render-blocking `<script src>
 `script-src 'self'`. The default theme's `scripts/theme-init.js` does this and wires
 its Light / Dark / System switch:
 
+It registers it as a blocking asset ([The theme contract](#the-theme-contract)), which
+`ThemeScripts placement="head"` renders as:
+
 ```astro
-<script src="/themes/default/scripts/theme-init.js" data-storage-key="gl-theme-preference" is:inline></script>
+<script src="/themes/default/scripts/theme-init.js" data-storage-key="gl-theme-preference"></script>
+```
+
+```typescript
+assets: {
+  scripts: [{ src: "/themes/default/scripts/theme-init.js", blocking: true, data: { "storage-key": "gl-theme-preference" } }],
+}
 ```
 
 Without JavaScript the default theme's tokens fall back to `prefers-color-scheme`.

@@ -2,13 +2,20 @@
 /**
  * Base Layout - the page shell every default-theme layout uses (#345): <head> (SEO,
  * tokens, fonts, styles, the theme script), the site header and footer.
+ *
+ * It follows core's theme contract (#484, themes/README.md "The theme contract"): the
+ * tokens go through resolveThemeTokens, so the site's global styles apply; the theme
+ * script is a blocking asset in theme.config.ts; the header and footer are template parts.
  */
 import themeConfig from '../theme.config'
-import { themeCssVariables } from '../tokens'
+import { resolveThemeTokens, themeCssVariables } from '@/lib/themeTokens'
 import { getSiteSettings } from '@/lib/siteSettings'
 import SiteHeader from '../components/SiteHeader.astro'
 import SiteFooter from '../components/SiteFooter.astro'
 import SeoHead from '@/components/SeoHead.astro'
+import TemplatePart from '@/components/TemplatePart.astro'
+import ThemeScripts from '@/components/ThemeScripts.astro'
+import { bodyScripts, scriptDataAttributes } from '@/lib/themeAssets'
 import type { SeoMeta } from '@/lib/seo'
 import { getMenu, withCurrent } from '@/lib/menus'
 
@@ -37,7 +44,10 @@ const path = Astro.url.pathname
 const themeAssets = Astro.locals.themeAssets || {}
 // Backward compatibility fallback
 const legacyCssPath = Astro.locals.themeCssPath
-const tokens = themeCssVariables(themeConfig)
+const tokens = themeCssVariables(resolveThemeTokens(themeConfig, Astro.locals.globalStyles))
+// The end of <body> renders the other registered scripts as an expression rather than
+// <ThemeScripts placement="body">, which renders the same tags: the component drops a
+// space Astro writes here, and the page stays byte-identical to before #484.
 ---
 
 <!doctype html>
@@ -50,9 +60,9 @@ const tokens = themeCssVariables(themeConfig)
     <SeoHead title={title} description={description} {...seo} />
     <link rel="alternate" type="application/rss+xml" title={siteTitle} href="/rss.xml" />
 
-    {/* Sets data-theme before the first paint. A plain <script src>, not inline, so it
-        works under a CSP of script-src 'self'. */}
-    <script src="/themes/default/scripts/theme-init.js" data-storage-key={themeConfig.darkMode.storageKey} is:inline></script>
+    {/* This theme's own render-blocking scripts (theme-init.js sets data-theme before the
+        first paint), also when its layouts stand in for another theme's. */}
+    <ThemeScripts scripts={themeConfig.assets?.scripts} placement="head" />
 
     <link rel="preload" href="/themes/default/fonts/literata/literata-latin-opsz-normal.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/themes/default/fonts/inter/inter-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin />
@@ -69,21 +79,16 @@ const tokens = themeCssVariables(themeConfig)
   </head>
   <body>
     <div class="site">
-      <SiteHeader siteTitle={siteTitle} menu={withCurrent(primaryMenu?.items ?? [], path)} isHome={path === '/'} />
+      <TemplatePart slug="header"><SiteHeader siteTitle={siteTitle} menu={withCurrent(primaryMenu?.items ?? [], path)} isHome={path === '/'} /></TemplatePart>
       <main id="content" class="site-main" tabindex="-1">
         <slot />
       </main>
-      <SiteFooter siteTitle={siteTitle} tagline={site.tagline} menu={footerMenu?.items ?? []} />
+      <TemplatePart slug="footer"><SiteFooter siteTitle={siteTitle} tagline={site.tagline} menu={footerMenu?.items ?? []} /></TemplatePart>
     </div>
     <slot name="footer-scripts" />
 
-    {themeAssets.scripts?.map((script: any) => (
-      <script
-        src={script.src}
-        defer={script.defer}
-        async={script.async}
-        type={script.type}
-      ></script>
+    {bodyScripts(themeAssets.scripts).map((script) => (
+      <script src={script.src} defer={script.defer} async={script.async} type={script.type} {...scriptDataAttributes(script)}></script>
     ))}
   </body>
 </html>

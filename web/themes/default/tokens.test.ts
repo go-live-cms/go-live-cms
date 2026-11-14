@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import themeConfig, { type ThemeColors } from "./theme.config"
-import { cssName, themeCssVariables } from "./tokens"
+import { cssName, themeCssVariables } from "@/lib/themeTokens"
 import { AVATAR_COLORS } from "./lib/avatar"
 import { BLOCK_COLOR_TOKENS } from "@gl-admin/lib/blocks-spec"
 

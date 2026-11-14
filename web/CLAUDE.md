@@ -364,8 +364,19 @@ are the most fragile part of the codebase. **Before editing anything under
   `<figcaption>`, and `<cite>` as the last child of `<blockquote>`. The image toolbar is
   `components/editor/ui/ImageToolbar.tsx` (shown on a selected image; the text bubble
   menu hides then, and in a caption shows only bold/italic/link).
+- **Theme contract (#484, `themes/README.md` "The theme contract", design
+  `docs/design/theme-builder.md` 3.5):** core emits tokens (`src/lib/themeTokens.ts`:
+  `themeCssVariables(resolveThemeTokens(config, Astro.locals.globalStyles))`; the middleware
+  sets `globalStyles`, `NO_GLOBAL_STYLES` until #485; `supports.globalStyles`), scripts are
+  `config.assets` with `blocking` for `<head>` (`src/lib/themeAssets.ts`,
+  `components/ThemeScripts.astro`), `components/TemplatePart.astro` renders its slot until
+  #491, and nested `BlockRenderer`s share one page scope (`blocks/utils/pageScope.ts`: heading
+  ids unique across docs, `/gl-embeds.js` once). **The default theme's HTML is pinned by
+  `themes/default/theme.astro.test.ts`'s whole-page snapshots** (`__snapshots__/layouts/`);
+  Astro whitespace is fragile (an expression or a component at the end of `<body>` adds or
+  drops a space), so check them after any `base.astro` edit.
 - **Default public theme (#345):** tokens live in `themes/default/theme.config.ts` and
-  become CSS custom properties in `base.astro` (`tokens.ts`); `styles/theme.css` is plain
+  become CSS custom properties in `base.astro` (core's `src/lib/themeTokens.ts`); `styles/theme.css` is plain
   CSS served as is and only reads `var(--…)` (`tokens.test.ts` checks 4.5:1 in both
   palettes and that every `var()` is defined). Fonts are self-hosted under
   `themes/default/fonts/`. The Light / Dark / System switch is `scripts/theme-init.js`,

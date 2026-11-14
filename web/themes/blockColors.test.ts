@@ -3,7 +3,7 @@ import path from "node:path"
 import { describe, expect, it } from "vitest"
 import { BLOCK_COLORS } from "@gl-admin/lib/blocks-spec"
 import defaultConfig from "./default/theme.config"
-import { themeCssVariables } from "./default/tokens"
+import { themeCssVariables } from "@/lib/themeTokens"
 
 // Block colours (#356): every theme styles every palette value, `.gl-color-<value>`, from
 // `--block-*` custom properties it defines for light and for dark. A theme added later
@@ -16,7 +16,7 @@ const themes = readdirSync(root, { withFileTypes: true })
 
 function sheetOf(theme: string): string {
   const css = readFileSync(path.join(root, theme, "styles", "theme.css"), "utf8")
-  // The default theme's tokens come from theme.config.ts (base.astro, tokens.ts).
+  // The default theme's tokens come from theme.config.ts (base.astro, src/lib/themeTokens.ts).
   return theme === "default" ? `${themeCssVariables(defaultConfig)}\n${css}` : css
 }
 

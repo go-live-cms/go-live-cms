@@ -1,5 +1,5 @@
-import React from "react"
-import { blockAnchorId, blocksInReadingOrder, embedTargetOf, footnoteIndex, type BlockDocV1, type Block } from "@gl-admin/lib/blocks-spec"
+import React, { useContext } from "react"
+import { blockAnchorId, blocksInReadingOrder, footnoteIndex, type BlockDocV1, type Block } from "@gl-admin/lib/blocks-spec"
 import { blockRegistry } from "./blocks/registry"
 import { isExtensionBlockType, pluginOfBlockType } from "@gl-admin/lib/blocks-spec/themeBlocks"
 import { PluginBlockBoundary, PluginBlockChecksContext, probePluginBlocks } from "./blocks/PluginBlockBoundary"
@@ -7,6 +7,7 @@ import { renderContent, getBlockContent, isBlankParagraph } from "./blocks/utils
 import { ImageSizesContext, BLOCK_IMAGE_SIZES } from "./blocks/utils/responsiveImage"
 import { HeadingIdsContext, headingAnchors, type HeadingAnchor } from "./blocks/utils/headingAnchors"
 import { FootnotesContext } from "./blocks/utils/footnotes"
+import { docHasEmbed, PageScopeContext, type PageScope } from "./blocks/utils/pageScope"
 // Browser-safe: the admin's revision preview renders this component too.
 import { log } from "../lib/log"
 
@@ -24,6 +25,17 @@ interface BlockRendererProps {
   // The headings' ids (#351). A layout that also builds a table of contents passes the
   // list it built, so both use the same ids; otherwise they're computed from the doc.
   headings?: HeadingAnchor[]
+  // Ids the page already uses (e.g. a theme's own `content`), which computed heading ids
+  // skip; ignored when `headings` is given. Inside another BlockRenderer's blocks, that
+  // renderer's reserved and heading ids are skipped too (pageScope.ts, #484).
+  reservedIds?: Iterable<string | RegExp>
+}
+
+// The embed loader of the page's outermost renderer: added after its blocks if its own doc,
+// or a renderer nested in its blocks, has an embed. Rendered after the blocks, so every
+// nested renderer has reported by then.
+function EmbedLoader({ state }: { state: { needed: boolean } }) {
+  return state.needed ? <script src={EMBED_LOADER_SRC} defer /> : null
 }
 
 /** Whether this build draws `block`: its type has a component, and it isn't from a newer build of its theme or plugin. */
@@ -38,8 +50,12 @@ function rendersBlock(block: Block): boolean {
  * Uses the block registry to delegate rendering to individual block components.
  * WordPress-style architecture for easy extensibility.
  */
-export default function BlockRenderer({ doc, imageSizes = BLOCK_IMAGE_SIZES, headings }: BlockRendererProps) {
-  const headingIds = new Map((headings ?? headingAnchors(doc)).map((h) => [h.blockId, h.id]))
+export default function BlockRenderer({ doc, imageSizes = BLOCK_IMAGE_SIZES, headings, reservedIds }: BlockRendererProps) {
+  // The page this doc is part of (#484): set when this renderer is inside another's blocks.
+  const page = useContext(PageScopeContext)
+  const reserved = [...(page?.reservedIds ?? []), ...(reservedIds ?? [])]
+  const anchors = headings ?? headingAnchors(doc, reserved)
+  const headingIds = new Map(anchors.map((h) => [h.blockId, h.id]))
   const renderBlock = blockRendererFor(doc, { anchors: true })
 
   // Deduplicate blocks_order to prevent duplicate rendering
@@ -57,12 +73,17 @@ export default function BlockRenderer({ doc, imageSizes = BLOCK_IMAGE_SIZES, hea
   if (list) uniqueBlockIds.push(list)
 
   // The script that builds an embed's player on click (#425), for a post that has one. It
-  // is ours, on this site: nothing is asked of a provider until a reader clicks.
+  // is ours, on this site: nothing is asked of a provider until a reader clicks. Once per
+  // page (#484): a nested renderer reports it to the outermost, which adds it.
   const readingOrder = blocksInReadingOrder(doc)
-  const hasEmbed = readingOrder.some((id) => {
-    const block = doc.blocks[id] as Block | undefined
-    return block?.type === "embed" && embedTargetOf(block.attrs) !== null
-  })
+  const hasEmbed = docHasEmbed(doc)
+  const loader = page ? null : { needed: hasEmbed }
+  if (page && hasEmbed) page.needEmbedLoader()
+  // What renderers nested in this doc's blocks skip and report to.
+  const scope: PageScope = {
+    reservedIds: [...reserved, ...anchors.map((h) => h.id)],
+    needEmbedLoader: page ? () => page.needEmbedLoader() : () => void (loader!.needed = true),
+  }
 
   // On the server, every plugin block is rendered on its own first (#456): one whose renderer
   // throws is left out, and so are its footnote references (no number, no back link to an
@@ -76,16 +97,18 @@ export default function BlockRenderer({ doc, imageSizes = BLOCK_IMAGE_SIZES, hea
   const footnotes = footnoteIndex(doc, (block) => rendersBlock(block as Block) && !failedPluginBlocks?.has((block as Block).id))
 
   return (
-    <ImageSizesContext.Provider value={imageSizes}>
-      <HeadingIdsContext.Provider value={headingIds}>
-        <FootnotesContext.Provider value={footnotes}>
-          <PluginBlockChecksContext.Provider value={failedPluginBlocks}>
-            <div className="block-content">{uniqueBlockIds.map((blockId) => renderBlock(blockId))}</div>
-          </PluginBlockChecksContext.Provider>
-        </FootnotesContext.Provider>
-        {hasEmbed && <script src={EMBED_LOADER_SRC} defer />}
-      </HeadingIdsContext.Provider>
-    </ImageSizesContext.Provider>
+    <PageScopeContext.Provider value={scope}>
+      <ImageSizesContext.Provider value={imageSizes}>
+        <HeadingIdsContext.Provider value={headingIds}>
+          <FootnotesContext.Provider value={footnotes}>
+            <PluginBlockChecksContext.Provider value={failedPluginBlocks}>
+              <div className="block-content">{uniqueBlockIds.map((blockId) => renderBlock(blockId))}</div>
+            </PluginBlockChecksContext.Provider>
+          </FootnotesContext.Provider>
+          {loader && <EmbedLoader state={loader} />}
+        </HeadingIdsContext.Provider>
+      </ImageSizesContext.Provider>
+    </PageScopeContext.Provider>
   )
 }
 

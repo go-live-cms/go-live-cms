@@ -8,15 +8,14 @@ green for anything you can click, light and dark.
 
 ```
 themes/default/
-├── theme.config.ts        # Tokens (colours, type, widths, spacing, radius) + layouts
-├── tokens.ts              # Tokens -> CSS custom properties (inlined by base.astro)
+├── theme.config.ts        # Tokens (colours, type, widths, spacing, radius), assets, layouts
 ├── styles/theme.css       # Plain CSS, served as is; reads only var(--...)
 ├── fonts/                 # Self-hosted woff2 (latin) + each family's OFL.txt
 ├── scripts/theme-init.js  # Light / Dark / System switch and the phone menu
 ├── components/            # Header, footer, byline, post header, list item, ...
 ├── lib/                   # Pure helpers (byline names, reading time, avatar)
 └── layouts/
-    ├── base.astro         # <head>, header, footer
+    ├── base.astro         # <head>, header, footer (core's theme contract, below)
     ├── home/default.astro       # Front page (/)
     ├── archive/default.astro    # A post type's list (/post)
     ├── author/default.astro     # An author's page (/author/ana)
@@ -28,6 +27,14 @@ themes/default/
 
 The post layout is chosen per post type on the admin Themes screen (`layout_variants`,
 read by `getPostLayoutVariant`).
+
+`base.astro` follows core's theme contract (#484, `themes/README.md`, "The theme
+contract"): its tokens go through `resolveThemeTokens(themeConfig,
+Astro.locals.globalStyles)` (`supports.globalStyles: true`), `scripts/theme-init.js` is a
+blocking script in `assets.scripts`, and the header and footer are wrapped in
+`<TemplatePart slug="header">` / `slug="footer"`. `theme.astro.test.ts` snapshots every
+layout kind whole (`__snapshots__/layouts/`); a change to the theme's markup updates them
+(`npx vitest run --project astro themes/default/theme.astro.test.ts -u`), reviewed like code.
 
 Every post layout ends with the post's terms, older / newer links and "More to read"
 (#351, `src/lib/relatedPosts.ts`). The sidebar layout adds "On this page" (H2s with their
