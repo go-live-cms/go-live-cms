@@ -1,7 +1,6 @@
 import { Extension, mergeAttributes, Node } from "@tiptap/core"
 import {
   SITE_BLOCK_NODE_NAMES,
-  SITE_LOGO_DEFAULT_WIDTH,
   siteBlockNodeAttrs,
   type SiteBlockType,
 } from "@gl-admin/lib/blocks-spec"
@@ -30,7 +29,8 @@ declare module "@tiptap/core" {
  *   otherwise, makes one, so paste can't put one in a post. `renderHTML` writes an empty
  *   element for the clipboard and the attrs are never rendered, so a copy pastes nothing.
  */
-function siteNode(type: SiteBlockType, attributes: Record<string, unknown>) {
+function siteNode(type: SiteBlockType) {
+  const attributes = siteBlockNodeAttrs(type, {})
   const name = SITE_BLOCK_NODE_NAMES[type]
   const dataType = type.replace(/_/g, "-")
   return Node.create({
@@ -51,14 +51,15 @@ function siteNode(type: SiteBlockType, attributes: Record<string, unknown>) {
   })
 }
 
-// Each node's attrs and defaults are the Block Spec's (`siteBlockNodeAttrs`): the
-// fingerprint (#416) includes them, so a tab that didn't know one is refused.
-export const SiteTitle = siteNode("site_title", { level: 0, link: true })
-export const SiteTagline = siteNode("site_tagline", {})
-export const SiteLogo = siteNode("site_logo", { width: SITE_LOGO_DEFAULT_WIDTH, link: true })
-export const Navigation = siteNode("navigation", { location: null, menuId: null, layout: "row", overlay: "phone" })
-export const Search = siteNode("search", { label: null, placeholder: null, button: null })
-export const TemplatePart = siteNode("template_part", { slug: null })
+// Each node's attrs and defaults are the Block Spec's (`siteBlockNodeAttrs` of no attrs), so
+// the editor, the bridge and the store share one list. The fingerprint (#416) includes them,
+// so a tab that didn't know one is refused.
+export const SiteTitle = siteNode("site_title")
+export const SiteTagline = siteNode("site_tagline")
+export const SiteLogo = siteNode("site_logo")
+export const Navigation = siteNode("navigation")
+export const Search = siteNode("search")
+export const TemplatePart = siteNode("template_part")
 
 /** The site blocks' commands: no schema. One ordinary transaction each (rule 7). */
 export const SiteBlockCommands = Extension.create({

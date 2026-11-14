@@ -1,4 +1,4 @@
-import React from "react"
+import React, { useId } from "react"
 import { normalizeSiteBlockAttrs, SEARCH_DEFAULTS } from "@gl-admin/lib/blocks-spec"
 import type { BlockComponentProps } from "../types"
 import { useSiteRenderContext } from "../utils/siteContext"
@@ -11,9 +11,10 @@ import { MAX_QUERY_LENGTH, SEARCH_PATH } from "../../../lib/searchPath"
  */
 const SearchBlock: React.FC<BlockComponentProps> = ({ block, anchorId }) => {
   const site = useSiteRenderContext()
+  // Unique on the page even when a part holding this block renders twice.
+  const fieldId = `search-${useId().replace(/[^A-Za-z0-9_-]/g, "")}`
   if (!site) return null
   const attrs = normalizeSiteBlockAttrs("search", block.attrs) as { label?: string; placeholder?: string; button?: string }
-  const fieldId = `search-${block.id}`
   return (
     <form id={anchorId} role="search" className="search-form search-block" action={SEARCH_PATH} method="get">
       <label htmlFor={fieldId} className="sr-only">

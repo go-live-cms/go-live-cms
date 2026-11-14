@@ -7,6 +7,7 @@ import {
   SEARCH_BUTTON_MAX_LENGTH,
   SEARCH_LABEL_MAX_LENGTH,
   SEARCH_PLACEHOLDER_MAX_LENGTH,
+  SITE_LOGO_DEFAULT_WIDTH,
   SITE_LOGO_MAX_WIDTH,
   SITE_LOGO_MIN_WIDTH,
   siteBlockTypeOfNode,
@@ -79,28 +80,7 @@ export default function SiteBlockSettings({ editor, node, blockRef }: { editor: 
           <p className="post-settings__hint">{SITE_TITLE_LEVEL_HELP}</p>
         </>
       )}
-      {type === "site_logo" && (
-        <div className="post-settings__field">
-          <label className="post-settings__label" htmlFor={`${ids}-width`}>
-            Width
-          </label>
-          <input
-            id={`${ids}-width`}
-            type="number"
-            min={SITE_LOGO_MIN_WIDTH}
-            max={SITE_LOGO_MAX_WIDTH}
-            step={1}
-            value={Number(attrs.width) || ""}
-            onChange={(event) => {
-              const value = event.currentTarget.valueAsNumber
-              if (Number.isFinite(value)) set({ width: normalizeSiteLogoWidth(value) })
-            }}
-          />
-          <small className="post-settings__hint">
-            In pixels, {SITE_LOGO_MIN_WIDTH} to {SITE_LOGO_MAX_WIDTH}. The height follows the image.
-          </small>
-        </div>
-      )}
+      {type === "site_logo" && <WidthField id={`${ids}-width`} width={attrs.width} onCommit={(width) => set({ width })} />}
       {(type === "site_title" || type === "site_logo") && (
         <Switch className="block-settings__switch" label="Link to the home page" checked={attrs.link !== false} onChange={(link) => set({ link })} />
       )}
@@ -123,6 +103,53 @@ export default function SiteBlockSettings({ editor, node, blockRef }: { editor: 
       {type === "template_part" && <PartField id={`${ids}-part`} slug={attrs.slug} onPick={(slug) => set({ slug })} />}
       {hint && <p className="post-settings__hint">{hint}</p>}
     </fieldset>
+  )
+}
+
+/**
+ * The logo's width, typed freely and stored on Enter or when the field loses focus, clamped
+ * then: clamping each keystroke would turn the "1" of "120" into 32.
+ */
+export function WidthField({ id, width, onCommit }: { id: string; width: unknown; onCommit: (width: number) => void }) {
+  const stored = Number(width) || SITE_LOGO_DEFAULT_WIDTH
+  const [text, setText] = useState(String(stored))
+  // Someone else's change, or this one's once clamped.
+  useEffect(() => setText(String(stored)), [stored])
+  const commit = () => {
+    const value = Number(text)
+    if (text.trim() === "" || !Number.isFinite(value)) {
+      setText(String(stored))
+      return
+    }
+    const next = normalizeSiteLogoWidth(value)
+    setText(String(next))
+    if (next !== stored) onCommit(next)
+  }
+  return (
+    <div className="post-settings__field">
+      <label className="post-settings__label" htmlFor={id}>
+        Width
+      </label>
+      <input
+        id={id}
+        type="number"
+        min={SITE_LOGO_MIN_WIDTH}
+        max={SITE_LOGO_MAX_WIDTH}
+        step={1}
+        value={text}
+        aria-describedby={`${id}-hint`}
+        onChange={(event) => setText(event.currentTarget.value)}
+        onBlur={commit}
+        onKeyDown={(event) => {
+          if (event.key !== "Enter") return
+          event.preventDefault()
+          commit()
+        }}
+      />
+      <small id={`${id}-hint`} className="post-settings__hint">
+        In pixels, {SITE_LOGO_MIN_WIDTH} to {SITE_LOGO_MAX_WIDTH}. The height follows the image.
+      </small>
+    </div>
   )
 }
 

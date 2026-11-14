@@ -137,7 +137,8 @@ describe("site blocks in a template", () => {
   it("search: the theme's GET form to /search with its own texts", () => {
     const html = render(docOf(["search", { label: "Search the blog", placeholder: "Search the blog", button: "Go" }]), context())
     expect(html).toContain('<form id="b-blk-site-000000" role="search" class="search-form search-block" action="/search" method="get">')
-    expect(html).toContain('<label for="search-blk-site-000000" class="sr-only">Search the blog</label>')
+    const forId = /<label for="(search-[^"]+)" class="sr-only">Search the blog<\/label>/.exec(html)![1]
+    expect(html).toContain(`<input id="${forId}" type="search"`)
     expect(html).toContain('name="q"')
     expect(html).toContain('placeholder="Search the blog"')
     expect(html).toContain('<button type="submit" class="btn btn-primary">Go</button>')
@@ -147,6 +148,14 @@ describe("site blocks in a template", () => {
     expect(plain).not.toContain("placeholder")
     // Text, never markup.
     expect(render(docOf(["search", { button: "<b>Go</b>" }]), context())).toContain("&lt;b&gt;Go&lt;/b&gt;")
+  })
+
+  it("search: a part rendered twice keeps its field ids unique", () => {
+    const part = docOf(["search", {}])
+    const html = render(docOf(["template_part", { slug: "header" }], ["template_part", { slug: "header" }]), context({ parts: { header: part } }))
+    const ids = [...html.matchAll(/<input id="([^"]+)"/g)].map((m) => m[1])
+    expect(ids).toHaveLength(2)
+    expect(new Set(ids).size).toBe(2)
   })
 
   it("template part: its resolved part as a header, the part's site blocks alive inside", () => {

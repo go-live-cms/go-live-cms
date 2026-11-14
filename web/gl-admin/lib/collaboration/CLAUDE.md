@@ -608,6 +608,9 @@ kept so references in code stay valid.
   - **Where they may sit** (`validateBlockDoc(doc, { kind })`, Go `prepareForStoreAs`): a `template_part` never in a
     part, referenced or not, so parts can't recurse. The collab store stores posts only until #490 adds the
     template document kind, which must pass its kind.
+  - **Old data:** like `callout` in #419, a stored pre-#376 custom block whose type is one of the six names
+    (`navigation`, `search`, …) now reads as the site block: its `pm` and `text` are dropped by the bridge and
+    the API. No such type shipped in a theme; check before restoring an old backup that had one.
   - **Stale clients:** a bundle from before #488 lacks the six nodes (and a narrower doc and containers); the
     fingerprint guard (#416) refuses it (`schemaFingerprint.test.ts`), so open tabs reload once after the deploy.
   - Tests: `blocks-spec/siteBlocks.test.ts` (the vectors, kinds), `extensions/SiteBlocks.test.ts` (schema, bridge,
