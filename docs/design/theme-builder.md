@@ -1009,13 +1009,15 @@ desktop-only in v1, with "Use a larger screen to edit templates" (open question 
 
 ### 13.1 Settled on the boards
 
-- **Sidebar.** Appearance sits between Content and Workspace, as `nav.ts` has it since
-  #347: **Themes** and **Site editor** (admins), then **Menus** (editors and admins).
+- **Sidebar.** Appearance sits between Content and Workspace, where `nav.ts` has put Themes
+  and Menus since #347. It gains **Site editor** after Themes: **Themes** and **Site
+  editor** (admins), then **Menus** (editors and admins).
   Contributors have no Appearance section. An editor who opens the Site editor's address
   gets the 403 page.
 - **Overview vocabulary.** Each template and part says what renders it now: "Theme layout ·
-  post/default" (a code layout), "Theme template · 404" or "Theme part · Paper's footer" (a
-  block template or part the theme ships, 5.7), "Customized", "Customized · changes not
+  post/default" (a code layout), "Theme template · 404" or "Theme part · <theme>'s footer" (a
+  block template or part the theme ships, 5.7; the boards' sample active theme is called
+  Paper), "Customized", "Customized · changes not
   published", "Default changed since you customized", "Resets on publish", and for
   `front-page` without a template "Not customized · Home renders /". A customized `single`
   row says the type's layout choice no longer applies (3.2), and a customized `archive` row
@@ -1032,14 +1034,19 @@ desktop-only in v1, with "Use a larger screen to edit templates" (open question 
   picker for which post or page it shows. A part opened from a template's card has a way
   back to that template, and "Used in N templates" opens a list of them.
 - **Inserting a query loop** first asks which posts: "This page's list" (`inherit`) or
-  "Posts I choose", as Columns asks for a layout.
+  "Posts I choose", as Columns asks for a layout. "This page's list" is offered only in a
+  template whose route has a list (`home`, `front-page` showing latest posts, `archive*`,
+  `taxonomy-*`, `author`, `search`). Elsewhere (single, page, 404, any part) the insert goes
+  straight to "Posts I choose" and the switch isn't shown, since there is no list to take.
 - **Parts are laid out by the theme** (3.5): the default theme puts the header part's
   blocks in one row and the footer part's in its columns, so v1 needs no row or stack
-  block. The editor shows a part's blocks stacked, with Split or Preview for the real
-  layout.
+  block. A part the theme doesn't know, such as one an admin creates, gets no special
+  layout: its blocks flow one after another, and columns or a group arrange them. The
+  editor shows a part's blocks stacked, with Split or Preview for the real layout.
 - **The site logo is a setting, everywhere.** Replacing it in the `site_logo` block's panel
   replaces `site_logo_media_id` at once, as Settings › General does: it isn't part of the
-  design draft or its publish (5.1, 11).
+  design draft or its publish (5.1, 11). Since everything around it is a draft, the panel
+  says so beside Replace ("replacing it here replaces it everywhere it shows, right away").
 - **Global styles save as you go** (6.5): each change saves the whole draft with
   `base_revision`, debounced, and reloads the preview. There is no Save button. A failed
   save keeps the typed value and offers Try again; leaving with an unsaved change asks
@@ -1048,12 +1055,19 @@ desktop-only in v1, with "Use a larger screen to edit templates" (open question 
 - **Publish dialog.** Refusals come first and alone (an empty template, a part slug that
   resolves to nothing), each with Open; contrast warnings come after they're fixed, with
   the failing pairs and **Publish anyway**. A failed flush says nothing was published.
-- **Names of new templates and parts.** The saved slug is the typed name in lower case
-  with every other run of characters turned into a hyphen, up to 64 characters, shown as
-  it's typed. It can't change later, because pages store it (`block:<name>`, section 10).
+- **Names of new templates and parts.** The saved name is the typed one with Latin accents
+  dropped (as `headingAnchors` does), in lower case, each run of anything but `a-z0-9`
+  turned into one hyphen, hyphens trimmed from both ends, and cut to 64 characters (then
+  trimmed again). A name that leaves nothing is refused ("Use at least one letter or
+  number"), as is one already taken in the theme. The result is shown as it's typed, fits
+  both `block:[a-z0-9-]{1,64}` and the slug CHECK once prefixed, and is one rule in TS and
+  Go with shared vectors. It can't change later, because pages store it (`block:<name>`,
+  section 10).
   A new page template starts from the theme's page or blank; a new part starts empty.
 - **Phones.** At 375 the overview and the history are read-only, except that **Publish site
   design** works there: its dialog is a list. Editing and restoring need a larger screen.
+  So a refusal there (an empty template, a missing part) says to fix it on a larger screen
+  instead of offering Open.
 - **Site blocks' markup** reuses the default theme components' classes (3.5). The only new
   ones are `site-logo`, `site-logo-block`, `site-tagline`, `site-nav.is-column`,
   `query-no-results` and core's `gl-preview-banner` (8.3).
