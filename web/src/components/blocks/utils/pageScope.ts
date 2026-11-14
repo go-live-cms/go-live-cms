@@ -18,7 +18,7 @@
  */
 import { createContext } from "react"
 import { blockAnchorId, blocksInReadingOrder, embedTargetOf, FOOTNOTES_TITLE_ID, type Block, type BlockDocV1 } from "@gl-admin/lib/blocks-spec"
-import { headingAnchors, type HeadingAnchor } from "./headingAnchors"
+import { embedNoteId, headingAnchors, type HeadingAnchor } from "./headingAnchors"
 
 export interface PageScope {
   // Ids a nested renderer's headings never take.
@@ -47,8 +47,8 @@ export function docHasEmbed(doc: BlockDocV1 | null | undefined, readingOrder?: r
 /**
  * The element ids a rendered doc puts on the page besides its headings: its top-level
  * blocks' `b-<id>` anchors (#356) and, with footnotes (#422), the list's title and the
- * `fn-N` / `ref-N` anchors. A doc nested inside it reserves them, as headingAnchors does
- * for the doc's own.
+ * `fn-N` / `ref-N` anchors, and every embed's note (`embed-note-<id>`, #481, at any depth). A
+ * doc nested inside it reserves them, as headingAnchors does for the doc's own.
  */
 export function docElementIds(doc: BlockDocV1 | null | undefined): (string | RegExp)[] {
   if (!doc?.blocks || !Array.isArray(doc.blocks_order)) return []
@@ -59,6 +59,10 @@ export function docElementIds(doc: BlockDocV1 | null | undefined): (string | Reg
   }
   if (doc.blocks_order.some((blockId) => doc.blocks[blockId]?.type === "footnotes")) {
     ids.push(FOOTNOTES_TITLE_ID, /^fn-\d+$/, /^ref-\d+(-\d+)?$/)
+  }
+  for (const blockId of blocksInReadingOrder(doc)) {
+    const note = doc.blocks[blockId]?.type === "embed" ? embedNoteId(blockId) : null
+    if (note) ids.push(note)
   }
   return ids
 }

@@ -1,5 +1,5 @@
 import { createContext } from "react"
-import { blocksInReadingOrder, isMediaMissing, type BlockDocV1 } from "@gl-admin/lib/blocks-spec"
+import { blocksInReadingOrder, isMediaMissing, normalizeMediaAlt, type BlockDocV1 } from "@gl-admin/lib/blocks-spec"
 import { safeImageSrc } from "./safeUrl"
 
 // Image variants and focal point on the public site (#255).
@@ -65,10 +65,8 @@ export interface ResponsiveImageAttrs {
  */
 export function imageAlt(blockAlt: unknown, media: BlockMedia | undefined, decorative = false): string | undefined {
   if (decorative || media?.decorative === true) return ""
-  const own = typeof blockAlt === "string" ? blockAlt.trim() : ""
-  if (own) return own
-  const library = typeof media?.alt === "string" ? media.alt.trim() : ""
-  return library || undefined
+  // As stored: control characters as spaces, trimmed, capped (the API's sanitizer).
+  return normalizeMediaAlt(blockAlt) ?? normalizeMediaAlt(media?.alt) ?? undefined
 }
 
 // blockMediaFor returns the media info the API attached for an image

@@ -65,6 +65,14 @@ describe("links that open a new tab (#481)", () => {
     )
   })
 
+  it("says it once for a link split into runs by its marks, on the last run", () => {
+    const link = { type: "link", attrs: { href: "https://example.org/docs", target: "_blank" } }
+    const out = html([text("Read the "), text("full", link, { type: "bold" }), text(" guide", link), text(" and "), text("more", link)])
+    expect(out.match(/opens in a new tab/g)).toHaveLength(2)
+    expect(out).toContain('<strong><a href="https://example.org/docs" target="_blank" rel="noopener noreferrer">full</a></strong>')
+    expect(out).toContain(' guide<span class="sr-only"> (opens in a new tab)</span></a> and ')
+  })
+
   it("a link in the same tab says nothing more", () => {
     expect(html([text("Docs", { type: "link", attrs: { href: "/docs" } })])).toBe('<a href="/docs">Docs</a>')
   })

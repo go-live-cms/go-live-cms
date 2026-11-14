@@ -135,8 +135,8 @@ func TestAttachBlockMedia_MediaBlocks(t *testing.T) {
 		DoAndReturn(func(_ context.Context, ids []int64) ([]db.Medium, error) {
 			require.ElementsMatch(t, []int64{11, 12, 14, 404, 405}, ids)
 			return []db.Medium{
-				{ID: 11, MediaPath: "/app/uploads/media/a.jpg", Width: 10, Height: 10, MimeType: "image/jpeg", FileSize: 9, Name: "private name"},
-				{ID: 12, MediaPath: "/app/uploads/media/launch-0a1b.mp4", MimeType: "video/mp4", FileSize: 18874368, Name: "Launch", OriginalFilename: "launch.mp4"},
+				{ID: 11, MediaPath: "/app/uploads/media/a.jpg", Width: 10, Height: 10, MimeType: "image/jpeg", FileSize: 9, Name: "private name", Alt: "A kite"},
+				{ID: 12, MediaPath: "/app/uploads/media/launch-0a1b.mp4", MimeType: "video/mp4", FileSize: 18874368, Name: "Launch", OriginalFilename: "launch.mp4", Alt: "not for a video"},
 				{ID: 14, MediaPath: "/app/uploads/media/checklist-9a9a.pdf", MimeType: "application/pdf", FileSize: 245760, Name: "Import checklist", OriginalFilename: "import-checklist.pdf"},
 			}, nil
 		})
@@ -156,6 +156,9 @@ func TestAttachBlockMedia_MediaBlocks(t *testing.T) {
 	// An image's entry stays as it was: no name, type or size.
 	require.Empty(t, media["11"].Name)
 	require.Empty(t, media["11"].MimeType)
+	// The library's alt (#481) only on an image's entry.
+	require.Equal(t, "A kite", media["11"].Alt)
+	require.Empty(t, video.Alt)
 	// Deleted media, the nested video's lookup found: listed, sorted.
 	require.Equal(t, []int64{404, 405}, doc["media_missing"])
 

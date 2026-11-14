@@ -749,7 +749,8 @@ describe("layout snapshots (#484)", () => {
       const d = docWithHeadings([1, "A heading 1 block"], [2, "Second"], [3, "Third"])
       const blocks = d.blocks as Record<string, unknown>
       blocks["image-00001"] = { id: "image-00001", type: "image", version: 2, attrs: { src: "/uploads/media/kite.jpg", mediaId: 5 } }
-      blocks["details-001"] = { id: "details-001", type: "details", version: 1, attrs: { summary: [] }, children: ["p0"] }
+      blocks["details-001"] = { id: "details-001", type: "details", version: 1, attrs: { summary: [] }, children: ["para-000002"] }
+      blocks["para-000002"] = { id: "para-000002", type: "paragraph", version: 1, attrs: { pm: { type: "paragraph", content: [{ type: "text", text: "Inside the details." }] } } }
       blocks["para-000001"] = { id: "para-000001", type: "paragraph", version: 1, attrs: { pm: { type: "paragraph", content: [{ type: "text", text: "Docs", marks: [{ type: "link", attrs: { href: "https://example.org", target: "_blank" } }] }] } } }
       blocks["embed-00001"] = { id: "embed-00001", type: "embed", version: 1, attrs: { provider: "youtube", ref: "dQw4w9WgXcQ" } }
       d.blocks_order.push("image-00001", "details-001", "para-000001", "embed-00001")
