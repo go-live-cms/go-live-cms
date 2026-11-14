@@ -20,6 +20,7 @@ func toSettingsResponse(settings db.Setting, siteAddress string) SettingsRespons
 		EditorAllowedEmbeds:     embeds,
 		AllowSignup:             settings.AllowSignup,
 		FrontPageID:             nullInt64Ptr(settings.FrontPageID),
+		SiteLogoMediaID:         nullInt64Ptr(settings.SiteLogoMediaID),
 		SiteAddress:             siteAddress,
 		CreatedAt:               settings.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		ChangedAt:               settings.ChangedAt.Format("2006-01-02T15:04:05Z07:00"),

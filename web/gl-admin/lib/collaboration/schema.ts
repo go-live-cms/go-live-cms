@@ -21,6 +21,7 @@ import { AudioBlock, FileBlock, MediaBlockCommands, VideoBlock } from "../../com
 import { ContentLink, DateChip, Mention } from "../../components/editor/extensions/InlineNodes"
 import { EmbedBlock, EmbedBlockCommands } from "../../components/editor/extensions/EmbedBlock"
 import { HtmlBlock, HtmlBlockCommands } from "../../components/editor/extensions/HtmlBlock"
+import { Navigation, Search, SiteBlockCommands, SiteLogo, SiteTagline, SiteTitle, TemplatePart } from "../../components/editor/extensions/SiteBlocks"
 import { Columns } from "../../components/editor/extensions/ColumnsBlock"
 import { Buttons } from "../../components/editor/extensions/ButtonsBlock"
 import { Spacer } from "../../components/editor/extensions/SpacerBlock"
@@ -141,6 +142,17 @@ export function schemaExtensions({ collaborating }: { collaborating: boolean }) 
     // New node types and a wider doc, so they change the fingerprint (#416).
     footnoteRef: FootnoteRef,
     footnotes: Footnotes,
+    // #488: the site blocks (design theme-builder.md 4, 7.4). In every document's schema, so
+    // the editor and the collab server have one schema and one fingerprint whatever the doc
+    // is; in a post they are inert. Six new node types and a wider doc and containers, so they
+    // change the fingerprint (#416): tabs on the bundle before are refused and reload.
+    siteTitle: SiteTitle,
+    siteTagline: SiteTagline,
+    siteLogo: SiteLogo,
+    navigation: Navigation,
+    search: Search,
+    templatePart: TemplatePart,
+    siteBlockCommands: SiteBlockCommands,
     blockId: BlockIdExtension,
   }
 }

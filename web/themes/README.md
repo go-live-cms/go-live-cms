@@ -693,6 +693,14 @@ the post's (and its parts'). `BlockRenderer` keeps two things unique per page, n
   its blocks, when any doc on the page has an embed; nested renderers report it instead of
   adding their own.
 
+**And style the site blocks.** A block template's header, footer and other parts use the site blocks
+(#488): site title, tagline, logo, navigation, search and template part. They render the
+markup of the default theme's header pieces (`.site-title`, `.site-tagline`,
+`.site-logo-block > .site-logo`, `.nav-block > .site-nav` with `.is-column` and a
+`details.nav-overlay` for phones, `.search-form.search-block`, `.template-part--<slug>`;
+`src/components/blocks/README.md` has the whole list), so a theme that styles its own
+header that way styles them too. Style the ones your header doesn't use; the default
+theme's rules are the "site blocks (#488)" section of its `styles/theme.css`.
 ---
 
 ## Theme Functions (`functions.ts`)

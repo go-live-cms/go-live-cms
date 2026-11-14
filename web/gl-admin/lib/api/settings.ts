@@ -26,6 +26,10 @@ export interface Settings {
   // The page the site shows at / (#336), null for the latest posts. As stored: it may be
   // a page that was unpublished or trashed since, which / then doesn't show.
   front_page_id: number | null
+  // The site logo (#488): the image the Site logo block shows, null for none, and its media
+  // as the block reads it (null for none, or a lookup that failed).
+  site_logo_media_id?: number | null
+  site_logo?: SiteLogo | null
   // PUBLIC_BASE_URL, read-only ("" when not configured): the domain is deploy config.
   site_address: string
   created_at: string
@@ -45,6 +49,22 @@ export interface UpdateSettingsRequest {
   allow_signup?: boolean
   // A published page's id, or null for the latest posts (#336). Admins only.
   front_page_id?: number | null
+  // An image's media id, or null for no logo (#488). Admins only.
+  site_logo_media_id?: number | null
+}
+
+/** GET /settings' `site_logo` (api/site_logo.go). */
+export interface SiteLogo {
+  id: number
+  media_path: string
+  width: number
+  height: number
+  variants?: Record<string, { path: string; width: number; height: number }>
+  alt: string
+  mime_type: string
+  name: string
+  filename: string
+  decorative?: boolean
 }
 
 // /extension-settings serves and accepts theme rows only (#451).

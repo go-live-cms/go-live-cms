@@ -8,6 +8,8 @@ import {
   ICONS,
   canInsert,
   catalogEntries,
+  offeredIn,
+  SITE_BLOCKS,
   flattenSections,
   isAdminOnly,
   matchEntry,
@@ -18,6 +20,7 @@ import {
 } from "./catalog"
 import { applyTurnInto, computeTurnIntoFromSelection } from "../utils/turnInto"
 import { stubJsdomRangeLayout } from "@gl-admin/lib/collaboration/testHelpers"
+import { SITE_BLOCK_NODE_NAMES, siteBlockNodeAttrs, type SiteBlockType } from "@gl-admin/lib/blocks-spec"
 import { currentTableSizePicker } from "../ui/TableSizePicker"
 import { currentColumnsPicker } from "../ui/ColumnsPicker"
 
@@ -76,7 +79,8 @@ describe("the catalog", () => {
       ["Embeds", ["YouTube", "Vimeo", "X", "Embed a link"]],
       ["Advanced", ["Custom HTML"]],
     ])
-    expect(BLOCK_GROUPS.map((g) => g.label)).toEqual(["Text", "Media", "Layout", "Embeds", "Advanced"])
+    // Site (#488) is between Embeds and Advanced; a post's menus never show it (below).
+    expect(BLOCK_GROUPS.map((g) => g.label)).toEqual(["Text", "Media", "Layout", "Embeds", "Site", "Advanced"])
   })
 
   it("holds every installed theme block, offered only while its theme is active", () => {
@@ -242,6 +246,37 @@ describe("insert", () => {
       const heading = ed.state.doc.child(1)
       expect(heading.attrs.level).toBe(Number(entry.id.slice(-1)))
     }
+  })
+})
+
+// #488 (design theme-builder.md 4.4): the Site group, offered by the kind of document.
+describe("the Site group (#488)", () => {
+  it("is offered in templates and parts, never in a post, and the template part only in a template", () => {
+    expect(SITE_BLOCKS.map((e) => e.name)).toEqual(["Site title", "Site tagline", "Site logo", "Navigation", "Search", "Template part"])
+    expect(SITE_BLOCKS.every((e) => e.group === "site")).toBe(true)
+    expect(catalogEntries()).toEqual(expect.arrayContaining([...SITE_BLOCKS]))
+    // A post (the default context) gets none of them, whatever the role.
+    for (const role of ["admin", "editor", "contributor"]) {
+      expect(menuEntries({ role }).filter((e) => e.group === "site")).toEqual([])
+      expect(menuEntries({ role, context: "post" }).filter((e) => e.group === "site")).toEqual([])
+    }
+    expect(names(menuEntries({ role: "editor", context: "template" }).filter((e) => e.group === "site"))).toEqual(names(SITE_BLOCKS))
+    expect(names(menuEntries({ role: "editor", context: "part" }).filter((e) => e.group === "site"))).not.toContain("Template part")
+    // Every core block is still offered everywhere it was (no `contexts`).
+    expect(CORE_BLOCKS.every((e) => offeredIn(e, "post") && offeredIn(e, "template") && offeredIn(e, "part"))).toBe(true)
+    expect(searchCatalog(menuEntries({ role: "admin", context: "template" }), "").map((s) => s.label)).toContain("Site")
+    expect(searchCatalog(menuEntries({ role: "admin" }), "").map((s) => s.label)).not.toContain("Site")
+  })
+
+  it.each(SITE_BLOCKS.map((e) => [e.id, e] as const))("%s replaces the typed /query with its block, defaults filled in", (_id, entry) => {
+    const ed = makeEditor("<p>first</p><p>/que</p>")
+    const from = ed.state.doc.firstChild!.nodeSize + 1
+    ed.commands.setTextSelection(from + 4)
+    entry.insert(ed, { from, to: from + 4 })
+    const node = ed.state.doc.child(1)
+    expect(node.type.name).toBe(SITE_BLOCK_NODE_NAMES[entry.type as SiteBlockType])
+    expect(node.attrs).toMatchObject(siteBlockNodeAttrs(entry.type as SiteBlockType, {}))
+    expect(ed.state.doc.textContent).toBe("first")
   })
 })
 

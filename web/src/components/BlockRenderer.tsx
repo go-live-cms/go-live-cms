@@ -8,6 +8,7 @@ import { ImageSizesContext, BLOCK_IMAGE_SIZES } from "./blocks/utils/responsiveI
 import { HeadingIdsContext, headingAnchors, type HeadingAnchor } from "./blocks/utils/headingAnchors"
 import { FootnotesContext } from "./blocks/utils/footnotes"
 import { docElementIds, docHasEmbed, PageScopeContext, type PageScope } from "./blocks/utils/pageScope"
+import { SiteContext, type SiteRenderContext } from "./blocks/utils/siteContext"
 // Browser-safe: the admin's revision preview renders this component too.
 import { log } from "../lib/log"
 
@@ -29,6 +30,11 @@ interface BlockRendererProps {
   // skip; ignored when `headings` is given. Inside another BlockRenderer's blocks, that
   // renderer's reserved and heading ids are skipped too (pageScope.ts, #484).
   reservedIds?: Iterable<string | RegExp>
+  // What the site blocks read (#488, blocks/utils/siteContext.ts): set by a block template's
+  // layout (#491), inherited by renderers nested in its blocks (a part). Absent: the one
+  // around this renderer, if any; a post's body has none, so its site blocks render nothing.
+  // `null` clears it, for a post's own body rendered inside a template (`post_content`, #489).
+  site?: SiteRenderContext | null
 }
 
 // The embed loader of the page's outermost renderer: added after its blocks if its own doc,
@@ -54,9 +60,11 @@ function rendersBlock(block: Block): boolean {
  * Uses the block registry to delegate rendering to individual block components.
  * WordPress-style architecture for easy extensibility.
  */
-export default function BlockRenderer({ doc, imageSizes = BLOCK_IMAGE_SIZES, headings, reservedIds }: BlockRendererProps) {
+export default function BlockRenderer({ doc, imageSizes = BLOCK_IMAGE_SIZES, headings, reservedIds, site }: BlockRendererProps) {
   // The page this doc is part of (#484): set when this renderer is inside another's blocks.
   const page = useContext(PageScopeContext)
+  const inheritedSite = useContext(SiteContext)
+  const siteContext = site === undefined ? inheritedSite : site
   const reserved = [...(page?.reservedIds ?? []), ...(reservedIds ?? [])]
   const anchors = headings ?? headingAnchors(doc, reserved)
   const headingIds = new Map(anchors.map((h) => [h.blockId, h.id]))
@@ -109,19 +117,21 @@ export default function BlockRenderer({ doc, imageSizes = BLOCK_IMAGE_SIZES, hea
   const footnotes = footnoteIndex(doc, (block) => rendersBlock(block as Block) && !failedPluginBlocks?.has((block as Block).id))
 
   return (
-    <PageScopeContext.Provider value={scope}>
-      <ImageSizesContext.Provider value={imageSizes}>
-        <HeadingIdsContext.Provider value={headingIds}>
-          <FootnotesContext.Provider value={footnotes}>
-            <PluginBlockChecksContext.Provider value={failedPluginBlocks}>
-              <div className="block-content">{uniqueBlockIds.map((blockId) => renderBlock(blockId))}</div>
-            </PluginBlockChecksContext.Provider>
-          </FootnotesContext.Provider>
-          {loader && <EmbedLoader state={loader} />}
-          {ownLoader && <script src={EMBED_LOADER_SRC} defer />}
-        </HeadingIdsContext.Provider>
-      </ImageSizesContext.Provider>
-    </PageScopeContext.Provider>
+    <SiteContext.Provider value={siteContext}>
+      <PageScopeContext.Provider value={scope}>
+        <ImageSizesContext.Provider value={imageSizes}>
+          <HeadingIdsContext.Provider value={headingIds}>
+            <FootnotesContext.Provider value={footnotes}>
+              <PluginBlockChecksContext.Provider value={failedPluginBlocks}>
+                <div className="block-content">{uniqueBlockIds.map((blockId) => renderBlock(blockId))}</div>
+              </PluginBlockChecksContext.Provider>
+            </FootnotesContext.Provider>
+            {loader && <EmbedLoader state={loader} />}
+            {ownLoader && <script src={EMBED_LOADER_SRC} defer />}
+          </HeadingIdsContext.Provider>
+        </ImageSizesContext.Provider>
+      </PageScopeContext.Provider>
+    </SiteContext.Provider>
   )
 }
 

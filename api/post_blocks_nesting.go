@@ -61,6 +61,9 @@ var flowBlockTypes = map[string]bool{
 	"html": true,
 	// #426: a row of buttons keeps its buttons in its pm.
 	"buttons": true, "spacer": true,
+	// #488: the site blocks (post_blocks_site.go), which hold no blocks.
+	"site_title": true, "site_tagline": true, "site_logo": true,
+	"navigation": true, "search": true, "template_part": true,
 }
 
 // listBlockTypes have their items as children (Block Spec `LIST_ITEMS`): list_item for

@@ -286,6 +286,20 @@ Expect a few seconds of downtime while containers are recreated. Open editors sh
 "Reconnecting" and resync by themselves: on SIGTERM the collab server stores every open doc
 (Yjs state + `block_doc`), and edits typed while it's down are sent when the tab reconnects.
 
+### Deploys that change the editor's schema
+
+A release that adds a block, a mark or an inline node changes the editor's schema
+fingerprint (#416). **Open editor tabs reload once:** when the collab server restarts, a
+tab still on the old bundle reconnects, is refused with `schema-mismatch`, and shows "The
+editor was updated. Reload to keep editing." Its edits up to the restart were stored; the
+reload loads the new bundle, and nothing typed is lost. Tell editors before such a deploy.
+
+Releases that did this, newest first:
+
+- **#488, site blocks I** (`site_title`, `site_tagline`, `site_logo`, `navigation`,
+  `search`, `template_part`), with migration `000057` (`settings.site_logo_media_id`, a
+  nullable column the previous release ignores, so it is safe to run before the new API).
+
 ## Change the domain
 
 The site's address is deploy config, not a setting: Settings › General shows it

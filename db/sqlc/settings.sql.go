@@ -131,7 +131,7 @@ func (q *Queries) GetPublicFrontPage(ctx context.Context) (Post, error) {
 }
 
 const getSettings = `-- name: GetSettings :one
-SELECT id, post_url_structure, site_title, posts_per_page, created_at, changed_at, site_tagline, site_language, site_timezone, date_format, editor_markdown_shortcuts, editor_allowed_embeds, allow_signup, front_page_id FROM settings WHERE id = 1
+SELECT id, post_url_structure, site_title, posts_per_page, created_at, changed_at, site_tagline, site_language, site_timezone, date_format, editor_markdown_shortcuts, editor_allowed_embeds, allow_signup, front_page_id, site_logo_media_id FROM settings WHERE id = 1
 `
 
 func (q *Queries) GetSettings(ctx context.Context) (Setting, error) {
@@ -152,6 +152,7 @@ func (q *Queries) GetSettings(ctx context.Context) (Setting, error) {
 		pq.Array(&i.EditorAllowedEmbeds),
 		&i.AllowSignup,
 		&i.FrontPageID,
+		&i.SiteLogoMediaID,
 	)
 	return i, err
 }
@@ -272,9 +273,12 @@ SET
   -- The front page (#336): set_front_page says whether the request names one;
   -- front_page_id NULL then means "the latest posts".
   front_page_id = CASE WHEN $11::boolean THEN $12::bigint ELSE front_page_id END,
+  -- The site logo (#488): set_site_logo says whether the request names one;
+  -- site_logo_media_id NULL then means none.
+  site_logo_media_id = CASE WHEN $13::boolean THEN $14::bigint ELSE site_logo_media_id END,
   changed_at = now()
 WHERE id = 1
-RETURNING id, post_url_structure, site_title, posts_per_page, created_at, changed_at, site_tagline, site_language, site_timezone, date_format, editor_markdown_shortcuts, editor_allowed_embeds, allow_signup, front_page_id
+RETURNING id, post_url_structure, site_title, posts_per_page, created_at, changed_at, site_tagline, site_language, site_timezone, date_format, editor_markdown_shortcuts, editor_allowed_embeds, allow_signup, front_page_id, site_logo_media_id
 `
 
 type UpdateSettingsParams struct {
@@ -290,6 +294,8 @@ type UpdateSettingsParams struct {
 	EditorAllowedEmbeds     []string       `json:"editor_allowed_embeds"`
 	SetFrontPage            bool           `json:"set_front_page"`
 	FrontPageID             sql.NullInt64  `json:"front_page_id"`
+	SetSiteLogo             bool           `json:"set_site_logo"`
+	SiteLogoMediaID         sql.NullInt64  `json:"site_logo_media_id"`
 }
 
 func (q *Queries) UpdateSettings(ctx context.Context, arg UpdateSettingsParams) (Setting, error) {
@@ -306,6 +312,8 @@ func (q *Queries) UpdateSettings(ctx context.Context, arg UpdateSettingsParams) 
 		pq.Array(arg.EditorAllowedEmbeds),
 		arg.SetFrontPage,
 		arg.FrontPageID,
+		arg.SetSiteLogo,
+		arg.SiteLogoMediaID,
 	)
 	var i Setting
 	err := row.Scan(
@@ -323,6 +331,7 @@ func (q *Queries) UpdateSettings(ctx context.Context, arg UpdateSettingsParams) 
 		pq.Array(&i.EditorAllowedEmbeds),
 		&i.AllowSignup,
 		&i.FrontPageID,
+		&i.SiteLogoMediaID,
 	)
 	return i, err
 }

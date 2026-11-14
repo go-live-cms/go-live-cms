@@ -5,6 +5,7 @@ import { useClickOutside, useFloating, useStableId } from "@gl-admin/components/
 import { toast } from "@gl-admin/components/ui/Toast"
 import { authManager } from "@gl-admin/lib/auth"
 import { getActiveTheme, menuEntries, type CatalogEntry } from "../blocks/catalog"
+import { editorDocKind } from "../extensions/SiteBlocks"
 import { gutterAccepts, insertFromGutter } from "../utils/blockGutter"
 import type { BlockRef } from "../utils/blockActions"
 import { InsertMenuFooter, InsertMenuList, InsertMenuStatus, optionId, useInsertMenu } from "./InsertMenu"
@@ -35,7 +36,7 @@ export default function AddBlockMenu({ editor, target, anchor, onClose, entries:
   const entries = useMemo(
     () =>
       given ??
-      menuEntries({ role: authManager.getState().user?.role, theme: getActiveTheme(), accepts: gutterAccepts(editor, target) }),
+      menuEntries({ role: authManager.getState().user?.role, theme: getActiveTheme(), context: editorDocKind(editor), accepts: gutterAccepts(editor, target) }),
     [given]
   )
   const menu = useInsertMenu(entries, query)

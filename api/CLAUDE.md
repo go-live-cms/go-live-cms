@@ -741,6 +741,25 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   "Changes not published", scheduled updates, duplicate, template, restore) and
   `TestHTMLSnippetRoutesRequireRole` (`htmlSnippetRoutes`, the route audit).
 
+## Site blocks and the site logo (#488, `000057`, `post_blocks_site.go`, `site_logo.go`)
+
+- **Six core flow types** (`flowBlockTypes`, `siteBlockTypes`): `site_title`, `site_tagline`, `site_logo`,
+  `navigation`, `search`, `template_part`. They hold no text: what they show is the site's, rendered by the web from
+  the template's context. `sanitizeSiteBlockAttrs` is an allowlist per type with defaults left out (the web's
+  `normalizeSiteBlockAttrs`; `siteBlockVectors.json` pins both): a level 1 or 2, `link: false`, a logo width clamped to
+  32–600, **one** of `menuId` (a positive integer) and `location` (a theme location's name; both set keeps the menu),
+  `layout: column`, `overlay: never`, the search texts as plain text (80/80/40 runes), a part's slug. Nothing else: no
+  text, pm, links, handlers or a part's content.
+- **Where they sit, by the doc's kind** (design 4.2): `prepareForStore` is a post's, where they are inert and never
+  refused (a refusal would make every later store of the post fail). `prepareForStoreAs(themeBlocks, kind)` adds the
+  kind's rules (`checkSiteBlockPlacement`): a `template_part` never in a `part`. The template tables (#490) store
+  through it; an unknown kind is an error, never a post.
+- **The site logo:** `settings.site_logo_media_id` (FK media, `ON DELETE SET NULL`). `PUT /settings
+  {site_logo_media_id: <id> | null}` (admins; absent keeps): an image, else 400 `invalid_site_logo`. `GET` and `PUT
+  /settings` add `site_logo` (`SiteLogoResponse`: public path, size, resized variants, alt, type, names; null for none or
+  a failed lookup, logged `site_logo_lookup_failed`). `/settings` is public and cached; media edits and deletes already
+  purge (`publicCachePurgeRoutes`). Activity: the field name in `settings_updated`. "Used in" for the logo is #496.
+- Tests: `post_blocks_site_test.go` (the vectors, kinds), `site_logo_test.go` (the setting, the lookup, roles).
 ## Categories, merges and redirects (#331, #146, `000047`)
 
 - **One category per post** (taxonomy `category`, `db.CategoryTaxonomy`): `PUT

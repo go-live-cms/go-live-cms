@@ -28,6 +28,8 @@ import { DETAILS_OPEN_HELP, DETAILS_OPEN_LABEL } from "./DetailsBlock"
 import { button, MediaBlockView, MediaLookupTracker, mediaIcon, missingPanel } from "./MediaBlockViews"
 import { EmbedBlockView } from "./EmbedBlockViews"
 import { HtmlBlockView } from "./HtmlBlockViews"
+import { SiteBlockView } from "./SiteBlockViews"
+import { SITE_BLOCK_NODE_NAMES } from "@gl-admin/lib/blocks-spec"
 import { GALLERY_EMPTY_FRESH, GALLERY_EMPTY_TEXT, GALLERY_EMPTY_TITLE } from "./GalleryBlock"
 import { chooseGalleryImages, chooseMediaFor, uploadGalleryImages } from "../blocks/mediaPicking"
 import { deleteBlockTr, editorBlockAt, refOfBlock } from "../utils/blockTree"
@@ -100,6 +102,13 @@ export const BlockNodeViews = Extension.create({
             embed: (node, view, getPos) => new EmbedBlockView(node, view, getPos as () => number | undefined, editor),
             // #428 (HtmlBlockViews.ts): a code field for admins, a locked preview for the rest.
             html: (node, view, getPos) => new HtmlBlockView(node, view, getPos as () => number | undefined, editor),
+            // #488 (SiteBlockViews.ts): labelled placeholders; inert in a post, and they say so.
+            ...Object.fromEntries(
+              Object.values(SITE_BLOCK_NODE_NAMES).map((name) => [
+                name,
+                (node: PMNode, view: EditorView, getPos: () => number | undefined) => new SiteBlockView(node, view, getPos, editor),
+              ])
+            ),
             // #426: columns, buttons and the spacer (LayoutBlockViews.ts).
             columns: (node, view, getPos) => new ColumnsView(node, view, getPos as () => number | undefined, editor),
             buttons: (node, view, getPos) => new ButtonsView(node, view, getPos as () => number | undefined, editor),

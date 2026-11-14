@@ -22,7 +22,15 @@ func (server *Server) getSettings(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, toSettingsResponse(settings, server.siteAddress()))
+	c.JSON(http.StatusOK, server.settingsResponse(c, settings))
+}
+
+// settingsResponse is the settings as GET and PUT /settings answer them, the site logo's
+// media (#488) looked up with them.
+func (server *Server) settingsResponse(c *gin.Context, settings db.Setting) SettingsResponse {
+	response := toSettingsResponse(settings, server.siteAddress())
+	response.SiteLogo = server.siteLogo(c.Request.Context(), settings)
+	return response
 }
 
 // siteAddress is the public origin the Settings page shows read-only (#330), or "" if
@@ -74,6 +82,18 @@ func (server *Server) updateSettings(c *gin.Context) {
 	if frontPageID != nil {
 		params.FrontPageID = sql.NullInt64{Int64: *frontPageID, Valid: true}
 	}
+	setSiteLogo, siteLogoID, err := req.siteLogoUpdate()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "invalid_site_logo", "fields": gin.H{"site_logo_media_id": err.Error()}})
+		return
+	}
+	if siteLogoID != nil && !server.checkSiteLogo(c, *siteLogoID) {
+		return
+	}
+	params.SetSiteLogo = setSiteLogo
+	if siteLogoID != nil {
+		params.SiteLogoMediaID = sql.NullInt64{Int64: *siteLogoID, Valid: true}
+	}
 
 	settings, err := server.store.UpdateSettings(c, params)
 	if err != nil {
@@ -89,7 +109,7 @@ func (server *Server) updateSettings(c *gin.Context) {
 		Payload:    map[string]any{"fields": req.setFields()},
 	})
 
-	c.JSON(http.StatusOK, toSettingsResponse(settings, server.siteAddress()))
+	c.JSON(http.StatusOK, server.settingsResponse(c, settings))
 }
 
 // getExtensionSetting handles GET /extension-settings/:key

@@ -19,6 +19,7 @@
  */
 
 import { isMediaMissing } from "./media"
+import { SITE_BLOCK_NODE_NAMES, SITE_BLOCK_TYPES } from "./siteBlocks"
 
 /**
  * The core Block Spec types that hold no blocks (design 2.2's `flow`). Lists count as
@@ -51,6 +52,8 @@ export const FLOW_TYPES = [
   // #426
   "buttons",
   "spacer",
+  // #488: the site blocks (siteBlocks.ts), flow atoms that read site data on the page.
+  ...SITE_BLOCK_TYPES,
 ] as const
 
 /**
@@ -63,7 +66,18 @@ export const FLOW_TYPES = [
 // The media blocks (#423) and embeds (#425) too: one in a quote's pm would never render.
 // Buttons and the spacer (#426) too: the page renders them from their own blocks only.
 // Custom HTML (#428) too: its markup is only ever rendered from its own block.
-export const STANDALONE_FLOW_NODE_NAMES = ["tableBlock", "video", "audio", "file", "embed", "html", "buttons", "spacer"] as const
+// The site blocks (#488) too: each renders from its own block, never as part of a quote's text.
+export const STANDALONE_FLOW_NODE_NAMES = [
+  "tableBlock",
+  "video",
+  "audio",
+  "file",
+  "embed",
+  "html",
+  "buttons",
+  "spacer",
+  ...Object.values(SITE_BLOCK_NODE_NAMES),
+] as const
 
 /**
  * The list types: `children` are their items, as before #414. Each list has one item
@@ -260,6 +274,8 @@ export const BLOCK_NODE_NAMES: Readonly<Record<string, string>> = {
   spacer: "spacer",
   // #422: only in a `footnotes` list, so not flow.
   footnote: "footnote",
+  // #488
+  ...SITE_BLOCK_NODE_NAMES,
   ...Object.fromEntries(Object.entries(CONTAINERS).map(([type, rule]) => [type, rule.node])),
 }
 

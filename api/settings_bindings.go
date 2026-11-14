@@ -23,6 +23,9 @@ type UpdateSettingsRequest struct {
 	// The front page (#336, front_page.go): a published page's id, null for the
 	// latest posts, absent to keep it.
 	FrontPageID json.RawMessage `json:"front_page_id"`
+	// The site logo (#488, site_logo.go): an image's media id, null for none, absent to
+	// keep it.
+	SiteLogoMediaID json.RawMessage `json:"site_logo_media_id"`
 }
 
 // setFields lists the JSON names of the settings the request sets, in field
@@ -45,6 +48,7 @@ func (req UpdateSettingsRequest) setFields() []string {
 	add(req.EditorAllowedEmbeds != nil, "editor_allowed_embeds")
 	add(req.AllowSignup != nil, "allow_signup")
 	add(len(req.FrontPageID) > 0, "front_page_id")
+	add(len(req.SiteLogoMediaID) > 0, "site_logo_media_id")
 	return fields
 }
 
@@ -66,6 +70,10 @@ type SettingsResponse struct {
 	// The page shown at / (#336), or null for the latest posts. As stored: it may
 	// name a page that isn't published any more, which / then doesn't show.
 	FrontPageID *int64 `json:"front_page_id"`
+	// The site logo (#488): the media id as stored (null = none), and what the Site logo
+	// block renders, looked up with it (null for none, or a lookup that failed).
+	SiteLogoMediaID *int64            `json:"site_logo_media_id"`
+	SiteLogo        *SiteLogoResponse `json:"site_logo"`
 	// The public origin (PUBLIC_BASE_URL), read-only: the domain is deploy config
 	// (docs/operations/deploy.md, "Change domain"). "" when it isn't configured.
 	SiteAddress string `json:"site_address"`

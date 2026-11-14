@@ -40,6 +40,14 @@ import {
 } from "../blocks-spec"
 import { attrProblem, isExtensionBlockType, themeBlockSpecOf, type ThemeBlockSpec } from "../blocks-spec/themeBlocks"
 import {
+  isSiteBlockType,
+  normalizeSiteBlockAttrs,
+  SITE_BLOCK_NODE_NAMES,
+  SITE_BLOCK_VERSION,
+  siteBlockNodeAttrs,
+  siteBlockTypeOfNode,
+} from "../blocks-spec/siteBlocks"
+import {
   acceptsChild,
   BLOCK_NODE_NAMES,
   containerOfNode,
@@ -176,6 +184,12 @@ function pmNodeToBlock(node: PMNode, allBlocks: Record<BlockID, Block>, seenIds:
 
   const themeSpec = themeBlockSpecOf(node.type)
   if (themeSpec) return themeNodeToBlock(node, id, themeSpec)
+
+  // #488: a site block keeps its own attrs only, each valid, defaults left out. Whatever else
+  // a client's Yjs update put on the element stops here; the API's sanitizer keeps the same
+  // (siteBlockVectors.json).
+  const siteType = siteBlockTypeOfNode(node.type.name)
+  if (siteType) return { id, type: siteType, version: SITE_BLOCK_VERSION, attrs: normalizeSiteBlockAttrs(siteType, node.attrs) } as Block
 
   switch (node.type.name) {
     case "paragraph":
@@ -1030,6 +1044,11 @@ function pmAttrsWithout(pm: any, ...names: string[]): Record<string, unknown> {
 function blockToPMNode(block: Block, allBlocks: Record<BlockID, Block>, ctx: ConvertContext): any {
   const baseAttrs = {
     "data-block-id": block.id, // Ensure block ID is preserved
+  }
+
+  // #488: the node's every attr, defaults filled in, from the stored ones (`siteBlockNodeAttrs`).
+  if (isSiteBlockType(block.type)) {
+    return { type: SITE_BLOCK_NODE_NAMES[block.type], attrs: { ...baseAttrs, ...siteBlockNodeAttrs(block.type, block.attrs) } }
   }
 
   switch (block.type) {

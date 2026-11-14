@@ -436,6 +436,16 @@ issue.
 | Reads site data | no | **yes, through the context** | no | no |
 | Changes the fingerprint | when added | **once, in their deploy** | with the theme's build | with the plugin's build |
 
+**As built (T6, #488):** the six blocks of site blocks I are `blocks-spec/siteBlocks.ts`
+(`siteBlockVectors.json` shared with Go's `post_blocks_site.go`). Three details the table
+left open: a logo's width defaults to 48 px; a `navigation` block with both `menuId` and
+`location` set (two people picking at once) keeps `menuId`, in the bridge and the API alike;
+and `overlay: phone` folds the links into a `<details>` menu button at the header's 760px
+breakpoint, so it needs no script. The render context is
+`src/components/blocks/utils/siteContext.ts`, filled by `src/lib/siteRenderContext.ts`;
+`post_content` (T7) must render the post's body with `site={null}`, or the post's own site
+blocks would come alive inside the template.
+
 Theme and plugin blocks work in templates exactly as in posts, with their own renderers and
 #456's boundary for plugins. **Data-reading ("dynamic") blocks from themes or plugins are not
 in v1.** They would need a data contract (who fetches, with what limits). That belongs with
