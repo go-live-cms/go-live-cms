@@ -3,7 +3,7 @@
  *
  * Plain CSS, served as is from /themes/default/styles/theme.css (no build step). The
  * tokens (--color-*, --size-*, --space-*, ...) are not defined here: base.astro inlines
- * them from theme.config.ts (tokens.ts), light by default and dark under
+ * them from theme.config.ts (src/lib/themeTokens.ts), light by default and dark under
  * [data-theme="dark"] or prefers-color-scheme.
  */
 
