@@ -1188,6 +1188,13 @@ from `/uploads`. Give `.video-block video` and `.audio-block audio` the text col
 and lay `.file-block` out as a row that wraps on a phone; the default theme's rules are in
 `styles/theme.css`.
 
+**Video captions (#507).** A video whose media item has a captions file (Media › the video ›
+Captions (VTT)) gets `<track kind="captions" src srclang label default>` as the first child of its
+`<video>`, so the browser shows them by default and lists them in its captions menu. They come from
+the media library, so a theme does nothing to get them; style the cues with `video::cue` if you want
+(the browser's own look otherwise). The file is same-origin under `/uploads`, served as
+`text/vtt`, so there is no `crossorigin` to add.
+
 **Embeds (#425).** A placeholder until the reader clicks, so opening a post sends nothing to another
 site. Style `.embed-frame` (a 16:9 box; `.is-card` for a post on X, `.is-compact` for an audio
 player), `.embed-provider`, `.embed-title`, `.embed-note` and `.btn`, and after the click

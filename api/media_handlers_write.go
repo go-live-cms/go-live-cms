@@ -523,6 +523,10 @@ func (server *Server) updateMedia(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	captions, ok := parseCaptionsRequest(c, req)
+	if !ok {
+		return
+	}
 
 	caller, ok := server.callerUser(c)
 	if !ok {
@@ -568,10 +572,19 @@ func (server *Server) updateMedia(c *gin.Context) {
 		params.FocalX = sql.NullFloat64{Float64: focal.X, Valid: true}
 		params.FocalY = sql.NullFloat64{Float64: focal.Y, Valid: true}
 	}
+	// Captions (#507): only a video, only a text/vtt file (applyCaptions).
+	if captions.any() && !server.applyCaptions(c, id, captions, &params) {
+		return
+	}
 	updatedMedia, err := server.store.UpdateMediaMetadata(c.Request.Context(), params)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "media not found"})
+			return
+		}
+		// The captions file was deleted after applyCaptions read it.
+		if isForeignKeyViolation(err) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "captions must be a WebVTT (.vtt) file in the media library", "code": "invalid_captions"})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update media"})

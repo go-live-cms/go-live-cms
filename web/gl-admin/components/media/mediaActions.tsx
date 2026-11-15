@@ -5,6 +5,7 @@ import { toast } from "@gl-admin/components/ui/Toast"
 import { getMediaURL } from "@gl-admin/lib/api"
 import { deleteMedia } from "@gl-admin/lib/api/media"
 import { errorMessage } from "@gl-admin/lib/api/errors"
+import { isCaptionsFile } from "@gl-admin/lib/mediaLibrary"
 import type { Media } from "@gl-admin/lib/types"
 
 // The actions the side panel and the detail page share: copy the URL, download, delete.
@@ -31,6 +32,13 @@ export function downloadMedia(media: Pick<Media, "media_path" | "name">) {
   document.body.appendChild(link)
   link.click()
   link.remove()
+}
+
+// What deleting takes away. A captions file (#507) is in no post itself: the videos it
+// captions lose their captions (the API clears the link).
+export function deleteDescription(media: Pick<Media, "mime_type">[]): string {
+  if (media.length > 0 && media.every(isCaptionsFile)) return "Videos it captions lose their captions. This can't be undone."
+  return "Posts that use it lose the image. This can't be undone."
 }
 
 type DeleteMediaDialogProps = {
@@ -71,7 +79,7 @@ export function DeleteMediaDialog({ media, onClose, onDeleted }: DeleteMediaDial
       role="alertdialog"
       size="small"
       title={count > 0 ? title : ""}
-      description="Posts that use it lose the image. This can't be undone."
+      description={deleteDescription(media)}
       footer={
         <>
           <Button variant="ghost" onClick={onClose} disabled={busy}>

@@ -15,6 +15,8 @@ import {
   typeLabel,
   usedInHeading,
   usageLabels,
+  canHaveCaptions,
+  isCaptionsFile,
   usedInRows,
   type MediaPostLink,
   type MediaUsage,
@@ -85,6 +87,11 @@ describe("usedInRows (the “Used in” data)", () => {
     // #427
     expect(usageLabels({ relationship_type: "gallery", usages: [{ type: "block", block_id: "a", block_type: "cover" }, { type: "block", block_id: "b", block_type: "media_text" }] })).toEqual(["cover block", "media & text block"])
     expect(usageLabels({ relationship_type: "featured", usages: [] })).toEqual(["featured image"])
+    // A captions file (#507) is used through the video blocks showing the video it captions.
+    expect(usageLabels({ relationship_type: "captions", usages: [{ type: "captions", block_id: "v1", block_type: "video" }] })).toEqual(["captions of a video block"])
+    expect(
+      usageLabels({ relationship_type: "captions", usages: [{ type: "captions", block_id: "v1", block_type: "video" }, { type: "captions", block_id: "v2", block_type: "video" }] }),
+    ).toEqual(["captions of 2 video blocks"])
   })
 
   it("is empty for an unused file", () => {
@@ -136,6 +143,22 @@ describe("file kinds and labels", () => {
     expect(findMediaSort("name_asc")).toBe("name_asc")
     expect(findMediaSort("bogus")).toBe("date_desc")
     expect(findMediaSort(null)).toBe("date_desc")
+  })
+})
+
+describe("captions (#507)", () => {
+  it("lets a video carry captions, from a WebVTT file", () => {
+    expect(canHaveCaptions({ media_path: "/uploads/media/tour.mp4", mime_type: "video/mp4" })).toBe(true)
+    expect(canHaveCaptions({ media_path: "/uploads/media/song.mp3", mime_type: "audio/mpeg" })).toBe(false)
+    expect(canHaveCaptions({ media_path: "/uploads/media/a.jpg", mime_type: "image/jpeg" })).toBe(false)
+    expect(isCaptionsFile({ mime_type: "text/vtt" })).toBe(true)
+    expect(isCaptionsFile({ mime_type: "text/plain" })).toBe(false)
+  })
+
+  it("files a .vtt with the library's files, tagged VTT", () => {
+    const vtt = { media_path: "/uploads/media/tour-en-0a1b.vtt", mime_type: "text/vtt" }
+    expect(mediaKind(vtt)).toBe("file")
+    expect(typeLabel(vtt)).toBe("VTT file")
   })
 })
 

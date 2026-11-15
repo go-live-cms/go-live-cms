@@ -32,6 +32,9 @@ export interface BlockMedia {
   file_size?: number
   name?: string
   filename?: string
+  // A video's captions (#507), for a video block only: the WebVTT file's /uploads URL, its
+  // language and label (`utils/mediaFile.ts` `blockCaptionsFor`).
+  captions?: { url: string; lang?: string; label: string }
 }
 
 // Default `sizes` for block images: a content column up to ~1000px wide.

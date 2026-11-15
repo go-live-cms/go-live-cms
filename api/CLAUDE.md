@@ -150,6 +150,20 @@ the collab server.
   featured image goes through `UnlinkPostFeaturedMedia`, which keeps an image that is also in
   the body as a content link. `GET /media/:id/posts` adds `usages` (`featured` | `block` |
   `attached`, `mediaUsages`). One row per pair keeps #325's counts unchanged.
+- **Video captions (#507, `000059`, `media_captions.go`):** on the media item, not the block:
+  `media.captions_media_id` (FK media, `ON DELETE SET NULL`; never itself) is a `text/vtt` item and
+  `captions_lang` its BCP-47 tag (`''` without captions). `.vtt` uploads are sniffed by `isWebVTT`
+  (`WEBVTT` after an optional BOM, then space/tab/line break, and text: HTML is refused); `/uploads`
+  serves them as `text/vtt; charset=utf-8` (`uploadsContentType`, before the static handler; nosniff
+  is global), and so does the web's production proxy. `PUT /media/:id {captions_media_id: id|null,
+  captions_lang}` (in `UpdateMediaMetadata`, `set_captions`): only on a `video/*` (400
+  `captions_not_video`), only a `text/vtt` item (400 `invalid_captions`, also for a file deleted
+  meanwhile), no language = keep the stored one, else the site language; a language alone needs
+  captions. Responses carry `captions_media_id`/`captions_lang`. `attachBlockMedia` gives a video a
+  **video block** shows `captions: {url, lang, label}` (label = the file's name, else the language;
+  a second `GetMediaByIDs`, best effort). "Used in" of a captions file = `GetPostsByCaptionsMedia`
+  (posts whose video blocks show a video it captions; usage `captions`). PUT/replace/DELETE media
+  already purge the public cache.
 - **`media_path` in responses is a URL path, not the stored value.** The DB holds
   the filesystem path (`<UPLOAD_PATH>/<file>`, e.g. `/app/uploads/media/x.jpg` in
   compose); responses map it to where `/uploads` serves it (`/uploads/media/x.jpg`)

@@ -73,6 +73,10 @@ export async function updateMedia(
     alt?: string
     decorative?: boolean
     focal_point?: FocalPoint | null
+    // A video's captions (#507): a text/vtt media id, or null to remove them. The
+    // language is kept when left out (the site language for a video's first captions).
+    captions_media_id?: number | null
+    captions_lang?: string
   },
   token?: string
 ): Promise<any> {

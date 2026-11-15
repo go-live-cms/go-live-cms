@@ -556,6 +556,7 @@ func (server *Server) setupRoutes() error {
 	// that posts already embed.
 	uploads := router.Group("/uploads", func(ctx *gin.Context) {
 		ctx.Header("Cache-Control", "no-cache")
+		uploadsContentType(ctx) // .vtt as text/vtt (#507); nosniff is global
 	})
 	uploads.Static("/", filepath.Dir(server.config.UploadPath))
 

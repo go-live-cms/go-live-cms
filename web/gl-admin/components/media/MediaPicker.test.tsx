@@ -119,7 +119,7 @@ describe("MediaPicker", () => {
     await render(<MediaPicker isOpen onClose={() => {}} onSelect={() => {}} />)
     const filter = document.querySelector('[role="radiogroup"][aria-label="Kind of file"]')!
     const radios = Array.from(filter.querySelectorAll('[role="radio"]'))
-    expect(radios.map((r) => r.textContent)).toEqual(["All", "Images", "Video", "Audio", "Files"])
+    expect(radios.map((r) => r.textContent)).toEqual(["All", "Images", "Video", "Audio", "Files", "Captions"])
     await click(button("Video", filter))
     expect(api.getMedia).toHaveBeenLastCalledWith(expect.objectContaining({ type: "video" }))
     expect(tile("demo.webm")).toBeTruthy()

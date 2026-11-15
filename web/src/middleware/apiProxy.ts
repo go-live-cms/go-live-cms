@@ -27,6 +27,16 @@ const HOP_BY_HOP_REQUEST = [
 // fetch() has already decoded the body, so the upstream encoding/length no longer apply.
 const DROPPED_RESPONSE = ["connection", "keep-alive", "transfer-encoding", "content-encoding", "content-length"]
 
+// A video's captions (#507): a .vtt under /uploads is served as WebVTT, never sniffed. The
+// API's /uploads already answers that way (uploadsContentType); this keeps it so whatever
+// sits in between, because a <track> refuses any other type and a sniffed text file must
+// never be read as HTML on the site's origin.
+export const CAPTIONS_CONTENT_TYPE = "text/vtt; charset=utf-8"
+
+export function isCaptionsPath(pathname: string): boolean {
+  return pathname.startsWith("/uploads/") && pathname.toLowerCase().endsWith(".vtt")
+}
+
 export function isApiProxyPath(pathname: string): boolean {
   return pathname === "/api/v1" || pathname.startsWith("/api/v1/") || pathname.startsWith("/uploads/")
 }
@@ -79,6 +89,10 @@ export async function proxyToApi(
   // Copying the Headers keeps every Set-Cookie (the refresh cookie) as its own entry.
   const responseHeaders = new Headers(upstream.headers)
   for (const name of DROPPED_RESPONSE) responseHeaders.delete(name)
+  if (upstream.ok && isCaptionsPath(url.pathname)) {
+    responseHeaders.set("content-type", CAPTIONS_CONTENT_TYPE)
+    responseHeaders.set("x-content-type-options", "nosniff")
+  }
   return new Response(upstream.body, {
     status: upstream.status,
     statusText: upstream.statusText,

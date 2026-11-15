@@ -22,7 +22,7 @@ describe("media blocks (#423)", () => {
   it("map each media block to the picker kind it takes", () => {
     expect(MEDIA_BLOCK_KINDS).toEqual({ image: "image", video: "video", audio: "audio", file: "document", cover: "image", media_text: "image" })
     expect(MEDIA_BLOCK_TYPES).toEqual(["image", "video", "audio", "file", "cover", "media_text"])
-    expect(MEDIA_PICKER_KINDS).toEqual(["image", "video", "audio", "document"])
+    expect(MEDIA_PICKER_KINDS).toEqual(["image", "video", "audio", "document", "captions"])
     expect(isMediaBlockType("video")).toBe(true)
     expect(isMediaBlockType("toString")).toBe(false)
   })
@@ -34,6 +34,10 @@ describe("media blocks (#423)", () => {
     expect(mimeMatchesKind("image/png", "video")).toBe(false)
     expect(mimeMatchesKind("", "image")).toBe(false)
     expect(mimeMatchesKind(undefined, "document")).toBe(false)
+    // A video's captions (#507): WebVTT only, not any text file.
+    expect(mimeMatchesKind("text/vtt", "captions")).toBe(true)
+    expect(mimeMatchesKind("text/plain", "captions")).toBe(false)
+    expect(mimeMatchesKind("text/vtt", "document")).toBe(false)
   })
 
   it("agree with the API on which blocks show media and on the label's cap", () => {
