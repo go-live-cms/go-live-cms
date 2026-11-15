@@ -92,11 +92,37 @@ func TestSiteBlocksInAPost(t *testing.T) {
 		require.ErrorContains(t, doc.prepareForStoreAs(ThemeBlockManifest{}, blockDocKind("page")), "kind")
 	})
 
-	t.Run("site blocks are flow, so a group or a column holds them", func(t *testing.T) {
+	t.Run("site blocks are flow, so a group or a column holds them; the query loop's are its own", func(t *testing.T) {
 		for blockType := range siteBlockTypes {
+			if _, container := blockContainers[blockType]; container || blockType == queryPaginationBlockType {
+				require.False(t, isFlowBlockType(blockType), blockType)
+				require.True(t, isCoreBlockType(blockType), blockType)
+				continue
+			}
 			require.True(t, isFlowBlockType(blockType), blockType)
 			require.True(t, containerAccepts("group", blockType), blockType)
 			require.True(t, containerAccepts("column", blockType), blockType)
 		}
+		// #489: a query at the top level or in a group; its parts only in a query.
+		require.True(t, containerAccepts("group", "query"))
+		require.False(t, containerAccepts("column", "query"))
+		require.False(t, containerAccepts("post_template", "query"))
+		require.False(t, containerAccepts("post_template", "group"))
+		require.False(t, containerAccepts("query_no_results", "group"))
+		for _, part := range []string{"post_template", queryPaginationBlockType, "query_no_results"} {
+			require.True(t, containerAccepts("query", part), part)
+			require.False(t, containerAccepts("group", part), part)
+		}
 	})
+}
+
+// #489: the query loop's attrs map one to one onto /public list parameters, so whatever a
+// client writes, no query string, status or SQL survives the store.
+func TestSiteQueryAttrsCarryNoQueryLanguage(t *testing.T) {
+	block := map[string]interface{}{"id": "query-0001", "type": "query", "version": float64(1), "attrs": map[string]interface{}{
+		"postType": "post_status=draft", "where": "1=1; DROP TABLE posts", "status": "draft", "perPage": float64(500),
+		"taxonomy": "category", "termIds": "1, 2,x,3", "authorId": float64(-1), "inherit": "true",
+	}}
+	sanitizeBlock(block)
+	require.Equal(t, map[string]interface{}{"perPage": float64(24), "taxonomy": "category", "termIds": []interface{}{float64(1), float64(2), float64(3)}}, block["attrs"])
 }

@@ -1,5 +1,7 @@
 import { createContext, useContext } from "react"
 import type { BlockDocV1 } from "@gl-admin/lib/blocks-spec"
+import type { AuthorProfile, Post, TaxonomyTerm } from "@gl-admin/lib/api/types"
+import type { DateSettings } from "../../../lib/siteDates"
 import type { BlockMedia } from "./responsiveImage"
 
 /**
@@ -52,6 +54,73 @@ export interface SiteRenderContext {
   parts: Readonly<Record<string, BlockDocV1 | null>>
   /** The page being rendered (its path), for `aria-current`. */
   currentPath?: string
+  /** #489: what the route renders (its post, its list, its term, author or search). */
+  route?: SiteRoute
+  /** #489: the site's date settings (Settings › General), for `post_date`. */
+  dates?: DateSettings
+  /**
+   * #489: each query block's posts, by `queryKey`, filled before the render (at most four per
+   * page, design 4.3): an inheriting query's is the route's own list, any other's was read from
+   * `/public/posts/type/:type`. Missing or null: over the four, failed or no list here, and
+   * the block renders nothing.
+   */
+  queries?: Readonly<Record<string, SitePostList | null>>
+  /** #489: the part being rendered, so a query in it finds its posts (`queryKey`). */
+  partSlug?: string
+}
+
+/** A term with its archive's link and its taxonomy's label (`src/lib/termPage.ts` `linkTerms`). */
+export type SiteLinkedTerm = TaxonomyTerm & { href?: string; taxonomy_label?: string }
+
+/**
+ * A post a post block shows (#489): a row of a list, or the route's own post. `post` carries
+ * the published title, excerpt, dates, byline (`authors`) and the category in its URL.
+ */
+export interface SitePostItem {
+  post: Post
+  href: string
+  /** The featured image's URL on this site, or null. */
+  image: string | null
+  /** The published terms, linked. A list row carries none yet, so `post_terms` shows nothing in a list. */
+  terms?: SiteLinkedTerm[]
+}
+
+/** A list of posts (#489): the route's own (with its pages), or a query's (one page). */
+export interface SitePostList {
+  items: SitePostItem[]
+  page: number
+  totalPages: number
+  /**
+   * Page 1's URL (#349's: `/`, `/post`, `/category/guides`, `/author/ana`, `/search`), or null
+   * for a query that isn't the page's own list: it has no pager, since two pagers can't share
+   * one `/page/N/` URL (4.3).
+   */
+  basePath: string | null
+  /** A query string every page link keeps (search's `?q=…`). */
+  pageQuery?: string
+}
+
+/** The route's post (#489): the item, its published body and what its end shows. */
+export interface SiteRoutePost extends SitePostItem {
+  /** The published blocks `post_content` renders. */
+  blocks?: BlockDocV1 | null
+  /** The credited authors (#350); the row's byline otherwise. */
+  authors?: AuthorProfile[]
+  /** Older and newer posts (#351), for `post_navigation`; null when they failed or there are none. */
+  adjacent?: { previous: SitePostItem | null; next: SitePostItem | null; archiveHref: string; archiveLabel: string } | null
+}
+
+/** What a block template renders (design 3.2's route kinds), as `query_title` and the post blocks read it. */
+export interface SiteRoute {
+  kind: "home" | "front-page" | "single" | "page" | "archive" | "term" | "author" | "search" | "404"
+  post?: SiteRoutePost | null
+  /** The route's own list (archive, term, author, search, home), for an inheriting query. */
+  list?: SitePostList | null
+  term?: { name: string; description?: string } | null
+  author?: { name: string } | null
+  search?: { query: string } | null
+  /** The listed post type's name, for an archive's `query_title`. */
+  postType?: { name: string; label: string } | null
 }
 
 export const SiteContext = createContext<SiteRenderContext | null>(null)
@@ -60,6 +129,30 @@ export const SiteContext = createContext<SiteRenderContext | null>(null)
 export function useSiteRenderContext(): SiteRenderContext | null {
   const site = useContext(SiteContext)
   return site?.inTemplate === true ? site : null
+}
+
+/** Where a query block's posts are kept in `queries`: its id, prefixed by its part's slug. */
+export function queryKey(partSlug: string | undefined, blockId: string): string {
+  return partSlug ? `part:${partSlug}:${blockId}` : blockId
+}
+
+/** The list item a post template is rendering (#489), or null outside a post template. */
+export const SitePostItemContext = createContext<SitePostItem | null>(null)
+
+/** The query a pager, a post template or "no results" sits in (#489): its posts and whether it is the page's list. */
+export const SiteQueryContext = createContext<{ list: SitePostList; inherit: boolean } | null>(null)
+
+/**
+ * The post a post block shows (#489): the list item when it sits in a post template, else the
+ * route's post; `inList` says which. Null outside a template, or with neither.
+ */
+export function useSitePost(): { site: SiteRenderContext; item: SitePostItem | SiteRoutePost; inList: boolean } | null {
+  const site = useSiteRenderContext()
+  const listed = useContext(SitePostItemContext)
+  if (!site) return null
+  if (listed) return { site, item: listed, inList: true }
+  const own = site.route?.post
+  return own ? { site, item: own, inList: false } : null
 }
 
 /** "/", without the query or hash: what the home link and `aria-current` compare. */

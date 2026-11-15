@@ -21,7 +21,8 @@ const TemplatePartBlock: React.FC<BlockComponentProps> = ({ block, anchorId }) =
   const slug = normalizeSiteBlockAttrs("template_part", block.attrs).slug as string | undefined
   const doc = slug ? site.parts[slug] : null
   if (!slug || !doc || !Array.isArray(doc.blocks_order) || doc.blocks_order.length === 0) return null
-  const inPart: SiteRenderContext = { ...site, kind: "part" }
+  // The slug lets a query in the part find its posts (#489, `queryKey`).
+  const inPart: SiteRenderContext = { ...site, kind: "part", partSlug: slug }
   const Tag = slug === "header" ? "header" : slug === "footer" ? "footer" : "div"
   return (
     <Tag id={anchorId} className={`template-part template-part--${slug}`}>

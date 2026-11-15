@@ -1,9 +1,12 @@
 package api
 
-// Site blocks I (#488, docs/design/theme-builder.md 4.1-4.2): site_title, site_tagline,
-// site_logo, navigation, search and template_part. Core flow types (flowBlockTypes) that hold
-// no text of their own: what they show is the site's, read on the page. In a post they are
-// inert, never refused (refusing one would make every later store of that post fail).
+// Site blocks (docs/design/theme-builder.md 4.1-4.2). Site blocks I (#488): site_title,
+// site_tagline, site_logo, navigation, search and template_part. Site blocks II (#489): the
+// query loop (query, post_template and query_no_results, rows of blockContainers, and
+// query_pagination, an atom that lives only in a query), query_title, term_description and
+// the post_* blocks. They hold no text of their own: what they show is the site's, read on
+// the page. In a post they are inert, never refused (refusing one would make every later
+// store of that post fail).
 //
 // Their attrs are allowlists with defaults left out, the same rules as the web's
 // normalizeSiteBlockAttrs (web/gl-admin/lib/blocks-spec/siteBlocks.ts);
@@ -14,6 +17,8 @@ import (
 	"math"
 	"regexp"
 	"sort"
+	"strconv"
+	"strings"
 
 	"github.com/go-live-cms/go-live-cms/api/sitedesign"
 )
@@ -28,10 +33,15 @@ const (
 	blockDocKindPart     blockDocKind = "part"
 )
 
-// siteBlockTypes are the site blocks of #488 (Block Spec SITE_BLOCK_TYPES).
+// siteBlockTypes are the site blocks (Block Spec SITE_BLOCK_TYPES).
 var siteBlockTypes = map[string]bool{
 	"site_title": true, "site_tagline": true, "site_logo": true,
 	"navigation": true, "search": true, "template_part": true,
+	// #489
+	"query_title": true, "term_description": true, "post_title": true, "post_content": true,
+	"post_excerpt": true, "post_featured_image": true, "post_date": true, "post_byline": true,
+	"post_terms": true, "post_navigation": true, queryPaginationBlockType: true,
+	"query": true, "post_template": true, "query_no_results": true,
 }
 
 const (
@@ -46,6 +56,19 @@ const (
 	// maxSafeInteger is JavaScript's Number.MAX_SAFE_INTEGER: the largest menu id the web
 	// keeps (isMenuId).
 	maxSafeInteger = 1<<53 - 1
+
+	// #489: a query's page size (the /public/posts per_page cap) and terms, an excerpt's words.
+	queryMinPerPage     = 1
+	queryMaxPerPage     = 24
+	queryDefaultPerPage = 10
+	queryMaxTerms       = 10
+	queryDefaultType    = "post"
+
+	postExcerptMinWords     = 5
+	postExcerptMaxWords     = 100
+	postExcerptDefaultWords = 35
+
+	postTermsDefaultTaxonomy = "category"
 )
 
 var (
@@ -54,6 +77,10 @@ var (
 	// A template part's slug, as site_templates.slug's CHECK allows it (one rule for both,
 	// #490).
 	templatePartSlugPattern = sitedesign.SlugPattern
+	// A post type's or a taxonomy's name (identifierRe, at most 64): the web's isContentName.
+	contentNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
+	// One id of a query's comma list of terms (the editor node's form).
+	termIDPattern = regexp.MustCompile(`^\s*[0-9]+\s*$`)
 )
 
 // sanitizeSiteBlockAttrs keeps a site block's own attrs, each valid, defaults left out.
@@ -109,6 +136,148 @@ func sanitizeSiteBlockAttrs(blockType string, attrs map[string]interface{}) {
 		if slug, ok := attrs["slug"].(string); !ok || !templatePartSlugPattern.MatchString(slug) {
 			delete(attrs, "slug")
 		}
+	case "query":
+		sanitizeQueryAttrs(attrs)
+	case "query_title":
+		keepOnlyAttrs(attrs, "level")
+		if level, ok := attrs["level"].(float64); !ok || level != 2 {
+			delete(attrs, "level")
+		}
+	case "post_title":
+		keepOnlyAttrs(attrs, "level", "link")
+		if level, ok := attrs["level"].(float64); !ok || level < 1 || level > 4 || level != math.Trunc(level) {
+			delete(attrs, "level")
+		}
+		if _, ok := attrs["link"].(bool); !ok {
+			delete(attrs, "link")
+		}
+	case "post_excerpt":
+		keepOnlyAttrs(attrs, "length")
+		keepClampedInt(attrs, "length", postExcerptMinWords, postExcerptMaxWords, postExcerptDefaultWords)
+	case "post_featured_image":
+		keepOnlyAttrs(attrs, "aspect", "link")
+		if aspect := attrs["aspect"]; aspect != "16-9" && aspect != "3-2" && aspect != "1-1" {
+			delete(attrs, "aspect")
+		}
+		keepOnlyTrue(attrs, "link")
+	case "post_date":
+		keepOnlyAttrs(attrs, "which", "format")
+		if attrs["which"] != "modified" {
+			delete(attrs, "which")
+		}
+		if attrs["format"] != "short" {
+			delete(attrs, "format")
+		}
+	case "post_byline":
+		keepOnlyAttrs(attrs, "avatars")
+		keepOnlyFalse(attrs, "avatars")
+	case "post_terms":
+		keepOnlyAttrs(attrs, "taxonomy")
+		if name, ok := attrs["taxonomy"].(string); !ok || !contentNamePattern.MatchString(name) || name == postTermsDefaultTaxonomy {
+			delete(attrs, "taxonomy")
+		}
+	case "term_description", "post_content", "post_navigation", queryPaginationBlockType, "post_template", "query_no_results":
+		keepOnlyAttrs(attrs)
+	}
+}
+
+// sanitizeQueryAttrs keeps a query's closed vocabulary (design 4.3), each attr one /public
+// list parameter: never a query string, a status or SQL. inherit only true; postType a name
+// ("post" left out); perPage rounded and clamped to 1-24 (10 left out); orderBy "title";
+// order "asc"; taxonomy and termIds both or neither (termIds: ids, distinct, ascending, at
+// most 10; the editor node's comma list is read too); authorId a user id.
+func sanitizeQueryAttrs(attrs map[string]interface{}) {
+	keepOnlyAttrs(attrs, "inherit", "postType", "perPage", "orderBy", "order", "taxonomy", "termIds", "authorId")
+	keepOnlyTrue(attrs, "inherit")
+	if name, ok := attrs["postType"].(string); !ok || !contentNamePattern.MatchString(name) || name == queryDefaultType {
+		delete(attrs, "postType")
+	}
+	keepClampedInt(attrs, "perPage", queryMinPerPage, queryMaxPerPage, queryDefaultPerPage)
+	if attrs["orderBy"] != "title" {
+		delete(attrs, "orderBy")
+	}
+	if attrs["order"] != "asc" {
+		delete(attrs, "order")
+	}
+	termIDs := normalizeQueryTermIDs(attrs["termIds"])
+	taxonomy, ok := attrs["taxonomy"].(string)
+	if len(termIDs) == 0 || !ok || !contentNamePattern.MatchString(taxonomy) {
+		delete(attrs, "taxonomy")
+		delete(attrs, "termIds")
+	} else {
+		ids := make([]interface{}, len(termIDs))
+		for i, id := range termIDs {
+			ids[i] = float64(id)
+		}
+		attrs["termIds"] = ids
+	}
+	if !isPositiveID(attrs["authorId"]) {
+		delete(attrs, "authorId")
+	}
+}
+
+// normalizeQueryTermIDs is the web's normalizeTermIds: valid ids from an array or a comma
+// list, each once, ascending, at most queryMaxTerms.
+func normalizeQueryTermIDs(value interface{}) []int64 {
+	var raw []interface{}
+	switch v := value.(type) {
+	case []interface{}:
+		raw = v
+	case string:
+		for _, part := range strings.Split(v, ",") {
+			if !termIDPattern.MatchString(part) {
+				continue
+			}
+			if n, err := strconv.ParseFloat(strings.TrimSpace(part), 64); err == nil {
+				raw = append(raw, n)
+			}
+		}
+	}
+	seen := map[int64]bool{}
+	ids := []int64{}
+	for _, item := range raw {
+		if !isPositiveID(item) {
+			continue
+		}
+		id := int64(item.(float64))
+		if !seen[id] {
+			seen[id] = true
+			ids = append(ids, id)
+		}
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	if len(ids) > queryMaxTerms {
+		ids = ids[:queryMaxTerms]
+	}
+	return ids
+}
+
+// isPositiveID: a positive whole JSON number the web keeps exactly (isPositiveId).
+func isPositiveID(value interface{}) bool {
+	n, ok := value.(float64)
+	return ok && n >= 1 && n == math.Trunc(n) && n <= maxSafeInteger
+}
+
+// keepClampedInt keeps attrs[name] as a number rounded like Math.round and clamped to
+// minValue..maxValue, left out when that is def (the default) or it isn't a number.
+func keepClampedInt(attrs map[string]interface{}, name string, minValue, maxValue, def float64) {
+	n, ok := attrs[name].(float64)
+	if !ok || math.IsInf(n, 0) || math.IsNaN(n) {
+		delete(attrs, name)
+		return
+	}
+	clamped := math.Min(maxValue, math.Max(minValue, roundHalfUp(n)))
+	if clamped == def {
+		delete(attrs, name)
+		return
+	}
+	attrs[name] = clamped
+}
+
+// keepOnlyTrue keeps attrs[name] only when it is the boolean true (its default is false).
+func keepOnlyTrue(attrs map[string]interface{}, name string) {
+	if value, ok := attrs[name].(bool); !ok || !value {
+		delete(attrs, name)
 	}
 }
 
@@ -126,10 +295,13 @@ func roundHalfUp(v float64) float64 {
 }
 
 // checkSiteBlockPlacement applies the placement rules of design 4.2 that depend on the
-// doc's kind (the web's siteBlockKindIssues): a template part never sits in a part, at any
-// depth or unreferenced, so parts are never recursive. In a post nothing is refused.
+// doc's kind (the web's siteBlockKindIssues), first problem in key order. In a post nothing
+// is refused. In a part, a template part never sits (at any depth or unreferenced, so parts
+// are never recursive), nor a post_content (#489: a header holding the post would render it
+// twice). In a template, a post_content never sits inside a query's post_template at any
+// depth (it would render the route's post once per item), and there is at most one.
 func (doc *BlockDocV1) checkSiteBlockPlacement(kind blockDocKind) error {
-	if kind != blockDocKindPart {
+	if kind == blockDocKindPost {
 		return nil
 	}
 	ids := make([]string, 0, len(doc.Blocks))
@@ -137,10 +309,51 @@ func (doc *BlockDocV1) checkSiteBlockPlacement(kind blockDocKind) error {
 		ids = append(ids, id)
 	}
 	sort.Strings(ids)
+	typeOf := func(id string) string {
+		block, _ := doc.Blocks[id].(map[string]interface{})
+		return stringOf(block["type"])
+	}
+	// Each block's parent: the first block, in key order, whose children name it.
+	parent := map[string]string{}
 	for _, id := range ids {
 		block, _ := doc.Blocks[id].(map[string]interface{})
-		if block != nil && block["type"] == "template_part" {
-			return fmt.Errorf("block %s: a template_part can't be in a part", id)
+		children, _ := block["children"].([]interface{})
+		for _, child := range children {
+			if childID, ok := child.(string); ok {
+				if _, seen := parent[childID]; !seen {
+					parent[childID] = id
+				}
+			}
+		}
+	}
+	inPostTemplate := func(id string) bool {
+		seen := map[string]bool{id: true}
+		for at, ok := parent[id]; ok && !seen[at]; at, ok = parent[at] {
+			if typeOf(at) == "post_template" {
+				return true
+			}
+			seen[at] = true
+		}
+		return false
+	}
+	contents := 0
+	for _, id := range ids {
+		switch typeOf(id) {
+		case "template_part":
+			if kind == blockDocKindPart {
+				return fmt.Errorf("block %s: a template_part can't be in a part", id)
+			}
+		case "post_content":
+			contents++
+			if kind == blockDocKindPart {
+				return fmt.Errorf("block %s: a post_content can't be in a part", id)
+			}
+			if inPostTemplate(id) {
+				return fmt.Errorf("block %s: a post_content can't be in a post_template", id)
+			}
+			if contents > 1 {
+				return fmt.Errorf("block %s: a template holds at most one post_content", id)
+			}
 		}
 	}
 	return nil

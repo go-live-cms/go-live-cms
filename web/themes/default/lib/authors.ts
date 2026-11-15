@@ -2,45 +2,10 @@
  * Pure helpers for author bylines, "Written by" cards and the author page (#350).
  * Tested in authors.test.ts.
  */
-import { authorPath } from "@/lib/seo"
-import { avatarSrc } from "./avatar"
 
-export interface BylinePerson {
-  name: string
-  // Avatar colour key: always the username, so a person keeps one colour everywhere.
-  key: string
-  // The author page, for credited authors only (they're the ones with a page).
-  href?: string
-  // Their uploaded picture (#334), checked by avatarSrc; null shows the initial.
-  avatar?: string | null
-}
-
-type Credited = { username: string; full_name?: string; avatar?: string | null }
-
-export function displayName(author: Credited): string {
-  return author.full_name?.trim() || author.username
-}
-
-// People in a byline: the credited authors when there are any (each links to their
-// page), else the post's owner, who may have no page and so isn't linked.
-export function bylinePeople(
-  credited: Credited[] | undefined,
-  owner: { user_id?: number; username?: string },
-): BylinePerson[] {
-  if (credited && credited.length > 0) {
-    return credited.map((a) => {
-      const avatar = avatarSrc(a.avatar)
-      return { name: displayName(a), key: a.username, href: authorPath(a.username), ...(avatar ? { avatar } : {}) }
-    })
-  }
-  return owner.username ? [{ name: owner.username, key: owner.username }] : []
-}
-
-// What goes before the i-th of n names: "", ", " or " and " ("Ana, Luan and Priya").
-export function nameSeparator(i: number, n: number): string {
-  if (i === 0) return ""
-  return i === n - 1 ? " and " : ", "
-}
+// Who a byline credits is core's (src/lib/bylines.ts), shared with the post_byline site block
+// (#489), so a block template and this theme credit the same people the same way.
+export { bylinePeople, displayName, nameSeparator, type BylinePerson } from "@/lib/bylines"
 
 // The website as a link target, only for an absolute http(s) URL (the API checks
 // this too; this keeps a bad stored value from becoming a javascript: link).

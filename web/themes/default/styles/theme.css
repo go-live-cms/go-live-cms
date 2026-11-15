@@ -2591,3 +2591,48 @@ body {
 .template-part--footer {
   border-top: 1px solid var(--color-border);
 }
+/* ---------- site blocks II (#489) ----------
+   The query loop and the post blocks of a block template (#491), with the markup of this
+   theme's own list and post pieces (.post-list, .post-item, .pagination, .byline, .eyebrow,
+   .post-terms, .post-nav, .post-featured), so the theme styles both the same way. In a post
+   they render nothing. New rules only: the list's and the post's are unchanged. */
+.query-loop {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+.query-loop > .post-list {
+  margin: 0;
+}
+.query-loop > .pagination {
+  padding-top: 0;
+}
+.query-no-results {
+  padding-block: var(--space-6);
+  border-top: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+}
+.query-no-results > :first-child {
+  margin-top: 0;
+}
+.post-date {
+  margin: 0;
+}
+div.post-item-media {
+  display: block;
+}
+.post-item .media.is-aspect-16-9,
+.post-featured img.is-aspect-16-9 {
+  aspect-ratio: 16 / 9;
+}
+.post-item .media.is-aspect-3-2,
+.post-featured img.is-aspect-3-2 {
+  aspect-ratio: 3 / 2;
+}
+.post-item .media.is-aspect-1-1,
+.post-featured img.is-aspect-1-1 {
+  aspect-ratio: 1 / 1;
+}
+.post-featured > a {
+  display: block;
+}

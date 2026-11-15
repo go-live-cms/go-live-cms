@@ -282,10 +282,16 @@ WHERE
     -- Review requested (#323): an open review request; for a contributor only on
     -- their own posts (they don't see others' requests).
     AND (NOT @review_pending::boolean OR (EXISTS (SELECT 1 FROM review_requests rr WHERE rr.post_id = p.id AND rr.status = 'open') AND (@viewer_id::bigint = 0 OR p.user_id = @viewer_id)))
+    -- The public query loop's filters (#489): what the site shows, so the published terms
+    -- (any of them) and the published byline (#319), never the working ones above.
+    AND (@published_term_ids::bigint[] IS NULL OR cardinality(@published_term_ids::bigint[]) = 0
+         OR EXISTS (SELECT 1 FROM post_published_terms pt WHERE pt.post_id = p.id AND pt.taxonomy_term_id = ANY(@published_term_ids::bigint[])))
+    AND (@published_author_id::bigint = 0 OR EXISTS (SELECT 1 FROM post_published_authors pa WHERE pa.post_id = p.id AND pa.user_id = @published_author_id::bigint))
 -- Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
 -- of these pairs; anything else falls through to the id tiebreaker.
 -- changed_at sorts as GREATEST(changed_at, created_at): never-updated posts
 -- keep the 0001-01-01 sentinel and rank by creation time instead.
+-- published_title (#489, the public query loop) sorts by the title the site shows.
 ORDER BY
     CASE WHEN @sort_column::text = 'created_at' AND @sort_direction::text = 'asc' THEN p.created_at END ASC,
     CASE WHEN @sort_column::text = 'created_at' AND @sort_direction::text = 'desc' THEN p.created_at END DESC,
@@ -293,6 +299,8 @@ ORDER BY
     CASE WHEN @sort_column::text = 'changed_at' AND @sort_direction::text = 'desc' THEN GREATEST(p.changed_at, p.created_at) END DESC,
     CASE WHEN @sort_column::text = 'title' AND @sort_direction::text = 'asc' THEN p.title END ASC,
     CASE WHEN @sort_column::text = 'title' AND @sort_direction::text = 'desc' THEN p.title END DESC,
+    CASE WHEN @sort_column::text = 'published_title' AND @sort_direction::text = 'asc' THEN COALESCE(p.published_settings->>'title', p.title) END ASC,
+    CASE WHEN @sort_column::text = 'published_title' AND @sort_direction::text = 'desc' THEN COALESCE(p.published_settings->>'title', p.title) END DESC,
     CASE WHEN @sort_column::text = 'menu_order' AND @sort_direction::text = 'asc' THEN p.menu_order END ASC,
     CASE WHEN @sort_column::text = 'menu_order' AND @sort_direction::text = 'desc' THEN p.menu_order END DESC,
     -- Stable tiebreaker in the requested direction (also serves sort=id).
@@ -320,7 +328,11 @@ WHERE
     AND (@viewer_id::bigint = 0 OR p.user_id = @viewer_id OR p.post_status = 'published')
     AND (NOT @unpublished_changes::boolean
          OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
-    AND (NOT @review_pending::boolean OR (EXISTS (SELECT 1 FROM review_requests rr WHERE rr.post_id = p.id AND rr.status = 'open') AND (@viewer_id::bigint = 0 OR p.user_id = @viewer_id)));
+    AND (NOT @review_pending::boolean OR (EXISTS (SELECT 1 FROM review_requests rr WHERE rr.post_id = p.id AND rr.status = 'open') AND (@viewer_id::bigint = 0 OR p.user_id = @viewer_id)))
+    -- The public query loop's filters (#489), as in ListPostsWithMeta.
+    AND (@published_term_ids::bigint[] IS NULL OR cardinality(@published_term_ids::bigint[]) = 0
+         OR EXISTS (SELECT 1 FROM post_published_terms pt WHERE pt.post_id = p.id AND pt.taxonomy_term_id = ANY(@published_term_ids::bigint[])))
+    AND (@published_author_id::bigint = 0 OR EXISTS (SELECT 1 FROM post_published_authors pa WHERE pa.post_id = p.id AND pa.user_id = @published_author_id::bigint));
 
 -- name: CountPostsByStatus :many
 -- The admin list's status tabs (#340): one count per status, with the list's

@@ -777,6 +777,22 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   a failed lookup, logged `site_logo_lookup_failed`). `/settings` is public and cached; media edits and deletes already
   purge (`publicCachePurgeRoutes`). Activity: the field name in `settings_updated`. "Used in" for the logo is #496.
 - Tests: `post_blocks_site_test.go` (the vectors, kinds), `site_logo_test.go` (the setting, the lookup, roles).
+- **Site blocks II (#489):** the query loop's three containers are rows of `blockContainers` (`query` at the top or
+  in a group holding `post_template`, `query_pagination` and `query_no_results`; those two only in a query, flow,
+  columns, details and media & text, never a group or a query), `query_pagination` a core atom that only lives in a
+  query (`nestedOnlyAtoms`, with `footnote`), and ten more flow types. `sanitizeQueryAttrs` is the query's closed
+  vocabulary, one `/public` parameter each: `inherit` true, `postType` and `taxonomy` names, `perPage` 1–24,
+  `orderBy` title, `order` asc, `termIds` (ids, distinct, ascending, ≤10; the editor node's comma list is read too)
+  only with a taxonomy, `authorId`. Never a status, a query string or SQL. `checkSiteBlockPlacement` adds
+  `post_content`'s rules: never in a part, never inside a `post_template` at any depth, at most one per template.
+- **The query loop's reads (#489, `public_posts_query.go`):** `GET /public/posts/type/:type` (#349's pages and the
+  published list rows) takes `per_page` (≥1, capped at 24; absent = `posts_per_page`), `order_by` (`date` =
+  `created_at`, `title` = the **published** title, `published_title` in `ListPostsWithMeta`), `order`, `terms` (≤10
+  ids: one of them in the **published** terms, `post_published_terms`) and `author_id` (in the **published** byline,
+  `post_published_authors`); `CountFilteredPosts` takes the same two filters, so `total` agrees. Anything else is a
+  400 that reads nothing. Only published posts of a public, active type, as before, so no filter reaches a draft, a
+  trashed post or a private type (`public_posts_query_db_test.go`). The cache key is the whole sorted query string,
+  so every filter keys it (`TestPublicCacheKeysOnEveryQueryFilter`). `GET /public/posts` (feeds) is unchanged.
 ## Categories, merges and redirects (#331, #146, `000047`)
 
 - **One category per post** (taxonomy `category`, `db.CategoryTaxonomy`): `PUT

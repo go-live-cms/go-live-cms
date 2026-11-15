@@ -303,6 +303,10 @@ reload loads the new bundle, and nothing typed is lost. Tell editors before such
 
 Releases that did this, newest first:
 
+- **#489, site blocks II** (the query loop: `query`, `post_template`, `query_pagination`,
+  `query_no_results`; `query_title`, `term_description` and the `post_*` blocks): fourteen new
+  node types, and a wider doc and group. No migration. Open editor tabs reload once after the
+  deploy.
 - **#488, site blocks I** (`site_title`, `site_tagline`, `site_logo`, `navigation`,
   `search`, `template_part`), with migration `000057` (`settings.site_logo_media_id`, a
   nullable column the previous release ignores, so it is safe to run before the new API).

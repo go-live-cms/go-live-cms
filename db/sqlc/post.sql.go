@@ -121,6 +121,10 @@ WHERE
     AND (NOT $7::boolean
          OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
     AND (NOT $8::boolean OR (EXISTS (SELECT 1 FROM review_requests rr WHERE rr.post_id = p.id AND rr.status = 'open') AND ($6::bigint = 0 OR p.user_id = $6)))
+    -- The public query loop's filters (#489), as in ListPostsWithMeta.
+    AND ($9::bigint[] IS NULL OR cardinality($9::bigint[]) = 0
+         OR EXISTS (SELECT 1 FROM post_published_terms pt WHERE pt.post_id = p.id AND pt.taxonomy_term_id = ANY($9::bigint[])))
+    AND ($10::bigint = 0 OR EXISTS (SELECT 1 FROM post_published_authors pa WHERE pa.post_id = p.id AND pa.user_id = $10::bigint))
 `
 
 type CountFilteredPostsParams struct {
@@ -132,6 +136,8 @@ type CountFilteredPostsParams struct {
 	ViewerID           int64   `json:"viewer_id"`
 	UnpublishedChanges bool    `json:"unpublished_changes"`
 	ReviewPending      bool    `json:"review_pending"`
+	PublishedTermIds   []int64 `json:"published_term_ids"`
+	PublishedAuthorID  int64   `json:"published_author_id"`
 }
 
 func (q *Queries) CountFilteredPosts(ctx context.Context, arg CountFilteredPostsParams) (int64, error) {
@@ -144,6 +150,8 @@ func (q *Queries) CountFilteredPosts(ctx context.Context, arg CountFilteredPosts
 		arg.ViewerID,
 		arg.UnpublishedChanges,
 		arg.ReviewPending,
+		pq.Array(arg.PublishedTermIds),
+		arg.PublishedAuthorID,
 	)
 	var total int64
 	err := row.Scan(&total)
@@ -1163,20 +1171,27 @@ WHERE
     -- Review requested (#323): an open review request; for a contributor only on
     -- their own posts (they don't see others' requests).
     AND (NOT $10::boolean OR (EXISTS (SELECT 1 FROM review_requests rr WHERE rr.post_id = p.id AND rr.status = 'open') AND ($8::bigint = 0 OR p.user_id = $8)))
+    -- The public query loop's filters (#489): what the site shows, so the published terms
+    -- (any of them) and the published byline (#319), never the working ones above.
+    AND ($11::bigint[] IS NULL OR cardinality($11::bigint[]) = 0
+         OR EXISTS (SELECT 1 FROM post_published_terms pt WHERE pt.post_id = p.id AND pt.taxonomy_term_id = ANY($11::bigint[])))
+    AND ($12::bigint = 0 OR EXISTS (SELECT 1 FROM post_published_authors pa WHERE pa.post_id = p.id AND pa.user_id = $12::bigint))
 ORDER BY
-    CASE WHEN $11::text = 'created_at' AND $12::text = 'asc' THEN p.created_at END ASC,
-    CASE WHEN $11::text = 'created_at' AND $12::text = 'desc' THEN p.created_at END DESC,
-    CASE WHEN $11::text = 'changed_at' AND $12::text = 'asc' THEN GREATEST(p.changed_at, p.created_at) END ASC,
-    CASE WHEN $11::text = 'changed_at' AND $12::text = 'desc' THEN GREATEST(p.changed_at, p.created_at) END DESC,
-    CASE WHEN $11::text = 'title' AND $12::text = 'asc' THEN p.title END ASC,
-    CASE WHEN $11::text = 'title' AND $12::text = 'desc' THEN p.title END DESC,
-    CASE WHEN $11::text = 'menu_order' AND $12::text = 'asc' THEN p.menu_order END ASC,
-    CASE WHEN $11::text = 'menu_order' AND $12::text = 'desc' THEN p.menu_order END DESC,
+    CASE WHEN $13::text = 'created_at' AND $14::text = 'asc' THEN p.created_at END ASC,
+    CASE WHEN $13::text = 'created_at' AND $14::text = 'desc' THEN p.created_at END DESC,
+    CASE WHEN $13::text = 'changed_at' AND $14::text = 'asc' THEN GREATEST(p.changed_at, p.created_at) END ASC,
+    CASE WHEN $13::text = 'changed_at' AND $14::text = 'desc' THEN GREATEST(p.changed_at, p.created_at) END DESC,
+    CASE WHEN $13::text = 'title' AND $14::text = 'asc' THEN p.title END ASC,
+    CASE WHEN $13::text = 'title' AND $14::text = 'desc' THEN p.title END DESC,
+    CASE WHEN $13::text = 'published_title' AND $14::text = 'asc' THEN COALESCE(p.published_settings->>'title', p.title) END ASC,
+    CASE WHEN $13::text = 'published_title' AND $14::text = 'desc' THEN COALESCE(p.published_settings->>'title', p.title) END DESC,
+    CASE WHEN $13::text = 'menu_order' AND $14::text = 'asc' THEN p.menu_order END ASC,
+    CASE WHEN $13::text = 'menu_order' AND $14::text = 'desc' THEN p.menu_order END DESC,
     -- Stable tiebreaker in the requested direction (also serves sort=id).
-    CASE WHEN $12::text = 'asc' THEN p.id END ASC,
+    CASE WHEN $14::text = 'asc' THEN p.id END ASC,
     p.id DESC
-LIMIT $14
-OFFSET $13
+LIMIT $16
+OFFSET $15
 `
 
 type ListPostsWithMetaParams struct {
@@ -1190,6 +1205,8 @@ type ListPostsWithMetaParams struct {
 	ViewerID               int64   `json:"viewer_id"`
 	UnpublishedChanges     bool    `json:"unpublished_changes"`
 	ReviewPending          bool    `json:"review_pending"`
+	PublishedTermIds       []int64 `json:"published_term_ids"`
+	PublishedAuthorID      int64   `json:"published_author_id"`
 	SortColumn             string  `json:"sort_column"`
 	SortDirection          string  `json:"sort_direction"`
 	OffsetCount            int32   `json:"offset_count"`
@@ -1227,6 +1244,7 @@ type ListPostsWithMetaRow struct {
 // of these pairs; anything else falls through to the id tiebreaker.
 // changed_at sorts as GREATEST(changed_at, created_at): never-updated posts
 // keep the 0001-01-01 sentinel and rank by creation time instead.
+// published_title (#489, the public query loop) sorts by the title the site shows.
 func (q *Queries) ListPostsWithMeta(ctx context.Context, arg ListPostsWithMetaParams) ([]ListPostsWithMetaRow, error) {
 	rows, err := q.db.QueryContext(ctx, listPostsWithMeta,
 		arg.WithUnpublishedChanges,
@@ -1239,6 +1257,8 @@ func (q *Queries) ListPostsWithMeta(ctx context.Context, arg ListPostsWithMetaPa
 		arg.ViewerID,
 		arg.UnpublishedChanges,
 		arg.ReviewPending,
+		pq.Array(arg.PublishedTermIds),
+		arg.PublishedAuthorID,
 		arg.SortColumn,
 		arg.SortDirection,
 		arg.OffsetCount,

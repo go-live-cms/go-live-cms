@@ -19,7 +19,7 @@
  */
 
 import { isMediaMissing } from "./media"
-import { SITE_BLOCK_NODE_NAMES, SITE_BLOCK_TYPES } from "./siteBlocks"
+import { SITE_BLOCK_NODE_NAMES, SITE_FLOW_BLOCK_TYPES, SITE_FLOW_NODE_NAMES } from "./siteBlocks"
 
 /**
  * The core Block Spec types that hold no blocks (design 2.2's `flow`). Lists count as
@@ -52,8 +52,9 @@ export const FLOW_TYPES = [
   // #426
   "buttons",
   "spacer",
-  // #488: the site blocks (siteBlocks.ts), flow atoms that read site data on the page.
-  ...SITE_BLOCK_TYPES,
+  // #488, #489: the site blocks that are flow atoms (siteBlocks.ts), which read site data on
+  // the page. The query loop's containers are rows below; `query_pagination` lives only in a query.
+  ...SITE_FLOW_BLOCK_TYPES,
 ] as const
 
 /**
@@ -76,7 +77,7 @@ export const STANDALONE_FLOW_NODE_NAMES = [
   "html",
   "buttons",
   "spacer",
-  ...Object.values(SITE_BLOCK_NODE_NAMES),
+  ...SITE_FLOW_NODE_NAMES,
 ] as const
 
 /**
@@ -176,7 +177,8 @@ export interface ContainerRule {
 export const CONTAINERS = {
   group: {
     node: "group",
-    accepts: ["flow", "details", "columns", "media_text"],
+    // #489: a query loop may sit in a group (design theme-builder.md 4.2).
+    accepts: ["flow", "details", "columns", "media_text", "query"],
     min: 1,
     topLevel: true,
     synthesize: { type: "paragraph", role: "paragraph" },
@@ -240,6 +242,32 @@ export const CONTAINERS = {
     fillWhenEmptied: true,
     emptyNotInSchema: true,
   },
+  // #489, the query loop (design theme-builder.md 4.1-4.2, siteBlocks.ts): a `query` at the top
+  // level or in a group holds its post template, its pager and what it shows when empty. A
+  // `post_template` (repeated for each post) and a `query_no_results` only exist in a query and
+  // hold flow, columns, details and media & text, **never a group or a query**: group → query →
+  // post_template → group would close a cycle, so a query loop can't be nested in another.
+  query: {
+    node: "query",
+    accepts: ["post_template", "query_pagination", "query_no_results"],
+    min: 1,
+    topLevel: true,
+    synthesize: { type: "post_template", role: "post-template" },
+  },
+  post_template: {
+    node: "postTemplate",
+    accepts: ["flow", "columns", "details", "media_text"],
+    min: 1,
+    topLevel: false,
+    synthesize: { type: "paragraph", role: "paragraph" },
+  },
+  query_no_results: {
+    node: "queryNoResults",
+    accepts: ["flow", "columns", "details", "media_text"],
+    min: 1,
+    topLevel: false,
+    synthesize: { type: "paragraph", role: "paragraph" },
+  },
 } as const satisfies Record<string, ContainerRule>
 
 export type ContainerType = keyof typeof CONTAINERS
@@ -274,12 +302,20 @@ export const BLOCK_NODE_NAMES: Readonly<Record<string, string>> = {
   spacer: "spacer",
   // #422: only in a `footnotes` list, so not flow.
   footnote: "footnote",
-  // #488
+  // #488, #489 (the query loop's containers are rows of CONTAINERS too, with the same nodes;
+  // `query_pagination` only lives in a query, so it isn't flow).
   ...SITE_BLOCK_NODE_NAMES,
   ...Object.fromEntries(Object.entries(CONTAINERS).map(([type, rule]) => [type, rule.node])),
 }
 
 const CORE_TYPES = new Set(Object.keys(BLOCK_NODE_NAMES))
+/** Atoms that only exist inside their container: a note in its list (#422), a query's pager (#489). */
+const NESTED_ONLY_ATOMS = new Set<unknown>(["footnote", "query_pagination"])
+
+/** A core type that holds no blocks and only exists inside its container (a footnote, a query's pager). */
+export function isNestedOnlyType(type: unknown): boolean {
+  return NESTED_ONLY_ATOMS.has(type)
+}
 const FLOW = new Set<string>(FLOW_TYPES)
 const LISTS = new Set<string>(LIST_TYPES)
 /** The ProseMirror node names of the list types. */
@@ -520,8 +556,8 @@ export interface NestingIssue {
  * 3. No cycles (a block can't be its own descendant).
  * 4. A container's children are of the types and in the count the table allows; a core
  *    block that is neither a container nor a list has no `children`; a container that only
- *    exists inside its parent (a `column`, #426) isn't in `blocks_order`, nor is a `footnote`
- *    (#422); a footnotes list is the only one in the doc and the last block of `blocks_order`.
+ *    exists inside its parent (a `column`, #426; a `post_template`, #489) isn't in
+ *    `blocks_order`, nor is a `footnote` (#422) or a `query_pagination` (#489); a footnotes list is the only one in the doc and the last block of `blocks_order`.
  * An unreferenced block is not an error (restores and dropped blocks pass through such
  * states). `children` that isn't an array of strings is an error. Theme and unknown types
  * may have children (as before #414); rules 1–3 apply to them too.
@@ -552,7 +588,7 @@ export function nestingIssues(doc: unknown): NestingIssue[] {
     // A `column` (#426) only exists inside its `columns`.
     const type = has(id) ? blocks[id as string].type : undefined
     const rule = containerRule(type)
-    if ((rule && !rule.topLevel) || type === "footnote") issues.push({ path: ["blocks_order", index], message: `a ${String(type)} can't be at the top level` })
+    if ((rule && !rule.topLevel) || NESTED_ONLY_ATOMS.has(type)) issues.push({ path: ["blocks_order", index], message: `a ${String(type)} can't be at the top level` })
     // The footnotes list (#422): being last is also what makes it the only one.
     if (rule?.onePerDocLast && index !== order.length - 1) issues.push({ path: ["blocks_order", index], message: `a ${String(type)} must be the last block` })
   })

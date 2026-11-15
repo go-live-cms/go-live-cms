@@ -12,6 +12,7 @@ import {
   isGroupAlign,
   isGroupStyle,
   isMediaTextPosition,
+  isSiteBlockNode,
   isSpacerSize,
   normalizeButtonHref,
   normalizeBlockColor,
@@ -505,8 +506,9 @@ function parseStyle(style: string): Record<string, string> {
 // table's parts (#420), so cells copied from a table paste as cells.
 const SLICE_CONTEXT_TYPES = new Set([
   "bulletList", "orderedList", "listItem", "blockquote", "taskList", "taskItem", "callout",
-  // The footnotes list can't be pasted (#422): text copied from a note pastes as text.
-  ...CONTAINER_NODE_NAMES.filter((name) => name !== "footnotes"),
+  // The footnotes list can't be pasted (#422): text copied from a note pastes as text. Nor the
+  // query loop (#489, no parse rules): a slice copied from inside one pastes as its blocks.
+  ...CONTAINER_NODE_NAMES.filter((name) => name !== "footnotes" && !isSiteBlockNode(name)),
   "tableBlock", "table", "tableRow", "tableCell",
 ])
 

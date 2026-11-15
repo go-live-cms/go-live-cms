@@ -1,5 +1,5 @@
 {
-  "description": "Site blocks I (#488, docs/design/theme-builder.md 4.1-4.2). Read by blocks-spec/siteBlocks.test.ts (normalizeSiteBlockAttrs, validateBlockDoc with a kind) and api/post_blocks_site_test.go (the sanitizer, prepareForStoreAs). `attrs`: what a block of `type` with `input` keeps, defaults left out. `kinds`: whether a doc of `kind` stores.",
+  "description": "Site blocks I and II (#488, #489, docs/design/theme-builder.md 4.1-4.2). Read by blocks-spec/siteBlocks.test.ts (normalizeSiteBlockAttrs, validateBlockDoc with a kind) and api/post_blocks_site_test.go (the sanitizer, prepareForStoreAs). `attrs`: what a block of `type` with `input` keeps, defaults left out. `kinds`: whether a doc of `kind` stores.",
   "attrs": [
     { "name": "site_title: the defaults are left out", "type": "site_title", "input": { "level": 0, "link": true }, "expected": {} },
     { "name": "site_title: an H1 that doesn't link", "type": "site_title", "input": { "level": 1, "link": false }, "expected": { "level": 1, "link": false } },
@@ -35,7 +35,47 @@
     { "name": "template_part: a slug", "type": "template_part", "input": { "slug": "header" }, "expected": { "slug": "header" } },
     { "name": "template_part: a slug with a dash and an underscore", "type": "template_part", "input": { "slug": "promo_bar-2" }, "expected": { "slug": "promo_bar-2" } },
     { "name": "template_part: upper case isn't a slug", "type": "template_part", "input": { "slug": "Header" }, "expected": {} },
-    { "name": "template_part: a path isn't a slug, and its content is never stored", "type": "template_part", "input": { "slug": "../header", "blocks": {}, "html": "<script>alert(1)</script>" }, "expected": {} }
+    { "name": "template_part: a path isn't a slug, and its content is never stored", "type": "template_part", "input": { "slug": "../header", "blocks": {}, "html": "<script>alert(1)</script>" }, "expected": {} },
+    { "name": "query: the defaults are left out", "type": "query", "input": { "inherit": false, "postType": "post", "perPage": 10, "orderBy": "date", "order": "desc", "taxonomy": null, "termIds": null, "authorId": null }, "expected": {} },
+    { "name": "query: every option set", "type": "query", "input": { "inherit": true, "postType": "product", "perPage": 3, "orderBy": "title", "order": "asc", "taxonomy": "category", "termIds": [7, 3], "authorId": 12 }, "expected": { "inherit": true, "postType": "product", "perPage": 3, "orderBy": "title", "order": "asc", "taxonomy": "category", "termIds": [3, 7], "authorId": 12 } },
+    { "name": "query: a page size is rounded and clamped to 1-24", "type": "query", "input": { "perPage": 30 }, "expected": { "perPage": 24 } },
+    { "name": "query: a page size below one is one", "type": "query", "input": { "perPage": 0 }, "expected": { "perPage": 1 } },
+    { "name": "query: a fraction rounds, and rounding to the default leaves it out", "type": "query", "input": { "perPage": 9.5 }, "expected": {} },
+    { "name": "query: a string page size is dropped", "type": "query", "input": { "perPage": "5" }, "expected": {} },
+    { "name": "query: terms are distinct, ascending, at most ten", "type": "query", "input": { "taxonomy": "post_tag", "termIds": [12, 3, 3, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11] }, "expected": { "taxonomy": "post_tag", "termIds": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] } },
+    { "name": "query: the node's comma list of terms", "type": "query", "input": { "taxonomy": "category", "termIds": "5,2" }, "expected": { "taxonomy": "category", "termIds": [2, 5] } },
+    { "name": "query: bad term ids are dropped, and no terms means no taxonomy", "type": "query", "input": { "taxonomy": "category", "termIds": [0, -1, 1.5, "3"] }, "expected": {} },
+    { "name": "query: terms without a taxonomy are dropped", "type": "query", "input": { "termIds": [3] }, "expected": {} },
+    { "name": "query: a taxonomy or a type that isn't a name is dropped", "type": "query", "input": { "postType": "../posts", "taxonomy": "Category", "termIds": [3] }, "expected": {} },
+    { "name": "query: an author must be an id", "type": "query", "input": { "authorId": "12" }, "expected": {} },
+    { "name": "query: inherit is only ever true, and no SQL or query string survives", "type": "query", "input": { "inherit": "yes", "where": "1=1", "query": "status=draft", "postStatus": "draft", "offset": 5 }, "expected": {} },
+    { "name": "query_title: level 2", "type": "query_title", "input": { "level": 2 }, "expected": { "level": 2 } },
+    { "name": "query_title: level 1 is the default", "type": "query_title", "input": { "level": 1, "text": "Guides" }, "expected": {} },
+    { "name": "query_title: a level it doesn't have", "type": "query_title", "input": { "level": 3 }, "expected": {} },
+    { "name": "term_description: no attrs", "type": "term_description", "input": { "text": "<b>x</b>" }, "expected": {} },
+    { "name": "post_title: a level and a link", "type": "post_title", "input": { "level": 3, "link": true }, "expected": { "level": 3, "link": true } },
+    { "name": "post_title: no link", "type": "post_title", "input": { "link": false }, "expected": { "link": false } },
+    { "name": "post_title: null is as the page needs", "type": "post_title", "input": { "level": null, "link": null }, "expected": {} },
+    { "name": "post_title: a level it doesn't have, a string link", "type": "post_title", "input": { "level": 5, "link": "yes" }, "expected": {} },
+    { "name": "post_content: no attrs, never a body", "type": "post_content", "input": { "pm": { "type": "doc" }, "html": "<p>x</p>", "postId": 3 }, "expected": {} },
+    { "name": "post_excerpt: a length", "type": "post_excerpt", "input": { "length": 25 }, "expected": { "length": 25 } },
+    { "name": "post_excerpt: the default length is left out", "type": "post_excerpt", "input": { "length": 35 }, "expected": {} },
+    { "name": "post_excerpt: clamped to 5-100", "type": "post_excerpt", "input": { "length": 500 }, "expected": { "length": 100 } },
+    { "name": "post_excerpt: a short one is five words", "type": "post_excerpt", "input": { "length": 1 }, "expected": { "length": 5 } },
+    { "name": "post_featured_image: a shape and a link", "type": "post_featured_image", "input": { "aspect": "16-9", "link": true }, "expected": { "aspect": "16-9", "link": true } },
+    { "name": "post_featured_image: the defaults are left out", "type": "post_featured_image", "input": { "aspect": "auto", "link": false }, "expected": {} },
+    { "name": "post_featured_image: a shape it doesn't have, and no media of its own", "type": "post_featured_image", "input": { "aspect": "4-3", "mediaId": 5, "src": "/uploads/x.jpg" }, "expected": {} },
+    { "name": "post_date: modified, short", "type": "post_date", "input": { "which": "modified", "format": "short" }, "expected": { "which": "modified", "format": "short" } },
+    { "name": "post_date: the defaults are left out", "type": "post_date", "input": { "which": "published", "format": "long" }, "expected": {} },
+    { "name": "post_byline: no avatars", "type": "post_byline", "input": { "avatars": false }, "expected": { "avatars": false } },
+    { "name": "post_byline: avatars are the default", "type": "post_byline", "input": { "avatars": true }, "expected": {} },
+    { "name": "post_terms: tags", "type": "post_terms", "input": { "taxonomy": "post_tag" }, "expected": { "taxonomy": "post_tag" } },
+    { "name": "post_terms: the category is the default", "type": "post_terms", "input": { "taxonomy": "category" }, "expected": {} },
+    { "name": "post_terms: a taxonomy that isn't a name", "type": "post_terms", "input": { "taxonomy": "a b" }, "expected": {} },
+    { "name": "post_navigation: no attrs", "type": "post_navigation", "input": { "label": "x" }, "expected": {} },
+    { "name": "query_pagination: no attrs", "type": "query_pagination", "input": { "page": 2, "base": "/x" }, "expected": {} },
+    { "name": "post_template: no attrs", "type": "post_template", "input": { "columns": 3 }, "expected": {} },
+    { "name": "query_no_results: no attrs", "type": "query_no_results", "input": { "text": "x" }, "expected": {} }
   ],
   "kinds": [
     {
@@ -156,6 +196,151 @@
         "blocks": {
           "title-0001": { "id": "title-0001", "type": "site_title", "version": 1, "attrs": {}, "children": ["para-00001"] },
           "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "Hello" } }
+        }
+      }
+    },
+    {
+      "name": "#489: a template with a query loop, the post blocks and its post's content",
+      "kind": "template",
+      "valid": true,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["qtitle-001", "tdesc-0001", "ptitle-001", "content-01", "query-0001", "pnav-00001"],
+        "blocks": {
+          "qtitle-001": { "id": "qtitle-001", "type": "query_title", "version": 1, "attrs": { "level": 2 } },
+          "tdesc-0001": { "id": "tdesc-0001", "type": "term_description", "version": 1, "attrs": {} },
+          "ptitle-001": { "id": "ptitle-001", "type": "post_title", "version": 1, "attrs": { "level": 1, "link": false } },
+          "content-01": { "id": "content-01", "type": "post_content", "version": 1, "attrs": {} },
+          "query-0001": { "id": "query-0001", "type": "query", "version": 1, "attrs": { "inherit": true }, "children": ["templ-0001", "pager-0001", "empty-0001"] },
+          "templ-0001": { "id": "templ-0001", "type": "post_template", "version": 1, "attrs": {}, "children": ["terms-0001", "title-0001", "image-0001", "excer-0001", "byline-001", "date-00001"] },
+          "terms-0001": { "id": "terms-0001", "type": "post_terms", "version": 1, "attrs": {} },
+          "title-0001": { "id": "title-0001", "type": "post_title", "version": 1, "attrs": { "level": 3 } },
+          "image-0001": { "id": "image-0001", "type": "post_featured_image", "version": 1, "attrs": { "aspect": "3-2", "link": true } },
+          "excer-0001": { "id": "excer-0001", "type": "post_excerpt", "version": 1, "attrs": { "length": 25 } },
+          "byline-001": { "id": "byline-001", "type": "post_byline", "version": 1, "attrs": {} },
+          "date-00001": { "id": "date-00001", "type": "post_date", "version": 1, "attrs": { "format": "short" } },
+          "pager-0001": { "id": "pager-0001", "type": "query_pagination", "version": 1, "attrs": {} },
+          "empty-0001": { "id": "empty-0001", "type": "query_no_results", "version": 1, "attrs": {}, "children": ["para-00001"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "x" } },
+          "pnav-00001": { "id": "pnav-00001", "type": "post_navigation", "version": 1, "attrs": {} }
+        }
+      }
+    },
+    {
+      "name": "#489: a part may hold a query loop and the post blocks, but not the post's content",
+      "kind": "part",
+      "valid": true,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["ptitle-001", "query-0001"],
+        "blocks": {
+          "ptitle-001": { "id": "ptitle-001", "type": "post_title", "version": 1, "attrs": {} },
+          "query-0001": { "id": "query-0001", "type": "query", "version": 1, "attrs": { "perPage": 3 }, "children": ["templ-0001"] },
+          "templ-0001": { "id": "templ-0001", "type": "post_template", "version": 1, "attrs": {}, "children": ["title-0001"] },
+          "title-0001": { "id": "title-0001", "type": "post_title", "version": 1, "attrs": {} }
+        }
+      }
+    },
+    {
+      "name": "#489: post_content can't be in a part (a header holding the post would render it twice)",
+      "kind": "part",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["content-01"],
+        "blocks": {
+          "content-01": { "id": "content-01", "type": "post_content", "version": 1, "attrs": {} }
+        }
+      }
+    },
+    {
+      "name": "#489: post_content can't be in a part, even unreferenced",
+      "kind": "part",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["para-00001"],
+        "blocks": {
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "x" } },
+          "content-01": { "id": "content-01", "type": "post_content", "version": 1, "attrs": {} }
+        }
+      }
+    },
+    {
+      "name": "#489: post_content can't be in a post template (it would render the route's post once per item)",
+      "kind": "template",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["query-0001"],
+        "blocks": {
+          "query-0001": { "id": "query-0001", "type": "query", "version": 1, "attrs": {}, "children": ["templ-0001"] },
+          "templ-0001": { "id": "templ-0001", "type": "post_template", "version": 1, "attrs": {}, "children": ["content-01"] },
+          "content-01": { "id": "content-01", "type": "post_content", "version": 1, "attrs": {} }
+        }
+      }
+    },
+    {
+      "name": "#489: post_content can't be in a post template at any depth",
+      "kind": "template",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["query-0001"],
+        "blocks": {
+          "query-0001": { "id": "query-0001", "type": "query", "version": 1, "attrs": {}, "children": ["templ-0001"] },
+          "templ-0001": { "id": "templ-0001", "type": "post_template", "version": 1, "attrs": {}, "children": ["cols-00001"] },
+          "cols-00001": { "id": "cols-00001", "type": "columns", "version": 1, "attrs": {}, "children": ["col-000001", "col-000002"] },
+          "col-000001": { "id": "col-000001", "type": "column", "version": 1, "attrs": {}, "children": ["detail-001"] },
+          "detail-001": { "id": "detail-001", "type": "details", "version": 1, "attrs": {}, "children": ["content-01"] },
+          "content-01": { "id": "content-01", "type": "post_content", "version": 1, "attrs": {} },
+          "col-000002": { "id": "col-000002", "type": "column", "version": 1, "attrs": {}, "children": ["para-00001"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "x" } }
+        }
+      }
+    },
+    {
+      "name": "#489: a template holds at most one post_content",
+      "kind": "template",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["content-01", "group-0001"],
+        "blocks": {
+          "content-01": { "id": "content-01", "type": "post_content", "version": 1, "attrs": {} },
+          "group-0001": { "id": "group-0001", "type": "group", "version": 1, "attrs": {}, "children": ["content-02"] },
+          "content-02": { "id": "content-02", "type": "post_content", "version": 1, "attrs": {} }
+        }
+      }
+    },
+    {
+      "name": "#489: a post_content in no results is the template's one",
+      "kind": "template",
+      "valid": true,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["query-0001"],
+        "blocks": {
+          "query-0001": { "id": "query-0001", "type": "query", "version": 1, "attrs": {}, "children": ["templ-0001", "empty-0001"] },
+          "templ-0001": { "id": "templ-0001", "type": "post_template", "version": 1, "attrs": {}, "children": ["title-0001"] },
+          "title-0001": { "id": "title-0001", "type": "post_title", "version": 1, "attrs": {} },
+          "empty-0001": { "id": "empty-0001", "type": "query_no_results", "version": 1, "attrs": {}, "children": ["content-01"] },
+          "content-01": { "id": "content-01", "type": "post_content", "version": 1, "attrs": {} }
+        }
+      }
+    },
+    {
+      "name": "#489: in a post the query loop and post blocks are inert, post_content in a post template too",
+      "kind": "post",
+      "valid": true,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["content-01", "query-0001"],
+        "blocks": {
+          "content-01": { "id": "content-01", "type": "post_content", "version": 1, "attrs": {} },
+          "query-0001": { "id": "query-0001", "type": "query", "version": 1, "attrs": {}, "children": ["templ-0001"] },
+          "templ-0001": { "id": "templ-0001", "type": "post_template", "version": 1, "attrs": {}, "children": ["content-02"] },
+          "content-02": { "id": "content-02", "type": "post_content", "version": 1, "attrs": {} }
         }
       }
     }

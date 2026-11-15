@@ -117,9 +117,11 @@ func sanitizeBlock(block map[string]interface{}) {
 		sanitizeCoverAttrs(attrs)
 	case "media_text":
 		sanitizeMediaTextAttrs(attrs)
-	case "site_title", "site_tagline", "site_logo", "navigation", "search", "template_part":
-		// #488 (post_blocks_site.go): allowlists, defaults left out.
-		sanitizeSiteBlockAttrs(stringOf(block["type"]), attrs)
+	default:
+		// #488, #489 (post_blocks_site.go): allowlists, defaults left out.
+		if blockType := stringOf(block["type"]); siteBlockTypes[blockType] {
+			sanitizeSiteBlockAttrs(blockType, attrs)
+		}
 	}
 
 	// Block colour (#356): a palette token on the core blocks that take one.

@@ -11,12 +11,39 @@
  *   blocks name it. A menu by **id** isn't fetched here: no public route serves any menu by
  *   id. The resolve route attaches the ones a published template or part names (#491, 3.3),
  *   and the caller passes them as `menusById`.
- * - Failures fail soft: that block renders nothing, the rest of the page renders.
+ * - #489: the query blocks (`collectTemplateNeeds`), **at most four per page**, parts counted,
+ *   in reading order. An inheriting query takes the route's own list (`route.list`, already
+ *   loaded and passed by the route): no second fetch, and its pager's URLs are #349's. Any
+ *   other reads one page of `/public/posts/type/:type` with its filters (`queryRequestParams`),
+ *   all in parallel, each within 2 s. A fifth query renders nothing, logged once
+ *   (`site_block_query_limit`).
+ * - Failures fail soft: that block renders nothing, the rest of the page renders. A failed
+ *   query is logged once per request (`site_block_data_failed`, the block type and a count,
+ *   never the query string).
  */
-import { isMenuLocation, isSiteBlockType, normalizeSiteBlockAttrs, type BlockDocV1 } from "@gl-admin/lib/blocks-spec"
-import type { SiteMenu, SiteRenderContext } from "@/components/blocks/utils/siteContext"
+import {
+  blocksInReadingOrder,
+  isMenuLocation,
+  isSiteBlockType,
+  normalizeQueryPerPage,
+  normalizeSiteBlockAttrs,
+  QUERY_DEFAULT_POST_TYPE,
+  type BlockDocV1,
+  type QueryAttrs,
+} from "@gl-admin/lib/blocks-spec"
+import type { Post } from "@gl-admin/lib/api/types"
+import { SERVER_MEDIA_URL } from "@gl-admin/lib/server-api-url"
+import { queryKey, type SiteMenu, type SitePostList, type SiteRenderContext, type SiteRoute } from "@/components/blocks/utils/siteContext"
+import { log, requestIdHeaders } from "./log"
 import { getMenu, withCurrent, type Menu } from "./menus"
+import { listedThumbnail, toListedPosts } from "./postList"
+import { normalizeUrlStructure, type UrlStructure } from "./seo"
 import { getSiteSettings } from "./siteSettings"
+
+/** At most this many query blocks per rendered page, counting parts (design 4.3). */
+export const MAX_QUERIES_PER_PAGE = 4
+/** A query's read gives up after this long, as a menu's does. */
+export const SITE_QUERY_TIMEOUT_MS = 2000
 
 /** What the site blocks of some docs need loaded: the theme locations, menu ids and part slugs they name. */
 export interface SiteBlockNeeds {
@@ -46,6 +73,145 @@ export function siteBlockNeeds(docs: Iterable<BlockDocV1 | null | undefined>): S
   return { locations: [...locations].sort(), menuIds: [...menuIds].sort((a, b) => a - b), parts: [...parts].sort() }
 }
 
+/** A query block a page renders (#489): where its posts go (`queryKey`) and what it asks for. */
+export interface TemplateQueryNeed {
+  key: string
+  blockId: string
+  /** The part it sits in, or none for the template's own. */
+  part?: string
+  attrs: QueryAttrs
+}
+
+/** What a block template's render needs loaded first (design 3.4, step 1). */
+export interface TemplateNeeds extends SiteBlockNeeds {
+  /** The query blocks that render, in reading order (parts where the template places them), at most four. */
+  queries: TemplateQueryNeed[]
+  /** How many query loops the page renders: a part placed twice renders its queries twice. */
+  renderedQueries: number
+  /** How many more there were than the four: they render nothing. */
+  skippedQueries: number
+  /** Whether a site logo block is used (the logo comes with the settings). */
+  logo: boolean
+}
+
+/**
+ * Walks the template and its parts (design 3.4's `collectTemplateNeeds`): the menus and parts
+ * the site blocks name, whether the logo is used, and the query blocks in reading order, a part's
+ * at the place the template puts it (its posts read once, its loops counted each time it is placed).
+ * A part the template doesn't place renders nowhere here, so it reads nothing. Only the first
+ * `MAX_QUERIES_PER_PAGE` rendered loops get posts; a part placed again after the limit is reached
+ * gets none (its key is shared, so it renders what its first placement read, if that was kept).
+ */
+export function collectTemplateNeeds(template: BlockDocV1 | null | undefined, parts: Readonly<Record<string, BlockDocV1 | null>> = {}): TemplateNeeds {
+  const base = siteBlockNeeds([template, ...Object.values(parts)])
+  const kept = new Map<string, TemplateQueryNeed>()
+  let rendered = 0
+  let logo = false
+  const visit = (doc: BlockDocV1 | null | undefined, part?: string) => {
+    if (!doc?.blocks) return
+    for (const id of blocksInReadingOrder(doc)) {
+      const block = doc.blocks[id]
+      if (!block) continue
+      if (block.type === "site_logo") logo = true
+      else if (block.type === "query") {
+        rendered++
+        const key = queryKey(part, id)
+        if (rendered <= MAX_QUERIES_PER_PAGE && !kept.has(key)) {
+          kept.set(key, { key, blockId: id, ...(part ? { part } : {}), attrs: normalizeSiteBlockAttrs("query", block.attrs) as QueryAttrs })
+        }
+      } else if (block.type === "template_part" && part === undefined) {
+        const slug = normalizeSiteBlockAttrs("template_part", block.attrs).slug
+        if (typeof slug === "string") visit(parts[slug], slug)
+      }
+    }
+  }
+  visit(template)
+  return { ...base, queries: [...kept.values()], renderedQueries: rendered, skippedQueries: Math.max(0, rendered - MAX_QUERIES_PER_PAGE), logo }
+}
+
+/**
+ * The `/public/posts/type/:type` parameters for a query's attrs, one to one (design 4.3): the
+ * page size always, the order, the terms and the author when set. Nothing else reaches the
+ * request, so no attr can ask for a status, another route or anything `/public` doesn't serve.
+ */
+export function queryRequestParams(attrs: QueryAttrs): URLSearchParams {
+  const params = new URLSearchParams({ per_page: String(normalizeQueryPerPage(attrs.perPage)) })
+  if (attrs.orderBy === "title") params.set("order_by", "title")
+  if (attrs.order === "asc") params.set("order", "asc")
+  if (attrs.termIds?.length) params.set("terms", attrs.termIds.join(","))
+  if (attrs.authorId) params.set("author_id", String(attrs.authorId))
+  return params
+}
+
+/** What reads a non-inheriting query's posts (tests pass their own). */
+export type QueryReader = (attrs: QueryAttrs, options: { structure: UrlStructure; siteUrl: string }) => Promise<SitePostList>
+
+/**
+ * Page 1 of a query's posts (#489), within `SITE_QUERY_TIMEOUT_MS`. A 404 (the type isn't
+ * public, or no longer exists) is an empty list, so "no results" shows; anything else throws.
+ * One page only: a query of chosen posts has no pager (4.3).
+ */
+export async function readQueryPosts(
+  attrs: QueryAttrs,
+  { structure, siteUrl }: { structure: UrlStructure; siteUrl: string },
+  fetcher: typeof fetch = fetch,
+  timeoutMs = SITE_QUERY_TIMEOUT_MS,
+): Promise<SitePostList> {
+  const postType = attrs.postType ?? QUERY_DEFAULT_POST_TYPE
+  const controller = new AbortController()
+  let timer: ReturnType<typeof setTimeout> | undefined
+  // As getMenu: the abort alone doesn't end a DNS lookup that hangs, so the timer settles it too.
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      controller.abort()
+      reject(new Error(`timed out after ${timeoutMs}ms`))
+    }, timeoutMs)
+  })
+  const load = async (): Promise<SitePostList> => {
+    const url = `${SERVER_MEDIA_URL}/public/posts/type/${encodeURIComponent(postType)}?${queryRequestParams(attrs)}`
+    const response = await fetcher(url, { headers: requestIdHeaders(), signal: controller.signal })
+    if (response.status === 404) return { items: [], page: 1, totalPages: 0, basePath: null }
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    const body = (await response.json()) as { posts?: unknown }
+    const rows = (Array.isArray(body?.posts) ? body.posts : []) as Post[]
+    const items = await toListedPosts(rows, postType, structure, siteUrl)
+    // Without the site's URL publicImageUrl can't make an absolute URL and gives none: keep the
+    // row's own same-origin path then (an /uploads one, listedThumbnail's check), so the image shows.
+    if (!siteUrl) for (const [i, item] of items.entries()) item.image ??= listedThumbnail(rows[i])
+    return { items, page: 1, totalPages: 1, basePath: null }
+  }
+  try {
+    return await Promise.race([load(), timeout])
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/**
+ * Each query's posts by key: an inheriting query's is the route's own list (no fetch), any
+ * other's is read (`read`), all at once. A failure is null for that query and logged once for
+ * the request, with how many failed.
+ */
+export async function loadQueries(
+  queries: readonly TemplateQueryNeed[],
+  { route, structure, siteUrl, read = readQueryPosts }: { route?: SiteRoute; structure: UrlStructure; siteUrl: string; read?: QueryReader },
+): Promise<Record<string, SitePostList | null>> {
+  const failures: unknown[] = []
+  const entries = await Promise.all(
+    queries.map(async (query): Promise<[string, SitePostList | null]> => {
+      if (query.attrs.inherit) return [query.key, route?.list ?? null]
+      try {
+        return [query.key, await read(query.attrs, { structure, siteUrl })]
+      } catch (error) {
+        failures.push(error)
+        return [query.key, null]
+      }
+    }),
+  )
+  if (failures.length > 0) log.warn("site_block_data_failed", { block_type: "query", count: failures.length, error: failures[0] })
+  return Object.fromEntries(entries)
+}
+
 function siteMenu(menu: Menu | null, currentPath: string | undefined): SiteMenu | null {
   if (!menu) return null
   return { name: menu.name, items: currentPath ? withCurrent(menu.items, currentPath) : menu.items }
@@ -62,6 +228,12 @@ export interface LoadSiteRenderContextOptions {
   currentPath?: string
   /** For tests: what reads a menu by location. */
   readMenu?: (location: string) => Promise<Menu | null>
+  /** #489: what the route renders: its post, its own list (for an inheriting query), its term, author or search. */
+  route?: SiteRoute
+  /** #489: the site's URL (`resolveSiteUrl`), for the featured images of a query's posts. */
+  siteUrl?: string
+  /** For tests: what reads a non-inheriting query's posts. */
+  readQuery?: QueryReader
 }
 
 /**
@@ -71,12 +243,26 @@ export interface LoadSiteRenderContextOptions {
  */
 export async function loadSiteRenderContext(locals: App.Locals | undefined, options: LoadSiteRenderContextOptions): Promise<SiteRenderContext> {
   const parts = options.parts ?? {}
-  const docs = [...options.docs, ...Object.values(parts)]
+  const own = [...options.docs]
+  const docs = [...own, ...Object.values(parts)]
+  // The template's queries first (the first doc is the template; the others render with it),
+  // its parts where it places them; at most four.
+  const needs = collectTemplateNeeds(mergedDoc(own), parts)
+  // Every location the docs and every part name, placed or not (a code layout's parts too).
   const { locations } = siteBlockNeeds(docs)
+  if (needs.skippedQueries > 0) {
+    log.warn("site_block_query_limit", { limit: MAX_QUERIES_PER_PAGE, count: needs.renderedQueries })
+  }
   const readMenu = options.readMenu ?? ((location: string) => getMenu(location))
-  const [settings, menus] = await Promise.all([
-    getSiteSettings(locals),
+  const settingsRead = getSiteSettings(locals)
+  const [settings, menus, queries] = await Promise.all([
+    settingsRead,
     Promise.all(locations.map(async (location) => [location, await readMenu(location).catch(() => null)] as const)),
+    needs.queries.length === 0
+      ? Promise.resolve({})
+      : settingsRead.then((site) =>
+          loadQueries(needs.queries, { route: options.route, structure: normalizeUrlStructure(site.urlStructure), siteUrl: options.siteUrl ?? "", read: options.readQuery }),
+        ),
   ])
   const menusById = Object.fromEntries(Object.entries(options.menusById ?? {}).map(([id, menu]) => [id, siteMenu(menu, options.currentPath)]))
   return {
@@ -88,5 +274,22 @@ export async function loadSiteRenderContext(locals: App.Locals | undefined, opti
     menusById,
     parts,
     currentPath: options.currentPath,
+    dates: { language: settings.language, timeZone: settings.timeZone, dateFormat: settings.dateFormat },
+    ...(options.route ? { route: options.route } : {}),
+    queries,
+  }
+}
+
+/**
+ * The docs rendered with the template as one doc, in order, for the walk (`collectTemplateNeeds`):
+ * their blocks keyed as the template's, since they render outside any part.
+ */
+function mergedDoc(docs: (BlockDocV1 | null | undefined)[]): BlockDocV1 | null {
+  const present = docs.filter((doc): doc is BlockDocV1 => !!doc?.blocks)
+  if (present.length <= 1) return present[0] ?? null
+  return {
+    doc_version: 1,
+    blocks_order: present.flatMap((doc) => doc.blocks_order ?? []),
+    blocks: Object.assign({}, ...present.map((doc) => doc.blocks)),
   }
 }

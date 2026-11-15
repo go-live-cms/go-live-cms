@@ -1,16 +1,49 @@
-import { Extension, mergeAttributes, Node } from "@tiptap/core"
+import { Extension, mergeAttributes, Node, type JSONContent } from "@tiptap/core"
 import {
+  containerContent,
   SITE_BLOCK_NODE_NAMES,
   siteBlockNodeAttrs,
+  type SiteAtomType,
   type SiteBlockType,
+  type SiteContainerType,
 } from "@gl-admin/lib/blocks-spec"
 
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {
     siteBlocks: {
-      /** A site block (#488) for the caret's line, with its default attrs. */
+      /**
+       * A site block (#488, #489) for the caret's line, with its default attrs. A query loop
+       * comes whole (`siteBlockContent`): a post template with a title, date and excerpt, the
+       * pager and "no results".
+       */
       insertSiteBlock: (type: SiteBlockType, attrs?: Record<string, unknown>) => ReturnType
     }
+  }
+}
+
+/** What "no results" says until someone changes it (the blocks canvas's). */
+export const QUERY_NO_RESULTS_TEXT = "Nothing here yet."
+
+/** The node a site block starts as: its default attrs, and a container's starting blocks. */
+export function siteBlockContent(type: SiteBlockType, attrs: Record<string, unknown> = {}): JSONContent {
+  const node = (t: SiteBlockType, a: Record<string, unknown> = {}, content?: JSONContent[]): JSONContent => ({
+    type: SITE_BLOCK_NODE_NAMES[t],
+    attrs: siteBlockNodeAttrs(t, a),
+    ...(content ? { content } : {}),
+  })
+  switch (type) {
+    case "query":
+      return node("query", attrs, [
+        node("post_template", {}, [node("post_title"), node("post_date", { format: "short" }), node("post_excerpt")]),
+        node("query_pagination"),
+        node("query_no_results", {}, [{ type: "paragraph", content: [{ type: "text", text: QUERY_NO_RESULTS_TEXT }] }]),
+      ])
+    case "post_template":
+      return node("post_template", {}, [node("post_title")])
+    case "query_no_results":
+      return node("query_no_results", {}, [{ type: "paragraph", content: [{ type: "text", text: QUERY_NO_RESULTS_TEXT }] }])
+    default:
+      return node(type, attrs)
   }
 }
 
@@ -29,7 +62,7 @@ declare module "@tiptap/core" {
  *   otherwise, makes one, so paste can't put one in a post. `renderHTML` writes an empty
  *   element for the clipboard and the attrs are never rendered, so a copy pastes nothing.
  */
-function siteNode(type: SiteBlockType) {
+function siteNode(type: SiteAtomType) {
   const attributes = siteBlockNodeAttrs(type, {})
   const name = SITE_BLOCK_NODE_NAMES[type]
   const dataType = type.replace(/_/g, "-")
@@ -60,6 +93,50 @@ export const SiteLogo = siteNode("site_logo")
 export const Navigation = siteNode("navigation")
 export const Search = siteNode("search")
 export const TemplatePart = siteNode("template_part")
+// #489: the post blocks, the query title, the term description and the query's pager.
+export const QueryTitle = siteNode("query_title")
+export const TermDescription = siteNode("term_description")
+export const PostTitle = siteNode("post_title")
+export const PostContent = siteNode("post_content")
+export const PostExcerpt = siteNode("post_excerpt")
+export const PostFeaturedImage = siteNode("post_featured_image")
+export const PostDate = siteNode("post_date")
+export const PostByline = siteNode("post_byline")
+export const PostTerms = siteNode("post_terms")
+export const PostNavigation = siteNode("post_navigation")
+export const QueryPagination = siteNode("query_pagination")
+
+/**
+ * The query loop's containers (#489): rows of the nesting table, so their content expressions
+ * are `containerContent`'s (a query holds its post template, pager and "no results"; those
+ * hold flow, columns, details and media & text, never a group or a query). `isolating` and
+ * `defining` like every container. Like the atoms: attrs from the Block Spec, last writer
+ * wins, and **no parse rule** (paste makes none; a copy pastes only the blocks inside).
+ */
+function siteContainer(type: SiteContainerType) {
+  const attributes = siteBlockNodeAttrs(type, {})
+  const dataType = type.replace(/_/g, "-")
+  return Node.create({
+    name: SITE_BLOCK_NODE_NAMES[type],
+    content: containerContent(type),
+    defining: true,
+    isolating: true,
+
+    addAttributes() {
+      return Object.fromEntries(
+        Object.entries(attributes).map(([attr, value]) => [attr, { default: value, rendered: false, parseHTML: () => null }])
+      )
+    },
+
+    renderHTML({ HTMLAttributes }) {
+      return ["div", mergeAttributes({ "data-type": dataType, class: "editor-site-container" }, HTMLAttributes), 0]
+    },
+  })
+}
+
+export const Query = siteContainer("query")
+export const PostTemplate = siteContainer("post_template")
+export const QueryNoResults = siteContainer("query_no_results")
 
 /** The site blocks' commands: no schema. One ordinary transaction each (rule 7). */
 export const SiteBlockCommands = Extension.create({
@@ -71,7 +148,7 @@ export const SiteBlockCommands = Extension.create({
         ({ state, commands }) => {
           const name = SITE_BLOCK_NODE_NAMES[type]
           if (!name || !state.schema.nodes[name]) return false
-          return commands.insertContent({ type: name, attrs: siteBlockNodeAttrs(type, attrs) })
+          return commands.insertContent(siteBlockContent(type, attrs))
         },
     }
   },

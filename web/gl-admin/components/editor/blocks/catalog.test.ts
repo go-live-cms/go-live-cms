@@ -21,6 +21,8 @@ import {
 import { applyTurnInto, computeTurnIntoFromSelection } from "../utils/turnInto"
 import { stubJsdomRangeLayout } from "@gl-admin/lib/collaboration/testHelpers"
 import { SITE_BLOCK_NODE_NAMES, siteBlockNodeAttrs, type SiteBlockType } from "@gl-admin/lib/blocks-spec"
+import { holderAcceptsType } from "../utils/blockTree"
+import { QUERY_NO_RESULTS_TEXT } from "../extensions/SiteBlocks"
 import { currentTableSizePicker } from "../ui/TableSizePicker"
 import { currentColumnsPicker } from "../ui/ColumnsPicker"
 
@@ -252,7 +254,29 @@ describe("insert", () => {
 // #488 (design theme-builder.md 4.4): the Site group, offered by the kind of document.
 describe("the Site group (#488)", () => {
   it("is offered in templates and parts, never in a post, and the template part only in a template", () => {
-    expect(SITE_BLOCKS.map((e) => e.name)).toEqual(["Site title", "Site tagline", "Site logo", "Navigation", "Search", "Template part"])
+    expect(SITE_BLOCKS.map((e) => e.name)).toEqual([
+      "Site title",
+      "Site tagline",
+      "Site logo",
+      "Navigation",
+      "Search",
+      "Template part",
+      // #489
+      "Query loop",
+      "Post template",
+      "Pagination",
+      "No results",
+      "Query title",
+      "Term description",
+      "Post title",
+      "Post content",
+      "Post excerpt",
+      "Featured image",
+      "Post date",
+      "Post byline",
+      "Post terms",
+      "Post navigation",
+    ])
     expect(SITE_BLOCKS.every((e) => e.group === "site")).toBe(true)
     expect(catalogEntries()).toEqual(expect.arrayContaining([...SITE_BLOCKS]))
     // A post (the default context) gets none of them, whatever the role.
@@ -262,13 +286,18 @@ describe("the Site group (#488)", () => {
     }
     expect(names(menuEntries({ role: "editor", context: "template" }).filter((e) => e.group === "site"))).toEqual(names(SITE_BLOCKS))
     expect(names(menuEntries({ role: "editor", context: "part" }).filter((e) => e.group === "site"))).not.toContain("Template part")
+    // #489: a part never holds the post's body (design 4.2); it may hold a query loop.
+    expect(names(menuEntries({ role: "editor", context: "part" }).filter((e) => e.group === "site"))).not.toContain("Post content")
+    expect(names(menuEntries({ role: "editor", context: "part" }).filter((e) => e.group === "site"))).toContain("Query loop")
     // Every core block is still offered everywhere it was (no `contexts`).
     expect(CORE_BLOCKS.every((e) => offeredIn(e, "post") && offeredIn(e, "template") && offeredIn(e, "part"))).toBe(true)
     expect(searchCatalog(menuEntries({ role: "admin", context: "template" }), "").map((s) => s.label)).toContain("Site")
     expect(searchCatalog(menuEntries({ role: "admin" }), "").map((s) => s.label)).not.toContain("Site")
   })
 
-  it.each(SITE_BLOCKS.map((e) => [e.id, e] as const))("%s replaces the typed /query with its block, defaults filled in", (_id, entry) => {
+  // The query loop's parts are only offered inside a query (below).
+  const topLevel = SITE_BLOCKS.filter((e) => holderAcceptsType("doc", e.type))
+  it.each(topLevel.map((e) => [e.id, e] as const))("%s replaces the typed /query with its block, defaults filled in", (_id, entry) => {
     const ed = makeEditor("<p>first</p><p>/que</p>")
     const from = ed.state.doc.firstChild!.nodeSize + 1
     ed.commands.setTextSelection(from + 4)
@@ -276,7 +305,33 @@ describe("the Site group (#488)", () => {
     const node = ed.state.doc.child(1)
     expect(node.type.name).toBe(SITE_BLOCK_NODE_NAMES[entry.type as SiteBlockType])
     expect(node.attrs).toMatchObject(siteBlockNodeAttrs(entry.type as SiteBlockType, {}))
-    expect(ed.state.doc.textContent).toBe("first")
+    // A query loop comes whole (#489): its "no results" says so until someone changes it.
+    expect(ed.state.doc.textContent).toBe(entry.type === "query" ? `first${QUERY_NO_RESULTS_TEXT}` : "first")
+  })
+
+  it("#489: a query loop comes whole, and its post template, pager and no results are offered only inside a query", () => {
+    expect(SITE_BLOCKS.filter((e) => !holderAcceptsType("doc", e.type)).map((e) => e.type)).toEqual(["post_template", "query_pagination", "query_no_results"])
+    for (const holder of ["doc", "group", "column", "postTemplate", "queryNoResults"]) {
+      const offered = menuEntries({ role: "editor", context: "template", accepts: (e) => holderAcceptsType(holder, e.type) }).map((e) => e.type)
+      for (const type of ["post_template", "query_pagination", "query_no_results"]) expect(offered, `${holder} ${type}`).not.toContain(type)
+      // Never a query in a post template or no results, nor in a column: the table stays acyclic.
+      expect(offered.includes("query"), holder).toBe(holder === "doc" || holder === "group")
+      expect(offered, holder).toContain("post_title")
+    }
+    const inQuery = menuEntries({ role: "editor", context: "template", accepts: (e) => holderAcceptsType("query", e.type) }).map((e) => e.type)
+    expect(inQuery).toEqual(["post_template", "query_pagination", "query_no_results"])
+
+    const ed = makeEditor("<p>/que</p>")
+    SITE_BLOCKS.find((e) => e.type === "query")!.insert(ed, { from: 1, to: 5 })
+    const query = ed.state.doc.firstChild!
+    expect(query.type.name).toBe("query")
+    expect(() => query.check()).not.toThrow()
+    const kids: string[] = []
+    query.forEach((child) => kids.push(child.type.name))
+    expect(kids).toEqual(["postTemplate", "queryPagination", "queryNoResults"])
+    const inTemplate: string[] = []
+    query.firstChild!.forEach((child) => inTemplate.push(child.type.name))
+    expect(inTemplate).toEqual(["postTitle", "postDate", "postExcerpt"])
   })
 })
 

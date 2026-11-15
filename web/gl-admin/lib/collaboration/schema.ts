@@ -21,7 +21,29 @@ import { AudioBlock, FileBlock, MediaBlockCommands, VideoBlock } from "../../com
 import { ContentLink, DateChip, Mention } from "../../components/editor/extensions/InlineNodes"
 import { EmbedBlock, EmbedBlockCommands } from "../../components/editor/extensions/EmbedBlock"
 import { HtmlBlock, HtmlBlockCommands } from "../../components/editor/extensions/HtmlBlock"
-import { Navigation, Search, SiteBlockCommands, SiteLogo, SiteTagline, SiteTitle, TemplatePart } from "../../components/editor/extensions/SiteBlocks"
+import {
+  Navigation,
+  PostByline,
+  PostContent,
+  PostDate,
+  PostExcerpt,
+  PostFeaturedImage,
+  PostNavigation,
+  PostTemplate,
+  PostTerms,
+  PostTitle,
+  Query,
+  QueryNoResults,
+  QueryPagination,
+  QueryTitle,
+  Search,
+  SiteBlockCommands,
+  SiteLogo,
+  SiteTagline,
+  SiteTitle,
+  TemplatePart,
+  TermDescription,
+} from "../../components/editor/extensions/SiteBlocks"
 import { Columns } from "../../components/editor/extensions/ColumnsBlock"
 import { Buttons } from "../../components/editor/extensions/ButtonsBlock"
 import { Spacer } from "../../components/editor/extensions/SpacerBlock"
@@ -152,6 +174,23 @@ export function schemaExtensions({ collaborating }: { collaborating: boolean }) 
     navigation: Navigation,
     search: Search,
     templatePart: TemplatePart,
+    // #489: the query loop (three containers and its pager), the query title, the term
+    // description and the post blocks. Fourteen new node types and a wider doc and group, so
+    // they change the fingerprint (#416) again: open tabs reload once after the deploy.
+    queryTitle: QueryTitle,
+    termDescription: TermDescription,
+    postTitle: PostTitle,
+    postContent: PostContent,
+    postExcerpt: PostExcerpt,
+    postFeaturedImage: PostFeaturedImage,
+    postDate: PostDate,
+    postByline: PostByline,
+    postTerms: PostTerms,
+    postNavigation: PostNavigation,
+    queryPagination: QueryPagination,
+    query: Query,
+    postTemplate: PostTemplate,
+    queryNoResults: QueryNoResults,
     siteBlockCommands: SiteBlockCommands,
     blockId: BlockIdExtension,
   }

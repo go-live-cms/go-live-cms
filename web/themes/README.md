@@ -709,6 +709,13 @@ markup of the default theme's header pieces (`.site-title`, `.site-tagline`,
 `src/components/blocks/README.md` has the whole list), so a theme that styles its own
 header that way styles them too. Style the ones your header doesn't use; the default
 theme's rules are the "site blocks (#488)" section of its `styles/theme.css`.
+
+So do the query loop and the post blocks (#489): they render your list's and post's own markup
+(`.post-list > .post-item`, `.post-item-title`, `.post-item-excerpt`, `.post-item-media`, `.pagination`,
+`.byline`, `.eyebrow`, `.post-terms`, `.post-nav`, `.post-featured`, `.title`, `.dek`), so a theme
+that styles those has little left: `.query-loop`, `.query-no-results`, `.post-date` and the featured
+image's shapes (`.is-aspect-16-9`, `-3-2`, `-1-1`). The default theme's are the "site blocks II
+(#489)" section.
 ---
 
 ## Theme Functions (`functions.ts`)

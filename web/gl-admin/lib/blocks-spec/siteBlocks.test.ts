@@ -4,7 +4,10 @@ import {
   BLOCK_NODE_NAMES,
   dedupeBlockRefs,
   isFlowType,
+  isSiteContainerType,
   isStandaloneFlowType,
+  SITE_CONTAINER_TYPES,
+  SITE_FLOW_BLOCK_TYPES,
   normalizeSiteBlockAttrs,
   SITE_BLOCK_CONTEXTS,
   SITE_BLOCK_NODE_NAMES,
@@ -27,7 +30,9 @@ describe("siteBlockVectors.json attrs (shared with the API)", () => {
       const out = normalizeSiteBlockAttrs(type, vector.input)
       expect(out).toEqual(vector.expected)
       // What it keeps is what the store's validator accepts, and normalizing is idempotent.
-      expect(() => validateBlock({ id: "block-0001", type, version: 1, attrs: out })).not.toThrow()
+      // A container (#489) holds its children by id; how many is the nesting table's.
+      const children = isSiteContainerType(type) ? { children: [] } : {}
+      expect(() => validateBlock({ id: "block-0001", type, version: 1, attrs: out, ...children })).not.toThrow()
       expect(normalizeSiteBlockAttrs(type, out)).toEqual(out)
       // The node's attrs (defaults filled in) come back to the same stored attrs.
       expect(normalizeSiteBlockAttrs(type, siteBlockNodeAttrs(type, out))).toEqual(out)
@@ -47,11 +52,19 @@ describe("siteBlockVectors.json kinds (shared with the API)", () => {
 
 describe("site blocks in the Block Spec", () => {
   it("are flow atoms that never sit in another block's content", () => {
-    for (const type of SITE_BLOCK_TYPES) {
+    for (const type of SITE_FLOW_BLOCK_TYPES) {
       expect(isFlowType(type)).toBe(true)
       expect(isStandaloneFlowType(type)).toBe(true)
       expect(BLOCK_NODE_NAMES[type]).toBe(SITE_BLOCK_NODE_NAMES[type])
     }
+  })
+
+  it("the query loop (#489): three containers and a pager that only live where the table puts them", () => {
+    for (const type of [...SITE_CONTAINER_TYPES, "query_pagination"] as const) {
+      expect(isFlowType(type), type).toBe(false)
+      expect(BLOCK_NODE_NAMES[type]).toBe(SITE_BLOCK_NODE_NAMES[type])
+    }
+    expect(SITE_BLOCK_TYPES).toHaveLength(20)
   })
 
   it("validateBlockDoc defaults to a post, where nothing about a site block is an error", () => {

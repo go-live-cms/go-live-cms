@@ -7,6 +7,7 @@ import {
   containerRule,
   isBlockNode,
   isContainerType,
+  isNestedOnlyType,
   isStandaloneFlowType,
   LIST_ITEM_NODE_NAMES,
 } from "@gl-admin/lib/blocks-spec/nesting"
@@ -205,10 +206,11 @@ export function holderAccepts(holder: PMNode, child: PMNode): boolean {
  * The slash menu (`slotAcceptsAt`), the gutter's + (`gutterAccepts`) and drops all read it.
  */
 export function holderAcceptsType(holderName: string, type: string): boolean {
-  if (holderName === "doc") return !isContainerType(type) || !!containerRule(type)?.topLevel
+  // A note (#422) and a query's pager (#489) only exist inside their container.
+  if (holderName === "doc") return isContainerType(type) ? !!containerRule(type)?.topLevel : !isNestedOnlyType(type)
   const container = containerOfNode(holderName)
   if (container) return acceptsChild(container.type, type)
-  return !isContainerType(type) && !isStandaloneFlowType(type)
+  return !isContainerType(type) && !isStandaloneFlowType(type) && !isNestedOnlyType(type)
 }
 
 function withChildren(holder: PMNode, children: PMNode[]): boolean {

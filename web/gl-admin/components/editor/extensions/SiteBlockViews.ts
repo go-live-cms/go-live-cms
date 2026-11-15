@@ -9,6 +9,8 @@ import {
   SITE_BLOCK_INERT_NOTE,
   SITE_BLOCK_LABELS,
   SITE_LOGO_DEFAULT_WIDTH,
+  POST_EXCERPT_DEFAULT_WORDS,
+  QUERY_DEFAULT_PER_PAGE,
   siteBlockTypeOfNode,
   type SiteBlockType,
 } from "@gl-admin/lib/blocks-spec"
@@ -60,7 +62,49 @@ export function siteBlockSummary(type: SiteBlockType, attrs: Record<string, unkn
       return `“${(a.placeholder as string | undefined) ?? (a.label as string | undefined) ?? SEARCH_DEFAULTS.label}” · ${(a.button as string | undefined) ?? SEARCH_DEFAULTS.button}`
     case "template_part":
       return typeof a.slug === "string" ? "Template part" : "Choose a part in the Block tab"
+    // #489 (the canvas's "Query loop · This page’s list · 10 per page", "Post title · H3 · links to the post").
+    case "query":
+      return queryLoopSummary(a)
+    case "post_template":
+      return "Repeats for each post"
+    case "query_no_results":
+      return "When the list is empty"
+    case "query_pagination":
+      return "← Newer · 1 2 3 … · Older →, for the page’s own list"
+    case "query_title":
+      return `${a.level === 2 ? "H2" : "H1"} · the page’s list, named`
+    case "term_description":
+      return "The listed category’s or tag’s description"
+    case "post_title":
+      return [a.level ? `H${a.level}` : "Sized for the page", a.link === true ? "links to the post" : a.link === false ? "no link" : null].filter(Boolean).join(" · ")
+    case "post_content":
+      return "The post’s blocks render here, with their own anchors."
+    case "post_excerpt":
+      return `${(a.length as number | undefined) ?? POST_EXCERPT_DEFAULT_WORDS} words`
+    case "post_featured_image":
+      return [ASPECT_LABELS[(a.aspect as string | undefined) ?? "auto"], a.link === true ? "links to the post" : null].filter(Boolean).join(" · ")
+    case "post_date":
+      return `${a.which === "modified" ? "updated" : "published"}, ${a.format === "short" ? "short" : "long"}`
+    case "post_byline":
+      return a.avatars === false ? "Names only" : "With avatars"
+    case "post_terms":
+      return typeof a.taxonomy === "string" ? `Taxonomy: ${a.taxonomy}` : "Category"
+    case "post_navigation":
+      return "Older · Newer"
   }
+}
+
+const ASPECT_LABELS: Readonly<Record<string, string>> = { auto: "Original shape", "16-9": "16:9", "3-2": "3:2", "1-1": "1:1" }
+
+/** A query's line (the canvas's "This page’s list · 10 per page", "Posts in Guides · 3, newest first"). */
+export function queryLoopSummary(attrs: Record<string, unknown>): string {
+  const a = normalizeSiteBlockAttrs("query", attrs)
+  if (a.inherit === true) return "This page’s list · its pages"
+  const type = typeof a.postType === "string" ? a.postType : "Posts"
+  const filters = [Array.isArray(a.termIds) ? `in ${a.termIds.length === 1 ? "1 term" : `${a.termIds.length} terms`}` : null, a.authorId ? "by one author" : null]
+  const count = (a.perPage as number | undefined) ?? QUERY_DEFAULT_PER_PAGE
+  const order = a.orderBy === "title" ? (a.order === "asc" ? "A to Z" : "Z to A") : a.order === "asc" ? "oldest first" : "newest first"
+  return `${[type, ...filters].filter(Boolean).join(" ")} · ${count}, ${order}`
 }
 
 /** The inert notice for a site block in a document of `kind`, or null where it works. */
@@ -159,5 +203,78 @@ export class SiteBlockView implements NodeView {
 
   ignoreMutation() {
     return true
+  }
+}
+
+/**
+ * The query loop's containers (#489, the canvas's query frame): a labelled header ("Query
+ * loop · Posts · 10, newest first", "Post template · Repeats for each post", "No results · When
+ * the list is empty") above their blocks, which stay editable. Inert in a post, and it says so,
+ * like the atoms. Plain DOM; the header only reads the node (rule 7).
+ */
+export class SiteContainerView implements NodeView {
+  dom: HTMLElement
+  contentDOM: HTMLElement
+  private header: HTMLElement
+  private node: PMNode
+  private readonly type: SiteBlockType
+
+  constructor(
+    node: PMNode,
+    _view: EditorView,
+    _getPos: () => number | undefined,
+    private readonly editor: Editor
+  ) {
+    this.node = node
+    this.type = siteBlockTypeOfNode(node.type.name) as SiteBlockType
+    this.dom = document.createElement("div")
+    this.dom.dataset.type = this.type.replace(/_/g, "-")
+    // Remote carets' name labels flip at this edge, as in a group (#417).
+    this.dom.setAttribute("data-collab-bounds", "")
+    this.header = document.createElement("div")
+    this.header.className = "editor-site-container__head"
+    this.header.setAttribute("contenteditable", "false")
+    this.contentDOM = document.createElement("div")
+    this.contentDOM.className = "editor-site-container__content"
+    this.dom.append(this.header, this.contentDOM)
+    this.render()
+  }
+
+  private render() {
+    const inert = siteBlockInertNote(this.type, editorDocKind(this.editor))
+    this.dom.className = `editor-site-container editor-site-container--${this.type.replace(/_/g, "-")}${inert ? " is-inert" : ""}`
+    const id = this.node.attrs["data-block-id"]
+    if (typeof id === "string" && id) this.dom.setAttribute("data-block-id", id)
+    else this.dom.removeAttribute("data-block-id")
+    const tile = document.createElement("span")
+    tile.className = "editor-site-block__tile"
+    tile.append(svgIcon(ICON_OF[this.type]))
+    const name = document.createElement("b")
+    name.className = "editor-site-block__name"
+    name.textContent = SITE_BLOCK_LABELS[this.type]
+    const detail = document.createElement("span")
+    detail.className = "editor-site-block__detail"
+    detail.textContent = siteBlockSummary(this.type, this.node.attrs)
+    const children: Node[] = [tile, name, detail]
+    if (inert) {
+      const note = document.createElement("p")
+      note.className = "editor-site-block__note"
+      note.setAttribute("role", "note")
+      note.textContent = inert
+      children.push(note)
+    }
+    this.header.replaceChildren(...children)
+  }
+
+  update(node: PMNode) {
+    if (node.type !== this.node.type) return false
+    this.node = node
+    this.render()
+    return true
+  }
+
+  ignoreMutation(mutation: MutationRecord | { type: "selection"; target: globalThis.Node }) {
+    if (mutation.type === "selection") return false
+    return !this.contentDOM.contains(mutation.target as globalThis.Node)
   }
 }

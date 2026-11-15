@@ -28,8 +28,8 @@ import { DETAILS_OPEN_HELP, DETAILS_OPEN_LABEL } from "./DetailsBlock"
 import { button, MediaBlockView, MediaLookupTracker, mediaIcon, missingPanel } from "./MediaBlockViews"
 import { EmbedBlockView } from "./EmbedBlockViews"
 import { HtmlBlockView } from "./HtmlBlockViews"
-import { SiteBlockView } from "./SiteBlockViews"
-import { SITE_BLOCK_NODE_NAMES } from "@gl-admin/lib/blocks-spec"
+import { SiteBlockView, SiteContainerView } from "./SiteBlockViews"
+import { SITE_ATOM_NODE_NAMES, SITE_CONTAINER_TYPES, SITE_BLOCK_NODE_NAMES } from "@gl-admin/lib/blocks-spec"
 import { GALLERY_EMPTY_FRESH, GALLERY_EMPTY_TEXT, GALLERY_EMPTY_TITLE } from "./GalleryBlock"
 import { chooseGalleryImages, chooseMediaFor, uploadGalleryImages } from "../blocks/mediaPicking"
 import { deleteBlockTr, editorBlockAt, refOfBlock } from "../utils/blockTree"
@@ -104,9 +104,16 @@ export const BlockNodeViews = Extension.create({
             html: (node, view, getPos) => new HtmlBlockView(node, view, getPos as () => number | undefined, editor),
             // #488 (SiteBlockViews.ts): labelled placeholders; inert in a post, and they say so.
             ...Object.fromEntries(
-              Object.values(SITE_BLOCK_NODE_NAMES).map((name) => [
+              SITE_ATOM_NODE_NAMES.map((name) => [
                 name,
                 (node: PMNode, view: EditorView, getPos: () => number | undefined) => new SiteBlockView(node, view, getPos, editor),
+              ])
+            ),
+            // #489: the query loop's containers, a labelled frame around their blocks.
+            ...Object.fromEntries(
+              SITE_CONTAINER_TYPES.map((type) => [
+                SITE_BLOCK_NODE_NAMES[type],
+                (node: PMNode, view: EditorView, getPos: () => number | undefined) => new SiteContainerView(node, view, getPos, editor),
               ])
             ),
             // #426: columns, buttons and the spacer (LayoutBlockViews.ts).

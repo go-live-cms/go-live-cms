@@ -891,6 +891,267 @@
           "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "x" } }
         }
       }
+    },
+    {
+      "name": "#489: a query loop at the top level holds a post template, a pager and no results",
+      "valid": true,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["query-0001"],
+        "blocks": {
+          "query-0001": { "id": "query-0001", "type": "query", "version": 1, "attrs": { "perPage": 3 }, "children": ["templ-0001", "pager-0001", "empty-0001"] },
+          "templ-0001": { "id": "templ-0001", "type": "post_template", "version": 1, "attrs": {}, "children": ["title-0001", "excer-0001", "cols-00001", "detail-001", "media-0001"] },
+          "title-0001": { "id": "title-0001", "type": "post_title", "version": 1, "attrs": { "level": 3 } },
+          "excer-0001": { "id": "excer-0001", "type": "post_excerpt", "version": 1, "attrs": {} },
+          "cols-00001": { "id": "cols-00001", "type": "columns", "version": 1, "attrs": {}, "children": ["col-000001", "col-000002"] },
+          "col-000001": { "id": "col-000001", "type": "column", "version": 1, "attrs": {}, "children": ["date-00001"] },
+          "col-000002": { "id": "col-000002", "type": "column", "version": 1, "attrs": {}, "children": ["byline-001"] },
+          "date-00001": { "id": "date-00001", "type": "post_date", "version": 1, "attrs": {} },
+          "byline-001": { "id": "byline-001", "type": "post_byline", "version": 1, "attrs": {} },
+          "detail-001": { "id": "detail-001", "type": "details", "version": 1, "attrs": {}, "children": ["para-00001"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "x" } },
+          "media-0001": { "id": "media-0001", "type": "media_text", "version": 1, "attrs": {}, "children": ["para-00002"] },
+          "para-00002": { "id": "para-00002", "type": "paragraph", "version": 1, "attrs": { "text": "x" } },
+          "pager-0001": { "id": "pager-0001", "type": "query_pagination", "version": 1, "attrs": {} },
+          "empty-0001": { "id": "empty-0001", "type": "query_no_results", "version": 1, "attrs": {}, "children": ["para-00003", "search-0001", "cols-00002"] },
+          "para-00003": { "id": "para-00003", "type": "paragraph", "version": 1, "attrs": { "text": "x" } },
+          "search-0001": { "id": "search-0001", "type": "search", "version": 1, "attrs": {} },
+          "cols-00002": { "id": "cols-00002", "type": "columns", "version": 1, "attrs": {}, "children": ["col-000003", "col-000004"] },
+          "col-000003": { "id": "col-000003", "type": "column", "version": 1, "attrs": {}, "children": ["para-00004"] },
+          "col-000004": { "id": "col-000004", "type": "column", "version": 1, "attrs": {}, "children": ["para-00005"] },
+          "para-00004": { "id": "para-00004", "type": "paragraph", "version": 1, "attrs": { "text": "x" } },
+          "para-00005": { "id": "para-00005", "type": "paragraph", "version": 1, "attrs": { "text": "x" } }
+        }
+      }
+    },
+    {
+      "name": "#489: a query loop in a group",
+      "valid": true,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["group-0001"],
+        "blocks": {
+          "group-0001": { "id": "group-0001", "type": "group", "version": 1, "attrs": {}, "children": ["query-0001"] },
+          "query-0001": { "id": "query-0001", "type": "query", "version": 1, "attrs": {}, "children": ["templ-0001"] },
+          "templ-0001": { "id": "templ-0001", "type": "post_template", "version": 1, "attrs": {}, "children": ["title-0001"] },
+          "title-0001": { "id": "title-0001", "type": "post_title", "version": 1, "attrs": {} }
+        }
+      }
+    },
+    {
+      "name": "#489: a query can't be in a column",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["cols-00001"],
+        "blocks": {
+          "cols-00001": { "id": "cols-00001", "type": "columns", "version": 1, "attrs": {}, "children": ["col-000001", "col-000002"] },
+          "col-000001": { "id": "col-000001", "type": "column", "version": 1, "attrs": {}, "children": ["query-0001"] },
+          "col-000002": { "id": "col-000002", "type": "column", "version": 1, "attrs": {}, "children": ["para-00001"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "x" } },
+          "query-0001": { "id": "query-0001", "type": "query", "version": 1, "attrs": {}, "children": ["templ-0001"] },
+          "templ-0001": { "id": "templ-0001", "type": "post_template", "version": 1, "attrs": {}, "children": ["para-00002"] },
+          "para-00002": { "id": "para-00002", "type": "paragraph", "version": 1, "attrs": { "text": "x" } }
+        }
+      }
+    },
+    {
+      "name": "#489: a query can't be in a details",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["detail-001"],
+        "blocks": {
+          "detail-001": { "id": "detail-001", "type": "details", "version": 1, "attrs": {}, "children": ["query-0001"] },
+          "query-0001": { "id": "query-0001", "type": "query", "version": 1, "attrs": {}, "children": ["templ-0001"] },
+          "templ-0001": { "id": "templ-0001", "type": "post_template", "version": 1, "attrs": {}, "children": ["para-00001"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "x" } }
+        }
+      }
+    },
+    {
+      "name": "#489: a query can't be in a cover",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["cover-0001"],
+        "blocks": {
+          "cover-0001": { "id": "cover-0001", "type": "cover", "version": 1, "attrs": {}, "children": ["query-0001"] },
+          "query-0001": { "id": "query-0001", "type": "query", "version": 1, "attrs": {}, "children": ["templ-0001"] },
+          "templ-0001": { "id": "templ-0001", "type": "post_template", "version": 1, "attrs": {}, "children": ["para-00001"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "x" } }
+        }
+      }
+    },
+    {
+      "name": "#489: no query loop in a query loop's post template (a query can't hold itself)",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["query-0001"],
+        "blocks": {
+          "query-0001": { "id": "query-0001", "type": "query", "version": 1, "attrs": {}, "children": ["templ-0001"] },
+          "templ-0001": { "id": "templ-0001", "type": "post_template", "version": 1, "attrs": {}, "children": ["query-0002"] },
+          "query-0002": { "id": "query-0002", "type": "query", "version": 1, "attrs": {}, "children": ["templ-0002"] },
+          "templ-0002": { "id": "templ-0002", "type": "post_template", "version": 1, "attrs": {}, "children": ["para-00001"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "x" } }
+        }
+      }
+    },
+    {
+      "name": "#489: no group in a post template (group → query → post_template → group would be a cycle)",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["group-0001"],
+        "blocks": {
+          "group-0001": { "id": "group-0001", "type": "group", "version": 1, "attrs": {}, "children": ["query-0001"] },
+          "query-0001": { "id": "query-0001", "type": "query", "version": 1, "attrs": {}, "children": ["templ-0001"] },
+          "templ-0001": { "id": "templ-0001", "type": "post_template", "version": 1, "attrs": {}, "children": ["group-0002"] },
+          "group-0002": { "id": "group-0002", "type": "group", "version": 1, "attrs": {}, "children": ["para-00001"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "x" } }
+        }
+      }
+    },
+    {
+      "name": "#489: no group and no query in no results either",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["query-0001"],
+        "blocks": {
+          "query-0001": { "id": "query-0001", "type": "query", "version": 1, "attrs": {}, "children": ["templ-0001", "empty-0001"] },
+          "templ-0001": { "id": "templ-0001", "type": "post_template", "version": 1, "attrs": {}, "children": ["para-00001"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "x" } },
+          "empty-0001": { "id": "empty-0001", "type": "query_no_results", "version": 1, "attrs": {}, "children": ["group-0001", "query-0002"] },
+          "group-0001": { "id": "group-0001", "type": "group", "version": 1, "attrs": {}, "children": ["para-00002"] },
+          "para-00002": { "id": "para-00002", "type": "paragraph", "version": 1, "attrs": { "text": "x" } },
+          "query-0002": { "id": "query-0002", "type": "query", "version": 1, "attrs": {}, "children": ["templ-0002"] },
+          "templ-0002": { "id": "templ-0002", "type": "post_template", "version": 1, "attrs": {}, "children": ["para-00003"] },
+          "para-00003": { "id": "para-00003", "type": "paragraph", "version": 1, "attrs": { "text": "x" } }
+        }
+      }
+    },
+    {
+      "name": "#489: a post template only exists in a query: not at the top level",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["templ-0001"],
+        "blocks": {
+          "templ-0001": { "id": "templ-0001", "type": "post_template", "version": 1, "attrs": {}, "children": ["para-00001"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "x" } }
+        }
+      }
+    },
+    {
+      "name": "#489: a post template only exists in a query: not in a group",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["group-0001"],
+        "blocks": {
+          "group-0001": { "id": "group-0001", "type": "group", "version": 1, "attrs": {}, "children": ["templ-0001"] },
+          "templ-0001": { "id": "templ-0001", "type": "post_template", "version": 1, "attrs": {}, "children": ["para-00001"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "x" } }
+        }
+      }
+    },
+    {
+      "name": "#489: no results only exists in a query",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["empty-0001"],
+        "blocks": {
+          "empty-0001": { "id": "empty-0001", "type": "query_no_results", "version": 1, "attrs": {}, "children": ["para-00001"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "x" } }
+        }
+      }
+    },
+    {
+      "name": "#489: a pager only exists in a query: not at the top level",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["pager-0001"],
+        "blocks": {
+          "pager-0001": { "id": "pager-0001", "type": "query_pagination", "version": 1, "attrs": {} }
+        }
+      }
+    },
+    {
+      "name": "#489: a pager only exists in a query: not in a group or a post template",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["group-0001", "query-0001"],
+        "blocks": {
+          "group-0001": { "id": "group-0001", "type": "group", "version": 1, "attrs": {}, "children": ["pager-0001"] },
+          "pager-0001": { "id": "pager-0001", "type": "query_pagination", "version": 1, "attrs": {} },
+          "query-0001": { "id": "query-0001", "type": "query", "version": 1, "attrs": {}, "children": ["templ-0001"] },
+          "templ-0001": { "id": "templ-0001", "type": "post_template", "version": 1, "attrs": {}, "children": ["pager-0002"] },
+          "pager-0002": { "id": "pager-0002", "type": "query_pagination", "version": 1, "attrs": {} }
+        }
+      }
+    },
+    {
+      "name": "#489: a pager holds no blocks",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["query-0001"],
+        "blocks": {
+          "query-0001": { "id": "query-0001", "type": "query", "version": 1, "attrs": {}, "children": ["templ-0001", "pager-0001"] },
+          "templ-0001": { "id": "templ-0001", "type": "post_template", "version": 1, "attrs": {}, "children": ["para-00001"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "x" } },
+          "pager-0001": { "id": "pager-0001", "type": "query_pagination", "version": 1, "attrs": {}, "children": ["para-00002"] },
+          "para-00002": { "id": "para-00002", "type": "paragraph", "version": 1, "attrs": { "text": "x" } }
+        }
+      }
+    },
+    {
+      "name": "#489: a query holds its own parts only, never a paragraph",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["query-0001"],
+        "blocks": {
+          "query-0001": { "id": "query-0001", "type": "query", "version": 1, "attrs": {}, "children": ["templ-0001", "para-00002"] },
+          "templ-0001": { "id": "templ-0001", "type": "post_template", "version": 1, "attrs": {}, "children": ["para-00001"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "x" } },
+          "para-00002": { "id": "para-00002", "type": "paragraph", "version": 1, "attrs": { "text": "x" } }
+        }
+      }
+    },
+    {
+      "name": "#489: an empty query, an empty post template and an empty no results",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["query-0001", "query-0002"],
+        "blocks": {
+          "query-0001": { "id": "query-0001", "type": "query", "version": 1, "attrs": {}, "children": [] },
+          "query-0002": { "id": "query-0002", "type": "query", "version": 1, "attrs": {}, "children": ["templ-0001", "empty-0001"] },
+          "templ-0001": { "id": "templ-0001", "type": "post_template", "version": 1, "attrs": {}, "children": [] },
+          "empty-0001": { "id": "empty-0001", "type": "query_no_results", "version": 1, "attrs": {}, "children": [] }
+        }
+      }
+    },
+    {
+      "name": "#489: a post template can't be in no results, nor no results in a post template",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["query-0001"],
+        "blocks": {
+          "query-0001": { "id": "query-0001", "type": "query", "version": 1, "attrs": {}, "children": ["empty-0001"] },
+          "empty-0001": { "id": "empty-0001", "type": "query_no_results", "version": 1, "attrs": {}, "children": ["templ-0001"] },
+          "templ-0001": { "id": "templ-0001", "type": "post_template", "version": 1, "attrs": {}, "children": ["empty-0002"] },
+          "empty-0002": { "id": "empty-0002", "type": "query_no_results", "version": 1, "attrs": {}, "children": ["para-00001"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "x" } }
+        }
+      }
     }
   ]
 }

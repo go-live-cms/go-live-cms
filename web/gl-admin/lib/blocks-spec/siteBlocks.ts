@@ -1,10 +1,14 @@
 /**
- * Site blocks I (#488, design: `docs/design/theme-builder.md` 4.1–4.5, 7.4): `site_title`,
- * `site_tagline`, `site_logo`, `navigation`, `search` and `template_part`.
+ * Site blocks (design: `docs/design/theme-builder.md` 4.1–4.5, 7.4). Site blocks I (#488):
+ * `site_title`, `site_tagline`, `site_logo`, `navigation`, `search` and `template_part`. Site
+ * blocks II (#489): the query loop (`query`, `post_template`, `query_pagination`,
+ * `query_no_results`), `query_title`, `term_description` and the `post_*` blocks.
  *
- * They are **core** Block Spec types (not namespaced, not a theme's), flow atoms that hold
- * no text of their own. What they show is the site's (Settings › General, the menus, the
- * published parts), read on the page from the `SiteRenderContext` SSR fills before the
+ * They are **core** Block Spec types (not namespaced, not a theme's). Most are flow atoms
+ * that hold no text of their own; the query loop's three containers are rows of the nesting
+ * table (`nesting.ts`), and `query_pagination` is an atom that only lives in a query. What they
+ * show is the site's (Settings › General, the menus, the published parts, the route's post and
+ * lists, a query's posts), read on the page from the `SiteRenderContext` SSR fills before the
  * synchronous render (`src/components/blocks/utils/siteContext.ts`). **Outside a template or
  * a part they render nothing**: they are in the one schema (7.4), so a client can write one
  * into a post's Yjs doc, and that post still stores (4.2's inert rule). The post catalog
@@ -20,9 +24,41 @@
 
 export const SITE_BLOCK_VERSION = 1
 
-/** The site blocks of #488, by Block Spec type. T7 (#489) adds the query and post blocks. */
-export const SITE_BLOCK_TYPES = ["site_title", "site_tagline", "site_logo", "navigation", "search", "template_part"] as const
+/** The site blocks that are flow (they may sit wherever flow may): #488's six, then #489's. */
+export const SITE_FLOW_BLOCK_TYPES = [
+  "site_title",
+  "site_tagline",
+  "site_logo",
+  "navigation",
+  "search",
+  "template_part",
+  // #489
+  "query_title",
+  "term_description",
+  "post_title",
+  "post_content",
+  "post_excerpt",
+  "post_featured_image",
+  "post_date",
+  "post_byline",
+  "post_terms",
+  "post_navigation",
+] as const
+
+/** An atom that only lives in a query (#489): neither flow nor a container, like a `footnote` in its list. */
+export const SITE_QUERY_ATOM_TYPES = ["query_pagination"] as const
+
+/** The query loop's containers (#489), rows of the nesting table (`nesting.ts`). */
+export const SITE_CONTAINER_TYPES = ["query", "post_template", "query_no_results"] as const
+
+/** The site blocks that are atoms (one node, no children): the flow ones and `query_pagination`. */
+export const SITE_ATOM_TYPES = [...SITE_FLOW_BLOCK_TYPES, ...SITE_QUERY_ATOM_TYPES] as const
+
+/** Every site block, by Block Spec type. */
+export const SITE_BLOCK_TYPES = [...SITE_ATOM_TYPES, ...SITE_CONTAINER_TYPES] as const
 export type SiteBlockType = (typeof SITE_BLOCK_TYPES)[number]
+export type SiteAtomType = (typeof SITE_ATOM_TYPES)[number]
+export type SiteContainerType = (typeof SITE_CONTAINER_TYPES)[number]
 
 /** Block Spec type → ProseMirror node name. */
 export const SITE_BLOCK_NODE_NAMES: Readonly<Record<SiteBlockType, string>> = {
@@ -32,14 +68,43 @@ export const SITE_BLOCK_NODE_NAMES: Readonly<Record<SiteBlockType, string>> = {
   navigation: "navigation",
   search: "search",
   template_part: "templatePart",
+  query_title: "queryTitle",
+  term_description: "termDescription",
+  post_title: "postTitle",
+  post_content: "postContent",
+  post_excerpt: "postExcerpt",
+  post_featured_image: "postFeaturedImage",
+  post_date: "postDate",
+  post_byline: "postByline",
+  post_terms: "postTerms",
+  post_navigation: "postNavigation",
+  query_pagination: "queryPagination",
+  query: "query",
+  post_template: "postTemplate",
+  query_no_results: "queryNoResults",
 }
 
+/** The ProseMirror node names of the flow site blocks (`STANDALONE_FLOW_NODE_NAMES`). */
+export const SITE_FLOW_NODE_NAMES: readonly string[] = SITE_FLOW_BLOCK_TYPES.map((type) => SITE_BLOCK_NODE_NAMES[type])
+/** The ProseMirror node names of the atom site blocks (one placeholder view each). */
+export const SITE_ATOM_NODE_NAMES: readonly string[] = SITE_ATOM_TYPES.map((type) => SITE_BLOCK_NODE_NAMES[type])
+
 const SITE_TYPES = new Set<string>(SITE_BLOCK_TYPES)
+const SITE_ATOMS = new Set<string>(SITE_ATOM_TYPES)
+const SITE_CONTAINERS = new Set<string>(SITE_CONTAINER_TYPES)
 const SITE_NODES = new Set<string>(Object.values(SITE_BLOCK_NODE_NAMES))
 const TYPE_OF_NODE = new Map<string, SiteBlockType>(SITE_BLOCK_TYPES.map((type) => [SITE_BLOCK_NODE_NAMES[type], type]))
 
 export function isSiteBlockType(type: unknown): type is SiteBlockType {
   return typeof type === "string" && SITE_TYPES.has(type)
+}
+
+export function isSiteAtomType(type: unknown): type is SiteAtomType {
+  return typeof type === "string" && SITE_ATOMS.has(type)
+}
+
+export function isSiteContainerType(type: unknown): type is SiteContainerType {
+  return typeof type === "string" && SITE_CONTAINERS.has(type)
 }
 
 export function isSiteBlockNode(nodeName: unknown): boolean {
@@ -50,7 +115,7 @@ export function siteBlockTypeOfNode(nodeName: unknown): SiteBlockType | undefine
   return typeof nodeName === "string" ? TYPE_OF_NODE.get(nodeName) : undefined
 }
 
-/** What the menus call each one, and History's diff. */
+/** What the menus call each one, and History's diff (the blocks canvas's names). */
 export const SITE_BLOCK_LABELS: Readonly<Record<SiteBlockType, string>> = {
   site_title: "Site title",
   site_tagline: "Site tagline",
@@ -58,6 +123,20 @@ export const SITE_BLOCK_LABELS: Readonly<Record<SiteBlockType, string>> = {
   navigation: "Navigation",
   search: "Search",
   template_part: "Template part",
+  query_title: "Query title",
+  term_description: "Term description",
+  post_title: "Post title",
+  post_content: "Post content",
+  post_excerpt: "Post excerpt",
+  post_featured_image: "Featured image",
+  post_date: "Post date",
+  post_byline: "Post byline",
+  post_terms: "Post terms",
+  post_navigation: "Post navigation",
+  query_pagination: "Pagination",
+  query: "Query loop",
+  post_template: "Post template",
+  query_no_results: "No results",
 }
 
 /** Their 24×24 stroke icons (the catalog's and the editor placeholders'). */
@@ -68,6 +147,20 @@ export const SITE_BLOCK_ICONS: Readonly<Record<SiteBlockType, string>> = {
   navigation: "M4 6h16M4 12h16M4 18h16",
   search: "M11 4a7 7 0 1 0 0 14a7 7 0 1 0 0-14M20 20l-3.5-3.5",
   template_part: "M4 4h16v6H4zM4 14h16v6H4z",
+  query_title: "M5 5h14M12 5v14M8 19h8",
+  term_description: "M4 6h16M4 11h16M4 16h10",
+  post_title: "M4 7V5h16v2M12 5v14M9 19h6",
+  post_content: "M4 4h16v16H4zM8 8h8M8 12h8M8 16h5",
+  post_excerpt: "M4 7h16M4 12h16M4 17h9M17 17h.01M20 17h.01",
+  post_featured_image: "M3 5h18v14H3zM8.5 10.5h.01M21 15l-5-5L5 19",
+  post_date: "M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M12 7v5l3 2",
+  post_byline: "M12 4a4 4 0 1 0 0 8a4 4 0 1 0 0-8M4 21c1-4 4-6 8-6s7 2 8 6",
+  post_terms: "M3 12V4h8l10 10-8 8zM7.5 8.5h.01",
+  post_navigation: "M9 6l-6 6 6 6M15 6l6 6-6 6",
+  query_pagination: "M4 12h.01M9 12h.01M15 12h.01M20 12h.01M3 7h18M3 17h18",
+  query: "M4 4h16v4H4zM4 10h16v4H4zM4 16h16v4H4z",
+  post_template: "M4 4h16v16H4zM8 9h8M8 13h5",
+  query_no_results: "M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M5.6 5.6l12.8 12.8",
 }
 
 // ── Where a block doc lives (design 4.2) ────────────────────────────────────────────
@@ -91,6 +184,23 @@ export const SITE_BLOCK_CONTEXTS: Readonly<Record<SiteBlockType, readonly BlockD
   navigation: ["template", "part"],
   search: ["template", "part"],
   template_part: ["template"],
+  // #489. A part may hold a query (they count towards the page's four, 4.3) and the post
+  // blocks (a header showing the post's title), never the post's body: a header holding it
+  // would render it twice (4.2).
+  query_title: ["template", "part"],
+  term_description: ["template", "part"],
+  post_title: ["template", "part"],
+  post_content: ["template"],
+  post_excerpt: ["template", "part"],
+  post_featured_image: ["template", "part"],
+  post_date: ["template", "part"],
+  post_byline: ["template", "part"],
+  post_terms: ["template", "part"],
+  post_navigation: ["template", "part"],
+  query_pagination: ["template", "part"],
+  query: ["template", "part"],
+  post_template: ["template", "part"],
+  query_no_results: ["template", "part"],
 }
 
 export interface SiteBlockKindIssue {
@@ -100,27 +210,58 @@ export interface SiteBlockKindIssue {
 
 /**
  * The placement rules of design 4.2 that depend on the doc's kind, in a stable order (the
- * blocks' keys, sorted); empty when it is fine. The API runs the same
- * (`checkSiteBlockPlacement`); `siteBlockVectors.json` pins both.
+ * blocks' keys, sorted; then the template-wide count); empty when it is fine. The API runs the
+ * same (`checkSiteBlockPlacement`); `siteBlockVectors.json` pins both.
  *
  * - **In a post, site blocks are inert, never an error**: refusing one would make every
  *   later store of that post `kept-invalid` until someone deleted the block.
  * - **`template_part` never sits in a part**: a part can't hold a part, so parts are never
  *   recursive and a cycle can't happen. Anywhere in the doc, referenced or not (a block left
  *   unreferenced could be referenced again by the next store).
- *
- * T7 (#489) adds `post_content`'s rules here.
+ * - **`post_content` never sits in a part** (a header holding the post would render it
+ *   twice), the same way, **nor inside a query's `post_template`**, at any depth (a list item
+ *   carries no body, and the block would render the route's post once per item; `post_excerpt`
+ *   is the list's block), **and at most one per template**, referenced or not.
  */
 export function siteBlockKindIssues(doc: unknown, kind: BlockDocKind): SiteBlockKindIssue[] {
-  if (kind !== "part") return []
+  if (kind === "post") return []
   const blocks = (doc as { blocks?: unknown } | null)?.blocks
   if (!blocks || typeof blocks !== "object") return []
+  const map = blocks as Record<string, unknown>
   const issues: SiteBlockKindIssue[] = []
-  for (const key of Object.keys(blocks).sort()) {
-    const block = (blocks as Record<string, unknown>)[key] as { type?: unknown } | null
-    if (block && typeof block === "object" && block.type === "template_part") {
-      issues.push({ path: ["blocks", key], message: "a template_part can't be in a part" })
+  const typeOf = (id: string) => {
+    const block = Object.prototype.hasOwnProperty.call(map, id) ? (map[id] as { type?: unknown } | null) : null
+    return block && typeof block === "object" ? block.type : undefined
+  }
+  // Each block's parent, from the children lists (the first one that names it: a block
+  // under two parents is the nesting check's error, not this one's).
+  const parentOf = new Map<string, string>()
+  for (const key of Object.keys(map).sort()) {
+    const children = (map[key] as { children?: unknown } | null)?.children
+    if (!Array.isArray(children)) continue
+    for (const child of children) if (typeof child === "string" && !parentOf.has(child)) parentOf.set(child, key)
+  }
+  const inPostTemplate = (id: string) => {
+    const seen = new Set<string>([id])
+    for (let at = parentOf.get(id); at !== undefined && !seen.has(at); at = parentOf.get(at)) {
+      if (typeOf(at) === "post_template") return true
+      seen.add(at)
     }
+    return false
+  }
+  const contents: string[] = []
+  for (const key of Object.keys(map).sort()) {
+    const type = typeOf(key)
+    if (kind === "part" && type === "template_part") {
+      issues.push({ path: ["blocks", key], message: "a template_part can't be in a part" })
+    } else if (type === "post_content") {
+      contents.push(key)
+      if (kind === "part") issues.push({ path: ["blocks", key], message: "a post_content can't be in a part" })
+      else if (inPostTemplate(key)) issues.push({ path: ["blocks", key], message: "a post_content can't be in a post_template" })
+    }
+  }
+  if (kind === "template" && contents.length > 1) {
+    issues.push({ path: ["blocks", contents[1]], message: "a template holds at most one post_content" })
   }
   return issues
 }
@@ -214,6 +355,116 @@ export interface TemplatePartAttrs {
   slug?: string
 }
 
+// ── #489: the query loop and the post blocks ────────────────────────────────────────
+
+/** A query's page size (design 4.1: 1–24, `/public/posts`' `per_page` cap) and its default. */
+export const QUERY_MIN_PER_PAGE = 1
+export const QUERY_MAX_PER_PAGE = 24
+export const QUERY_DEFAULT_PER_PAGE = 10
+/** At most this many terms in one query (`/public/posts`' `terms`). */
+export const QUERY_MAX_TERMS = 10
+export const QUERY_DEFAULT_POST_TYPE = "post"
+export const QUERY_ORDER_BYS = ["date", "title"] as const
+export type QueryOrderBy = (typeof QUERY_ORDER_BYS)[number]
+export const QUERY_ORDERS = ["desc", "asc"] as const
+export type QueryOrder = (typeof QUERY_ORDERS)[number]
+
+/** A post type's or a taxonomy's name, as the API's `identifier` rule allows it (at most 64). */
+const CONTENT_NAME_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/
+
+export function isContentName(value: unknown): value is string {
+  return typeof value === "string" && CONTENT_NAME_PATTERN.test(value)
+}
+
+/** A database id: a positive whole JSON number the web keeps exactly (a user, a term). */
+export function isPositiveId(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 && value <= Number.MAX_SAFE_INTEGER
+}
+
+/**
+ * A query's terms as stored: valid ids, each once, ascending, at most `QUERY_MAX_TERMS`; null
+ * for none. Takes the node's comma list ("3,5") or an array. A comma list because a node attr
+ * must be a scalar: y-tiptap compares attrs by identity, so an array would be written to the
+ * shared doc on every sync of the node.
+ */
+export function normalizeTermIds(value: unknown): number[] | null {
+  const raw = typeof value === "string" ? value.split(",").map((part) => (/^\s*\d+\s*$/.test(part) ? Number(part) : NaN)) : Array.isArray(value) ? value : []
+  const ids = [...new Set(raw.filter(isPositiveId))].sort((a, b) => a - b).slice(0, QUERY_MAX_TERMS)
+  return ids.length > 0 ? ids : null
+}
+
+/** A query's page size: a number rounded and clamped to 1–24, else the default. */
+export function normalizeQueryPerPage(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return QUERY_DEFAULT_PER_PAGE
+  return Math.min(QUERY_MAX_PER_PAGE, Math.max(QUERY_MIN_PER_PAGE, Math.round(value)))
+}
+
+/** `post_title`'s levels: absent is "as the page needs it" (an H1 for the page's post, an H3 in a list). */
+export const POST_TITLE_LEVELS = [1, 2, 3, 4] as const
+/** `query_title`'s levels: 1 (the default) or 2. */
+export const QUERY_TITLE_LEVELS = [1, 2] as const
+
+/** `post_excerpt`'s length in words, and its default (the canvas's "35 words"). */
+export const POST_EXCERPT_MIN_WORDS = 5
+export const POST_EXCERPT_MAX_WORDS = 100
+export const POST_EXCERPT_DEFAULT_WORDS = 35
+
+/** `post_featured_image`'s shapes: `auto` keeps the image's own (the default). */
+export const POST_FEATURED_IMAGE_ASPECTS = ["auto", "16-9", "3-2", "1-1"] as const
+export type PostFeaturedImageAspect = (typeof POST_FEATURED_IMAGE_ASPECTS)[number]
+
+export const POST_DATE_WHICH = ["published", "modified"] as const
+export const POST_DATE_FORMATS = ["long", "short"] as const
+
+export const POST_TERMS_DEFAULT_TAXONOMY = "category"
+
+/** An excerpt's length in words: a number rounded and clamped to 5–100, else the default. */
+export function normalizePostExcerptLength(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return POST_EXCERPT_DEFAULT_WORDS
+  return Math.min(POST_EXCERPT_MAX_WORDS, Math.max(POST_EXCERPT_MIN_WORDS, Math.round(value)))
+}
+
+export interface QueryAttrs {
+  /** Use the route's own list (archive, term, author, search, home), with its pages. */
+  inherit?: true
+  /** Absent: "post". */
+  postType?: string
+  /** 1–24; absent: 10. */
+  perPage?: number
+  orderBy?: "title"
+  order?: "asc"
+  /** Both or neither: the terms (of one taxonomy) a post must have one of. */
+  taxonomy?: string
+  termIds?: number[]
+  /** Credited in the post's published byline. */
+  authorId?: number
+}
+export interface QueryTitleAttrs {
+  level?: 2
+}
+export interface PostTitleAttrs {
+  level?: 1 | 2 | 3 | 4
+  /** Absent: a link in a list, none for the page's own post. */
+  link?: boolean
+}
+export interface PostExcerptAttrs {
+  length?: number
+}
+export interface PostFeaturedImageAttrs {
+  aspect?: "16-9" | "3-2" | "1-1"
+  link?: true
+}
+export interface PostDateAttrs {
+  which?: "modified"
+  format?: "short"
+}
+export interface PostBylineAttrs {
+  avatars?: false
+}
+export interface PostTermsAttrs {
+  taxonomy?: string
+}
+
 /**
  * A site block's attrs as stored: only the attrs its type has, each valid, defaults left
  * out. From anything (a node's attrs, a stored block's, a client's Yjs update), so the
@@ -228,6 +479,16 @@ export interface TemplatePartAttrs {
  *   a block not set up yet. `layout: "column"`, `overlay: "never"`.
  * - `search`: `label`, `placeholder`, `button` as plain text, capped.
  * - `template_part`: `slug`, a part's slug.
+ * - `query` (#489): `inherit: true`; `postType` a type's name ("post" is the default);
+ *   `perPage` rounded, clamped to 1–24 (10 is the default); `orderBy: "title"`; `order: "asc"`;
+ *   `taxonomy` and `termIds` both or neither (`normalizeTermIds`); `authorId` a user id.
+ * - `query_title`: `level: 2`. `post_title`: `level` 1–4, `link` a boolean.
+ * - `post_excerpt`: `length` in words, rounded, clamped to 5–100 (35 is the default).
+ * - `post_featured_image`: `aspect` "16-9", "3-2" or "1-1"; `link: true`.
+ * - `post_date`: `which: "modified"`, `format: "short"`. `post_byline`: `avatars: false`.
+ * - `post_terms`: `taxonomy` a taxonomy's name ("category" is the default).
+ * - `term_description`, `post_content`, `post_navigation`, `query_pagination`,
+ *   `post_template`, `query_no_results`: none.
  */
 export function normalizeSiteBlockAttrs(type: SiteBlockType, attrs: unknown): Record<string, unknown> {
   const a = (attrs && typeof attrs === "object" ? attrs : {}) as Record<string, unknown>
@@ -268,6 +529,57 @@ export function normalizeSiteBlockAttrs(type: SiteBlockType, attrs: unknown): Re
     case "template_part":
       if (isTemplatePartSlug(a.slug)) out.slug = a.slug
       break
+    case "query": {
+      if (a.inherit === true) out.inherit = true
+      if (isContentName(a.postType) && a.postType !== QUERY_DEFAULT_POST_TYPE) out.postType = a.postType
+      if (typeof a.perPage === "number" && Number.isFinite(a.perPage)) {
+        const perPage = normalizeQueryPerPage(a.perPage)
+        if (perPage !== QUERY_DEFAULT_PER_PAGE) out.perPage = perPage
+      }
+      if (a.orderBy === "title") out.orderBy = "title"
+      if (a.order === "asc") out.order = "asc"
+      const termIds = normalizeTermIds(a.termIds)
+      if (termIds && isContentName(a.taxonomy)) {
+        out.taxonomy = a.taxonomy
+        out.termIds = termIds
+      }
+      if (isPositiveId(a.authorId)) out.authorId = a.authorId
+      break
+    }
+    case "query_title":
+      if (a.level === 2) out.level = 2
+      break
+    case "post_title":
+      if ((POST_TITLE_LEVELS as readonly unknown[]).includes(a.level)) out.level = a.level
+      if (typeof a.link === "boolean") out.link = a.link
+      break
+    case "post_excerpt":
+      if (typeof a.length === "number" && Number.isFinite(a.length)) {
+        const length = normalizePostExcerptLength(a.length)
+        if (length !== POST_EXCERPT_DEFAULT_WORDS) out.length = length
+      }
+      break
+    case "post_featured_image":
+      if (a.aspect === "16-9" || a.aspect === "3-2" || a.aspect === "1-1") out.aspect = a.aspect
+      if (a.link === true) out.link = true
+      break
+    case "post_date":
+      if (a.which === "modified") out.which = "modified"
+      if (a.format === "short") out.format = "short"
+      break
+    case "post_byline":
+      if (a.avatars === false) out.avatars = false
+      break
+    case "post_terms":
+      if (isContentName(a.taxonomy) && a.taxonomy !== POST_TERMS_DEFAULT_TAXONOMY) out.taxonomy = a.taxonomy
+      break
+    case "term_description":
+    case "post_content":
+    case "post_navigation":
+    case "query_pagination":
+    case "post_template":
+    case "query_no_results":
+      break
   }
   return out
 }
@@ -296,6 +608,39 @@ export function siteBlockNodeAttrs(type: SiteBlockType, attrs: unknown): Record<
       return { label: stored.label ?? null, placeholder: stored.placeholder ?? null, button: stored.button ?? null }
     case "template_part":
       return { slug: stored.slug ?? null }
+    case "query":
+      return {
+        inherit: stored.inherit === true,
+        postType: stored.postType ?? QUERY_DEFAULT_POST_TYPE,
+        perPage: stored.perPage ?? QUERY_DEFAULT_PER_PAGE,
+        orderBy: stored.orderBy ?? "date",
+        order: stored.order ?? "desc",
+        taxonomy: stored.taxonomy ?? null,
+        // A comma list, never an array (normalizeTermIds).
+        termIds: Array.isArray(stored.termIds) ? (stored.termIds as number[]).join(",") : null,
+        authorId: stored.authorId ?? null,
+      }
+    case "query_title":
+      return { level: stored.level ?? 1 }
+    case "post_title":
+      return { level: stored.level ?? null, link: stored.link ?? null }
+    case "post_excerpt":
+      return { length: stored.length ?? POST_EXCERPT_DEFAULT_WORDS }
+    case "post_featured_image":
+      return { aspect: stored.aspect ?? "auto", link: stored.link === true }
+    case "post_date":
+      return { which: stored.which ?? "published", format: stored.format ?? "long" }
+    case "post_byline":
+      return { avatars: stored.avatars !== false }
+    case "post_terms":
+      return { taxonomy: stored.taxonomy ?? POST_TERMS_DEFAULT_TAXONOMY }
+    case "term_description":
+    case "post_content":
+    case "post_navigation":
+    case "query_pagination":
+    case "post_template":
+    case "query_no_results":
+      return {}
   }
 }
 

@@ -422,6 +422,17 @@ are the most fragile part of the codebase. **Before editing anything under
   each renders nothing. Markup: `src/components/blocks/README.md`; default theme rules: the "site blocks (#488)"
   section of `themes/default/styles/theme.css` (`themes/default/siteBlocks.test.ts`). Collab rules:
   `gl-admin/lib/collaboration/CLAUDE.md`.
+- **Site blocks II (#489, design `docs/design/theme-builder.md` 4.1–4.5):** the query loop (`query`, `post_template`,
+  `query_pagination`, `query_no_results`), `query_title`, `term_description` and the `post_*` blocks, the same chain
+  as #488's (renderers in `src/components/blocks/utils/postBlocks.tsx`, markup in `src/components/blocks/README.md`,
+  the default theme's "site blocks II (#489)" section). `loadSiteRenderContext` (`src/lib/siteRenderContext.ts`) also
+  takes the route (`SiteRoute`: its post, its own list, term, author or search) and fills each query's posts before
+  the render: `collectTemplateNeeds` keeps **four per page**, parts counted (the rest render nothing, logged
+  `site_block_query_limit` once); an inheriting query is the route's list (no fetch), any other one page of
+  `/public/posts/type/:type` with its filters (`queryRequestParams`, 2 s, `readQueryPosts`); a failure renders that
+  query nothing and is logged once per request (`site_block_data_failed`, the block type and a count). The pager is
+  #349's (`pageLinks`, `pagePath`), only for an inheriting query. Bylines are core's (`src/lib/bylines.ts`), which the
+  default theme re-exports.
 - **Site logo (#488):** Settings › General's **Site logo** (`components/settings/SiteLogoField.tsx`, rules
   `lib/siteLogo.ts`): the media picker (images only), Replace and Remove, saved with the page as
   `site_logo_media_id` (sent only when it changed, like the front page). `GET /settings` answers it with `site_logo`

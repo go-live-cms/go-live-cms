@@ -7,7 +7,10 @@ import { Details } from "../../components/editor/extensions/DetailsBlock"
 import Subscript from "@tiptap/extension-subscript"
 import Superscript from "@tiptap/extension-superscript"
 import { getCoreSchema, schemaExtensions } from "./schema"
-import { SITE_BLOCK_NODE_NAMES } from "../blocks-spec/siteBlocks"
+import { SITE_BLOCK_NODE_NAMES, SITE_BLOCK_TYPES } from "../blocks-spec/siteBlocks"
+
+// The site blocks of #488, as they shipped (the fingerprint test pins what each change added).
+const SITE_BLOCK_TYPES_488 = ["site_title", "site_tagline", "site_logo", "navigation", "search", "template_part"] as const
 import { Group } from "../../components/editor/extensions/GroupBlock"
 import { Footnote } from "../../components/editor/extensions/FootnotesBlock"
 import { GlTable, GlTableRow, TableBlock, TableCaption } from "../../components/editor/extensions/TableBlock"
@@ -223,7 +226,7 @@ describe("schemaFingerprint (#416)", () => {
     it("the table (#420) changed it: new node types, and a doc and a group that name the table block", () => {
       // The schema as it was before #420: no table nodes (nor #421's details), `(block | group)+`
       // doc, `block+` group.
-      const { table: _table, document: _document, group: _group, details: _details, columns: _columns, cover: _cover, mediaText: _mediaText, ...rest } = schemaExtensions({ collaborating: true })
+      const { table: _table, document: _document, group: _group, details: _details, columns: _columns, cover: _cover, mediaText: _mediaText, query: _query, postTemplate: _postTemplate, queryNoResults: _queryNoResults, ...rest } = schemaExtensions({ collaborating: true })
       const OldDocument = Node.create({ name: "doc", topNode: true, content: "(block | group)+" })
       const OldGroup = Group.extend({ content: "block+" })
       const before = getSchema([OldDocument, ...Object.values({ ...rest, group: OldGroup })])
@@ -243,7 +246,7 @@ describe("schemaFingerprint (#416)", () => {
 
     it("details (#421) changed it: new node types, and a doc and a group that name details", () => {
       // The schema as it was before #421 (after #423): no details nodes, a doc and a group without them.
-      const { document: _document, group: _group, details, columns: _columns, cover: _cover, mediaText: _mediaText, ...rest } = schemaExtensions({ collaborating: true })
+      const { document: _document, group: _group, details, columns: _columns, cover: _cover, mediaText: _mediaText, query: _query, postTemplate: _postTemplate, queryNoResults: _queryNoResults, ...rest } = schemaExtensions({ collaborating: true })
       const OldDocument = Node.create({ name: "doc", topNode: true, content: "(block | tableBlock | video | audio | file | group)+" })
       const OldGroup = Group.extend({ content: "(block | tableBlock | video | audio | file)+" })
       const before = getSchema([OldDocument, ...Object.values({ ...rest, group: OldGroup })])
@@ -279,7 +282,7 @@ describe("schemaFingerprint (#416)", () => {
     })
 
     it("the embed block (#425) changed it: a node type, named by the doc and a group", () => {
-      const { embed, embedCommands: _commands, document: _document, group: _group, details: _details, columns: _columns, cover: _cover, mediaText: _mediaText, ...rest } = schemaExtensions({ collaborating: true })
+      const { embed, embedCommands: _commands, document: _document, group: _group, details: _details, columns: _columns, cover: _cover, mediaText: _mediaText, query: _query, postTemplate: _postTemplate, queryNoResults: _queryNoResults, ...rest } = schemaExtensions({ collaborating: true })
       const flow = "(block | tableBlock | video | audio | file)"
       const OldDocument = Node.create({ name: "doc", topNode: true, content: `(block | tableBlock | video | audio | file | group | details)+` })
       const OldGroup = _group.extend({ content: `(${flow.slice(1, -1)} | details)+` })
@@ -309,7 +312,7 @@ describe("schemaFingerprint (#416)", () => {
 
     it("columns, buttons and the spacer (#426) changed it: new node types, named by the doc, a group and a details", () => {
       // The schema as it was before #426: none of them, and a doc, group and details without them.
-      const { columns, buttons, spacer, document: _document, group: _group, details: _details, cover: _cover, mediaText: _mediaText, ...rest } = schemaExtensions({ collaborating: true })
+      const { columns, buttons, spacer, document: _document, group: _group, details: _details, cover: _cover, mediaText: _mediaText, query: _query, postTemplate: _postTemplate, queryNoResults: _queryNoResults, ...rest } = schemaExtensions({ collaborating: true })
       const OldDocument = Node.create({ name: "doc", topNode: true, content: "(block | tableBlock | video | audio | file | embed | group | details | gallery)+" })
       const OldGroup = Group.extend({ content: "(block | tableBlock | video | audio | file | embed | details)+" })
       const OldDetails = Details.extend({ content: "detailsSummary (block | tableBlock | video | audio | file | embed)+" })
@@ -332,7 +335,7 @@ describe("schemaFingerprint (#416)", () => {
 
     it("cover and media & text (#427) changed it: two node types, named by the doc and a group", () => {
       // The schema as it was before #427: neither of them, and a doc and group that name neither.
-      const { cover, mediaText, coverMediaCommands: _commands, document: _document, group: _group, ...rest } = schemaExtensions({ collaborating: true })
+      const { cover, mediaText, coverMediaCommands: _commands, document: _document, group: _group, query: _query, postTemplate: _postTemplate, queryNoResults: _queryNoResults, ...rest } = schemaExtensions({ collaborating: true })
       const OldDocument = Node.create({ name: "doc", topNode: true, content: "(block | tableBlock | video | audio | file | embed | buttons | spacer | group | details | gallery | columns)+" })
       const OldGroup = Group.extend({ content: "(block | tableBlock | video | audio | file | embed | buttons | spacer | details | columns)+" })
       const before = getSchema([OldDocument, ...Object.values({ ...rest, group: OldGroup })])
@@ -354,7 +357,7 @@ describe("schemaFingerprint (#416)", () => {
     it("the site blocks (#488) changed it: six node types, named by the doc and every container that holds flow", () => {
       // The schema as it was before #488: none of the six, and no content expression naming them.
       const after = getCoreSchema()
-      const names = Object.values(SITE_BLOCK_NODE_NAMES)
+      const names = SITE_BLOCK_TYPES_488.map((type) => SITE_BLOCK_NODE_NAMES[type])
       const unnamed = (content: string | undefined) => (content ?? "").replace(new RegExp(` \\| (${names.join("|")})\\b`, "g"), "")
       let nodes = after.spec.nodes
       for (const name of names) nodes = nodes.remove(name)
@@ -381,10 +384,53 @@ describe("schemaFingerprint (#416)", () => {
       // No parse rules (design 4.4): paste can't make one.
       for (const name of names) expect(after.nodes[name].spec.parseDOM ?? [], name).toEqual([])
     })
+    it("site blocks II (#489) changed it: fourteen node types, the query loop named by the doc and a group", () => {
+      // The schema as it was before #489: none of the fourteen, and no content expression naming them.
+      const after = getCoreSchema()
+      const types = SITE_BLOCK_TYPES.filter((type) => !(SITE_BLOCK_TYPES_488 as readonly string[]).includes(type))
+      expect(types).toHaveLength(14)
+      const names = types.map((type) => SITE_BLOCK_NODE_NAMES[type])
+      const unnamed = (content: string | undefined) => (content ?? "").replace(new RegExp(` \\| (${names.join("|")})\\b`, "g"), "")
+      let nodes = after.spec.nodes
+      for (const name of names) nodes = nodes.remove(name)
+      nodes.forEach((name, spec) => {
+        if (spec.content && unnamed(spec.content) !== spec.content) nodes = nodes.update(name, { ...spec, content: unnamed(spec.content) })
+      })
+      const before = new Schema({ nodes, marks: after.spec.marks, topNode: after.spec.topNode })
+      for (const name of names) {
+        expect(before.nodes[name], name).toBeUndefined()
+        expect(after.nodes[name], name).toBeDefined()
+        expect(describeSchemaForFingerprint(after)).toContain(name)
+        // No parse rules (design 4.4): paste can't make one.
+        expect(after.nodes[name].spec.parseDOM ?? [], name).toEqual([])
+      }
+      expect(schemaFingerprint(before)).not.toBe(core)
+      // The query loop at the top level and in a group; the post blocks wherever flow is, a
+      // post template and "no results" included; the pager and the two containers only in a query.
+      expect(after.nodes.doc.spec.content).toContain("query")
+      expect(after.nodes.group.spec.content).toContain("query")
+      expect(after.nodes.column.spec.content).not.toMatch(/\bquery\b/)
+      expect(after.nodes.query.spec.content).toBe("(postTemplate | queryPagination | queryNoResults)+")
+      for (const holder of ["postTemplate", "queryNoResults"]) {
+        expect(after.nodes[holder].spec.content, holder).toContain("postTitle")
+        expect(after.nodes[holder].spec.content, holder).toContain("columns")
+        expect(after.nodes[holder].spec.content, holder).not.toMatch(/\b(group|query|postTemplate|queryPagination)\b/)
+      }
+      for (const flowless of ["doc", "group", "postTemplate", "column"]) {
+        expect(after.nodes[flowless].spec.content, flowless).not.toMatch(/\b(postTemplate|queryPagination|queryNoResults)\b/)
+      }
+      // A tab that didn't know an attr would rewrite the element and lose it: refused too.
+      for (const [name, attr] of [["query", "inherit"], ["query", "termIds"], ["postTitle", "level"], ["postExcerpt", "length"], ["postFeaturedImage", "aspect"], ["postDate", "which"], ["postByline", "avatars"], ["postTerms", "taxonomy"], ["queryTitle", "level"]] as const) {
+        const spec = after.spec.nodes.get(name)!
+        const { [attr]: _dropped, ...attrs } = spec.attrs as Record<string, unknown>
+        const without = new Schema({ nodes: after.spec.nodes.update(name, { ...spec, attrs: attrs as NonNullable<typeof spec.attrs> }), marks: after.spec.marks, topNode: after.spec.topNode })
+        expect(schemaFingerprint(without), `${name}.${attr}`).not.toBe(core)
+      }
+    })
     it("the video, audio and file blocks (#423) changed it: three node types, named by the doc and a group", () => {
       // The schema as it was before #423 (and #421): no media nodes, no details, and the doc and the group name
       // only the table next to `block`.
-      const { video, audio, file, mediaCommands: _commands, document: _document, group: _group, details: _details, columns: _columns, cover: _cover, mediaText: _mediaText, ...rest } = schemaExtensions({ collaborating: true })
+      const { video, audio, file, mediaCommands: _commands, document: _document, group: _group, details: _details, columns: _columns, cover: _cover, mediaText: _mediaText, query: _query, postTemplate: _postTemplate, queryNoResults: _queryNoResults, ...rest } = schemaExtensions({ collaborating: true })
       const OldDocument = Node.create({ name: "doc", topNode: true, content: "(block | tableBlock | group)+" })
       const OldGroup = Group.extend({ content: "(block | tableBlock)+" })
       const before = getSchema([OldDocument, ...Object.values({ ...rest, group: OldGroup })])

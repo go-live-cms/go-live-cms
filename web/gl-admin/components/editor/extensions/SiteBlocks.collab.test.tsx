@@ -95,6 +95,58 @@ describe("site blocks on the relay (#488)", () => {
     expect(html).not.toMatch(/template-part|site-nav|<nav|<header/)
   })
 
+  it("#489: a whole query loop written into a post's Yjs doc reaches every peer, stores with its own attrs, renders nothing, and survives a restart", async () => {
+    const pa = relay.client("1")
+    const pb = relay.client("2")
+    await Promise.all([pa.whenSynced(), pb.whenSynced()])
+    const b = makeEditor(pb.doc)
+    await waitFor(() => b.getText().includes("after"), { what: "b to load" })
+
+    const QUERY = "blk-0489-query-000001"
+    const TEMPLATE = "blk-0489-templ-000001"
+    const TITLE = "blk-0489-title-000001"
+    const BODY = "blk-0489-body-0000001"
+    const PAGER = "blk-0489-pager-000001"
+    pa.doc.transact(() => {
+      const element = (name: string, attrs: Record<string, string>, children: Y.XmlElement[] = []) => {
+        const el = new Y.XmlElement(name)
+        for (const [key, value] of Object.entries(attrs)) el.setAttribute(key, value)
+        if (children.length) el.insert(0, children)
+        return el
+      }
+      // A query with a status and a query string nobody may store, a post template holding the
+      // post's body (refused in a template, inert in a post), and the pager.
+      const query = element("query", { "data-block-id": QUERY, termIds: "5,2", taxonomy: "category", status: "draft", where: "1=1" }, [
+        element("postTemplate", { "data-block-id": TEMPLATE }, [element("postTitle", { "data-block-id": TITLE }), element("postContent", { "data-block-id": BODY })]),
+        element("queryPagination", { "data-block-id": PAGER }),
+      ])
+      pa.doc.getXmlFragment("default").insert(0, [query])
+    })
+
+    await waitFor(() => b.state.doc.child(0).type.name === "query", { what: "b to see the query" })
+    await waitFor(() => !!stored().blocks[QUERY], { what: "the store" })
+    const doc = stored()
+    expect(doc.blocks_order[0]).toBe(QUERY)
+    expect(doc.blocks[QUERY]).toEqual({ id: QUERY, type: "query", version: 1, attrs: { taxonomy: "category", termIds: [2, 5] }, children: [TEMPLATE, PAGER] })
+    expect(doc.blocks[TEMPLATE]).toEqual({ id: TEMPLATE, type: "post_template", version: 1, attrs: {}, children: [TITLE, BODY] })
+    expect(JSON.stringify(doc)).not.toMatch(/draft|1=1/)
+    // A post's store: inert there, never an error; as a template its body in a post template is refused.
+    expect(() => validateBlockDoc(doc)).not.toThrow()
+    expect(() => validateBlockDoc(doc, { kind: "template" })).toThrow(/post_content can't be in a post_template/)
+
+    const html = renderToStaticMarkup(<BlockRenderer doc={doc} />)
+    expect(html).toContain("after")
+    expect(html).not.toMatch(/query-loop|post-list|pagination|post-item/)
+
+    await relay.restart()
+    const pc = relay.client("3")
+    await pc.whenSynced()
+    const c = makeEditor(pc.doc)
+    await waitFor(() => c.getText().includes("after"), { what: "c to load after the restart" })
+    expect(c.state.doc.child(0).type.name).toBe("query")
+    expect(c.state.doc.child(0).attrs).toMatchObject({ "data-block-id": QUERY, termIds: "5,2", taxonomy: "category" })
+  })
+
   it("two people changing one block's settings converge, and a restart keeps them", async () => {
     const pa = relay.client("1")
     const pb = relay.client("2")
