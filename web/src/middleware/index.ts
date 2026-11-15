@@ -21,10 +21,9 @@ import { requestIdFrom, runWithLogContext } from "./requestContext"
 import {
   designPreviewCookieSecure,
   designPreviewToken,
+  finishDesignPreview,
   isPreviewablePath,
   loadDesignDraft,
-  withClearedDesignPreviewCookie,
-  withDesignPreview,
 } from "../lib/designPreview"
 // A plugin block whose renderer throws renders nothing instead of failing the page (#456).
 import "../lib/pluginBlockProbe"
@@ -195,19 +194,22 @@ async function handleRequest(context: APIContext, next: MiddlewareNext, proxied:
   // A design preview (#486, lib/designPreview.ts): with the preview cookie, the page
   // renders the draft design the API answers for it, else the published one. A refused
   // token's cookie is cleared; any page asked for with the cookie is never cached
-  // (httpCache.ts counts it as a session cookie).
+  // (httpCache.ts counts it as a session cookie). Astro.rewrite (page N, term archives)
+  // runs this middleware again with the same locals, so the draft is read once per
+  // request and the banner or the cleared cookie added once, by whichever pass finishes
+  // first (the rewritten page, which the outer pass then returns as it is).
   const previewSecure = designPreviewCookieSecure(url)
-  const previewToken = isPreviewablePath(url.pathname) ? designPreviewToken(context.request.headers.get("cookie"), previewSecure) : null
-  let previewing = false
-  let previewRefused = false
-  if (previewToken) {
-    const result = await loadDesignDraft(previewToken)
-    if (result.status === "ok" && result.draft.theme === context.locals.activeTheme) {
-      context.locals.globalStyles = result.draft.globalStyles
-      context.locals.designPreview = { expiresAt: result.draft.expiresAt }
-      previewing = true
-    } else if (result.status === "refused") {
-      previewRefused = true
+  if (context.locals.designPreview === undefined && isPreviewablePath(url.pathname)) {
+    const previewToken = designPreviewToken(context.request.headers.get("cookie"), previewSecure)
+    if (previewToken) {
+      const result = await loadDesignDraft(previewToken)
+      const previewing = result.status === "ok" && result.draft.theme === context.locals.activeTheme
+      if (result.status === "ok" && previewing) context.locals.globalStyles = result.draft.globalStyles
+      context.locals.designPreview = {
+        state: previewing ? "previewing" : result.status === "refused" ? "refused" : "off",
+        expiresAt: result.status === "ok" ? result.draft.expiresAt : null,
+        applied: false,
+      }
     }
   }
 
@@ -215,8 +217,8 @@ async function handleRequest(context: APIContext, next: MiddlewareNext, proxied:
   // pages only from the allowed embed providers (#425); none if the setting can't be read.
   // Cache-Control: public for published pages, no-store otherwise (#185, httpCache.ts).
   let page = withRobotsHeader(await redirectOn404(context.request, url, await next()), url.pathname)
-  if (previewing) page = await withDesignPreview(page, `${url.pathname}${url.search}`)
-  if (previewRefused) page = withClearedDesignPreviewCookie(page, previewSecure)
+  // Exit returns to the URL that was asked for, not the route a rewrite rendered.
+  page = await finishDesignPreview(page, context.locals.designPreview, `${context.originPathname ?? url.pathname}${url.search}`, previewSecure)
   const response = withPageCacheControl(page, context.request, context.routePattern)
   return applyPublicCsp(response, async () => (await getSiteSettings(context.locals)).allowedEmbeds)
 }

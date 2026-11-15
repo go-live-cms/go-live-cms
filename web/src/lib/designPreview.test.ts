@@ -1,13 +1,18 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { JSDOM } from "jsdom"
+import { readFileSync } from "node:fs"
+import { resolve } from "node:path"
 import {
   DESIGN_PREVIEW_COOKIE,
+  DESIGN_PREVIEW_MAX_AGE_SECONDS,
   HOST_DESIGN_PREVIEW_COOKIE,
   designPreviewBannerHtml,
   designPreviewCookieSecure,
   designPreviewSetCookie,
   designPreviewToken,
+  finishDesignPreview,
   injectDesignPreviewBanner,
+  type DesignPreviewState,
   isPreviewTokenShape,
   isPreviewablePath,
   isSameOriginPost,
@@ -30,6 +35,12 @@ describe("the preview cookie", () => {
     expect(designPreviewCookieSecure(new URL("https://site.example/"), false)).toBe(true)
     expect(designPreviewCookieSecure(new URL("https://localhost:4321/"), true)).toBe(true)
     expect(designPreviewCookieSecure(new URL("http://localhost:4321/"), true)).toBe(false)
+  })
+
+  it("lives exactly as long as the API's token (designPreviewTTL)", () => {
+    const go = readFileSync(resolve(__dirname, "../../../api/site_design_preview.go"), "utf8")
+    const minutes = Number(/const designPreviewTTL = (\d+) \* time\.Minute/.exec(go)?.[1])
+    expect(minutes * 60).toBe(DESIGN_PREVIEW_MAX_AGE_SECONDS)
   })
 
   it("is HttpOnly, SameSite=Strict, Path=/ and 15 minutes; __Host- whenever it is Secure", () => {
@@ -183,6 +194,13 @@ describe("the banner", () => {
     expect(designPreviewBannerHtml('/a?q="><script>alert(1)</script>')).not.toContain("<script>")
   })
 
+  it("skips a <body inside the head (a script or a comment)", () => {
+    const head = `<html><head><!-- <body> --><script>document.write("<body class=x>")</script></head><body><main>M</main></body></html>`
+    const html = injectDesignPreviewBanner(head, "/")
+    expect(html).toContain(`<!-- <body> --><script>document.write("<body class=x>")</script></head><body><style>`)
+    expect(html.match(/gl-preview-banner"/g)).toHaveLength(1)
+  })
+
   it("leaves a page without a body alone", () => {
     expect(injectDesignPreviewBanner("<p>fragment</p>", "/")).toBe("<p>fragment</p>")
   })
@@ -211,6 +229,30 @@ describe("withDesignPreview", () => {
     expect(response.status).toBe(301)
     expect(response.headers.get("Location")).toBe("/b")
     expect(response.headers.get("Cache-Control")).toBe(PRIVATE_NO_STORE)
+  })
+})
+
+describe("finishDesignPreview", () => {
+  const html = () => new Response("<html><head></head><body><main>M</main></body></html>", { headers: { "Content-Type": "text/html" } })
+
+  it("adds the banner once per request, though a rewrite runs the middleware twice", async () => {
+    const preview: DesignPreviewState = { state: "previewing", expiresAt: null, applied: false }
+    // The rewritten route's pass finishes first; the outer pass gets its page back.
+    const inner = await finishDesignPreview(html(), preview, "/category/guides", true)
+    const outer = await finishDesignPreview(inner, preview, "/category/guides", true)
+    expect((await outer.text()).match(/class="gl-preview-banner"/g)).toHaveLength(1)
+    expect(outer.headers.get("Cache-Control")).toBe(PRIVATE_NO_STORE)
+  })
+
+  it("clears a refused token's cookie once, and leaves an unanswered preview alone", async () => {
+    const refused: DesignPreviewState = { state: "refused", expiresAt: null, applied: false }
+    const once = await finishDesignPreview(html(), refused, "/", true)
+    const twice = await finishDesignPreview(once, refused, "/", true)
+    expect(twice.headers.getSetCookie()).toHaveLength(1)
+
+    const page = html()
+    expect(await finishDesignPreview(page, { state: "off", expiresAt: null, applied: false }, "/", true)).toBe(page)
+    expect(await finishDesignPreview(page, undefined, "/", true)).toBe(page)
   })
 })
 

@@ -219,12 +219,43 @@ export function designPreviewBannerHtml(returnTo: string): string {
   )
 }
 
-/** Puts the banner right after `<body …>`, in the page's flow above the header. */
+/**
+ * Puts the banner right after `<body …>`, in the page's flow above the header. The search
+ * starts after `</head>`, so a `<body` inside a head script or comment is never the spot.
+ */
 export function injectDesignPreviewBanner(html: string, returnTo: string): string {
-  const body = /<body\b[^>]*>/i.exec(html)
+  const headEnd = html.search(/<\/head\s*>/i)
+  const from = headEnd < 0 ? 0 : headEnd
+  const bodyTag = /<body\b[^>]*>/gi
+  bodyTag.lastIndex = from
+  const body = bodyTag.exec(html)
   if (!body) return html
   const at = body.index + body[0].length
   return html.slice(0, at) + designPreviewBannerHtml(returnTo) + html.slice(at)
+}
+
+/** A request's preview, as the middleware keeps it in `locals.designPreview`. */
+export interface DesignPreviewState {
+  state: "previewing" | "refused" | "off"
+  expiresAt: string | null
+  applied: boolean
+}
+
+/**
+ * Finishes a page for the request's preview: the banner and headers when previewing, the
+ * cleared cookie when the API refused the token. Once per request: Astro.rewrite runs the
+ * middleware again with the same locals, and the rewritten page the inner pass finished is
+ * what the outer pass returns.
+ */
+export async function finishDesignPreview(
+  page: Response,
+  preview: DesignPreviewState | undefined,
+  returnTo: string,
+  secure: boolean,
+): Promise<Response> {
+  if (!preview || preview.applied || preview.state === "off") return page
+  preview.applied = true
+  return preview.state === "previewing" ? withDesignPreview(page, returnTo) : withClearedDesignPreviewCookie(page, secure)
 }
 
 /** Adds the `Set-Cookie` that ends the preview (the API refused its token). */

@@ -21,9 +21,12 @@ declare namespace App {
     // While an admin previews the design (#486), the draft instead (lib/designPreview.ts).
     globalStyles?: import("./lib/themeTokens").GlobalStyles
 
-    // Set while this page renders with the unpublished design (#486, lib/designPreview.ts):
-    // the page is never cached and carries the preview banner.
-    designPreview?: { expiresAt: string | null }
+    // The design preview of this request (#486, lib/designPreview.ts), set once the cookie's
+    // token was checked: `previewing` (the draft renders, the page gets the banner and is
+    // never cached), `refused` (the API refused it: the cookie is cleared) or `off` (the API
+    // couldn't answer, or another theme). `applied`: the banner or the cleared cookie was
+    // added, so a rewrite's second middleware pass doesn't add it again.
+    designPreview?: import("./lib/designPreview").DesignPreviewState
 
     // Phase 2: Theme functions
     themeFunctions?: import("./lib/theme-api").ThemeFunctions
