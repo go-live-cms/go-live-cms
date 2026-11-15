@@ -18,6 +18,14 @@ import { hocuspocusUrl } from "../../gl-admin/lib/collaboration/backend"
 import { log } from "../lib/log"
 import { NO_GLOBAL_STYLES, publishedGlobalStyles } from "../lib/themeTokens"
 import { requestIdFrom, runWithLogContext } from "./requestContext"
+import {
+  designPreviewCookieSecure,
+  designPreviewToken,
+  isPreviewablePath,
+  loadDesignDraft,
+  withClearedDesignPreviewCookie,
+  withDesignPreview,
+} from "../lib/designPreview"
 // A plugin block whose renderer throws renders nothing instead of failing the page (#456).
 import "../lib/pluginBlockProbe"
 
@@ -184,14 +192,32 @@ async function handleRequest(context: APIContext, next: MiddlewareNext, proxied:
     })
   }
 
+  // A design preview (#486, lib/designPreview.ts): with the preview cookie, the page
+  // renders the draft design the API answers for it, else the published one. A refused
+  // token's cookie is cleared; any page asked for with the cookie is never cached
+  // (httpCache.ts counts it as a session cookie).
+  const previewSecure = designPreviewCookieSecure(url)
+  const previewToken = isPreviewablePath(url.pathname) ? designPreviewToken(context.request.headers.get("cookie"), previewSecure) : null
+  let previewing = false
+  let previewRefused = false
+  if (previewToken) {
+    const result = await loadDesignDraft(previewToken)
+    if (result.status === "ok" && result.draft.theme === context.locals.activeTheme) {
+      context.locals.globalStyles = result.draft.globalStyles
+      context.locals.designPreview = { expiresAt: result.draft.expiresAt }
+      previewing = true
+    } else if (result.status === "refused") {
+      previewRefused = true
+    }
+  }
+
   // A page the site answers 404 for may have moved (#331, redirects.ts). Frames on public
   // pages only from the allowed embed providers (#425); none if the setting can't be read.
   // Cache-Control: public for published pages, no-store otherwise (#185, httpCache.ts).
-  const response = withPageCacheControl(
-    withRobotsHeader(await redirectOn404(context.request, url, await next()), url.pathname),
-    context.request,
-    context.routePattern,
-  )
+  let page = withRobotsHeader(await redirectOn404(context.request, url, await next()), url.pathname)
+  if (previewing) page = await withDesignPreview(page, `${url.pathname}${url.search}`)
+  if (previewRefused) page = withClearedDesignPreviewCookie(page, previewSecure)
+  const response = withPageCacheControl(page, context.request, context.routePattern)
   return applyPublicCsp(response, async () => (await getSiteSettings(context.locals)).allowedEmbeds)
 }
 

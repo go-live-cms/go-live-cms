@@ -18,7 +18,12 @@ declare namespace App {
     // The site's published global styles for the active theme (#484, #485), which a theme's
     // base layout merges into its tokens with resolveThemeTokens (lib/themeTokens.ts).
     // From GET /themes/active's global_styles (published only); NO_GLOBAL_STYLES when none.
+    // While an admin previews the design (#486), the draft instead (lib/designPreview.ts).
     globalStyles?: import("./lib/themeTokens").GlobalStyles
+
+    // Set while this page renders with the unpublished design (#486, lib/designPreview.ts):
+    // the page is never cached and carries the preview banner.
+    designPreview?: { expiresAt: string | null }
 
     // Phase 2: Theme functions
     themeFunctions?: import("./lib/theme-api").ThemeFunctions

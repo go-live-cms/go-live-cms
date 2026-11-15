@@ -274,6 +274,11 @@ func TestHTMLSnippetRoutesRequireRole(t *testing.T) {
 				addAuthorization(t, request, server.tokenMaker, authorizationTypeBearer, caller.ID, caller.Username, time.Minute)
 				recorder = httptest.NewRecorder()
 				server.router.ServeHTTP(recorder, request)
+				if strings.HasPrefix(siteDesignRoutes[key], "previewTokenOnly") {
+					// An access token, whoever's, is never a preview token.
+					require.Equal(t, http.StatusUnauthorized, recorder.Code, "%s answers a %s's access token", key, caller.Role)
+					continue
+				}
 				require.Equal(t, http.StatusForbidden, recorder.Code, "%s answers a %s", key, caller.Role)
 			}
 		})
@@ -284,14 +289,17 @@ func TestHTMLSnippetRoutesRequireRole(t *testing.T) {
 }
 
 // siteDesignRoutes are the site design routes (#485, design section 12): every method is
-// requireSiteAdmin, and none is under /public. The draft's only readers are these (and,
-// with #486, GET /site-design/draft by preview token); the published styles' only public
-// read is GET /themes/active (TestDraftGlobalStylesNeverPublic proves the draft isn't
-// there or on any /public route).
+// requireSiteAdmin, and none is under /public. The draft's only readers are these and
+// GET /site-design/draft, the named exception (#486): its bearer is a design preview
+// token, never an access token, and it re-checks that the token's user is still an admin
+// (TestDesignDraftRead). The published styles' only public read is GET /themes/active
+// (TestDraftGlobalStylesNeverPublic proves the draft isn't there or on any /public route).
 var siteDesignRoutes = map[string]string{
 	"GET /api/v1/site-design/global-styles": "requireSiteAdmin: the draft",
 	"PUT /api/v1/site-design/global-styles": "requireSiteAdmin",
 	"POST /api/v1/site-design/publish":      "requireSiteAdmin",
+	"POST /api/v1/site-design/preview":      "requireSiteAdmin: mints a preview token",
+	"GET /api/v1/site-design/draft":         "previewTokenOnly: the draft, for a preview token whose user is still an admin",
 }
 
 func TestSiteDesignRoutesRequireAdmin(t *testing.T) {
@@ -323,6 +331,11 @@ func TestSiteDesignRoutesRequireAdmin(t *testing.T) {
 				addAuthorization(t, request, server.tokenMaker, authorizationTypeBearer, caller.ID, caller.Username, time.Minute)
 				recorder = httptest.NewRecorder()
 				server.router.ServeHTTP(recorder, request)
+				if strings.HasPrefix(siteDesignRoutes[key], "previewTokenOnly") {
+					// An access token, whoever's, is never a preview token.
+					require.Equal(t, http.StatusUnauthorized, recorder.Code, "%s answers a %s's access token", key, caller.Role)
+					continue
+				}
 				require.Equal(t, http.StatusForbidden, recorder.Code, "%s answers a %s", key, caller.Role)
 			}
 		})

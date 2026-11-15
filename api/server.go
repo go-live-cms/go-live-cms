@@ -43,6 +43,8 @@ type Server struct {
 
 	// Collab (WebSocket) ticket minting; see collab_routes.go.
 	collabTickets collabTicketMaker
+	// Design preview tokens (#486, site_design_preview.go).
+	designPreviews designPreviewMaker
 	// collabFlushTimeout bounds publish's flush call to the Hocuspocus server
 	// (collab_internal_client.go); a field so tests can shorten it.
 	collabFlushTimeout time.Duration
@@ -205,6 +207,7 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 		ctx:        context.Background(),
 
 		collabTickets:      tokenMaker,
+		designPreviews:     tokenMaker,
 		collabFlushTimeout: collabFlushTimeout,
 		embedClient:        newEmbedClient(newEmbedTransport(), embedFetchTimeout),
 		webhooks:           newWebhookSender(config.PluginWebhooksAllowInsecure, nil),

@@ -68,9 +68,11 @@ export function buildAdminCsp({ nonce, pageOrigin, apiUrl, collabUrl }: AdminCsp
     // History's diff worker (#355) is a bundled same-origin file. Explicit, so blob: and
     // data: workers stay blocked whatever script-src (its fallback) allows later.
     "worker-src": ["'self'"],
-    // An embed's player, framed in the editor only when someone clicks Load (#425). Every
-    // provider's: the allowed list is a site setting, and the block itself checks it.
-    "frame-src": embedFrameHosts(EMBED_PROVIDERS),
+    // 'self': the Site editor's design preview frame (#486, #487), a public page of this
+    // site rendered with the preview cookie. Then an embed's player, framed in the editor
+    // only when someone clicks Load (#425). Every provider's: the allowed list is a site
+    // setting, and the block itself checks it.
+    "frame-src": ["'self'", ...embedFrameHosts(EMBED_PROVIDERS)],
     "object-src": ["'none'"],
     "base-uri": ["'self'"],
     "form-action": ["'self'"],

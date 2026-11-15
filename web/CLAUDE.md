@@ -376,6 +376,21 @@ are the most fragile part of the codebase. **Before editing anything under
   generated with the block manifest (`npm run themes:manifest`, `--check` in `build`;
   `installedThemeTokens.test.ts` fails on a stale one): regenerate it after changing a
   theme's tokens or `fontOptions`.
+- **Design preview (#486, `src/lib/designPreview.ts`, design `docs/design/theme-builder.md`
+  8.3):** `POST /gl-preview` (`src/pages/gl-preview.ts`, same-origin form posts only) takes a
+  `token` from the API's `POST /site-design/preview` and sets `__Host-gl_design_preview`
+  (HttpOnly, Secure, SameSite=Strict, Path=/, 15 min; `gl_design_preview` without Secure only in
+  `astro dev` over plain HTTP), then 303s to `redirect` (a path on this site, else `/`); no token
+  (the banner's Exit) clears it. The token is only ever in a form body and the cookie, never a URL
+  or a log line. With the cookie, the middleware reads `GET /site-design/draft` (bearer) for public
+  pages and, for the active theme, sets `locals.globalStyles` to the draft and
+  `locals.designPreview`; a refused token (401/403/409) clears the cookie, an API that can't answer
+  renders published. A previewed HTML page gets `private, no-store`, `X-Robots-Tag: noindex` and
+  the banner right after `<body>` (core markup and fixed colours, the default theme canvas's
+  board: a labelled region, Exit as a plain POST form, the first Tab stop). Any page asked for with
+  the cookie is `no-store` (`httpCache.ts` counts it as a session cookie). The admin CSP has
+  `frame-src 'self'` for the Site editor's frame; `gl-admin/lib/api/designPreview.ts`
+  `openDesignPreview(target, path)` posts a fresh token into it (#487).
 - **Theme contract (#484, `themes/README.md` "The theme contract", design
   `docs/design/theme-builder.md` 3.5):** core emits tokens (`src/lib/themeTokens.ts`:
   `themeCssVariables(resolveThemeTokens(config, Astro.locals.globalStyles))`; the middleware

@@ -553,6 +553,7 @@ var publicCacheNoPurgeRoutes = map[string]string{
 	"POST /api/v1/embeds/resolve":                                  "a lookup",
 	"POST /api/v1/posts/:id/duplicate":                             "a new draft",
 	"PUT /api/v1/site-design/global-styles":                        "the styles draft is never public; publish purges",
+	"POST /api/v1/site-design/preview":                             "a preview token; previews are never cached",
 	"POST /api/v1/post-templates":                                  "templates are never public",
 	"PUT /api/v1/post-templates/:id":                               "templates are never public",
 	"DELETE /api/v1/post-templates/:id":                            "templates are never public",
