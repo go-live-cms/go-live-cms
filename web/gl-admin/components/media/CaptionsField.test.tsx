@@ -96,6 +96,8 @@ describe("CaptionsField", () => {
     await flush()
 
     expect(api.updateMedia).toHaveBeenCalledWith(12, { captions_media_id: 30 })
+    // The file picked is shown as is: no lookup for it.
+    expect(api.getMediaById).not.toHaveBeenCalled()
     expect(onUpdated).toHaveBeenCalledWith(expect.objectContaining({ id: 12, captions_media_id: 30, captions_lang: "en-US" }))
     expect(toast.success).toHaveBeenCalledWith("Captions added")
   })

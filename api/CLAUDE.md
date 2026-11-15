@@ -154,8 +154,10 @@ the collab server.
   `media.captions_media_id` (FK media, `ON DELETE SET NULL`; never itself) is a `text/vtt` item and
   `captions_lang` its BCP-47 tag (`''` without captions). `.vtt` uploads are sniffed by `isWebVTT`
   (`WEBVTT` after an optional BOM, then space/tab/line break, and text: HTML is refused); `/uploads`
-  serves them as `text/vtt; charset=utf-8` (`uploadsContentType`, before the static handler; nosniff
-  is global), and so does the web's production proxy. `PUT /media/:id {captions_media_id: id|null,
+  serves them as `text/vtt; charset=utf-8` (`mime.AddExtensionType` in `media_captions.go`'s `init`;
+  nosniff is global), and so does the web's production proxy. A response shows no `captions_lang`
+  without captions (`captionsLangOf`: ON DELETE SET NULL leaves it), and new captions after a deleted
+  file get the site language. `PUT /media/:id {captions_media_id: id|null,
   captions_lang}` (in `UpdateMediaMetadata`, `set_captions`): only on a `video/*` (400
   `captions_not_video`), only a `text/vtt` item (400 `invalid_captions`, also for a file deleted
   meanwhile), no language = keep the stored one, else the site language; a language alone needs

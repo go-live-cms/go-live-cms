@@ -82,7 +82,10 @@ export default function CaptionsField({
       return
     }
     if (file.id === captionsId) return
-    if (await save({ captions_media_id: file.id }, "Captions added")) setCaptions(file)
+    // Shown at once, so the lookup (keyed by the saved id) has nothing to fetch.
+    const previous = captions
+    setCaptions(file)
+    if (!(await save({ captions_media_id: file.id }, "Captions added"))) setCaptions(previous)
   }
 
   const summary = captionsSummary(captions, media.captions_lang)

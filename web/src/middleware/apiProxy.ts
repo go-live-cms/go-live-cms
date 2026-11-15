@@ -28,7 +28,7 @@ const HOP_BY_HOP_REQUEST = [
 const DROPPED_RESPONSE = ["connection", "keep-alive", "transfer-encoding", "content-encoding", "content-length"]
 
 // A video's captions (#507): a .vtt under /uploads is served as WebVTT, never sniffed. The
-// API's /uploads already answers that way (uploadsContentType); this keeps it so whatever
+// API's /uploads already answers that way (its registered mime type); this keeps it so whatever
 // sits in between, because a <track> refuses any other type and a sniffed text file must
 // never be read as HTML on the site's origin.
 export const CAPTIONS_CONTENT_TYPE = "text/vtt; charset=utf-8"

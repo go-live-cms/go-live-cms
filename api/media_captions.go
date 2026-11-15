@@ -6,7 +6,7 @@
 // captions the video, reaches every post without republishing.
 //
 //   - Upload: ".vtt" is in allowedMediaTypes, checked by content (isWebVTT).
-//   - Serving: /uploads answers a .vtt as text/vtt; charset=utf-8 (uploadsContentType),
+//   - Serving: /uploads answers a .vtt as text/vtt; charset=utf-8 (the mime type registered in init),
 //     with the global nosniff, so a caption file is never read as HTML.
 //   - PUT /media/:id {captions_media_id, captions_lang}: only on a video, only a text/vtt
 //     item (captionsUpdateFor). Without a language, the site language is stored.
@@ -27,6 +27,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"mime"
 	"net/http"
 	"regexp"
 	"strings"
@@ -62,12 +63,13 @@ func isWebVTT(head []byte) bool {
 	return detected == "text/plain"
 }
 
-// uploadsContentType sets the Content-Type of the /uploads files Go's file server would
-// otherwise guess: a .vtt isn't in its table, and sniffing names it text/plain, which a
-// <track> refuses. Runs before the static handler, which keeps a type already set.
-func uploadsContentType(c *gin.Context) {
-	if strings.HasSuffix(strings.ToLower(c.Request.URL.Path), ".vtt") {
-		c.Header("Content-Type", captionsServedType)
+// The file server behind /uploads types files by extension (mime.TypeByExtension). Go's
+// built-in table has no .vtt, and the system's may not either; sniffing would then say
+// text/plain, which a <track> refuses. Registered once, so every file served by extension
+// (and nothing else, a 404 included) gets it. nosniff is global (securityHeadersMiddleware).
+func init() {
+	if err := mime.AddExtensionType(".vtt", captionsServedType); err != nil {
+		panic(err)
 	}
 }
 
@@ -131,16 +133,24 @@ func parseCaptionsRequest(c *gin.Context, req UpdateMediaRequest) (captionsReque
 // the file a text/vtt item; a language alone needs captions to apply to. Setting captions
 // without a language keeps the stored one, else stores the site language; removing them
 // clears it.
-func (server *Server) applyCaptions(c *gin.Context, mediaID int64, req captionsRequest, params *db.UpdateMediaMetadataParams) bool {
+//
+// loaded is the media row when the handler already read it (the ownership check), else nil.
+func (server *Server) applyCaptions(c *gin.Context, mediaID int64, loaded *db.Medium, req captionsRequest, params *db.UpdateMediaMetadataParams) bool {
 	ctx := c.Request.Context()
-	video, err := server.store.GetMedia(ctx, mediaID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "media not found"})
+	var video db.Medium
+	if loaded != nil {
+		video = *loaded
+	} else {
+		row, err := server.store.GetMedia(ctx, mediaID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "media not found"})
+				return false
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get media"})
 			return false
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get media"})
-		return false
+		video = row
 	}
 	if !strings.HasPrefix(video.MimeType, "video/") {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "only a video can have captions", "code": "captions_not_video"})
@@ -162,7 +172,9 @@ func (server *Server) applyCaptions(c *gin.Context, mediaID int64, req captionsR
 			c.JSON(http.StatusBadRequest, gin.H{"error": "captions must be a WebVTT (.vtt) file in the media library", "code": "invalid_captions"})
 			return false
 		}
-		if lang == nil && video.CaptionsLang == "" {
+		// Replacing the file keeps its language. New captions (none before, or the old file
+		// was deleted: ON DELETE SET NULL leaves captions_lang behind) get the site's.
+		if lang == nil && (!video.CaptionsMediaID.Valid || video.CaptionsLang == "") {
 			site := server.captionsDefaultLang(ctx)
 			lang = &site
 		}
@@ -217,6 +229,15 @@ func (server *Server) blockCaptions(video, captions db.Medium) *BlockCaptions {
 	}
 }
 
+// captionsLangOf is the language a response shows: none without captions, whatever
+// captions_lang still holds after the file was deleted (ON DELETE SET NULL).
+func captionsLangOf(captionsID sql.NullInt64, lang string) string {
+	if !captionsID.Valid {
+		return ""
+	}
+	return lang
+}
+
 // MediaUsageCaptions (#507): the media is the captions of a video a post's video block
 // shows (BlockID says which block).
 const MediaUsageCaptions = "captions"
@@ -250,29 +271,24 @@ func captionsUsedIn(rows []db.GetPostsByCaptionsMediaRow, canRead func(db.GetPos
 			out[at].Usages = append(out[at].Usages, usages...)
 			continue
 		}
-		var postParent *int64
-		if row.PostParent.Valid {
-			postParent = &row.PostParent.Int64
-		}
 		index[row.ID] = len(out)
-		out = append(out, PostWithMediaOrderResponse{
-			Post: PostResponse{
-				ID:          row.ID,
-				Title:       row.Title,
-				Description: row.Description,
-				UserID:      row.UserID,
-				Username:    row.Username,
-				Url:         row.Url,
-				PostType:    row.PostType,
-				PostStatus:  row.PostStatus,
-				PostParent:  postParent,
-				MenuOrder:   row.MenuOrder,
-				CreatedAt:   row.CreatedAt,
-				ChangedAt:   row.ChangedAt,
-			},
+		link := toPostResponseFromMediaRow(db.GetPostsByMediaRow{
+			ID:               row.ID,
+			Title:            row.Title,
+			Description:      row.Description,
+			UserID:           row.UserID,
+			Username:         row.Username,
+			Url:              row.Url,
+			PostType:         row.PostType,
+			PostStatus:       row.PostStatus,
+			PostParent:       row.PostParent,
+			MenuOrder:        row.MenuOrder,
+			CreatedAt:        row.CreatedAt,
+			ChangedAt:        row.ChangedAt,
 			RelationshipType: MediaUsageCaptions,
-			Usages:           usages,
 		})
+		link.Usages = usages
+		out = append(out, link)
 	}
 	return out
 }

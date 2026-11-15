@@ -200,7 +200,7 @@ func toMediaResponse(media db.Medium) MediaResponse {
 		FocalPoint:       focalPointFrom(media.FocalX, media.FocalY),
 		Decorative:       media.Decorative,
 		CaptionsMediaID:  nullInt64Ptr(media.CaptionsMediaID),
-		CaptionsLang:     media.CaptionsLang,
+		CaptionsLang:     captionsLangOf(media.CaptionsMediaID, media.CaptionsLang),
 	}
 }
 
@@ -239,7 +239,7 @@ func toMediaFromListRow(row db.ListMediaRow) MediaResponse {
 		FocalPoint:         focalPointFrom(row.FocalX, row.FocalY),
 		Decorative:         row.Decorative,
 		CaptionsMediaID:    nullInt64Ptr(row.CaptionsMediaID),
-		CaptionsLang:       row.CaptionsLang,
+		CaptionsLang:       captionsLangOf(row.CaptionsMediaID, row.CaptionsLang),
 	}
 }
 
@@ -277,7 +277,7 @@ func toMediaFromUserRow(row db.GetMediaByUserRow) MediaResponse {
 		FocalPoint:       focalPointFrom(row.FocalX, row.FocalY),
 		Decorative:       row.Decorative,
 		CaptionsMediaID:  nullInt64Ptr(row.CaptionsMediaID),
-		CaptionsLang:     row.CaptionsLang,
+		CaptionsLang:     captionsLangOf(row.CaptionsMediaID, row.CaptionsLang),
 	}
 }
 
@@ -315,7 +315,7 @@ func toMediaFromSearchRow(row db.SearchMediaByNameRow) MediaResponse {
 		FocalPoint:       focalPointFrom(row.FocalX, row.FocalY),
 		Decorative:       row.Decorative,
 		CaptionsMediaID:  nullInt64Ptr(row.CaptionsMediaID),
-		CaptionsLang:     row.CaptionsLang,
+		CaptionsLang:     captionsLangOf(row.CaptionsMediaID, row.CaptionsLang),
 	}
 }
 
@@ -353,7 +353,7 @@ func toPopularMediaResponse(row db.GetPopularMediaRow) PopularMediaResponse {
 		FocalPoint:       focalPointFrom(row.FocalX, row.FocalY),
 		Decorative:       row.Decorative,
 		CaptionsMediaID:  nullInt64Ptr(row.CaptionsMediaID),
-		CaptionsLang:     row.CaptionsLang,
+		CaptionsLang:     captionsLangOf(row.CaptionsMediaID, row.CaptionsLang),
 	}
 }
 

@@ -103,6 +103,12 @@ func TestUploadsServeWebVTT(t *testing.T) {
 	server, err := NewServer(config, store)
 	require.NoError(t, err)
 
+	// A missing .vtt is a plain 404, not labelled as captions.
+	missing := httptest.NewRecorder()
+	server.router.ServeHTTP(missing, httptest.NewRequest(http.MethodGet, "/uploads/media/gone.vtt", nil))
+	require.Equal(t, http.StatusNotFound, missing.Code)
+	require.NotContains(t, missing.Header().Get("Content-Type"), "text/vtt")
+
 	for _, path := range []string{"/uploads/media/tour-en-0a1b.vtt", "/uploads/media/notes.txt"} {
 		recorder := httptest.NewRecorder()
 		server.router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, path, nil))
@@ -168,6 +174,17 @@ func TestUpdateMediaCaptions(t *testing.T) {
 			target: &vtt,
 			want:   &db.UpdateMediaMetadataParams{ID: 40, SetCaptions: true, CaptionsMediaID: sql.NullInt64{Int64: 41, Valid: true}},
 			status: http.StatusOK,
+		},
+		{
+			// The old file was deleted (ON DELETE SET NULL left its language): new captions get
+			// the site language, not the stale one.
+			name:     "AddAfterTheFileWasDeleted",
+			body:     `{"captions_media_id": 41}`,
+			stored:   db.Medium{ID: 40, MimeType: "video/mp4", UserID: 1, CaptionsLang: "pt-BR"},
+			target:   &vtt,
+			settings: true,
+			want:     &db.UpdateMediaMetadataParams{ID: 40, SetCaptions: true, CaptionsMediaID: sql.NullInt64{Int64: 41, Valid: true}, CaptionsLang: sql.NullString{String: "pt-PT", Valid: true}},
+			status:   http.StatusOK,
 		},
 		{
 			name:   "Remove",
@@ -245,7 +262,7 @@ func TestUpdateMediaCaptionsFileDeletedMeanwhile(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	store := mockdb.NewMockStore(ctrl)
 	stubRoleLookup(store, editor)
-	store.EXPECT().GetMedia(gomock.Any(), int64(40)).Return(db.Medium{ID: 40, MimeType: "video/mp4", CaptionsLang: "en"}, nil)
+	store.EXPECT().GetMedia(gomock.Any(), int64(40)).Return(db.Medium{ID: 40, MimeType: "video/mp4", CaptionsMediaID: sql.NullInt64{Int64: 39, Valid: true}, CaptionsLang: "en"}, nil)
 	store.EXPECT().GetMedia(gomock.Any(), int64(41)).Return(db.Medium{ID: 41, MimeType: captionsMimeType}, nil)
 	store.EXPECT().UpdateMediaMetadata(gomock.Any(), gomock.Any()).Return(db.Medium{}, errors.New(`pq: insert or update on table "media" violates foreign key constraint "media_captions_media_id_fkey"`))
 	server := newTestServer(t, store)
@@ -253,6 +270,27 @@ func TestUpdateMediaCaptionsFileDeletedMeanwhile(t *testing.T) {
 	recorder := putMediaJSON(t, server, editor, 40, `{"captions_media_id": 41}`)
 	require.Equal(t, http.StatusBadRequest, recorder.Code, recorder.Body.String())
 	require.Contains(t, recorder.Body.String(), `"code":"invalid_captions"`)
+}
+
+// A contributor captioning their own video: the ownership read is reused, one GetMedia.
+func TestUpdateMediaCaptionsOwnVideo(t *testing.T) {
+	contributor := db.User{ID: 9508, Username: "contributor", Role: RoleContributor}
+	ctrl := gomock.NewController(t)
+	store := mockdb.NewMockStore(ctrl)
+	stubRoleLookup(store, contributor)
+	store.EXPECT().GetMedia(gomock.Any(), int64(40)).Times(1).Return(db.Medium{ID: 40, MimeType: "video/mp4", UserID: contributor.ID, CaptionsMediaID: sql.NullInt64{Int64: 41, Valid: true}, CaptionsLang: "en"}, nil)
+	store.EXPECT().GetMedia(gomock.Any(), int64(41)).Times(1).Return(db.Medium{ID: 41, MimeType: captionsMimeType}, nil)
+	store.EXPECT().UpdateMediaMetadata(gomock.Any(), gomock.Any()).Return(db.Medium{ID: 40, MimeType: "video/mp4", CaptionsMediaID: sql.NullInt64{Int64: 41, Valid: true}, CaptionsLang: "en"}, nil)
+	server := newTestServer(t, store)
+
+	recorder := putMediaJSON(t, server, contributor, 40, `{"captions_media_id": 41}`)
+	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+}
+
+// No language is shown without captions, whatever the column still holds.
+func TestMediaResponseCaptionsLang(t *testing.T) {
+	require.Equal(t, "", toMediaResponse(db.Medium{CaptionsLang: "pt-BR"}).CaptionsLang)
+	require.Equal(t, "pt-BR", toMediaResponse(db.Medium{CaptionsLang: "pt-BR", CaptionsMediaID: sql.NullInt64{Int64: 3, Valid: true}}).CaptionsLang)
 }
 
 // A contributor may caption their own video only (canWriteMedia, as for any edit).

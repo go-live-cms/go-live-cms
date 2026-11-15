@@ -535,6 +535,7 @@ func (server *Server) updateMedia(c *gin.Context) {
 
 	// Moderators may update any media, so only owner-scoped callers need the
 	// row read for the ownership decision; moderators stay at one query.
+	var loaded *db.Medium // reused by the captions check
 	if !canModerateMedia(caller) {
 		existingMedia, err := server.store.GetMedia(c.Request.Context(), id)
 		if err != nil {
@@ -549,6 +550,7 @@ func (server *Server) updateMedia(c *gin.Context) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "you can only update your own media"})
 			return
 		}
+		loaded = &existingMedia
 	}
 
 	// One statement that only touches the metadata: the file columns can't be
@@ -573,7 +575,7 @@ func (server *Server) updateMedia(c *gin.Context) {
 		params.FocalY = sql.NullFloat64{Float64: focal.Y, Valid: true}
 	}
 	// Captions (#507): only a video, only a text/vtt file (applyCaptions).
-	if captions.any() && !server.applyCaptions(c, id, captions, &params) {
+	if captions.any() && !server.applyCaptions(c, id, loaded, captions, &params) {
 		return
 	}
 	updatedMedia, err := server.store.UpdateMediaMetadata(c.Request.Context(), params)
