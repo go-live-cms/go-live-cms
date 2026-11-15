@@ -512,6 +512,18 @@ func (server *Server) getMediaPosts(c *gin.Context) {
 		}
 		postResponses = append(postResponses, toPostResponseFromMediaRow(post))
 	}
+	// A captions file (#507) is in no post_media row: it is used where a video it
+	// captions is shown by a video block.
+	if media.MimeType == captionsMimeType {
+		captioned, err := server.store.GetPostsByCaptionsMedia(c.Request.Context(), mediaID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get media posts"})
+			return
+		}
+		postResponses = append(postResponses, captionsUsedIn(captioned, func(row db.GetPostsByCaptionsMediaRow) bool {
+			return canReadPost(caller, db.Post{UserID: row.UserID, PostStatus: row.PostStatus})
+		})...)
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"media": server.mediaResponse(media),

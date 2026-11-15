@@ -24,6 +24,7 @@ export const KIND_NOUNS: Record<MediaPickerKind, { one: string; many: string; a:
   video: { one: "video", many: "videos", a: "a video" },
   audio: { one: "audio file", many: "audio files", a: "an audio file" },
   document: { one: "file", many: "files", a: "a file" },
+  captions: { one: "captions file", many: "captions files", a: "a captions file" },
 }
 
 const PAGE_SIZE = 20

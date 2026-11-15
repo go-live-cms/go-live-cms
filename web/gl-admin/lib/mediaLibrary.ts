@@ -27,6 +27,15 @@ export function mediaKind(media: Pick<Media, "media_path" | "mime_type">): Media
   return "file"
 }
 
+// A video can carry captions (#507); a WebVTT file is what captions it.
+export function canHaveCaptions(media: Pick<Media, "media_path" | "mime_type">): boolean {
+  return mediaKind(media) === "video"
+}
+
+export function isCaptionsFile(media: Pick<Media, "mime_type">): boolean {
+  return media.mime_type === "text/vtt"
+}
+
 // Raster images get a preview (and variants, focal point and crop previews); SVGs are
 // shown as an icon, like before, since the API makes no variants of them.
 export function isRasterImage(media: Pick<Media, "media_path" | "mime_type">): boolean {
@@ -100,6 +109,8 @@ export const TYPE_FILTERS: { id: string; label: string }[] = [
   { id: "video", label: "Video" },
   { id: "audio", label: "Audio" },
   { id: "document", label: "Files" },
+  // WebVTT files, a video's captions (#507).
+  { id: "captions", label: "Captions" },
 ]
 
 export const MEDIA_SORTS: { value: MediaSortOption; label: string }[] = [
@@ -141,8 +152,10 @@ export const CROP_PREVIEWS = [
 // (`block_id`, `block_type`: "image", "video", "audio", "file" (#423), "cover", "media_text" (#427), or a theme block's
 // "theme:<slug>/<block>"), or a
 // link made some other way ("attached").
+// A captions file (#507) is used through the videos it captions: `captions`, with the
+// video block's `block_id`.
 export interface MediaUsage {
-  type: "featured" | "block" | "attached"
+  type: "featured" | "block" | "attached" | "captions"
   block_id?: string
   block_type?: string
 }
@@ -178,14 +191,17 @@ export function usageLabels(link: Pick<MediaPostLink, "relationship_type" | "usa
   if (!link.usages?.length) return [link.relationship_type === "featured" ? "featured image" : "image in the post"]
   const labels: string[] = []
   const blocks = new Map<string, number>()
+  let captions = 0
   for (const usage of link.usages) {
     if (usage.type === "featured") labels.push("featured image")
     else if (usage.type === "block") {
       const noun = blockNoun(usage.block_type)
       blocks.set(noun, (blocks.get(noun) ?? 0) + 1)
-    } else labels.push("attached")
+    } else if (usage.type === "captions") captions++
+    else labels.push("attached")
   }
   for (const [noun, count] of blocks) labels.push(count === 1 ? noun : `${count} ${noun}s`)
+  if (captions > 0) labels.push(captions === 1 ? "captions of a video block" : `captions of ${captions} video blocks`)
   return labels
 }
 

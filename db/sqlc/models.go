@@ -81,6 +81,8 @@ type Medium struct {
 	FocalX           sql.NullFloat64 `json:"focal_x"`
 	FocalY           sql.NullFloat64 `json:"focal_y"`
 	Decorative       bool            `json:"decorative"`
+	CaptionsMediaID  sql.NullInt64   `json:"captions_media_id"`
+	CaptionsLang     string          `json:"captions_lang"`
 }
 
 type Menu struct {

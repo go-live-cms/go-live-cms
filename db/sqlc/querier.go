@@ -350,6 +350,10 @@ type Querier interface {
 	GetPostVersions(ctx context.Context, id int64) ([]GetPostVersionsRow, error)
 	GetPostWithMedia(ctx context.Context, id int64) (GetPostWithMediaRow, error)
 	GetPostWithMeta(ctx context.Context, id int64) (GetPostWithMetaRow, error)
+	// "Used in" for a captions file (#507): it is in no post_media row itself, so these are
+	// the posts using a video it captions, with that video's post_media blocks (the handler
+	// keeps the video blocks: they are what render the <track>).
+	GetPostsByCaptionsMedia(ctx context.Context, captionsMediaID int64) ([]GetPostsByCaptionsMediaRow, error)
 	GetPostsByMedia(ctx context.Context, mediaID int64) ([]GetPostsByMediaRow, error)
 	GetPostsByMultipleTaxonomyTerms(ctx context.Context, arg GetPostsByMultipleTaxonomyTermsParams) ([]Post, error)
 	GetPostsByTaxonomyTerm(ctx context.Context, arg GetPostsByTaxonomyTermParams) ([]Post, error)

@@ -80,6 +80,10 @@ type MediaResponse struct {
 	FocalPoint *FocalPoint   `json:"focal_point"`
 	// Decorative: the image needs no alt text and is rendered alt="" (#325).
 	Decorative bool `json:"decorative"`
+	// A video's captions (#507): the text/vtt media item (null for none) and its
+	// language ("" without captions).
+	CaptionsMediaID *int64 `json:"captions_media_id"`
+	CaptionsLang    string `json:"captions_lang"`
 }
 
 // PopularMediaResponse extends MediaResponse with guaranteed post_count field.
@@ -106,6 +110,9 @@ type PopularMediaResponse struct {
 	Variants   MediaVariants `json:"variants"`
 	FocalPoint *FocalPoint   `json:"focal_point"`
 	Decorative bool          `json:"decorative"`
+	// A video's captions (#507), as in MediaResponse.
+	CaptionsMediaID *int64 `json:"captions_media_id"`
+	CaptionsLang    string `json:"captions_lang"`
 }
 
 // PostWithMediaOrderResponse combines post data with media relationship metadata.
@@ -192,6 +199,8 @@ func toMediaResponse(media db.Medium) MediaResponse {
 		Variants:         variantsResponse(media.Variants),
 		FocalPoint:       focalPointFrom(media.FocalX, media.FocalY),
 		Decorative:       media.Decorative,
+		CaptionsMediaID:  nullInt64Ptr(media.CaptionsMediaID),
+		CaptionsLang:     captionsLangOf(media.CaptionsMediaID, media.CaptionsLang),
 	}
 }
 
@@ -229,6 +238,8 @@ func toMediaFromListRow(row db.ListMediaRow) MediaResponse {
 		Variants:           variantsResponse(row.Variants),
 		FocalPoint:         focalPointFrom(row.FocalX, row.FocalY),
 		Decorative:         row.Decorative,
+		CaptionsMediaID:    nullInt64Ptr(row.CaptionsMediaID),
+		CaptionsLang:       captionsLangOf(row.CaptionsMediaID, row.CaptionsLang),
 	}
 }
 
@@ -265,6 +276,8 @@ func toMediaFromUserRow(row db.GetMediaByUserRow) MediaResponse {
 		Variants:         variantsResponse(row.Variants),
 		FocalPoint:       focalPointFrom(row.FocalX, row.FocalY),
 		Decorative:       row.Decorative,
+		CaptionsMediaID:  nullInt64Ptr(row.CaptionsMediaID),
+		CaptionsLang:     captionsLangOf(row.CaptionsMediaID, row.CaptionsLang),
 	}
 }
 
@@ -301,6 +314,8 @@ func toMediaFromSearchRow(row db.SearchMediaByNameRow) MediaResponse {
 		Variants:         variantsResponse(row.Variants),
 		FocalPoint:       focalPointFrom(row.FocalX, row.FocalY),
 		Decorative:       row.Decorative,
+		CaptionsMediaID:  nullInt64Ptr(row.CaptionsMediaID),
+		CaptionsLang:     captionsLangOf(row.CaptionsMediaID, row.CaptionsLang),
 	}
 }
 
@@ -337,6 +352,8 @@ func toPopularMediaResponse(row db.GetPopularMediaRow) PopularMediaResponse {
 		Variants:         variantsResponse(row.Variants),
 		FocalPoint:       focalPointFrom(row.FocalX, row.FocalY),
 		Decorative:       row.Decorative,
+		CaptionsMediaID:  nullInt64Ptr(row.CaptionsMediaID),
+		CaptionsLang:     captionsLangOf(row.CaptionsMediaID, row.CaptionsLang),
 	}
 }
 

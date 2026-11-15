@@ -33,7 +33,7 @@ export const MEDIA_BLOCK_ICONS = {
 } as const
 
 /** The media library's kinds a picker filters by: the API's `GET /media?type=` values. */
-export const MEDIA_PICKER_KINDS = ["image", "video", "audio", "document"] as const
+export const MEDIA_PICKER_KINDS = ["image", "video", "audio", "document", "captions"] as const
 export type MediaPickerKind = (typeof MEDIA_PICKER_KINDS)[number]
 
 /** Block Spec type → the kind of media it holds (the picker's filter). */
@@ -66,12 +66,16 @@ export const MEDIA_KIND_ACCEPT: Record<MediaPickerKind, string> = {
   video: "video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov",
   audio: "audio/mpeg,audio/wav,audio/ogg,audio/mp4,.mp3,.wav,.ogg,.m4a",
   document: "application/pdf,.pdf,.doc,.docx",
+  // A video's captions (#507): WebVTT only.
+  captions: "text/vtt,.vtt",
 }
 
 /** Whether a MIME type belongs to a kind, by the API's own prefixes (`getMimeTypeFilter`). */
 export function mimeMatchesKind(mime: string | null | undefined, kind: MediaPickerKind): boolean {
   const value = mime ?? ""
-  return kind === "document" ? value.startsWith("application/") : value.startsWith(`${kind}/`)
+  if (kind === "document") return value.startsWith("application/")
+  if (kind === "captions") return value === "text/vtt"
+  return value.startsWith(`${kind}/`)
 }
 
 /** Longest file label, in code points (runes in the API's sanitizer, `fileLabelMaxRunes`). */

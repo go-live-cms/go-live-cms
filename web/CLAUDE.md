@@ -326,6 +326,12 @@ are the most fragile part of the codebase. **Before editing anything under
   content ignored. Copied files keep their names; the clipboard's unnamed picture (or
   Chrome/Firefox's generic `image.png`) is uploaded once, in its first format, as
   `pasted-YYYYMMDD-HHMMSS.<ext>`.
+- **Video captions (#507):** a video's detail page and side panel have **Captions (VTT)**
+  (`components/media/CaptionsField.tsx`, rules `lib/mediaCaptions.ts`): the shared `MediaPicker` with
+  the `captions` kind (`text/vtt`, the API's `type=captions`; also a library filter), Remove, and the
+  language, each saved at once (`PUT /media/:id`). "Used in" of a captions file reads "Captions of a
+  video block". The public video block renders the entry's `captions` as `<track kind="captions">`
+  (`blockCaptionsFor`); the production `/uploads` proxy forces `text/vtt` + nosniff for `.vtt`.
 - **Missing alt text (#325):** alt is optional on upload (the admin no longer sends the
   file's stem) and an image may be marked **decorative** (`media.decorative`). Missing =
   an image (SVG too), not decorative, alt empty or only whitespace: `missingAlt` in

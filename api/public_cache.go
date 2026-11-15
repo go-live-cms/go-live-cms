@@ -496,9 +496,9 @@ var publicCachePurgeRoutes = map[string]string{
 	"PUT /api/v1/posts/:id/taxonomy-terms/:term_id":    "term links and counts",
 	"DELETE /api/v1/posts/:id/taxonomy-terms/:term_id": "term links and counts",
 	// Media shown on published pages (alt, focal point, file, missing).
-	"PUT /api/v1/media/:id":          "alt text, decorative, focal point",
-	"POST /api/v1/media/:id/replace": "the file and its variants",
-	"DELETE /api/v1/media/:id":       "published blocks leave it out",
+	"PUT /api/v1/media/:id":          "alt text, decorative, focal point, a video's captions",
+	"POST /api/v1/media/:id/replace": "the file and its variants (a captions file too)",
+	"DELETE /api/v1/media/:id":       "published blocks leave it out (and a deleted captions file)",
 	// Site config.
 	"PUT /api/v1/settings":                   "title, tagline, language, front page, URL structure",
 	"PUT /api/v1/extension-settings":         "theme settings",

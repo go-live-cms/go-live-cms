@@ -9,6 +9,7 @@ import { errorMessage } from "@gl-admin/lib/api/errors"
 import { formatDate } from "@gl-admin/utils/formatting"
 import {
   altTextValue,
+  canHaveCaptions,
   formatDimensions,
   formatFileSize,
   hasAltText,
@@ -18,6 +19,7 @@ import {
 } from "@gl-admin/lib/mediaLibrary"
 import type { Media } from "@gl-admin/lib/types"
 import AltTextField from "./AltTextField"
+import CaptionsField from "./CaptionsField"
 import { KindIcon } from "./MediaCard"
 import UsedIn, { useUsedIn } from "./UsedIn"
 import { copyMediaURL, downloadMedia } from "./mediaActions"
@@ -143,6 +145,8 @@ export default function MediaPanel({ media, canWrite, asDrawer, onClose, onUpdat
             <p className="gl-media-panel__value">{altTextValue(media)}</p>
           </div>
         ))}
+
+      {canHaveCaptions(media) && <CaptionsField media={media} canWrite={canWrite} onUpdated={onUpdated} />}
 
       <dl className="gl-media-facts">
         <dt>Type</dt>

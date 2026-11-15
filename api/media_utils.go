@@ -93,6 +93,9 @@ var allowedMediaTypes = map[string]mediaKind{
 	".docx": {"application/vnd.openxmlformats-officedocument.wordprocessingml.document", hasPrefix("PK\x03\x04")},
 	// Plain text only: content that sniffs as HTML or XML is refused.
 	".txt": {"text/plain", sniffedAs("text/plain")},
+	// A video's captions (#507): WebVTT, checked by its signature (isWebVTT). Served as
+	// text/vtt (uploadsContentType).
+	".vtt": {captionsMimeType, isWebVTT},
 }
 
 // sniffLen is how much of a file is read to identify it, the most
@@ -550,6 +553,7 @@ func isValidSortOption(sort string) bool {
 //   - "audio" → "audio/"
 //   - "document" → "application/"
 //   - "text" → "text/"
+//   - "captions" → "text/vtt" (a video's WebVTT captions, #507)
 //   - other → "" (no filter)
 //
 // Returns empty string for unknown types, which disables MIME filtering.
@@ -565,6 +569,8 @@ func getMimeTypeFilter(fileType string) string {
 		return "application/"
 	case "text":
 		return "text/"
+	case "captions":
+		return captionsMimeType
 	default:
 		return ""
 	}

@@ -125,6 +125,10 @@ SET
     -- focal_y, where NULL clears it.
     focal_x = CASE WHEN sqlc.arg('set_focal_point')::boolean THEN sqlc.narg('focal_x')::double precision ELSE focal_x END,
     focal_y = CASE WHEN sqlc.arg('set_focal_point')::boolean THEN sqlc.narg('focal_y')::double precision ELSE focal_y END,
+    -- A video's captions (#507): set_captions false keeps the file; true writes
+    -- captions_media_id, where NULL removes them. captions_lang NULL keeps the language.
+    captions_media_id = CASE WHEN sqlc.arg('set_captions')::boolean THEN sqlc.narg('captions_media_id')::bigint ELSE captions_media_id END,
+    captions_lang = COALESCE(sqlc.narg('captions_lang')::text, captions_lang),
     changed_at = now()
 WHERE id = sqlc.arg('id')
 RETURNING *;
@@ -471,6 +475,21 @@ ORDER BY
     pm."order" ASC,
     p.created_at DESC;
 
+
+-- name: GetPostsByCaptionsMedia :many
+-- "Used in" for a captions file (#507): it is in no post_media row itself, so these are
+-- the posts using a video it captions, with that video's post_media blocks (the handler
+-- keeps the video blocks: they are what render the <track>).
+SELECT
+    p.id, p.title, p.description, p.user_id, p.username, p.url,
+    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,
+    pm.media_id AS video_id,
+    pm.blocks
+FROM media v
+JOIN post_media pm ON pm.media_id = v.id
+JOIN posts p ON p.id = pm.post_id
+WHERE v.captions_media_id = sqlc.arg('captions_media_id')::bigint
+ORDER BY p.created_at DESC, p.id, pm.media_id;
 
 -- name: CountMedia :one
 -- The total for GET /media: the rows ListMedia pages through, same filters.

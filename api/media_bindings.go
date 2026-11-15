@@ -106,6 +106,13 @@ type UpdateMediaRequest struct {
 	// absent to keep it (see focalPointUpdate).
 	FocalPoint json.RawMessage `json:"focal_point"`
 
+	// CaptionsMediaID (#507) is a video's captions: the id of a text/vtt media item, null
+	// to remove them, or absent to keep them (see captionsUpdate). CaptionsLang is their
+	// language (a BCP-47 tag); absent keeps it, and setting captions without one stores the
+	// site language.
+	CaptionsMediaID json.RawMessage `json:"captions_media_id"`
+	CaptionsLang    *string         `json:"captions_lang" binding:"omitempty,max=35"`
+
 	MediaPath        json.RawMessage `json:"media_path"`
 	FileSize         json.RawMessage `json:"file_size"`
 	MimeType         json.RawMessage `json:"mime_type"`

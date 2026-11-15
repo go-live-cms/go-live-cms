@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import { isApiProxyPath, proxyToApi } from "./apiProxy"
+import { CAPTIONS_CONTENT_TYPE, isApiProxyPath, isCaptionsPath, proxyToApi } from "./apiProxy"
 import { log } from "../lib/log"
 import { runWithLogContext } from "./requestContext"
 
@@ -53,6 +53,30 @@ describe("proxyToApi", () => {
     await runWithLogContext({ request_id: "req-12345678" }, () => proxyToApi(req, "198.51.100.7", "http://api:8080", fetchImpl))
 
     expect((fetchImpl.mock.calls[0][1]?.headers as Headers).get("x-request-id")).toBe("req-12345678")
+  })
+
+  it("serves a captions file under /uploads as WebVTT, never sniffed (#507)", async () => {
+    expect(isCaptionsPath("/uploads/media/tour-en-0a1b.vtt")).toBe(true)
+    expect(isCaptionsPath("/uploads/media/TOUR.VTT")).toBe(true)
+    expect(isCaptionsPath("/uploads/media/tour.txt")).toBe(false)
+    expect(isCaptionsPath("/api/v1/media/x.vtt")).toBe(false)
+
+    // Whatever the upstream said (text/plain from a sniffing server), the browser gets text/vtt.
+    const fetchImpl = upstream({ status: 200, body: "WEBVTT\n", headers: { "Content-Type": "text/plain; charset=utf-8" } })
+    const res = await proxyToApi(new Request("https://cms.example.com/uploads/media/tour-en-0a1b.vtt"), "198.51.100.7", "http://api:8080", fetchImpl)
+    expect(res.headers.get("content-type")).toBe(CAPTIONS_CONTENT_TYPE)
+    expect(res.headers.get("x-content-type-options")).toBe("nosniff")
+    expect(await res.text()).toBe("WEBVTT\n")
+
+    // A 404 keeps the API's JSON error.
+    const missing = upstream({ status: 404, body: '{"error":"not found"}', headers: { "Content-Type": "application/json" } })
+    const notFound = await proxyToApi(new Request("https://cms.example.com/uploads/media/gone.vtt"), "198.51.100.7", "http://api:8080", missing)
+    expect(notFound.headers.get("content-type")).toBe("application/json")
+
+    // Other uploads keep the upstream's type.
+    const image = upstream({ status: 200, body: "x", headers: { "Content-Type": "image/png" } })
+    const png = await proxyToApi(new Request("https://cms.example.com/uploads/media/a.png"), "198.51.100.7", "http://api:8080", image)
+    expect(png.headers.get("content-type")).toBe("image/png")
   })
 
   it("drops Expect, which Node's fetch refuses to send", async () => {
