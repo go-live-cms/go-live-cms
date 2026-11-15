@@ -21,6 +21,7 @@
  * front (docs/operations/deploy.md, "Caching").
  */
 import { isSiteUrlConfigured } from "./seo"
+import { DESIGN_PREVIEW_COOKIES } from "./designPreviewCookie"
 
 export const PUBLIC_PAGE_CACHE_CONTROL = "public, max-age=60, stale-while-revalidate=300"
 export const PRIVATE_NO_STORE = "private, no-store"
@@ -39,9 +40,10 @@ export const CACHEABLE_PAGE_ROUTES: ReadonlySet<string> = new Set([
 ])
 
 // Cookies that mean a signed-in visitor: the refresh cookie (#159: `__Host-` when Secure,
-// Path=/, so sent with every page; the dev one is scoped to /api/v1/auth) and the legacy
-// `auth_token` theme functions still read.
-const SESSION_COOKIES = ["__Host-refresh_token", "refresh_token", "auth_token"]
+// Path=/, so sent with every page; the dev one is scoped to /api/v1/auth), the legacy
+// `auth_token` theme functions still read, and the design preview cookie (#486: a page
+// rendered with it is never cached, whether or not the preview was accepted, design 11).
+const SESSION_COOKIES = ["__Host-refresh_token", "refresh_token", "auth_token", ...DESIGN_PREVIEW_COOKIES]
 
 export function hasSessionCookie(cookieHeader: string | null): boolean {
   if (!cookieHeader) return false

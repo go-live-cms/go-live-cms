@@ -1596,6 +1596,25 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   and theme activation). `TestDraftGlobalStylesNeverPublic` walks every `/public` and
   `/themes` GET route, signed in and not, for a draft marker.
 
+## Design preview (#486, `site_design_preview.go`, `token/design_preview.go`, design 8.3, 12)
+
+- `POST /site-design/preview` (admin) → `{token, theme, expires_at}`: v4.public, signed with
+  the access key (footer KID, so rotation covers it), audience `golive.design-preview`,
+  `token_type: design_preview`, `user_id` and `theme` claims, 15 minutes
+  (`designPreviewTTL`). `VerifyToken` rejects it and `VerifyDesignPreviewToken` rejects access
+  tokens and collab tickets. The web keeps it in an HttpOnly cookie (`POST /gl-preview`).
+- **`GET /site-design/draft` is the named exception to `requireSiteAdmin`**: registered
+  outside the admin group, its bearer is a preview token, never an access token (401). It
+  checks the token (401, `preview_expired`), then the user's row: gone or **not an admin any
+  more → 403** (a demotion ends previews at once), a password change since → 401; then the
+  active theme must be the token's (409 `preview_theme_inactive`). 200 =
+  `DesignDraftResponse{theme, global_styles (the draft, {} when none), expires_at}`: one key per
+  kind of design item, so #492 adds templates and parts (`?slugs=`) beside it.
+- Both answer `Cache-Control: private, no-store`, read nothing from the public cache and aren't
+  cached (`publicCacheRoutes` never lists them; the preview POST is in `publicCacheNoPurgeRoutes`).
+  The token is never logged (`TestDesignPreviewTokenNeverLogged`). Listed in `siteDesignRoutes`
+  (`route_auth_test.go`).
+
 ## Templates and parts (#490, `000058`, `site_templates.go`, `internal_handlers_site_templates.go`, `theme_block_templates.go`, `sitedesign/`, design `docs/design/theme-builder.md` 5, 7)
 
 - **Tables:** `site_templates` (one row per theme slug, kind `template` | `part` and slug; `theme_slug` has no FK, a
@@ -1631,6 +1650,7 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
 - Tests: `site_templates_test.go` (mock: names, access, tickets, the internal routes, Customize), `site_templates_db_test.go`
   (real DB through the routes), `theme_block_templates_test.go` (the scan), `sitedesign/sitedesign_test.go`,
   `db/sqlc/site_template_collab_tx_test.go` (the transaction and 000058's constraints).
+
 ## Gotchas
 
 - **Themes are discovered from disk** on startup (`ScanThemesDirectory("web/themes")`,

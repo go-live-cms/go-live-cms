@@ -11,7 +11,8 @@
 #
 # Access logs stay OFF (Caddy's default). Hocuspocus sends the collab ticket in its auth
 # message, not the URL, but a rollback to a pre-#284 release puts it back in the URL
-# (#233), and the API/web already log requests without query strings.
+# (#233), and the API/web already log requests without query strings. Keep request
+# headers out of every log too: the design preview cookie (#486) holds a token.
 
 {
 	# The error log (http.log.error, e.g. a 502 from /collab while collab restarts) follows

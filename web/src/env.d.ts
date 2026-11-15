@@ -18,7 +18,15 @@ declare namespace App {
     // The site's published global styles for the active theme (#484, #485), which a theme's
     // base layout merges into its tokens with resolveThemeTokens (lib/themeTokens.ts).
     // From GET /themes/active's global_styles (published only); NO_GLOBAL_STYLES when none.
+    // While an admin previews the design (#486), the draft instead (lib/designPreview.ts).
     globalStyles?: import("./lib/themeTokens").GlobalStyles
+
+    // The design preview of this request (#486, lib/designPreview.ts), set once the cookie's
+    // token was checked: `previewing` (the draft renders, the page gets the banner and is
+    // never cached), `refused` (the API refused it: the cookie is cleared) or `off` (the API
+    // couldn't answer, or another theme). `applied`: the banner or the cleared cookie was
+    // added, so a rewrite's second middleware pass doesn't add it again.
+    designPreview?: import("./lib/designPreview").DesignPreviewState
 
     // Phase 2: Theme functions
     themeFunctions?: import("./lib/theme-api").ThemeFunctions

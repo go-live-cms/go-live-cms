@@ -80,6 +80,13 @@ Two layers, both safe to lose:
   passes the header through, so it matters for browsers and for a CDN you put in front;
   such a CDN keeps a published change out for up to a minute (plus 5 of
   stale-while-revalidate) unless you purge it too. Rules: `web/src/lib/httpCache.ts`.
+- **Design previews (#486)**: an admin previewing the unpublished site design has a
+  `__Host-gl_design_preview` cookie (HttpOnly, Secure, SameSite=Strict, 15 minutes). Every
+  page asked for with it is `private, no-store` (and, when the draft applied,
+  `X-Robots-Tag: noindex`), and neither the API's cache nor Valkey ever sees the draft. A
+  CDN you put in front must bypass its cache when that cookie is present, as it should for
+  the session cookie. Caddy writes no access log and its error log drops request headers,
+  so the cookie and the token in it are never logged.
 
 ### API URLs: server side vs browser
 

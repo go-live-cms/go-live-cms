@@ -85,8 +85,9 @@ describe("buildAdminCsp", () => {
     expect(prod["connect-src"]).not.toContain("ws://localhost:1234")
   })
 
-  it("frames only the embed providers' players, and keeps X's widget script out (#425)", () => {
+  it("frames this site (the design preview, #486) and the embed providers' players, and keeps X's widget script out (#425)", () => {
     expect(prod["frame-src"]).toEqual([
+      "'self'",
       "https://www.youtube-nocookie.com",
       "https://player.vimeo.com",
       "https://platform.twitter.com",
