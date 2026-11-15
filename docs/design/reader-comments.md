@@ -243,8 +243,13 @@ old comments.
    addresses (one cookie value lists them, at most 5).
 4. Unconfirmed comments expire after **48 hours** (pruned hourly, like
    `RunSignupRequestPrune`). A second unconfirmed comment from the same address within the
-   cooldown is stored but sends no second mail; one link confirms every unconfirmed comment
-   of that address made in the last 48 hours.
+   cooldown is stored but sends no second mail.
+5. **A link confirms its own comment only.** Anyone can type any address, so the other
+   unconfirmed comments of that address may be someone else's, written to pass as its owner.
+   After confirming, the page lists the address's other unconfirmed comments (post title and
+   their first 100 characters, shown only to the person holding the link) with **Publish** or
+   **Discard** on each, none chosen for them. A reader whose second comment fell in the
+   cooldown confirms it there; a forged one is discarded or left to expire.
 
 The confirming browser may not be the one that wrote the comment (a phone's mail app). Then
 the phone holds the key, and the desktop's next comment asks again. That's the price of not
@@ -312,7 +317,7 @@ these hold a comment as `pending`, each with a reason the queue shows:
 | `links` | more links than `comments_max_links` (default 1; a link is anything the renderer would link, 11.4) |
 | `held_word` | the text or name contains a word from `comments_hold_words` |
 | `member_name` | 3.4 |
-| `previous_spam` | the commenter has a comment marked spam in the last 90 days |
+| `previous_spam` | the commenter had a comment marked spam in the last 90 days (`commenters.last_spam_at`, since the spam rows themselves go after 30) |
 | `plugin` | a guard answered hold (14.2), with its reason |
 
 And these send it to `spam`: a word from `comments_spam_words`, the honeypot (5.2), a guard
@@ -432,6 +437,7 @@ CREATE TABLE commenters (
   display_name   varchar(60)  NOT NULL,          -- the latest one used
   verified_at    timestamptz,
   blocked_at     timestamptz,                    -- 5.5
+  last_spam_at   timestamptz,                    -- 4.2 previous_spam; outlives the spam rows
   user_id        bigint REFERENCES users (id) ON DELETE SET NULL,  -- reserved for reader accounts (3.1 B)
   created_at     timestamptz NOT NULL DEFAULT now(),
   last_seen_at   timestamptz NOT NULL DEFAULT now()
@@ -449,7 +455,9 @@ CREATE TABLE reader_comments (
   id              bigserial PRIMARY KEY,
   post_id         bigint NOT NULL REFERENCES posts (id) ON DELETE CASCADE,
   parent_id       bigint REFERENCES reader_comments (id) ON DELETE SET NULL,  -- the comment it answers
-  root_id         bigint REFERENCES reader_comments (id) ON DELETE CASCADE,   -- its thread; NULL for a top-level one
+  root_id         bigint REFERENCES reader_comments (id) ON DELETE CASCADE,   -- its thread; NULL for a top-level one.
+                                                  -- The cascade only runs when a post goes, or a root with no
+                                                  -- approved replies is deleted: one with replies becomes a tombstone (6.4)
   commenter_id    bigint REFERENCES commenters (id) ON DELETE SET NULL,       -- a reader's
   author_user_id  bigint REFERENCES users (id) ON DELETE SET NULL,            -- a member's (3.4)
   display_name    varchar(60) NOT NULL,          -- as posted
@@ -483,7 +491,9 @@ CREATE TABLE reader_comment_unsubscribe_tokens (
 CREATE TABLE discussion_mail (
   id          bigserial PRIMARY KEY,
   kind        varchar NOT NULL,                    -- reply, author, moderation
-  recipient   jsonb   NOT NULL,                    -- {"commenter_id": n} or {"user_id": n}; never an address
+  commenter_id bigint REFERENCES commenters (id) ON DELETE CASCADE,  -- a reader recipient, or
+  user_id      bigint REFERENCES users (id) ON DELETE CASCADE,       -- a member; never an address
+  CHECK ((commenter_id IS NULL) <> (user_id IS NULL)),
   post_id     bigint,
   comment_ids bigint[] NOT NULL,                   -- coalesced
   due_at      timestamptz NOT NULL,
@@ -493,6 +503,11 @@ CREATE TABLE discussion_mail (
 
 ALTER TABLE posts ADD COLUMN discussion varchar NOT NULL DEFAULT 'default'
   CHECK (discussion IN ('default', 'open', 'closed', 'off'));     -- 12.3
+
+-- When the post first went live, for "close after N days" (12.4). posts has no publish
+-- date today (publish_at is the schedule). Set once, by a trigger, when post_status first
+-- becomes 'published'; backfilled from each published post's earliest post_versions row.
+ALTER TABLE posts ADD COLUMN first_published_at timestamptz;
 ```
 
 Plus the settings of 12.1 as `settings` columns, a `"comments"` entry in `post_types.supports`
@@ -542,10 +557,15 @@ and "Show more replies" (a link to `?thread=<root id>`, a page of that thread al
   emptied on its own), comments' trash is emptied after 30 days: a moderated thread produces
   far more trash than a post list, and nobody restores a reader's comment a year later.
   **Delete permanently** (from Trash or Spam, asks first) deletes the row.
-- **A removed comment with approved replies becomes a tombstone**: `removed_at` set, body
-  emptied, name and commenter cleared, status kept `approved`. It renders "This comment was
-  removed", so its replies keep their place. A tombstone whose last reply goes is deleted by
-  the hourly job.
+- **A comment that isn't shown but has approved replies renders as a placeholder.** The thread
+  read selects threads whose root is approved **or** has an approved reply, and a root or
+  parent that isn't approved (pending again, spam, trash) renders "This comment was removed",
+  so unapproving or trashing a comment never hides its replies. Restoring it brings its text
+  back.
+- **Deleting a comment that has approved replies makes a tombstone** instead of deleting the
+  row (a moderator's Delete permanently, a reader's delete, an erasure): `removed_at` set, body
+  emptied, name and commenter cleared, status `approved`. So `root_id`'s cascade never takes
+  approved replies with it. A tombstone whose last reply goes is deleted by the hourly job.
 - Spam is deleted after 30 days, pending after 90 (the queue is a queue, not an archive).
 
 ### 6.5 What the post's lifecycle does
@@ -574,7 +594,9 @@ every replica with `FOR UPDATE SKIP LOCKED` on the rows it deletes):
 - `network_hash` older than 30 days set to NULL;
 - expired browser keys;
 - tombstones with no replies left;
-- commenters with no comments, no keys and no unsubscribe-able subscription, after 30 days.
+- commenters with no comments and no keys, after 30 days, **unless blocked** or with a
+  `last_spam_at` in the last 90 days: those rows are what the block and `previous_spam` rules
+  remember, and they hold no text.
 
 ### 6.7 Backups
 
@@ -773,14 +795,15 @@ under `/gl-comments/` (`posts/:id`, `confirm`, `unsubscribe`, `unsubscribe/:toke
    `gl_commenter` cookie's keys as `GoLive-Commenter-Key`;
 3. sets the cookie from `set_key` (`Path=/gl-comments`, 3.3);
 4. answers a browser without scripts with a **303** back to the post,
-   `?commented=pending|published|confirm#comment-form` (or `?comment_error=<code>` with the
-   form's fields kept server-side for 10 minutes under a one-time id, so a mistake doesn't
-   lose the text), and `gl-comments.js` (which sends `Accept: application/json`) with the
-   API's JSON.
+   `?commented=pending|published|confirm#comment-form` on success. On a refusal it answers
+   a short themed page itself (422 or 429: "Your comment wasn't posted", the reason, the
+   typed text in a read-only textarea to copy, and **Back to the post**), so nothing is kept
+   on the server and a mistake doesn't lose the text. `gl-comments.js` (which sends
+   `Accept: application/json`) gets the API's JSON instead.
 
 The endpoint is `private, no-store`, outside `CACHEABLE_PAGE_ROUTES`. A post page with a
-`commented` or `comment_error` parameter is `private, no-store` too (`httpCache.ts` gains the
-rule), since it shows a notice for one reader.
+`commented` parameter is `private, no-store` too (`httpCache.ts` gains the rule), since it
+shows a notice for one reader.
 
 ---
 
@@ -950,8 +973,9 @@ discussionState(site, type, post, now):
 
 An explicit **Open** ignores the close-after timer, so a post can stay open on purpose. The
 rule is one function in Go and TypeScript with shared vectors (`discussionStateVectors.json`),
-the admin's panel and the API agreeing by construction. "First published" is the post's first
-`published_at`, which a re-publish doesn't move.
+the admin's panel and the API agreeing by construction. "First published" is the new
+`posts.first_published_at` (6.1), which a re-publish, an Update or a restore from the trash
+doesn't move.
 
 **Where the clock is applied.** The cached `/public` reads compute everything but the time
 and answer `closes_at` (problem 8). The write path, the admin and the renderer apply it:
@@ -974,7 +998,7 @@ their name, address, verified date, counts, comments (every status) and subscrip
 - **Erase** (asks first: "Delete Ana's 14 comments and everything stored about this address?
   Comments with replies are replaced by 'This comment was removed'. This can't be undone.")
   runs one transaction: tombstones for comments with approved replies, deletes the rest, the
-  keys and tokens, the commenter, and the address's outbox rows. Activity `commenter_erased`
+  keys and tokens, and the commenter (its outbox rows go by `ON DELETE CASCADE`). Activity `commenter_erased`
   with the count, never the address.
 
 ### 13.2 By the reader
@@ -1164,7 +1188,8 @@ Not filed: approved first. P2 is Medium and P3 is Low, as in theme-builder 15.
 - Depends on: nothing.
 
 **C2. storage, commenters, settings, state rule, jobs**
-- Scope: the tables of 6.1 and `posts.discussion`; `supports` gaining `comments` for `post`
+- Scope: the tables of 6.1, `posts.discussion` and `posts.first_published_at` (trigger and
+  backfill); `supports` gaining `comments` for `post`
   (migration) and its one-field exception for built-in types (12.2); the settings of 12.1 in
   `GET/PUT /settings`; `discussionState` in Go and TypeScript with
   `discussionStateVectors.json`; `PUT /posts/:id/discussion`; the text rules of 6.3 with
@@ -1173,7 +1198,9 @@ Not filed: approved first. P2 is Medium and P3 is Low, as in theme-builder 15.
   and keeps its commenters; trashing and restoring a post leaves its comments as they were; the
   state vectors pass in both suites, including the explicit Open overriding the timer; each
   retention rule is a DB test (an unconfirmed comment at 47 and 49 hours, a tombstone losing
-  its last reply, a network hash at 31 days); `posts.discussion` is not in
+  its last reply, a network hash at 31 days, a blocked commenter with no comments kept);
+  trashing or deleting a root with approved replies keeps the replies (placeholder or
+  tombstone); `first_published_at` is set once and survives unpublish, re-publish and trash; `posts.discussion` is not in
   `golive_post_settings()` (changing it leaves `has_unpublished_changes` false).
 - Depends on: nothing.
 
@@ -1194,7 +1221,8 @@ Not filed: approved first. P2 is Medium and P3 is Low, as in theme-builder 15.
   mapping, the cookie, the redirects, the kept form) and its `httpCache.ts` rules.
 - Acceptance: no answer distinguishes a known, verified, cooled-down or unknown address (mock
   test as signup's, the pre-response calls included); the confirmation mail contains no typed
-  name or text; one link confirms every unconfirmed comment of its address; a token is spent
+  name or text; a link confirms only its own comment, and the address's other unconfirmed
+  comments are published only one by one from the confirm page (3.3 step 5); a token is spent
   only by the button's POST; a key for another address is ignored; each hold reason and spam
   route has a case; a reply to an unapproved or other post's comment is refused; a closed or
   off post refuses with its code; the form works end to end without scripts (Astro container
