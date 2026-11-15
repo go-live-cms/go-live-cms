@@ -188,7 +188,9 @@ export function NumberField({
 
 /** The public post types, categories and members who are credited somewhere, read when the panel opens; a failed read lists none. */
 function useQueryChoices(postType: string) {
-  const [choices, setChoices] = useState<{ types: PostType[]; categories: TaxonomyTerm[]; authors: CreditedAuthor[] }>({ types: [], categories: [], authors: [] })
+  const [lists, setLists] = useState<{ types: PostType[]; categories: TaxonomyTerm[] }>({ types: [], categories: [] })
+  const [authors, setAuthors] = useState<CreditedAuthor[]>([])
+  // The types and categories once per panel; only who is credited depends on the type.
   useEffect(() => {
     let live = true
     void Promise.all([
@@ -196,16 +198,23 @@ function useQueryChoices(postType: string) {
         .then((page) => page.data)
         .catch(() => [] as PostType[]),
       getAllTaxonomyTerms("category").catch(() => [] as TaxonomyTerm[]),
-      getCreditedAuthors({ type: postType }).catch(() => [] as CreditedAuthor[]),
-    ]).then(([types, categories, authors]) => {
-      if (!live) return
-      setChoices({ types: types.filter((t) => t.is_active !== false && t.public !== false), categories, authors })
+    ]).then(([types, categories]) => {
+      if (live) setLists({ types: types.filter((t) => t.is_active !== false && t.public !== false), categories })
     })
     return () => {
       live = false
     }
+  }, [])
+  useEffect(() => {
+    let live = true
+    void getCreditedAuthors({ type: postType })
+      .catch(() => [] as CreditedAuthor[])
+      .then((found) => live && setAuthors(found))
+    return () => {
+      live = false
+    }
   }, [postType])
-  return choices
+  return { ...lists, authors }
 }
 
 /**
@@ -426,49 +435,22 @@ export default function SiteBlockSettings({ editor, node, blockRef }: { editor: 
 }
 
 /**
- * The logo's width, typed freely and stored on Enter or when the field loses focus, clamped
+ * The logo's width (a NumberField), typed freely and stored on Enter or when the field loses focus, clamped
  * then: clamping each keystroke would turn the "1" of "120" into 32.
  */
 export function WidthField({ id, width, onCommit }: { id: string; width: unknown; onCommit: (width: number) => void }) {
-  const stored = Number(width) || SITE_LOGO_DEFAULT_WIDTH
-  const [text, setText] = useState(String(stored))
-  // Someone else's change, or this one's once clamped.
-  useEffect(() => setText(String(stored)), [stored])
-  const commit = () => {
-    const value = Number(text)
-    if (text.trim() === "" || !Number.isFinite(value)) {
-      setText(String(stored))
-      return
-    }
-    const next = normalizeSiteLogoWidth(value)
-    setText(String(next))
-    if (next !== stored) onCommit(next)
-  }
   return (
-    <div className="post-settings__field">
-      <label className="post-settings__label" htmlFor={id}>
-        Width
-      </label>
-      <input
-        id={id}
-        type="number"
-        min={SITE_LOGO_MIN_WIDTH}
-        max={SITE_LOGO_MAX_WIDTH}
-        step={1}
-        value={text}
-        aria-describedby={`${id}-hint`}
-        onChange={(event) => setText(event.currentTarget.value)}
-        onBlur={commit}
-        onKeyDown={(event) => {
-          if (event.key !== "Enter") return
-          event.preventDefault()
-          commit()
-        }}
-      />
-      <small id={`${id}-hint`} className="post-settings__hint">
-        In pixels, {SITE_LOGO_MIN_WIDTH} to {SITE_LOGO_MAX_WIDTH}. The height follows the image.
-      </small>
-    </div>
+    <NumberField
+      id={id}
+      label="Width"
+      value={Number(width) || SITE_LOGO_DEFAULT_WIDTH}
+      fallback={SITE_LOGO_DEFAULT_WIDTH}
+      min={SITE_LOGO_MIN_WIDTH}
+      max={SITE_LOGO_MAX_WIDTH}
+      hint={`In pixels, ${SITE_LOGO_MIN_WIDTH} to ${SITE_LOGO_MAX_WIDTH}. The height follows the image.`}
+      normalize={normalizeSiteLogoWidth}
+      onCommit={onCommit}
+    />
   )
 }
 

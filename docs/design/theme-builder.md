@@ -471,8 +471,12 @@ containers), with the same vectors. Details the table left open:
   unchanged. Every filter is in the cache key (#185), which is the whole query string.
 - **The collector** is `collectTemplateNeeds` (`src/lib/siteRenderContext.ts`): the template's
   queries in reading order with each part's where the template places it, keyed by part and block id
-  (`queryKey`), then parts the template doesn't place (a code layout's `<TemplatePart>`). The fifth
-  and later render nothing (`site_block_query_limit`, once). `loadSiteRenderContext` takes the
+  (`queryKey`; a renderer of a part sets the context's `partSlug`, as the `template_part` block
+  does, or its queries find no posts). A part placed twice reads once and counts twice; a part the
+  template doesn't place reads nothing. The fifth rendered loop and later render nothing
+  (`site_block_query_limit`, once). The "one `post_content`" limit is the store's only, with no
+  fragment repair yet: two admins adding one at once make the template's stores `kept-invalid` until
+  one is removed. The template store (#490) is where a repair would go. `loadSiteRenderContext` takes the
   route (`SiteRoute`: its post, its own list, term, author or search) from the layout (#491), so an
   inheriting query reuses `route.list` and fetches nothing; on a route without a list it renders
   nothing. The context also carries the site's date settings for `post_date`.

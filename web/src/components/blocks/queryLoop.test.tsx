@@ -156,6 +156,13 @@ describe("the query loop (#489)", () => {
     expect(render(template, context({ kind: "single" }, { "query-0001": { items, page: 1, totalPages: 1, basePath: null } }, { parts: { sidebar: part } }))).not.toContain("Roles explained")
   })
 
+  it("a heading in a post template gets no id: it repeats once per post", () => {
+    const loop = docOf(["query-0001"], b("query-0001", "query", {}, ["templ-0001"]), b("templ-0001", "post_template", {}, ["head-00001"]), b("head-00001", "heading", { level: 2, text: "Read more" }))
+    const html = render(loop, context({ kind: "home" }, { "query-0001": { items, page: 1, totalPages: 1, basePath: null } }))
+    expect(html.split("<h2>Read more</h2>")).toHaveLength(3)
+    expect(html).not.toContain("read-more")
+  })
+
   it("renders nothing outside a template: in a post the whole loop is inert", () => {
     expect(render(archiveTemplate)).toBe('<div class="block-content"><p id="b-para-after">The rest of the page</p></div>')
   })

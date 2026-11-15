@@ -36,7 +36,7 @@ import { SERVER_MEDIA_URL } from "@gl-admin/lib/server-api-url"
 import { queryKey, type SiteMenu, type SitePostList, type SiteRenderContext, type SiteRoute } from "@/components/blocks/utils/siteContext"
 import { log, requestIdHeaders } from "./log"
 import { getMenu, withCurrent, type Menu } from "./menus"
-import { toListedPosts } from "./postList"
+import { listedThumbnail, toListedPosts } from "./postList"
 import { normalizeUrlStructure, type UrlStructure } from "./seo"
 import { getSiteSettings } from "./siteSettings"
 
@@ -86,7 +86,9 @@ export interface TemplateQueryNeed {
 export interface TemplateNeeds extends SiteBlockNeeds {
   /** The query blocks that render, in reading order (parts where the template places them), at most four. */
   queries: TemplateQueryNeed[]
-  /** How many more there were: they render nothing. */
+  /** How many query loops the page renders: a part placed twice renders its queries twice. */
+  renderedQueries: number
+  /** How many more there were than the four: they render nothing. */
   skippedQueries: number
   /** Whether a site logo block is used (the logo comes with the settings). */
   logo: boolean
@@ -95,13 +97,15 @@ export interface TemplateNeeds extends SiteBlockNeeds {
 /**
  * Walks the template and its parts (design 3.4's `collectTemplateNeeds`): the menus and parts
  * the site blocks name, whether the logo is used, and the query blocks in reading order, a part's
- * at the place the template puts it (each part once), then any part the template doesn't place
- * (a code layout's `<TemplatePart>`), by slug. Only the first `MAX_QUERIES_PER_PAGE` are kept.
+ * at the place the template puts it (its posts read once, its loops counted each time it is placed).
+ * A part the template doesn't place renders nowhere here, so it reads nothing. Only the first
+ * `MAX_QUERIES_PER_PAGE` rendered loops get posts; a part placed again after the limit is reached
+ * gets none (its key is shared, so it renders what its first placement read, if that was kept).
  */
 export function collectTemplateNeeds(template: BlockDocV1 | null | undefined, parts: Readonly<Record<string, BlockDocV1 | null>> = {}): TemplateNeeds {
   const base = siteBlockNeeds([template, ...Object.values(parts)])
-  const all: TemplateQueryNeed[] = []
-  const visited = new Set<string>()
+  const kept = new Map<string, TemplateQueryNeed>()
+  let rendered = 0
   let logo = false
   const visit = (doc: BlockDocV1 | null | undefined, part?: string) => {
     if (!doc?.blocks) return
@@ -109,23 +113,20 @@ export function collectTemplateNeeds(template: BlockDocV1 | null | undefined, pa
       const block = doc.blocks[id]
       if (!block) continue
       if (block.type === "site_logo") logo = true
-      else if (block.type === "query") all.push({ key: queryKey(part, id), blockId: id, ...(part ? { part } : {}), attrs: normalizeSiteBlockAttrs("query", block.attrs) as QueryAttrs })
-      else if (block.type === "template_part" && part === undefined) {
-        const slug = normalizeSiteBlockAttrs("template_part", block.attrs).slug
-        if (typeof slug === "string" && !visited.has(slug)) {
-          visited.add(slug)
-          visit(parts[slug], slug)
+      else if (block.type === "query") {
+        rendered++
+        const key = queryKey(part, id)
+        if (rendered <= MAX_QUERIES_PER_PAGE && !kept.has(key)) {
+          kept.set(key, { key, blockId: id, ...(part ? { part } : {}), attrs: normalizeSiteBlockAttrs("query", block.attrs) as QueryAttrs })
         }
+      } else if (block.type === "template_part" && part === undefined) {
+        const slug = normalizeSiteBlockAttrs("template_part", block.attrs).slug
+        if (typeof slug === "string") visit(parts[slug], slug)
       }
     }
   }
   visit(template)
-  for (const slug of Object.keys(parts).sort()) {
-    if (visited.has(slug)) continue
-    visited.add(slug)
-    visit(parts[slug], slug)
-  }
-  return { ...base, queries: all.slice(0, MAX_QUERIES_PER_PAGE), skippedQueries: Math.max(0, all.length - MAX_QUERIES_PER_PAGE), logo }
+  return { ...base, queries: [...kept.values()], renderedQueries: rendered, skippedQueries: Math.max(0, rendered - MAX_QUERIES_PER_PAGE), logo }
 }
 
 /**
@@ -173,7 +174,11 @@ export async function readQueryPosts(
     if (!response.ok) throw new Error(`HTTP ${response.status}`)
     const body = (await response.json()) as { posts?: unknown }
     const rows = (Array.isArray(body?.posts) ? body.posts : []) as Post[]
-    return { items: await toListedPosts(rows, postType, structure, siteUrl), page: 1, totalPages: 1, basePath: null }
+    const items = await toListedPosts(rows, postType, structure, siteUrl)
+    // Without the site's URL publicImageUrl can't make an absolute URL and gives none: keep the
+    // row's own same-origin path then (an /uploads one, listedThumbnail's check), so the image shows.
+    if (!siteUrl) for (const [i, item] of items.entries()) item.image ??= listedThumbnail(rows[i])
+    return { items, page: 1, totalPages: 1, basePath: null }
   }
   try {
     return await Promise.race([load(), timeout])
@@ -240,12 +245,13 @@ export async function loadSiteRenderContext(locals: App.Locals | undefined, opti
   const parts = options.parts ?? {}
   const own = [...options.docs]
   const docs = [...own, ...Object.values(parts)]
-  const { locations } = siteBlockNeeds(docs)
   // The template's queries first (the first doc is the template; the others render with it),
   // its parts where it places them; at most four.
   const needs = collectTemplateNeeds(mergedDoc(own), parts)
+  // Every location the docs and every part name, placed or not (a code layout's parts too).
+  const { locations } = siteBlockNeeds(docs)
   if (needs.skippedQueries > 0) {
-    log.warn("site_block_query_limit", { limit: MAX_QUERIES_PER_PAGE, count: needs.queries.length + needs.skippedQueries })
+    log.warn("site_block_query_limit", { limit: MAX_QUERIES_PER_PAGE, count: needs.renderedQueries })
   }
   const readMenu = options.readMenu ?? ((location: string) => getMenu(location))
   const settingsRead = getSiteSettings(locals)

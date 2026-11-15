@@ -101,7 +101,7 @@ const listOf = (title: string) => ({ items: [{ post: { id: 1, title } as never, 
 const quiet = () => vi.spyOn(log, "warn").mockImplementation(() => undefined)
 
 describe("collectTemplateNeeds (#489)", () => {
-  it("lists the query blocks in reading order, a part's where the template places it, each part once, then the logo", () => {
+  it("lists the query blocks in reading order, a part's where the template places it (read once, counted each time), and the logo", () => {
     const sidebar = doc({ ...query("q-part-0001"), "logo-00001": { type: "site_logo", attrs: {} } })
     const page = doc({
       ...query("q-tmpl-0001", { inherit: true }),
@@ -110,7 +110,9 @@ describe("collectTemplateNeeds (#489)", () => {
       ...query("q-tmpl-0002", { perPage: 3 }),
     })
     const needs = collectTemplateNeeds(page, { sidebar, unused: doc(query("q-unused-01")) })
-    expect(needs.queries.map((q) => q.key)).toEqual(["q-tmpl-0001", "part:sidebar:q-part-0001", "q-tmpl-0002", "part:unused:q-unused-01"])
+    // A part the template doesn't place renders nowhere, so it reads nothing.
+    expect(needs.queries.map((q) => q.key)).toEqual(["q-tmpl-0001", "part:sidebar:q-part-0001", "q-tmpl-0002"])
+    expect(needs.renderedQueries).toBe(4)
     expect(needs.queries[0].attrs).toEqual({ inherit: true })
     expect(needs.queries[2].attrs).toEqual({ perPage: 3 })
     expect(needs.skippedQueries).toBe(0)
@@ -188,6 +190,12 @@ describe("queryRequestParams (#489)", () => {
 
 describe("readQueryPosts (#489)", () => {
   const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } })
+
+  it("without the site's URL a row keeps its own /uploads path, so its image still shows", async () => {
+    const fetcher = vi.fn(async () => json(200, { posts: [{ id: 4, title: "Four", slug: "four", post_type: "post", meta: { _thumbnail_url: "/uploads/media/four.jpg" } }] }))
+    const list = await readQueryPosts({}, { structure: "slug", siteUrl: "" }, fetcher as never)
+    expect(list.items[0].image).toBe("/uploads/media/four.jpg")
+  })
 
   it("reads one page of /public/posts/type/:type with the query's filters, the rows as list items", async () => {
     const fetcher = vi.fn(async () => json(200, { posts: [{ id: 4, title: "Four", slug: "four", post_type: "product", meta: { _thumbnail_url: "/uploads/media/four.jpg" } }] }))

@@ -6,6 +6,7 @@ import { bylinePeople, nameSeparator, avatarColor, initial } from "../../../lib/
 import { pageLinks, pagePath, pageWindow } from "../../../lib/pagination"
 import { firstParagraphText, metaDescription } from "../../../lib/seo"
 import { DEFAULT_DATE_SETTINGS, formatSiteDate } from "../../../lib/siteDates"
+import { HeadingIdsContext } from "./headingAnchors"
 import {
   queryKey,
   SitePostItemContext,
@@ -30,6 +31,8 @@ import {
  * whose posts aren't in the context (it failed, or it is over the page's four) renders nothing
  * at all, pager and "no results" included: the rest of the page renders.
  */
+
+const NO_HEADING_IDS: ReadonlyMap<string, string> = new Map()
 
 // ── The query loop ─────────────────────────────────────────────────────────────────
 
@@ -63,8 +66,11 @@ export const PostTemplateBlock: React.FC<BlockComponentProps> = ({ block, doc, r
       {query.list.items.map((item) => (
         <li key={item.post.id} className={`post-item${media.length > 0 && item.image ? " has-media" : ""}`}>
           <SitePostItemContext.Provider value={item}>
-            <div className="post-item-body">{body.map((id) => renderBlock(id))}</div>
-            {media.map((id) => renderBlock(id))}
+            {/* The row's blocks repeat once per post, so a heading in them gets no id: one id per row would repeat. */}
+            <HeadingIdsContext.Provider value={NO_HEADING_IDS}>
+              <div className="post-item-body">{body.map((id) => renderBlock(id))}</div>
+              {media.map((id) => renderBlock(id))}
+            </HeadingIdsContext.Provider>
           </SitePostItemContext.Provider>
         </li>
       ))}
