@@ -81,6 +81,8 @@ type Medium struct {
 	FocalX           sql.NullFloat64 `json:"focal_x"`
 	FocalY           sql.NullFloat64 `json:"focal_y"`
 	Decorative       bool            `json:"decorative"`
+	CaptionsMediaID  sql.NullInt64   `json:"captions_media_id"`
+	CaptionsLang     string          `json:"captions_lang"`
 }
 
 type Menu struct {
@@ -446,6 +448,42 @@ type SiteDesignRelease struct {
 	PublishedBy sql.NullInt64   `json:"published_by"`
 	PublishedAt time.Time       `json:"published_at"`
 	Summary     json.RawMessage `json:"summary"`
+}
+
+type SiteTemplate struct {
+	ID                 int64                 `json:"id"`
+	ThemeSlug          string                `json:"theme_slug"`
+	Kind               string                `json:"kind"`
+	Slug               string                `json:"slug"`
+	Title              string                `json:"title"`
+	BlockDoc           json.RawMessage       `json:"block_doc"`
+	BlockRevision      int64                 `json:"block_revision"`
+	WorkingState       string                `json:"working_state"`
+	Source             string                `json:"source"`
+	SourceHash         string                `json:"source_hash"`
+	PublishedBlockDoc  pqtype.NullRawMessage `json:"published_block_doc"`
+	PublishedVersionID sql.NullInt64         `json:"published_version_id"`
+	CreatedBy          sql.NullInt64         `json:"created_by"`
+	CreatedAt          time.Time             `json:"created_at"`
+	ChangedAt          time.Time             `json:"changed_at"`
+}
+
+type SiteTemplateVersion struct {
+	ID         int64                 `json:"id"`
+	TemplateID int64                 `json:"template_id"`
+	ReleaseID  int64                 `json:"release_id"`
+	VersionNo  int32                 `json:"version_no"`
+	BlockDoc   pqtype.NullRawMessage `json:"block_doc"`
+	CreatedAt  time.Time             `json:"created_at"`
+}
+
+type SiteTemplateYdocState struct {
+	TemplateID    int64         `json:"template_id"`
+	State         []byte        `json:"state"`
+	Epoch         uuid.UUID     `json:"epoch"`
+	BlockRevision int64         `json:"block_revision"`
+	LastEditorID  sql.NullInt64 `json:"last_editor_id"`
+	ChangedAt     time.Time     `json:"changed_at"`
 }
 
 type TaxonomyTerm struct {

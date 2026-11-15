@@ -63,6 +63,51 @@ describe("video and audio (#423)", () => {
   })
 })
 
+describe("video captions (#507)", () => {
+  const CAPTIONS = { url: "/uploads/media/launch-en-77aa.vtt", lang: "en-US", label: "English" }
+  const captioned = (captions: unknown, extra: Record<string, unknown> = {}) =>
+    doc({ media: { ...MEDIA, "12": { ...MEDIA["12"], captions, ...extra } } })
+
+  it("renders the media item's captions as the first child of the video, on by default", () => {
+    const out = html(captioned(CAPTIONS))
+    expect(out).toContain(
+      `aria-label="The launch walkthrough"><track kind="captions" src="/uploads/media/launch-en-77aa.vtt" srcLang="en-US" label="English" default=""/><a href="/uploads/media/launch-0a1b.mp4"`,
+    )
+    // Same origin: no crossorigin on the video or the track.
+    expect(out).not.toMatch(/crossorigin/i)
+  })
+
+  it("renders no track without captions, or for a captions file that isn't under /uploads", () => {
+    expect(html(doc())).not.toContain("<track")
+    for (const bad of ["https://evil.example/x.vtt", "//evil.example/x.vtt", "javascript:alert(1)", "/uploads/../x.vtt", "/other/x.vtt", "", 7]) {
+      const out = html(captioned({ ...CAPTIONS, url: bad }))
+      expect(out, String(bad)).not.toContain("<track")
+      // The video itself still plays.
+      expect(out, String(bad)).toContain(`<video controls=""`)
+    }
+    expect(html(captioned(null))).not.toContain("<track")
+    expect(html(captioned("x"))).not.toContain("<track")
+  })
+
+  it("falls back to the language, then 'Captions', for the label, and drops an odd language", () => {
+    expect(html(captioned({ url: CAPTIONS.url, lang: "pt-BR", label: "  " }))).toContain(`srcLang="pt-BR" label="pt-BR"`)
+    const out = html(captioned({ url: CAPTIONS.url, lang: "en US\"><script>", label: "" }))
+    expect(out).toContain(`<track kind="captions" src="/uploads/media/launch-en-77aa.vtt" label="Captions" default=""/>`)
+    expect(out).not.toContain("<script>")
+  })
+
+  it("gives audio no track, whatever its entry says", () => {
+    const d = doc({ media: { ...MEDIA, "13": { ...MEDIA["13"], captions: CAPTIONS } } })
+    expect(html(d)).not.toContain("<track")
+  })
+
+  it("leaves a captioned video out with everything else when it was deleted", () => {
+    const out = html(doc({ media: { "13": MEDIA["13"] }, media_missing: [12] }))
+    expect(out).not.toContain("<video")
+    expect(out).not.toContain("<track")
+  })
+})
+
 describe("file (#423)", () => {
   it("renders a download row with the label, the type and size, and a Download button", () => {
     const out = html(doc())

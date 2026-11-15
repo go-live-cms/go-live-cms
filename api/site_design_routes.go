@@ -12,5 +12,8 @@ func (server *Server) registerSiteDesignRoutes(router *gin.RouterGroup) {
 		design.PUT("/global-styles", server.saveGlobalStyles)
 		// Styles only for now; #492 publishes templates and parts in the same release.
 		design.POST("/publish", server.publishSiteDesign)
+		// Templates and parts (#490): Customize or New template. Edited through the
+		// collab server (template-<id>), never by REST.
+		design.POST("/templates", server.createSiteTemplate)
 	}
 }

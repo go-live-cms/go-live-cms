@@ -227,6 +227,53 @@ describe("the bundled server process", () => {
     expect((await fetch(`${internalUrl}/healthz`)).status).toBe(200)
   })
 
+  it("serves template-<id> (#490): admins only, stored through the template API, flushed by name", async () => {
+    api.users.set("1", { role: "admin" })
+    const header = "blk-tpl-header01"
+    const doc = canonical(paragraphDoc("in the template"))
+    doc.blocks[header] = { id: header, type: "template_part", version: 1, attrs: { slug: "header" } } as unknown as (typeof doc.blocks)[string]
+    doc.blocks_order.unshift(header)
+    api.addTemplate("7", doc, "template", 4)
+    api.addTemplate("8", canonical(paragraphDoc("in the part")), "part", 2)
+
+    // An editor is refused at connect (no read-only view of a template); a contributor too.
+    expect(await open("2", { doc: "template-7" }).outcome).toEqual({ synced: false, reason: DENY.forbidden })
+    expect(await open("3", { doc: "template-7" }).outcome).toEqual({ synced: false, reason: DENY.forbidden })
+    // A template that doesn't exist, and a name that isn't one, are refused too.
+    expect(await open("1", { doc: "template-99" }).outcome).toEqual({ synced: false, reason: DENY.forbidden })
+    expect(await open("1", { doc: "templates-7" }).outcome).toEqual({ synced: false, reason: DENY.forbidden })
+
+    const admin = open("1", { doc: "template-7" })
+    expect(await admin.outcome).toEqual({ synced: true, readOnly: false })
+    expect(paragraphs(admin.doc)).toEqual(["", "in the template"])
+    appendParagraph(admin.doc, "flushed template", "blk-tpl-flush-01")
+    // A part in a part: kept-invalid, through the real bundle.
+    const part = open("1", { doc: "template-8" })
+    await part.outcome
+    const fragment = part.doc.getXmlFragment(EDITOR_FRAGMENT)
+    part.doc.transact(() => {
+      const nested = new Y.XmlElement("templatePart")
+      fragment.insert(fragment.length, [nested])
+      nested.setAttribute("data-block-id", "blk-nested-part1")
+      nested.setAttribute("slug", "footer")
+    })
+    await new Promise((resolve) => setTimeout(resolve, 300))
+
+    const flush = (name: string) =>
+      fetch(`${internalUrl}/internal/documents/${name}/flush`, { method: "POST", headers: { Authorization: `Bearer ${FLUSH_SECRET}` } })
+    expect((await flush("template-7")).status).toBe(200)
+    expect(api.templates.get("7")!.block_doc!.blocks_order).toEqual([header, expect.any(String), "blk-tpl-flush-01"])
+    expect(api.templates.get("7")!.block_revision).toBe(5)
+    expect((await flush("template-8")).status).toBe(200)
+    expect(api.templates.get("8")!.block_revision).toBe(2)
+    expect(api.templates.get("8")!.block_doc!.blocks["blk-nested-part1"]).toBeUndefined()
+    // Error level, so stderr; the store line itself says what was kept.
+    expect(stdout + stderr).toContain('"collab_store_invalid"')
+    expect(stdout).toMatch(/"event":"collab_store","doc":"template-8","trigger":"flush","block_doc":"kept-invalid"/)
+    expect(api.templatePuts.every((put) => put.body.block_edits === undefined)).toBe(true)
+    expect((await flush("templates-7")).status).toBe(400)
+  })
+
   it("never logs a ticket or the shared secrets", async () => {
     const t = await ticket("3")
     await open("3", { token: () => t }).outcome

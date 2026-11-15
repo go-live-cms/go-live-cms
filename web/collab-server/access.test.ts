@@ -4,6 +4,8 @@ import { createPublicKey, randomUUID } from "node:crypto"
 import { V4 } from "paseto"
 import {
   accessMode,
+  accessModeFor,
+  docKind,
   fetchDocAccess,
   isCollabDocName,
   postIdOf,
@@ -41,6 +43,23 @@ describe("doc names", () => {
   it("postIdOf keeps the id as a string and refuses bad names", () => {
     expect(postIdOf("post-9223372036854775807")).toBe("9223372036854775807")
     expect(() => postIdOf("post-0")).toThrow()
+    expect(() => postIdOf("template-3")).toThrow()
+  })
+
+  it("accepts template-<positive id> too (#490), with the same id rules", () => {
+    for (const ok of ["template-1", "template-9223372036854775807"]) expect(isCollabDocName(ok), ok).toBe(true)
+    for (const bad of ["template-", "template-0", "template-01", "Template-1", "templates-1", "template-1/x", "part-1", "template_1",
+      "template-12345678901234567890"]) {
+      expect(isCollabDocName(bad), bad).toBe(false)
+      expect(docKind(bad), bad).toBeNull()
+    }
+  })
+
+  it("docKind returns the kind and id of a valid name", () => {
+    expect(docKind("post-12")).toEqual({ kind: "post", id: "12" })
+    expect(docKind("template-9223372036854775807")).toEqual({ kind: "template", id: "9223372036854775807" })
+    expect(docKind(undefined)).toBeNull()
+    expect(docKind(7)).toBeNull()
   })
 })
 
@@ -171,5 +190,21 @@ describe("accessMode", () => {
     expect(accessMode({ role: "subscriber", canEdit: false })).toBeNull()
     expect(accessMode({ role: null, canEdit: false })).toBeNull()
     expect(accessMode(null)).toBeNull()
+  })
+
+  it("on a template (#490) only can_edit writes: everyone else is denied, never read-only", () => {
+    expect(accessMode({ role: "admin", canEdit: true }, "template")).toBe("write")
+    expect(accessMode({ role: "admin", canEdit: false }, "template")).toBeNull()
+    expect(accessMode({ role: "editor", canEdit: false }, "template")).toBeNull()
+    expect(accessMode({ role: "contributor", canEdit: false }, "template")).toBeNull()
+    expect(accessMode(null, "template")).toBeNull()
+  })
+
+  it("accessModeFor takes the kind from the doc name", () => {
+    const editor = { role: "editor", canEdit: false }
+    expect(accessModeFor(editor, "post-12")).toBe("read")
+    expect(accessModeFor(editor, "template-12")).toBeNull()
+    expect(accessModeFor({ role: "admin", canEdit: true }, "template-12")).toBe("write")
+    expect(accessModeFor({ role: "admin", canEdit: true }, "page-12")).toBeNull()
   })
 })

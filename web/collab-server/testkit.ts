@@ -7,11 +7,11 @@ import type { AddressInfo } from "node:net"
 import { V4 } from "paseto"
 import * as Y from "yjs"
 import { HocuspocusProvider, HocuspocusProviderWebsocket } from "@hocuspocus/provider"
-import type { BlockDocV1 } from "../gl-admin/lib/blocks-spec"
+import { validateBlockDoc, type BlockDocV1 } from "../gl-admin/lib/blocks-spec"
 import { EDITOR_FRAGMENT } from "../gl-admin/lib/collaboration/fragmentBridge"
 import { encodeCollabAuthToken, schemaFingerprint } from "../gl-admin/lib/collaboration/schemaFingerprint"
 import { getInstalledCollabSchema } from "../gl-admin/lib/theme-blocks/collabSchema"
-import { TICKET_AUDIENCE, TICKET_TYPE, type DocAccess, type TicketIdentity } from "./access"
+import { docKind, TICKET_AUDIENCE, TICKET_TYPE, type DocAccess, type TicketIdentity } from "./access"
 import { InternalApiError, type CollabRecord, type CollabStoreBody, type CollabStoreResult, type InternalApi } from "./api"
 import type { Clock } from "./recheck"
 
@@ -49,6 +49,17 @@ export interface FakePost {
   state: string | null
   epoch: string | null
   state_revision: number | null
+}
+
+/** GET's answer for a stored row: the state only when it was stored at the current revision (rule 12). */
+function recordOf(row: FakePost): CollabRecord {
+  const current = row.state !== null && row.state_revision === row.block_revision
+  return {
+    block_doc: row.block_doc ? structuredClone(row.block_doc) : null,
+    block_revision: row.block_revision,
+    ydoc_state: current ? row.state : null,
+    epoch: current ? row.epoch : null,
+  }
 }
 
 /**
@@ -102,6 +113,24 @@ export class FakeCollabApi implements InternalApi {
     post.block_revision += 1
   }
 
+  /**
+   * site_templates (#490): templates and parts by id, each with its kind, as
+   * GET/PUT /internal/site-templates/:id/collab keep them (no block edits).
+   */
+  templates = new Map<string, FakePost & { kind: "template" | "part" }>()
+  templatePuts: { templateId: string; body: CollabStoreBody }[] = []
+
+  addTemplate(templateId: string, blockDoc: BlockDocV1 | null, kind: "template" | "part" = "template", revision = 1) {
+    this.templates.set(templateId, { block_doc: blockDoc, block_revision: revision, state: null, epoch: null, state_revision: null, kind })
+  }
+
+  /** Something wrote a template's block_doc around the collab server (a restored backup). */
+  writeAroundTemplate(templateId: string, blockDoc: BlockDocV1) {
+    const template = this.templates.get(templateId)!
+    template.block_doc = blockDoc
+    template.block_revision += 1
+  }
+
   async fetchAccess(identity: TicketIdentity, docName: string): Promise<DocAccess | null> {
     this.accessCalls++
     if (this.failAccess) throw new Error("access lookup failed: API responded 502")
@@ -110,7 +139,15 @@ export class FakeCollabApi implements InternalApi {
     // issuedBeforePasswordChange (api/auth.go): whole seconds, strictly before → 403.
     const changedAt = this.passwordChangedAt.get(identity.userId)
     if (changedAt !== undefined && identity.issuedAt < changedAt) return null
-    const postId = docName.slice("post-".length)
+    const ref = docKind(docName)
+    if (!ref) return null
+    // templateDocAccess (api/internal_handlers_read.go, #490): a missing template is a
+    // 404; only an admin gets can_edit, everyone else their role with can_edit false.
+    if (ref.kind === "template") {
+      if (!this.templates.has(ref.id)) return null
+      return { role: user.role, canEdit: user.role === "admin" }
+    }
+    const postId = ref.id
     // In the trash (#327): nobody, moderators included (api/internal_handlers_read.go).
     if (this.trashed.has(postId)) return { role: null, canEdit: false, trashed: true }
     const moderator = user.role === "admin" || user.role === "editor"
@@ -123,14 +160,56 @@ export class FakeCollabApi implements InternalApi {
   async getCollab(postId: string): Promise<CollabRecord | null> {
     if (this.failGet) throw new Error("collab load failed: API responded 500")
     const post = this.posts.get(postId)
-    if (!post) return null
-    const current = post.state !== null && post.state_revision === post.block_revision
-    return {
-      block_doc: post.block_doc ? structuredClone(post.block_doc) : null,
-      block_revision: post.block_revision,
-      ydoc_state: current ? post.state : null,
-      epoch: current ? post.epoch : null,
+    return post ? recordOf(post) : null
+  }
+
+  async getTemplateCollab(templateId: string): Promise<CollabRecord | null> {
+    if (this.failGet) throw new Error("collab load failed: API responded 500")
+    const template = this.templates.get(templateId)
+    return template ? { ...recordOf(template), doc_kind: template.kind } : null
+  }
+
+  /**
+   * PUT /internal/site-templates/:id/collab (StoreSiteTemplateCollabTx): the post rules
+   * without block edits. Like the API, a block_doc must pass the template's kind (a part
+   * holding a template_part is a 400), which the collab server checks before it sends one.
+   */
+  async putTemplateCollab(templateId: string, body: CollabStoreBody): Promise<CollabStoreResult> {
+    if (this.beforePut) await this.beforePut()
+    if (this.failPut) throw new Error("collab store failed: API responded 503")
+    const template = this.templates.get(templateId)
+    if (!template) throw new Error("collab store failed: API responded 404")
+    if (!body.block_doc && body.base_revision === undefined) {
+      throw new InternalApiError("collab store failed: API responded 400", 400)
     }
+    if (body.base_revision !== undefined && body.base_revision !== template.block_revision) {
+      throw new InternalApiError("collab store failed: API responded 409", 409)
+    }
+    if (body.block_edits !== undefined) throw new InternalApiError("collab store failed: API responded 400 (block_edits)", 400)
+    if (body.block_doc) {
+      try {
+        validateBlockDoc(body.block_doc, { kind: template.kind })
+      } catch {
+        throw new InternalApiError("collab store failed: API responded 400", 400)
+      }
+    }
+    this.templatePuts.push({ templateId, body: structuredClone(body) })
+    if (body.block_doc) {
+      template.block_doc = structuredClone(body.block_doc)
+      template.block_revision += 1
+    }
+    template.state = body.state
+    template.epoch = body.epoch
+    template.state_revision = template.block_revision
+    return { block_revision: template.block_revision }
+  }
+
+  /** A template's stored state, decoded, as the API would hand it to a fresh server. */
+  storedTemplateDoc(templateId: string): Y.Doc {
+    const doc = new Y.Doc()
+    const state = this.templates.get(templateId)?.state
+    if (state) Y.applyUpdate(doc, Buffer.from(state, "base64"))
+    return doc
   }
 
   /** Awaited at the start of each PUT (to hold one in flight). */
@@ -198,6 +277,16 @@ export async function serveFakeApi(api: FakeCollabApi, secret: string): Promise<
         )
         if (access?.trashed) return json(410, { error: "the post is in the trash", code: "post_trashed" })
         return access ? json(200, { role: access.role, can_edit: access.canEdit }) : json(404, { error: "not found" })
+      }
+      m = /^\/internal\/site-templates\/(\d+)\/collab$/.exec(url.pathname)
+      if (m && req.method === "GET") {
+        const record = await api.getTemplateCollab(m[1])
+        return record ? json(200, record) : json(404, { error: "template not found" })
+      }
+      if (m && req.method === "PUT") {
+        const chunks: Buffer[] = []
+        for await (const chunk of req) chunks.push(chunk as Buffer)
+        return json(200, await api.putTemplateCollab(m[1], JSON.parse(Buffer.concat(chunks).toString("utf8"))))
       }
       m = /^\/internal\/posts\/(\d+)\/collab$/.exec(url.pathname)
       if (m && req.method === "GET") {

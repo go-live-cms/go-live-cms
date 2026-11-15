@@ -20,6 +20,10 @@
 // size and name from here. Ids that no longer exist (the media was deleted) are listed
 // in "media_missing", so the renderer can leave those blocks out: that is not the same
 // as a failed lookup, after which there is neither, and images render from their src.
+//
+// A video a video block shows also carries its captions (#507, media_captions.go):
+// `captions: {url, lang, label}` from the video's captions_media_id, looked up in a second
+// query. A failed lookup or a deleted file leaves `captions` out; the video still plays.
 package api
 
 import (
@@ -56,6 +60,10 @@ type BlockMedia struct {
 	FileSize int64  `json:"file_size,omitempty"`
 	Name     string `json:"name,omitempty"`
 	Filename string `json:"filename,omitempty"`
+
+	// Captions (#507): only for a video a video block shows, and only when it has a WebVTT
+	// captions file. The renderer adds them as <track kind="captions">.
+	Captions *BlockCaptions `json:"captions,omitempty"`
 }
 
 // mediaBlockTypes are the core block types that show a media item by `attrs.mediaId`
@@ -101,18 +109,21 @@ func isBlockDocShape(doc map[string]interface{}) bool {
 // blockDocMediaIDs returns the mediaIds of the doc's media blocks (image, video, audio,
 // file, cover, media & text), at any depth (the flat map).
 func blockDocMediaIDs(doc map[string]interface{}) []int64 {
-	ids, _, _ := blockDocMediaRefs(doc)
-	return ids
+	return blockDocMediaRefs(doc).ids
 }
 
-// blockDocMediaRefs returns the mediaIds of the doc's media blocks, which of them a
-// video, audio or file block shows (their entries carry the file info), and which an
-// image, cover or media & text block shows (their entries carry the library's alt, #481).
-func blockDocMediaRefs(doc map[string]interface{}) ([]int64, map[int64]bool, map[int64]bool) {
+// blockMediaRefs is what a doc's media blocks show: every mediaId, which of them a video,
+// audio or file block shows (their entries carry the file info), which an image, cover or
+// media & text block shows (their entries carry the library's alt, #481), and which a
+// video block shows (their entries carry the captions, #507).
+type blockMediaRefs struct {
+	ids                   []int64
+	files, images, videos map[int64]bool
+}
+
+func blockDocMediaRefs(doc map[string]interface{}) blockMediaRefs {
 	blocks, _ := doc["blocks"].(map[string]interface{})
-	var ids []int64
-	fileInfo := map[int64]bool{}
-	imageInfo := map[int64]bool{}
+	refs := blockMediaRefs{files: map[int64]bool{}, images: map[int64]bool{}, videos: map[int64]bool{}}
 	for _, raw := range blocks {
 		block, _ := raw.(map[string]interface{})
 		blockType := stringOf(block["type"])
@@ -121,15 +132,18 @@ func blockDocMediaRefs(doc map[string]interface{}) ([]int64, map[int64]bool, map
 		}
 		attrs, _ := block["attrs"].(map[string]interface{})
 		if id, ok := blockMediaID(attrs["mediaId"]); ok {
-			ids = append(ids, id)
+			refs.ids = append(refs.ids, id)
 			if imageBlockTypes[blockType] {
-				imageInfo[id] = true
+				refs.images[id] = true
 			} else {
-				fileInfo[id] = true
+				refs.files[id] = true
+			}
+			if blockType == "video" {
+				refs.videos[id] = true
 			}
 		}
 	}
-	return ids, fileInfo, imageInfo
+	return refs
 }
 
 // blockMediaID reads a mediaId attribute (a JSON number, or a numeric string
@@ -168,19 +182,23 @@ func (server *Server) attachBlockMedia(ctx context.Context, docs ...map[string]i
 	perDoc := make([][]int64, len(docs))
 	fileInfo := map[int64]bool{}
 	imageInfo := map[int64]bool{}
+	videoInfo := map[int64]bool{}
 	seen := map[int64]bool{}
 	var ids []int64
 	for i, doc := range docs {
 		if doc == nil {
 			continue
 		}
-		var files, images map[int64]bool
-		perDoc[i], files, images = blockDocMediaRefs(doc)
-		for id := range files {
+		refs := blockDocMediaRefs(doc)
+		perDoc[i] = refs.ids
+		for id := range refs.files {
 			fileInfo[id] = true
 		}
-		for id := range images {
+		for id := range refs.images {
 			imageInfo[id] = true
+		}
+		for id := range refs.videos {
+			videoInfo[id] = true
 		}
 		for _, id := range perDoc[i] {
 			if !seen[id] {
@@ -202,6 +220,7 @@ func (server *Server) attachBlockMedia(ctx context.Context, docs ...map[string]i
 	for _, row := range rows {
 		byID[row.ID] = row
 	}
+	captionsByID := server.loadBlockCaptions(ctx, rows, videoInfo)
 
 	for i, doc := range docs {
 		media := map[string]BlockMedia{}
@@ -229,6 +248,11 @@ func (server *Server) attachBlockMedia(ctx context.Context, docs ...map[string]i
 				entry.Name = row.Name
 				entry.Filename = row.OriginalFilename
 			}
+			if videoInfo[id] && row.CaptionsMediaID.Valid && strings.HasPrefix(row.MimeType, "video/") {
+				if captions, ok := captionsByID[row.CaptionsMediaID.Int64]; ok {
+					entry.Captions = server.blockCaptions(row, captions)
+				}
+			}
 			media[strconv.FormatInt(id, 10)] = entry
 		}
 		if len(media) > 0 {
@@ -243,4 +267,31 @@ func (server *Server) attachBlockMedia(ctx context.Context, docs ...map[string]i
 			doc["media_missing"] = ids
 		}
 	}
+}
+
+// loadBlockCaptions looks up the captions files of the videos a video block shows, in one
+// query (#507). Best effort: on an error the videos are served without captions.
+func (server *Server) loadBlockCaptions(ctx context.Context, rows []db.Medium, videos map[int64]bool) map[int64]db.Medium {
+	var ids []int64
+	seen := map[int64]bool{}
+	for _, row := range rows {
+		if !videos[row.ID] || !row.CaptionsMediaID.Valid || seen[row.CaptionsMediaID.Int64] {
+			continue
+		}
+		seen[row.CaptionsMediaID.Int64] = true
+		ids = append(ids, row.CaptionsMediaID.Int64)
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	captions, err := server.store.GetMediaByIDs(ctx, ids)
+	if err != nil {
+		server.logger.Warn("loading video captions failed; videos served without captions", "error", err)
+		return nil
+	}
+	byID := make(map[int64]db.Medium, len(captions))
+	for _, row := range captions {
+		byID[row.ID] = row
+	}
+	return byID
 }

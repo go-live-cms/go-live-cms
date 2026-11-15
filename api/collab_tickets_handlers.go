@@ -1,6 +1,8 @@
 package api
 
 import (
+	"database/sql"
+	"errors"
 	"net/http"
 	"time"
 
@@ -17,7 +19,8 @@ type collabTicketMaker interface {
 
 // createCollabTicket mints a collab ticket for the caller and one document.
 //
-// Authentication: Bearer access token. Admins and editors may get a ticket
+// Authentication: Bearer access token. For template-<id> (#490): admins only,
+// and the template must exist. For post-<id>: admins and editors may get a ticket
 // for any post, contributors for their own posts and published ones
 // (canReadPost, #135, #206, #393): a read-only live view unless they may edit
 // it. The ticket carries no role: the collab server asks the API.
@@ -32,22 +35,40 @@ func (server *Server) createCollabTicket(c *gin.Context) {
 	if !bindJSON(c, &req) {
 		return
 	}
-	postID, ok := postIDFromCollabDoc(req.Doc)
+	kind, docID, ok := collabDocRef(req.Doc)
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid doc name"})
-		return
-	}
-
-	// The collab server also serves read-only connections, so anyone who may
-	// read the working copy gets a ticket; the server makes the connection
-	// read-only when the access endpoint answers can_edit=false (#206).
-	if !server.authorizePost(c, postID, canReadPost) {
 		return
 	}
 
 	user, ok := server.callerUser(c)
 	if !ok {
 		return
+	}
+
+	switch kind {
+	case collabDocTemplate:
+		// Templates and parts are admins' only (#490, design 7.2 and 12): no read-only
+		// view for anyone else, so no ticket either. The collab server checks again.
+		if !isSiteAdmin(user) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "only admins can edit templates"})
+			return
+		}
+		if _, err := server.store.GetSiteTemplate(c.Request.Context(), docID); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "template not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get template"})
+			return
+		}
+	default:
+		// The collab server also serves read-only connections, so anyone who may
+		// read the working copy gets a ticket; the server makes the connection
+		// read-only when the access endpoint answers can_edit=false (#206).
+		if !server.authorizePost(c, docID, canReadPost) {
+			return
+		}
 	}
 
 	ticket, payload, err := server.collabTickets.CreateWSTicket(user.ID, user.Username, req.Doc, collabTicketTTL)

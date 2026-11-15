@@ -292,6 +292,7 @@ var siteDesignRoutes = map[string]string{
 	"GET /api/v1/site-design/global-styles": "requireSiteAdmin: the draft",
 	"PUT /api/v1/site-design/global-styles": "requireSiteAdmin",
 	"POST /api/v1/site-design/publish":      "requireSiteAdmin",
+	"POST /api/v1/site-design/templates":    "requireSiteAdmin: templates and parts are admins' only (#490)",
 }
 
 func TestSiteDesignRoutesRequireAdmin(t *testing.T) {

@@ -2,7 +2,7 @@
 // clock and the #280 access contract in memory. server.recheck.test.ts runs the same
 // cases against the real server and real clients.
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
-import { ACCESS_REVOKED, POST_TRASHED, createAccessRecheck, type AccessRecheckOptions, type CheckedConnection } from "./recheck"
+import { ACCESS_REVOKED, ACCESS_UNVERIFIED, POST_TRASHED, createAccessRecheck, type AccessRecheckOptions, type CheckedConnection } from "./recheck"
 import { FakeClock, FakeCollabApi } from "./testkit"
 
 const DOC = "post-12"
@@ -107,6 +107,63 @@ describe("access re-check (recheck.ts)", () => {
     expect(checks.size).toBe(0)
     expect(clock.pending).toBe(0)
     expect(events("ws_access_revoked")).toEqual([expect.objectContaining({ doc: DOC, user_id: "2", from: "write" })])
+  })
+
+  it("closes an admin demoted while on a template with access-revoked, never read-only (#490)", async () => {
+    api.users.set("1", { role: "admin" })
+    api.addTemplate("5", null)
+    const checks = recheck()
+    const template = new FakeConnection()
+    const post = new FakeConnection()
+    checks.add(template, { userId: "1", issuedAt: ISSUED, docName: "template-5" })
+    checks.add(post, { userId: "1", issuedAt: ISSUED, docName: DOC })
+    await clock.advance(MINUTE)
+    expect(template.closed).toBeNull()
+
+    api.users.set("1", { role: "editor" })
+    expect(checks.checkUser("1")).toBe(2)
+    await clock.advance(1)
+    expect(template.closed).toEqual({ code: 4403, reason: ACCESS_REVOKED })
+    expect(template.readOnly).toBe(false)
+    expect(template.messages).toEqual([])
+    // The same demotion leaves a post writable: an editor still edits posts.
+    expect(post.closed).toBeNull()
+    expect(post.readOnly).toBe(false)
+    expect(checks.size).toBe(1)
+    expect(events("ws_access_revoked")).toEqual([expect.objectContaining({ doc: "template-5", user_id: "1", role: "editor" })])
+  })
+
+  it("an outage past the grace period closes a template connection to reconnect, never read-only (#490)", async () => {
+    api.users.set("1", { role: "admin" })
+    api.addTemplate("5", null)
+    const checks = recheck()
+    const template = new FakeConnection()
+    const post = new FakeConnection()
+    checks.add(template, { userId: "1", issuedAt: ISSUED, docName: "template-5" })
+    checks.add(post, { userId: "1", issuedAt: ISSUED, docName: DOC })
+    api.failAccess = true
+    await clock.advance(MINUTE + 10_000) // failing, inside the grace period
+    expect(template.closed).toBeNull()
+    await clock.advance(2 * MINUTE)
+    expect(template.closed).toEqual({ code: 4503, reason: ACCESS_UNVERIFIED })
+    expect(template.readOnly).toBe(false)
+    expect(template.messages).toEqual([])
+    // A post keeps its rule: read-only (unverified), never closed.
+    expect(post.closed).toBeNull()
+    expect(post.readOnly).toBe(true)
+    expect(post.messages).toEqual([{ type: "access", mode: "read", reason: "unverified" }])
+    expect(checks.size).toBe(1)
+  })
+
+  it("closes a template connection when the template is deleted (#490)", async () => {
+    api.users.set("1", { role: "admin" })
+    api.addTemplate("5", null)
+    const checks = recheck()
+    const conn = new FakeConnection()
+    checks.add(conn, { userId: "1", issuedAt: ISSUED, docName: "template-5" })
+    api.templates.delete("5")
+    await clock.advance(MINUTE)
+    expect(conn.closed?.reason).toBe(ACCESS_REVOKED)
   })
 
   it("closes a user who lost every content role", async () => {

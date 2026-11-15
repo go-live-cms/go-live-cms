@@ -16,6 +16,8 @@ const text = (value: string, marks?: unknown[]) => ({ type: "text", text: value,
 const paragraph = (...content: unknown[]) => ({ type: "paragraph", attrs: { pm: { type: "paragraph", content } } })
 const heading = (level: unknown, value: string) => ({ type: "heading", attrs: { level, pm: { type: "heading", attrs: { level }, content: [text(value)] } } })
 
+const VIDEO_MEDIA = { media_path: "/uploads/media/tour.mp4", width: 0, height: 0, mime_type: "video/mp4", file_size: 1024, name: "Studio tour", filename: "tour.mp4" }
+
 function docOf(blocks: Record<string, Record<string, unknown>>, order: string[], media: Record<string, unknown> = {}): BlockDocV1 {
   return {
     doc_version: 1,
@@ -38,11 +40,14 @@ const post = docOf(
     "details-001": { type: "details", attrs: { summary: [] }, children: ["para-000002"] },
     "para-000002": paragraph(text("Inside the details.")),
     "embed-00001": { type: "embed", attrs: { provider: "youtube", ref: "dQw4w9WgXcQ", title: "Two editors, one draft" } },
+    // A video with captions from its media item (#507, WCAG 1.2.2).
+    "video-00001": { type: "video", attrs: { mediaId: 7 } },
   },
-  ["head-000001", "head-000002", "para-000001", "image-00001", "image-00002", "details-001", "embed-00001"],
+  ["head-000001", "head-000002", "para-000001", "image-00001", "image-00002", "details-001", "embed-00001", "video-00001"],
   {
     "5": { media_path: "/uploads/media/kite.jpg", width: 800, height: 600, alt: "A red kite over the dunes" },
     "6": { media_path: "/uploads/media/rule.png", width: 800, height: 8, decorative: true },
+    "7": { ...VIDEO_MEDIA, captions: { url: "/uploads/media/tour-en.vtt", lang: "en", label: "English" } },
   },
 )
 
@@ -52,15 +57,27 @@ afterEach(() => {
   document.body.innerHTML = ""
 })
 
-async function violations(html: string) {
+async function audit(html: string) {
   document.documentElement.lang = "en"
   document.title = "A post"
   document.body.innerHTML = `<main><article><h1>The post title</h1>${html}</article></main>`
-  const result = await axe.run(document, {
+  return axe.run(document, {
     runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa", "best-practice"] },
-    rules: { "color-contrast": { enabled: false } },
+    rules: { "color-contrast": { enabled: false }, "video-caption": { enabled: true } },
   })
+}
+
+async function violations(html: string) {
+  const result = await audit(html)
   return result.violations.map((v) => ({ id: v.id, help: v.help, nodes: v.nodes.map((n) => n.html) }))
+}
+
+// What axe says of the page's videos (#507): "video-caption" among the violations or the
+// results it couldn't decide, never among the passes, for a video without captions.
+async function videoCaptionFindings(html: string) {
+  const result = await audit(html)
+  const found = (list: axe.Result[]) => list.filter((r) => r.id === "video-caption").flatMap((r) => r.nodes.map((n) => n.html))
+  return { failed: [...found(result.violations), ...found(result.incomplete)], passed: found(result.passes) }
 }
 
 describe("a published post body (#481)", () => {
@@ -83,6 +100,21 @@ describe("a published post body (#481)", () => {
     expect(body).toContain('<summary><span class="sr-only">Details</span></summary>')
     expect(body).toContain('the guide<span class="sr-only"> (opens in a new tab)</span></a>')
     expect(body).toContain('aria-describedby="embed-note-embed-00001"')
+  })
+
+  it("captions a video from its media item, as a track the browser shows by default (#507)", async () => {
+    expect(body).toContain('<track kind="captions" src="/uploads/media/tour-en.vtt" srcLang="en" label="English" default=""/>')
+    const { failed, passed } = await videoCaptionFindings(body)
+    expect(failed).toEqual([])
+    expect(passed).toHaveLength(1)
+  })
+
+  it("a video without captions is not passed (#507)", async () => {
+    const uncaptioned = renderToStaticMarkup(<BlockRenderer doc={docOf({ "video-00009": { type: "video", attrs: { mediaId: 9 } } }, ["video-00009"], { "9": VIDEO_MEDIA })} />)
+    expect(uncaptioned).not.toContain("<track")
+    const { failed, passed } = await videoCaptionFindings(uncaptioned)
+    expect(passed).toEqual([])
+    expect(failed).toHaveLength(1)
   })
 
   it("an image nobody described is reported, not passed off as decorative", async () => {

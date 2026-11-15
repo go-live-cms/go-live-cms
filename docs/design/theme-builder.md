@@ -809,6 +809,15 @@ but it doesn't make the second path free.
 - **Load:** the same `loadIntoDoc`, so #453's reseed of uninstalled extension blocks
   applies to templates too.
 
+**As built (T8, #490):** three details the list above left open. `site_templates.block_revision`
+starts at **1**, as a post's does, not 5.1's 0: the collab server sends `base_revision` only when it
+is positive, and the API needs one on a state-only store (the seed), so a row at 0 could never store
+its first state. The load carries the row's kind as `doc_kind` (`template` or `part`), since one
+prefix names both and each store validates with its kind's rules; a record without a known kind
+fails the load. And `site_template_ydoc_state.epoch` is a `uuid`, as for posts. Starters until T17:
+`parts/header`, `parts/footer` and one generic template (`templates/index`) made of site blocks I,
+which every template slug falls back to (`api/sitedesign`).
+
 ### 7.3 Rule by rule
 
 | Rule | Status |

@@ -40,6 +40,16 @@ func (server *Server) flushCollabDoc(ctx context.Context, postID int64, requestI
 	return server.postCollabInternal(ctx, fmt.Sprintf("/internal/documents/post-%d/flush", postID), requestID)
 }
 
+// flushCollabTemplate is flushCollabDoc for a template or part, template-<id> (#490,
+// design 7.2): the same route with the wider name check. Publishing the site design
+// (#492) calls it for every item before reading block_doc.
+func (server *Server) flushCollabTemplate(ctx context.Context, templateID int64, requestID string) error {
+	ctx, cancel := context.WithTimeout(ctx, server.collabFlushTimeout)
+	defer cancel()
+
+	return server.postCollabInternal(ctx, fmt.Sprintf("/internal/documents/template-%d/flush", templateID), requestID)
+}
+
 // recheckCollabUser asks the collab server to look up the access of every open
 // connection the user has now, instead of at its next periodic re-check (up to
 // COLLAB_ACCESS_RECHECK_MS later): a demoted editor's documents turn read-only

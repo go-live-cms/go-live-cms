@@ -41,19 +41,39 @@ export const TICKET_TYPE = "ws_ticket"
 // jti for at least this long past `exp`, or a burned ticket would verify again.
 export const TICKET_CLOCK_TOLERANCE_MS = 5_000
 
-// The only doc names the editor opens (`post-${postId}`). Anything else is rejected
-// before auth, so a client can't make the server create and persist docs under
-// arbitrary names, or put crafted text into log lines.
-const COLLAB_DOC_NAME = /^post-[1-9]\d{0,18}$/
+// The only doc names the editor opens: `post-<id>` (a post's body) and `template-<id>`
+// (#490, docs/design/theme-builder.md 7.2: a block template or a template part, both rows
+// of site_templates, so they share the prefix; admins only). Anything else is rejected
+// before auth, so a client can't make the server create and persist docs under arbitrary
+// names, or put crafted text into log lines. Must match collabDocNamePattern in
+// api/collab_tickets_utils.go.
+const COLLAB_DOC_NAME = /^(post|template)-([1-9]\d{0,18})$/
+
+/** Which kind of document a name is: the API client, the access rules and the store follow it. */
+export type CollabDocKind = "post" | "template"
+
+/** A valid doc name's kind and id (as a string: it may exceed 2^53). */
+export interface CollabDocRef {
+  kind: CollabDocKind
+  id: string
+}
 
 export function isCollabDocName(name: unknown): name is string {
   return typeof name === "string" && COLLAB_DOC_NAME.test(name)
 }
 
-/** The post id in a valid doc name ("post-12" → "12"), as a string (it may exceed 2^53). */
+/** "post-12" → {kind: "post", id: "12"}, "template-3" → {kind: "template", id: "3"}; null otherwise. */
+export function docKind(name: unknown): CollabDocRef | null {
+  if (typeof name !== "string") return null
+  const match = COLLAB_DOC_NAME.exec(name)
+  return match ? { kind: match[1] as CollabDocKind, id: match[2] } : null
+}
+
+/** The post id in a valid post doc name ("post-12" → "12"). Throws for any other name. */
 export function postIdOf(docName: string): string {
-  if (!isCollabDocName(docName)) throw new Error("not a collab document name")
-  return docName.slice("post-".length)
+  const ref = docKind(docName)
+  if (ref?.kind !== "post") throw new Error("not a post document name")
+  return ref.id
 }
 
 export interface TicketClaims {
@@ -197,13 +217,26 @@ export async function fetchDocAccess(
 export const READ_ROLES = new Set(["admin", "editor", "contributor"])
 
 /**
- * What a connection may do, from the API's answer: "write" when it says the user may
- * edit this post (admins, editors, and a contributor on their own post), "read" for any
- * other content role (a contributor on someone else's post gets a live read-only view,
- * #206), null otherwise (deny).
+ * What a connection may do, from the API's answer and the document's kind.
+ *
+ * A post: "write" when the API says the user may edit it (admins, editors, and a
+ * contributor on their own post), "read" for any other content role (a contributor on
+ * someone else's post gets a live read-only view, #206), null otherwise (deny).
+ *
+ * A template or part (#490, design 7.2): "write" only when the API says the user may edit
+ * it (admins); everyone else is denied, never given a read-only view, since templates are
+ * admins' only. So an editor is refused at connect (`permission-denied`), and an admin
+ * demoted while connected is closed on the re-check (`access-revoked`), not made read-only.
  */
-export function accessMode(access: DocAccess | null): "write" | "read" | null {
+export function accessMode(access: DocAccess | null, kind: CollabDocKind = "post"): "write" | "read" | null {
   if (!access) return null
   if (access.canEdit) return "write"
+  if (kind === "template") return null
   return access.role && READ_ROLES.has(access.role) ? "read" : null
+}
+
+/** accessMode for a doc name: its kind decides (a name that isn't one is denied). */
+export function accessModeFor(access: DocAccess | null, docName: string): "write" | "read" | null {
+  const ref = docKind(docName)
+  return ref ? accessMode(access, ref.kind) : null
 }

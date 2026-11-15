@@ -1242,6 +1242,21 @@ func (mr *MockStoreMockRecorder) CreateSiteDesignRelease(arg0, arg1 interface{})
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateSiteDesignRelease", reflect.TypeOf((*MockStore)(nil).CreateSiteDesignRelease), arg0, arg1)
 }
 
+// CreateSiteTemplate mocks base method.
+func (m *MockStore) CreateSiteTemplate(arg0 context.Context, arg1 db.CreateSiteTemplateParams) (db.SiteTemplate, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateSiteTemplate", arg0, arg1)
+	ret0, _ := ret[0].(db.SiteTemplate)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateSiteTemplate indicates an expected call of CreateSiteTemplate.
+func (mr *MockStoreMockRecorder) CreateSiteTemplate(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateSiteTemplate", reflect.TypeOf((*MockStore)(nil).CreateSiteTemplate), arg0, arg1)
+}
+
 // CreateTaxonomyTerm mocks base method.
 func (m *MockStore) CreateTaxonomyTerm(arg0 context.Context, arg1 db.CreateTaxonomyTermParams) (db.TaxonomyTerm, error) {
 	m.ctrl.T.Helper()
@@ -2830,6 +2845,21 @@ func (mr *MockStoreMockRecorder) GetPostWithMeta(arg0, arg1 interface{}) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPostWithMeta", reflect.TypeOf((*MockStore)(nil).GetPostWithMeta), arg0, arg1)
 }
 
+// GetPostsByCaptionsMedia mocks base method.
+func (m *MockStore) GetPostsByCaptionsMedia(arg0 context.Context, arg1 int64) ([]db.GetPostsByCaptionsMediaRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPostsByCaptionsMedia", arg0, arg1)
+	ret0, _ := ret[0].([]db.GetPostsByCaptionsMediaRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPostsByCaptionsMedia indicates an expected call of GetPostsByCaptionsMedia.
+func (mr *MockStoreMockRecorder) GetPostsByCaptionsMedia(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPostsByCaptionsMedia", reflect.TypeOf((*MockStore)(nil).GetPostsByCaptionsMedia), arg0, arg1)
+}
+
 // GetPostsByMedia mocks base method.
 func (m *MockStore) GetPostsByMedia(arg0 context.Context, arg1 int64) ([]db.GetPostsByMediaRow, error) {
 	m.ctrl.T.Helper()
@@ -3098,6 +3128,51 @@ func (m *MockStore) GetSettings(arg0 context.Context) (db.Setting, error) {
 func (mr *MockStoreMockRecorder) GetSettings(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSettings", reflect.TypeOf((*MockStore)(nil).GetSettings), arg0)
+}
+
+// GetSiteTemplate mocks base method.
+func (m *MockStore) GetSiteTemplate(arg0 context.Context, arg1 int64) (db.SiteTemplate, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetSiteTemplate", arg0, arg1)
+	ret0, _ := ret[0].(db.SiteTemplate)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetSiteTemplate indicates an expected call of GetSiteTemplate.
+func (mr *MockStoreMockRecorder) GetSiteTemplate(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSiteTemplate", reflect.TypeOf((*MockStore)(nil).GetSiteTemplate), arg0, arg1)
+}
+
+// GetSiteTemplateBySlug mocks base method.
+func (m *MockStore) GetSiteTemplateBySlug(arg0 context.Context, arg1 db.GetSiteTemplateBySlugParams) (db.SiteTemplate, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetSiteTemplateBySlug", arg0, arg1)
+	ret0, _ := ret[0].(db.SiteTemplate)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetSiteTemplateBySlug indicates an expected call of GetSiteTemplateBySlug.
+func (mr *MockStoreMockRecorder) GetSiteTemplateBySlug(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSiteTemplateBySlug", reflect.TypeOf((*MockStore)(nil).GetSiteTemplateBySlug), arg0, arg1)
+}
+
+// GetSiteTemplateCollab mocks base method.
+func (m *MockStore) GetSiteTemplateCollab(arg0 context.Context, arg1 int64) (db.GetSiteTemplateCollabRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetSiteTemplateCollab", arg0, arg1)
+	ret0, _ := ret[0].(db.GetSiteTemplateCollabRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetSiteTemplateCollab indicates an expected call of GetSiteTemplateCollab.
+func (mr *MockStoreMockRecorder) GetSiteTemplateCollab(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSiteTemplateCollab", reflect.TypeOf((*MockStore)(nil).GetSiteTemplateCollab), arg0, arg1)
 }
 
 // GetTaxonomyTerm mocks base method.
@@ -4714,6 +4789,21 @@ func (mr *MockStoreMockRecorder) LockScheduledUpdateClaim(arg0, arg1 interface{}
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockScheduledUpdateClaim", reflect.TypeOf((*MockStore)(nil).LockScheduledUpdateClaim), arg0, arg1)
 }
 
+// LockSiteTemplateForCollabStore mocks base method.
+func (m *MockStore) LockSiteTemplateForCollabStore(arg0 context.Context, arg1 int64) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LockSiteTemplateForCollabStore", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LockSiteTemplateForCollabStore indicates an expected call of LockSiteTemplateForCollabStore.
+func (mr *MockStoreMockRecorder) LockSiteTemplateForCollabStore(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockSiteTemplateForCollabStore", reflect.TypeOf((*MockStore)(nil).LockSiteTemplateForCollabStore), arg0, arg1)
+}
+
 // LockUserForShare mocks base method.
 func (m *MockStore) LockUserForShare(arg0 context.Context, arg1 int64) error {
 	m.ctrl.T.Helper()
@@ -5981,6 +6071,21 @@ func (mr *MockStoreMockRecorder) StorePostCollabTx(arg0, arg1 interface{}) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StorePostCollabTx", reflect.TypeOf((*MockStore)(nil).StorePostCollabTx), arg0, arg1)
 }
 
+// StoreSiteTemplateCollabTx mocks base method.
+func (m *MockStore) StoreSiteTemplateCollabTx(arg0 context.Context, arg1 db.StoreSiteTemplateCollabTxParams) (db.StoreSiteTemplateCollabTxResult, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "StoreSiteTemplateCollabTx", arg0, arg1)
+	ret0, _ := ret[0].(db.StoreSiteTemplateCollabTxResult)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// StoreSiteTemplateCollabTx indicates an expected call of StoreSiteTemplateCollabTx.
+func (mr *MockStoreMockRecorder) StoreSiteTemplateCollabTx(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StoreSiteTemplateCollabTx", reflect.TypeOf((*MockStore)(nil).StoreSiteTemplateCollabTx), arg0, arg1)
+}
+
 // SyncPostContentMedia mocks base method.
 func (m *MockStore) SyncPostContentMedia(arg0 context.Context, arg1 db.SyncPostContentMediaParams) error {
 	m.ctrl.T.Helper()
@@ -6439,6 +6544,21 @@ func (mr *MockStoreMockRecorder) UpdateSettings(arg0, arg1 interface{}) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateSettings", reflect.TypeOf((*MockStore)(nil).UpdateSettings), arg0, arg1)
 }
 
+// UpdateSiteTemplateBlockDocFromCollab mocks base method.
+func (m *MockStore) UpdateSiteTemplateBlockDocFromCollab(arg0 context.Context, arg1 db.UpdateSiteTemplateBlockDocFromCollabParams) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateSiteTemplateBlockDocFromCollab", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdateSiteTemplateBlockDocFromCollab indicates an expected call of UpdateSiteTemplateBlockDocFromCollab.
+func (mr *MockStoreMockRecorder) UpdateSiteTemplateBlockDocFromCollab(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateSiteTemplateBlockDocFromCollab", reflect.TypeOf((*MockStore)(nil).UpdateSiteTemplateBlockDocFromCollab), arg0, arg1)
+}
+
 // UpdateTaxonomyTerm mocks base method.
 func (m *MockStore) UpdateTaxonomyTerm(arg0 context.Context, arg1 db.UpdateTaxonomyTermParams) (db.TaxonomyTerm, error) {
 	m.ctrl.T.Helper()
@@ -6630,6 +6750,20 @@ func (m *MockStore) UpsertScheduledUpdateFromPost(arg0 context.Context, arg1 db.
 func (mr *MockStoreMockRecorder) UpsertScheduledUpdateFromPost(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpsertScheduledUpdateFromPost", reflect.TypeOf((*MockStore)(nil).UpsertScheduledUpdateFromPost), arg0, arg1)
+}
+
+// UpsertSiteTemplateYdocState mocks base method.
+func (m *MockStore) UpsertSiteTemplateYdocState(arg0 context.Context, arg1 db.UpsertSiteTemplateYdocStateParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpsertSiteTemplateYdocState", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpsertSiteTemplateYdocState indicates an expected call of UpsertSiteTemplateYdocState.
+func (mr *MockStoreMockRecorder) UpsertSiteTemplateYdocState(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpsertSiteTemplateYdocState", reflect.TypeOf((*MockStore)(nil).UpsertSiteTemplateYdocState), arg0, arg1)
 }
 
 // UpsertThemeSetting mocks base method.

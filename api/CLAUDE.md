@@ -150,6 +150,22 @@ the collab server.
   featured image goes through `UnlinkPostFeaturedMedia`, which keeps an image that is also in
   the body as a content link. `GET /media/:id/posts` adds `usages` (`featured` | `block` |
   `attached`, `mediaUsages`). One row per pair keeps #325's counts unchanged.
+- **Video captions (#507, `000059`, `media_captions.go`):** on the media item, not the block:
+  `media.captions_media_id` (FK media, `ON DELETE SET NULL`; never itself) is a `text/vtt` item and
+  `captions_lang` its BCP-47 tag (`''` without captions). `.vtt` uploads are sniffed by `isWebVTT`
+  (`WEBVTT` after an optional BOM, then space/tab/line break, and text: HTML is refused); `/uploads`
+  serves them as `text/vtt; charset=utf-8` (`mime.AddExtensionType` in `media_captions.go`'s `init`;
+  nosniff is global), and so does the web's production proxy. A response shows no `captions_lang`
+  without captions (`captionsLangOf`: ON DELETE SET NULL leaves it), and new captions after a deleted
+  file get the site language. `PUT /media/:id {captions_media_id: id|null,
+  captions_lang}` (in `UpdateMediaMetadata`, `set_captions`): only on a `video/*` (400
+  `captions_not_video`), only a `text/vtt` item (400 `invalid_captions`, also for a file deleted
+  meanwhile), no language = keep the stored one, else the site language; a language alone needs
+  captions. Responses carry `captions_media_id`/`captions_lang`. `attachBlockMedia` gives a video a
+  **video block** shows `captions: {url, lang, label}` (label = the file's name, else the language;
+  a second `GetMediaByIDs`, best effort). "Used in" of a captions file = `GetPostsByCaptionsMedia`
+  (posts whose video blocks show a video it captions; usage `captions`). PUT/replace/DELETE media
+  already purge the public cache.
 - **`media_path` in responses is a URL path, not the stored value.** The DB holds
   the filesystem path (`<UPLOAD_PATH>/<file>`, e.g. `/app/uploads/media/x.jpg` in
   compose); responses map it to where `/uploads` serves it (`/uploads/media/x.jpg`)
@@ -1596,6 +1612,41 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   and theme activation). `TestDraftGlobalStylesNeverPublic` walks every `/public` and
   `/themes` GET route, signed in and not, for a draft marker.
 
+## Templates and parts (#490, `000058`, `site_templates.go`, `internal_handlers_site_templates.go`, `theme_block_templates.go`, `sitedesign/`, design `docs/design/theme-builder.md` 5, 7)
+
+- **Tables:** `site_templates` (one row per theme slug, kind `template` | `part` and slug; `theme_slug` has no FK, a
+  removed theme keeps its rows; slug `^[a-z0-9][a-z0-9_-]{0,79}$`, so `single-case_study` stores; `block_doc` +
+  `block_revision`, which starts at **1** like a post's: the collab server sends `base_revision` only when positive and a
+  state-only store needs one; `working_state`, `source` + `source_hash`, `published_block_doc` +
+  `published_version_id`), `site_template_ydoc_state` (as `post_ydoc_state`: state, a UUID epoch, the revision it was
+  stored at) and `site_template_versions` (per publish, under `site_design_releases`; written by #492).
+- **A second collab document kind, `template-<id>`** (parts share the prefix): `collabDocRef` /
+  `collabDocNamePattern` (the collab server's `isCollabDocName` must match). `GET /internal/site-templates/:id/collab`
+  is the #280 load plus `doc_kind` (the row's kind) with the same revision guard; `PUT` is the store without
+  `block_edits` (an unknown field: 400), `prepareForStoreAs` with the row's kind (a part holding a `template_part`: 400),
+  then `StoreSiteTemplateCollabTx` (lock, `block_doc` + revision+1 + `changed_at` only with a `block_doc`, the state at
+  the new revision, a throttled `site_template_edited`; 409 behind, 404 gone). No media links, mentions, reminders,
+  comments or plugin events: those are posts'.
+- **Admins only, everywhere:** `POST /collab/tickets` for `template-<id>` is admins' (403; 404 for a missing row);
+  `/internal/users/:id/access` answers `can_edit` = `isSiteAdmin` for a template (`templateDocAccess`), which the
+  collab server turns into a denial at connect and a close on a re-check (never read-only). A role change already calls
+  `recheckCollabUser`, which covers template connections.
+- **`POST /site-design/templates {kind, slug, from: theme|starter|blank, title?}`** (`requireSiteAdmin`): a row for the
+  active theme. `theme` copies the shipped default from the theme's config (404 `no_theme_default`), `starter` core's
+  starter (`sitedesign.Starter`: `parts/header`, `parts/footer`, and for any template slug its own, a prefix's or
+  `templates/index`; 404 `no_starter`), `blank` an empty doc. Copies get fresh block ids and `prepareForStoreAs` (400
+  `template_invalid`). 409 `template_exists` with the row's `id`; 400 `invalid_slug` / `invalid_title`. No Yjs
+  state is made: the collab server seeds on first open (rule 11). Activity `site_template_created` (`kind`, `slug`,
+  `source`; object `site_design`, the row's id). Not public; no purge.
+- **Theme scan (5.7):** `ScanThemesDirectory` reads `templates/<slug>.json` and `parts/<slug>.json`
+  (`{title, doc}`, `sitedesign.ParseFile`: strict, ≤ 1 MiB, ≤ 200 per kind); `applyThemeBlockTemplates` (after the
+  theme **and plugin** block manifests load, so `NewServer` now scans plugins first) validates each with its kind's rules
+  and stores the valid ones as `config.block_templates` / `config.block_parts` (slug → `{title, doc, hash}`). Invalid
+  files are logged and left out; a slug that also has a code layout at its rank logs that the block template wins.
+- `flushCollabTemplate` (`template-<id>`) is ready for #492's publish. Rendering (#491) and publishing (#492) aren't here.
+- Tests: `site_templates_test.go` (mock: names, access, tickets, the internal routes, Customize), `site_templates_db_test.go`
+  (real DB through the routes), `theme_block_templates_test.go` (the scan), `sitedesign/sitedesign_test.go`,
+  `db/sqlc/site_template_collab_tx_test.go` (the transaction and 000058's constraints).
 ## Gotchas
 
 - **Themes are discovered from disk** on startup (`ScanThemesDirectory("web/themes")`,

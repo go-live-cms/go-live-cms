@@ -174,7 +174,7 @@ export async function uploadGalleryImages(editor: Editor, pos: number, files: Fi
   return uploaded
 }
 
-const KIND_NOUNS: Record<MediaPickerKind, string> = { image: "an image", video: "a video", audio: "an audio file", document: "a document" }
+const KIND_NOUNS: Record<MediaPickerKind, string> = { image: "an image", video: "a video", audio: "an audio file", document: "a document", captions: "a captions file" }
 
 /**
  * Uploads `file` and points the block at `pos` at it (the block's own Upload). The block is

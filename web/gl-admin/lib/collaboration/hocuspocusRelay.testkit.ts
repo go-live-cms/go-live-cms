@@ -29,9 +29,13 @@ export interface Relay {
    * A client as `userId` (1 admin, 2 editor, 3 contributor who doesn't own the post), on
    * `POST_ID` unless `postId` names another post (add it to `api` first). It sends the
    * server's schema fingerprint (#416) unless `schemaFingerprint` says otherwise (another
-   * editor build).
+   * editor build). `docKind: "template"` opens `template-<postId>` instead (#490: add it
+   * with `api.addTemplate` first).
    */
-  client(userId: string, options?: { epoch?: string; postId?: number; schemaFingerprint?: string }): HocuspocusCollaboration
+  client(
+    userId: string,
+    options?: { epoch?: string; postId?: number; schemaFingerprint?: string; docKind?: "post" | "template" },
+  ): HocuspocusCollaboration
   /**
    * Stops the server (storing every doc) and starts a new one on the same port.
    * `whileDown` runs in between (e.g. write block_doc around the server). `schema`: the new
@@ -88,7 +92,7 @@ export async function startRelay({
       return server
     },
     url,
-    client(userId, { epoch, postId = POST_ID, schemaFingerprint } = {}) {
+    client(userId, { epoch, postId = POST_ID, schemaFingerprint, docKind } = {}) {
       // Fixed when the client is made, like an editor bundle's: a restart onto another
       // schema doesn't change it.
       const fingerprint = schemaFingerprint ?? server.schemaFingerprint
@@ -100,6 +104,7 @@ export async function startRelay({
         authRetryMs: 50,
         WebSocketPolyfill,
         reconnectDelayMs: 50,
+        ...(docKind ? { docKind } : {}),
       })
       if (epoch) client.socket.configuration.url = `${url}?epoch=${encodeURIComponent(epoch)}`
       clients.push(client)
