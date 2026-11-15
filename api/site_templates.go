@@ -165,7 +165,14 @@ func (server *Server) createSiteTemplate(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "there is no starter for this " + req.Kind, "code": "no_starter"})
 			return
 		}
-		doc, sourceHash, baseTitle = starter.Doc, sitedesign.Hash(starter.Doc), starter.Title
+		// Hashed as a theme default is (the doc as the store keeps it), so section 9's
+		// "changed since" compares like with like whatever the source.
+		normalized, err := server.normalizeSiteTemplateDoc(starter.Doc, req.Kind)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "template_invalid"})
+			return
+		}
+		doc, sourceHash, baseTitle = starter.Doc, sitedesign.Hash(normalized), starter.Title
 		if req.Kind == sitedesign.KindTemplate {
 			// A starter's title names the generic layout; the slug says which route.
 			baseTitle = ""
@@ -229,14 +236,7 @@ func (server *Server) copySiteTemplateDoc(raw json.RawMessage, kind string) (jso
 	if err != nil {
 		return nil, errors.New("the template's blocks can't be copied")
 	}
-	var doc BlockDocV1
-	if err := json.Unmarshal(renamed, &doc); err != nil {
-		return nil, errors.New("the template's blocks can't be read")
-	}
-	if err := doc.prepareForStoreAs(server.themeBlocks, blockDocKind(kind)); err != nil {
-		return nil, err
-	}
-	encoded, err := json.Marshal(doc)
+	encoded, err := server.normalizeSiteTemplateDoc(renamed, kind)
 	if err != nil {
 		return nil, err
 	}
@@ -244,4 +244,17 @@ func (server *Server) copySiteTemplateDoc(raw json.RawMessage, kind string) (jso
 		return nil, errors.New("the template is too large")
 	}
 	return encoded, nil
+}
+
+// normalizeSiteTemplateDoc runs the store's checks for kind on a doc and returns it as the
+// store would keep it.
+func (server *Server) normalizeSiteTemplateDoc(raw json.RawMessage, kind string) (json.RawMessage, error) {
+	var doc BlockDocV1
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		return nil, errors.New("the template's blocks can't be read")
+	}
+	if err := doc.prepareForStoreAs(server.themeBlocks, blockDocKind(kind)); err != nil {
+		return nil, err
+	}
+	return json.Marshal(doc)
 }

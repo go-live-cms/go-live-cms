@@ -5,7 +5,7 @@ import type { BlockDocV1 } from "../blocks-spec"
 import { appendParagraph, connect, paragraphDoc, paragraphs } from "../../../collab-server/testkit"
 import { EDITOR_FRAGMENT } from "./fragmentBridge"
 import { canonical } from "./fragmentBridge.fixtures"
-import type { CollabAccess, HocuspocusCollaboration, StoreMessage } from "./HocuspocusCollaboration"
+import { acquireHocuspocus, releaseHocuspocus, type CollabAccess, type HocuspocusCollaboration, type StoreMessage } from "./HocuspocusCollaboration"
 import { RECHECK_MS, startRelay, waitFor, type Relay } from "./hocuspocusRelay.testkit"
 
 // The template-<id> document kind (#490, docs/design/theme-builder.md 7.2-7.3) on the real
@@ -188,6 +188,41 @@ describe("template-<id>: the collab document kind for templates and parts (#490)
     expect(admin.getStatus()).toBe("revoked")
     expect(paragraphs(admin.doc)).toContain("kept locally")
     await waitFor(() => relay.server.recheckedConnections === 0, { what: "the server to drop it" })
+  })
+
+  it("an API outage past the grace period closes the admin's connection; it reconnects once the API answers, edits kept", async () => {
+    const admin = onTemplate("1")
+    const changes: CollabAccess[] = []
+    admin.onAccess((access) => changes.push(access))
+    await admin.whenSynced()
+    await waitFor(() => relay.server.recheckedConnections > 0, { what: "the server to track the connection" })
+
+    relay.api.failAccess = true
+    await relay.clock.advance(RECHECK_MS) // the first failed lookup, inside the grace period
+    await relay.clock.advance(3 * RECHECK_MS) // past it: closed to reconnect, never read-only
+    await waitFor(() => admin.getStatus() !== "connected", { what: "the close" })
+    expect(changes.some((change) => change.readOnly)).toBe(false)
+    expect(admin.revoked).toBe(false)
+    appendParagraph(admin.doc, "typed during the outage", "blk-outage-00001")
+
+    relay.api.failAccess = false
+    await waitFor(() => admin.getStatus() === "connected" && admin.synced, { what: "the reconnect", timeoutMs: 15_000 })
+    expect(admin.readOnly).toBe(false)
+    await waitFor(() => storedText().includes("typed during the outage"), { what: "the outage edit to be stored" })
+  })
+
+  it("the connection registry keeps post-<id> and template-<id> apart", async () => {
+    const post = acquireHocuspocus(TEMPLATE_ID, () => relay.client("1", { postId: TEMPLATE_ID }))
+    const tpl = acquireHocuspocus(`template-${TEMPLATE_ID}`, () => onTemplate("1"))
+    expect(tpl).not.toBe(post)
+    expect(post.docName).toBe(`post-${TEMPLATE_ID}`)
+    expect(tpl.docName).toBe(`template-${TEMPLATE_ID}`)
+    expect(acquireHocuspocus(`template-${TEMPLATE_ID}`, () => onTemplate("1"))).toBe(tpl)
+    // A create that opens another document is refused, not registered under the wrong name.
+    expect(() => acquireHocuspocus(`template-${PART_ID}`, () => onTemplate("1"))).toThrow(/template-31/)
+    releaseHocuspocus(tpl)
+    releaseHocuspocus(tpl)
+    releaseHocuspocus(post)
   })
 
   it("a part stores as a part; a template_part written into it is kept-invalid and block_doc keeps its last valid version", async () => {

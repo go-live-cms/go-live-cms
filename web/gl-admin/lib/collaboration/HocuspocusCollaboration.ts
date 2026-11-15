@@ -201,6 +201,14 @@ export class HocuspocusCollaboration {
       onClose: ({ event }) => {
         if (event?.reason === ACCESS_REVOKED) this.handleRevoked()
         else if (event?.reason === POST_TRASHED) this.handleRevoked(true)
+        else if (event?.reason === DENY_REASON.unavailable && !this._destroyed) {
+          // The server couldn't confirm access to a template for its grace period (#490:
+          // a template has no read-only view, so it closes instead of `unverified`). Not a
+          // revoke: reconnect, so the auth retries (access-unavailable, with backoff) until
+          // the API answers. The doc is kept; the sync handshake sends its unsynced edits.
+          collabDebug("closed while access was unverified; reconnecting")
+          this.socket.webSocket?.close()
+        }
       },
       onStatus: ({ status }) => {
         if (this.status !== "denied" && this.status !== "revoked" && this.status !== "outdated") this.setStatus(status as HocuspocusStatus)
@@ -483,16 +491,22 @@ export class HocuspocusCollaboration {
   }
 }
 
-// Per-post registry: the editor, the schema gate and the presence hook share one
-// connection per post. Ref-counted; destroyed shortly after the last release (StrictMode
+// Per-document registry: the editor, the schema gate and the presence hook share one
+// connection per document, keyed by its name (#490: post-12 and template-12 are two
+// documents, so the id alone can't be the key). Ref-counted; destroyed shortly after the last release (StrictMode
 // mounts twice). A stale, revoked or outdated instance is never handed out again (an
 // outdated one would only be asked again: if the server went back to this schema, a new
 // mount connects).
-const instances = new Map<number, { instance: HocuspocusCollaboration; refs: number; timer: number | null }>()
+const instances = new Map<string, { instance: HocuspocusCollaboration; refs: number; timer: number | null }>()
 const DESTROY_DELAY_MS = 750
 
-export function acquireHocuspocus(postId: number, create: () => HocuspocusCollaboration): HocuspocusCollaboration {
-  const entry = instances.get(postId)
+/**
+ * The shared connection for a document: `doc` is a post id (`post-<id>`) or a document name
+ * (`template-<id>`, #490). `create` must make a connection to that same document.
+ */
+export function acquireHocuspocus(doc: number | string, create: () => HocuspocusCollaboration): HocuspocusCollaboration {
+  const key = typeof doc === "number" ? `post-${doc}` : doc
+  const entry = instances.get(key)
   if (entry && !entry.instance.stale && !entry.instance.destroyed && !entry.instance.revoked && !entry.instance.outdated) {
     if (entry.timer !== null) {
       clearTimeout(entry.timer)
@@ -502,12 +516,16 @@ export function acquireHocuspocus(postId: number, create: () => HocuspocusCollab
     return entry.instance
   }
   const instance = create()
-  instances.set(postId, { instance, refs: 1, timer: null })
+  if (instance.docName !== key) {
+    instance.destroy()
+    throw new Error(`acquireHocuspocus(${key}) was given a connection to ${instance.docName}`)
+  }
+  instances.set(key, { instance, refs: 1, timer: null })
   return instance
 }
 
 export function releaseHocuspocus(instance: HocuspocusCollaboration): void {
-  const entry = instances.get(instance.postId)
+  const entry = instances.get(instance.docName)
   if (!entry || entry.instance !== instance) {
     // Replaced after going stale; it destroyed itself already.
     instance.destroy()
@@ -516,7 +534,7 @@ export function releaseHocuspocus(instance: HocuspocusCollaboration): void {
   entry.refs--
   if (entry.refs > 0) return
   entry.timer = setTimeout(() => {
-    if (instances.get(instance.postId) === entry) instances.delete(instance.postId)
+    if (instances.get(instance.docName) === entry) instances.delete(instance.docName)
     instance.destroy()
   }, DESTROY_DELAY_MS) as unknown as number
 }

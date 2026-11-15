@@ -134,3 +134,32 @@ func TestThemeBlockTemplateFromConfigBadInput(t *testing.T) {
 		require.False(t, ok, config)
 	}
 }
+
+func TestThemeConfigForResponseDropsShippedDocs(t *testing.T) {
+	root, _ := newShippingTheme(t)
+	themes, err := ScanThemesDirectory(root)
+	require.NoError(t, err)
+	applyThemeBlockTemplates(themes, ThemeBlockManifest{})
+	themes[0].Config["menu_locations"] = []string{"primary"}
+	config, err := json.Marshal(themes[0].Config)
+	require.NoError(t, err)
+
+	out := themeConfigForResponse(config)
+	require.NotContains(t, string(out), `"doc"`, "the docs stay in the stored config")
+	var got struct {
+		BlockTemplates map[string]map[string]string `json:"block_templates"`
+		BlockParts     map[string]map[string]string `json:"block_parts"`
+		MenuLocations  []string                     `json:"menu_locations"`
+	}
+	require.NoError(t, json.Unmarshal(out, &got))
+	shipped, ok := themeBlockTemplateFromConfig(config, sitedesign.KindTemplate, "single")
+	require.True(t, ok)
+	require.Equal(t, map[string]string{"title": "Single post", "hash": shipped.Hash}, got.BlockTemplates["single"])
+	require.Contains(t, got.BlockParts, "header")
+	require.Equal(t, []string{"primary"}, got.MenuLocations)
+
+	// Configs without shipped templates, or that don't decode, come back as stored.
+	for _, raw := range []string{`{"menu_locations":["primary"]}`, `not json`, ``, `{"block_templates":[]}`} {
+		require.Equal(t, raw, string(themeConfigForResponse(json.RawMessage(raw))), raw)
+	}
+}

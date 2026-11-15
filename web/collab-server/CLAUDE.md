@@ -68,8 +68,10 @@ block template or a template part: both are rows of `site_templates`, so they sh
 - **Access (admins only):** `accessMode(access, kind)` gives a template `write` or nothing:
   `can_edit` false (the API's `templateDocAccess`: only an admin edits) is **denied at connect**
   (`permission-denied`) and **closed with `access-revoked` on a re-check** (an admin demoted while
-  connected), never a read-only view or `demoted`. Trash (`post-trashed`) never applies. The re-check's
-  outage rule (`unverified`, read-only after the grace period) is unchanged for both kinds.
+  connected), never a read-only view or `demoted`. Trash (`post-trashed`) never applies. An API outage past
+  the grace period doesn't make a template read-only (`unverified`) either: its connections close with
+  `access-unavailable` (4503), which the client treats as an ordinary close, reconnecting and retrying its
+  auth with backoff until the API answers, its unsynced edits kept.
 - **Store:** the same pipeline, with `validateBlockDoc(doc, { kind })` (`StoreInput.kind`: `post`, or the
   template's `template` / `part`). A part holding a `template_part` is `kept-invalid`; the same block in
   a template stores. **No block change tracker** (`Session.tracker` is null, design 7.2): no `block_edits` are

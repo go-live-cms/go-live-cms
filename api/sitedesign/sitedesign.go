@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"regexp"
 	"strings"
 	"unicode/utf8"
@@ -134,7 +135,9 @@ func readStarter(name string) (File, bool) {
 	}
 	file, err := ParseFile(raw)
 	if err != nil {
-		// The embedded files are tested (TestStartersAreValid); a bad one is a build bug.
+		// The embedded files are tested (TestStartersAreValid); a bad one is a build bug,
+		// so it's logged rather than passed off as "no starter".
+		slog.Error("site_design_starter_invalid", "starter", name, "error", err)
 		return File{}, false
 	}
 	return file, true

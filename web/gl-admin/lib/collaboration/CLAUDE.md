@@ -23,7 +23,10 @@ Publish asks the API, which flushes the collab server before reading `block_doc`
 template parts (`site_templates`, admins only) are `template-<id>` documents on the same server, with
 the same schema, fingerprint, editor and rules. `HocuspocusCollaboration`'s `docKind: "template"` opens
 one (the Site editor, #493). Only an admin connects: anyone else is **refused at connect**, and an admin
-demoted while connected is **closed** (`access-revoked`), never given a read-only view. Each store is
+demoted while connected is **closed** (`access-revoked`), never given a read-only view. An API outage past
+the grace period closes it with `access-unavailable` instead of `unverified`: the client reconnects and
+retries (`onClose`), keeping its doc. The connection registry is keyed by doc name
+(`acquireHocuspocus(postId | docName, …)`), so `post-12` and `template-12` never share an entry. Each store is
 validated with the template's kind (a part holding a `template_part` is `kept-invalid`); there is no
 per-block attribution (#328) on templates. The server half: `collab-server/CLAUDE.md`, "Document kinds".
 

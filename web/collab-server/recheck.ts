@@ -23,7 +23,9 @@
 //     must not disconnect every editor, but an outage can't extend a revoked session's
 //     write access indefinitely either. Past the grace period a writable connection is
 //     made read-only (`unverified`, never closed: the client keeps its state and goes
-//     back to read-write on the next successful check).
+//     back to read-write on the next successful check). A template or part (#490) has no
+//     read-only view, so its connections close with `access-unavailable` instead: the
+//     client reconnects and retries until the API answers, keeping its unsynced edits.
 //
 // `checkUser` runs a user's checks now instead (#333): the API asks for it after a role
 // change or a removal (POST /internal/users/:id/recheck), so a demotion takes effect at
@@ -33,7 +35,7 @@
 //
 // Pure + dependency-injected (lookup, clock, random); unit tested in recheck.test.ts.
 // Must NOT import yjs.
-import { accessModeFor, type DocAccess, type TicketIdentity } from "./access"
+import { accessModeFor, docKind, type DocAccess, type TicketIdentity } from "./access"
 import { docNameForLog, errorMessage, logEvent, requestIdFrom } from "./logsafe"
 
 /** The close reason a client sees when its access is gone (shown as "session ended"). */
@@ -110,6 +112,14 @@ interface Group {
 }
 
 const CLOSE_CODE = 4403
+
+/**
+ * The close reason when a template or part's access couldn't be confirmed for the grace
+ * period (#490): not a revoke. The client reconnects and its auth retries until the API
+ * answers (the same reason auth.ts refuses with, DENY.unavailable).
+ */
+export const ACCESS_UNVERIFIED = "access-unavailable"
+const UNVERIFIED_CLOSE_CODE = 4503
 
 export function createAccessRecheck(options: AccessRecheckOptions) {
   const {
@@ -221,6 +231,25 @@ export function createAccessRecheck(options: AccessRecheckOptions) {
       }
       group.failing = true
       if (unconfirmedMs >= graceMs) {
+        if (docKind(group.docName)?.kind === "template") {
+          // A template or part (#490) has no read-only view: rather than `unverified`,
+          // its connections close with access-unavailable, which the client treats as an
+          // ordinary close. It reconnects, and its auth retries (access-unavailable, with
+          // backoff) until the API answers again; its unsynced edits stay in its Y.Doc and
+          // go out with the reconnect's sync.
+          for (const connection of [...group.connections.keys()]) {
+            logEvent("warn", "ws_access_revoked", {
+              request_id: requestId,
+              doc: docNameForLog(group.docName),
+              user_id: group.userId,
+              from: connection.readOnly ? "read" : "write",
+              reason: ACCESS_UNVERIFIED,
+            })
+            remove(connection)
+            connection.close({ code: UNVERIFIED_CLOSE_CODE, reason: ACCESS_UNVERIFIED })
+          }
+          return
+        }
         for (const connection of group.connections.keys()) setMode(group, connection, "read", "unverified", requestId)
       }
       schedule(group, retryMs)
