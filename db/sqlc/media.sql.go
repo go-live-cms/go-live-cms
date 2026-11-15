@@ -102,7 +102,7 @@ INSERT INTO media (
     $11,
     COALESCE($12::jsonb, '{}'::jsonb),
     $13
-) RETURNING id, name, description, alt, media_path, user_id, created_at, changed_at, file_size, mime_type, width, height, duration, original_filename, metadata, variants, focal_x, focal_y, decorative
+) RETURNING id, name, description, alt, media_path, user_id, created_at, changed_at, file_size, mime_type, width, height, duration, original_filename, metadata, variants, focal_x, focal_y, decorative, captions_media_id, captions_lang
 `
 
 type CreateMediaParams struct {
@@ -159,6 +159,8 @@ func (q *Queries) CreateMedia(ctx context.Context, arg CreateMediaParams) (Mediu
 		&i.FocalX,
 		&i.FocalY,
 		&i.Decorative,
+		&i.CaptionsMediaID,
+		&i.CaptionsLang,
 	)
 	return i, err
 }
@@ -329,7 +331,7 @@ func (q *Queries) GetFeaturedImage(ctx context.Context, postID int64) (GetFeatur
 }
 
 const getMedia = `-- name: GetMedia :one
-SELECT id, name, description, alt, media_path, user_id, created_at, changed_at, file_size, mime_type, width, height, duration, original_filename, metadata, variants, focal_x, focal_y, decorative FROM media
+SELECT id, name, description, alt, media_path, user_id, created_at, changed_at, file_size, mime_type, width, height, duration, original_filename, metadata, variants, focal_x, focal_y, decorative, captions_media_id, captions_lang FROM media
 WHERE id = $1 LIMIT 1
 `
 
@@ -356,12 +358,14 @@ func (q *Queries) GetMedia(ctx context.Context, id int64) (Medium, error) {
 		&i.FocalX,
 		&i.FocalY,
 		&i.Decorative,
+		&i.CaptionsMediaID,
+		&i.CaptionsLang,
 	)
 	return i, err
 }
 
 const getMediaByIDs = `-- name: GetMediaByIDs :many
-SELECT id, name, description, alt, media_path, user_id, created_at, changed_at, file_size, mime_type, width, height, duration, original_filename, metadata, variants, focal_x, focal_y, decorative FROM media
+SELECT id, name, description, alt, media_path, user_id, created_at, changed_at, file_size, mime_type, width, height, duration, original_filename, metadata, variants, focal_x, focal_y, decorative, captions_media_id, captions_lang FROM media
 WHERE id = ANY($1::bigint[])
 `
 
@@ -394,6 +398,8 @@ func (q *Queries) GetMediaByIDs(ctx context.Context, ids []int64) ([]Medium, err
 			&i.FocalX,
 			&i.FocalY,
 			&i.Decorative,
+			&i.CaptionsMediaID,
+			&i.CaptionsLang,
 		); err != nil {
 			return nil, err
 		}
@@ -409,7 +415,7 @@ func (q *Queries) GetMediaByIDs(ctx context.Context, ids []int64) ([]Medium, err
 }
 
 const getMediaByPost = `-- name: GetMediaByPost :many
-SELECT m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata, m.variants, m.focal_x, m.focal_y, m.decorative FROM media m
+SELECT m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata, m.variants, m.focal_x, m.focal_y, m.decorative, m.captions_media_id, m.captions_lang FROM media m
 JOIN post_media pm ON m.id = pm.media_id
 WHERE pm.post_id = $1
 ORDER BY pm."order", m.created_at
@@ -444,6 +450,8 @@ func (q *Queries) GetMediaByPost(ctx context.Context, postID int64) ([]Medium, e
 			&i.FocalX,
 			&i.FocalY,
 			&i.Decorative,
+			&i.CaptionsMediaID,
+			&i.CaptionsLang,
 		); err != nil {
 			return nil, err
 		}
@@ -460,7 +468,7 @@ func (q *Queries) GetMediaByPost(ctx context.Context, postID int64) ([]Medium, e
 
 const getMediaByPostWithOrder = `-- name: GetMediaByPostWithOrder :many
 SELECT 
-    m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata, m.variants, m.focal_x, m.focal_y, m.decorative,
+    m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata, m.variants, m.focal_x, m.focal_y, m.decorative, m.captions_media_id, m.captions_lang,
     pm."order" as media_order
 FROM media m
 JOIN post_media pm ON m.id = pm.media_id
@@ -488,6 +496,8 @@ type GetMediaByPostWithOrderRow struct {
 	FocalX           sql.NullFloat64 `json:"focal_x"`
 	FocalY           sql.NullFloat64 `json:"focal_y"`
 	Decorative       bool            `json:"decorative"`
+	CaptionsMediaID  sql.NullInt64   `json:"captions_media_id"`
+	CaptionsLang     string          `json:"captions_lang"`
 	MediaOrder       int32           `json:"media_order"`
 }
 
@@ -520,6 +530,8 @@ func (q *Queries) GetMediaByPostWithOrder(ctx context.Context, postID int64) ([]
 			&i.FocalX,
 			&i.FocalY,
 			&i.Decorative,
+			&i.CaptionsMediaID,
+			&i.CaptionsLang,
 			&i.MediaOrder,
 		); err != nil {
 			return nil, err
@@ -537,7 +549,7 @@ func (q *Queries) GetMediaByPostWithOrder(ctx context.Context, postID int64) ([]
 
 const getMediaByUser = `-- name: GetMediaByUser :many
 SELECT 
-    m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata, m.variants, m.focal_x, m.focal_y, m.decorative,
+    m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata, m.variants, m.focal_x, m.focal_y, m.decorative, m.captions_media_id, m.captions_lang,
     COUNT(pm.post_id) as post_count
 FROM media m
 LEFT JOIN post_media pm ON m.id = pm.media_id
@@ -591,6 +603,8 @@ type GetMediaByUserRow struct {
 	FocalX           sql.NullFloat64 `json:"focal_x"`
 	FocalY           sql.NullFloat64 `json:"focal_y"`
 	Decorative       bool            `json:"decorative"`
+	CaptionsMediaID  sql.NullInt64   `json:"captions_media_id"`
+	CaptionsLang     string          `json:"captions_lang"`
 	PostCount        int64           `json:"post_count"`
 }
 
@@ -630,6 +644,8 @@ func (q *Queries) GetMediaByUser(ctx context.Context, arg GetMediaByUserParams) 
 			&i.FocalX,
 			&i.FocalY,
 			&i.Decorative,
+			&i.CaptionsMediaID,
+			&i.CaptionsLang,
 			&i.PostCount,
 		); err != nil {
 			return nil, err
@@ -646,7 +662,7 @@ func (q *Queries) GetMediaByUser(ctx context.Context, arg GetMediaByUserParams) 
 }
 
 const getMediaForUpdate = `-- name: GetMediaForUpdate :one
-SELECT id, name, description, alt, media_path, user_id, created_at, changed_at, file_size, mime_type, width, height, duration, original_filename, metadata, variants, focal_x, focal_y, decorative FROM media
+SELECT id, name, description, alt, media_path, user_id, created_at, changed_at, file_size, mime_type, width, height, duration, original_filename, metadata, variants, focal_x, focal_y, decorative, captions_media_id, captions_lang FROM media
 WHERE id = $1 LIMIT 1
 FOR UPDATE
 `
@@ -676,6 +692,8 @@ func (q *Queries) GetMediaForUpdate(ctx context.Context, id int64) (Medium, erro
 		&i.FocalX,
 		&i.FocalY,
 		&i.Decorative,
+		&i.CaptionsMediaID,
+		&i.CaptionsLang,
 	)
 	return i, err
 }
@@ -694,7 +712,7 @@ func (q *Queries) GetMediaPostCount(ctx context.Context, mediaID int64) (int64, 
 
 const getPopularMedia = `-- name: GetPopularMedia :many
 SELECT 
-    m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata, m.variants, m.focal_x, m.focal_y, m.decorative,
+    m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata, m.variants, m.focal_x, m.focal_y, m.decorative, m.captions_media_id, m.captions_lang,
     COUNT(pm.post_id) as post_count
 FROM media m
 JOIN post_media pm ON m.id = pm.media_id
@@ -724,6 +742,8 @@ type GetPopularMediaRow struct {
 	FocalX           sql.NullFloat64 `json:"focal_x"`
 	FocalY           sql.NullFloat64 `json:"focal_y"`
 	Decorative       bool            `json:"decorative"`
+	CaptionsMediaID  sql.NullInt64   `json:"captions_media_id"`
+	CaptionsLang     string          `json:"captions_lang"`
 	PostCount        int64           `json:"post_count"`
 }
 
@@ -756,6 +776,8 @@ func (q *Queries) GetPopularMedia(ctx context.Context, limit int32) ([]GetPopula
 			&i.FocalX,
 			&i.FocalY,
 			&i.Decorative,
+			&i.CaptionsMediaID,
+			&i.CaptionsLang,
 			&i.PostCount,
 		); err != nil {
 			return nil, err
@@ -968,6 +990,77 @@ func (q *Queries) GetPostWithMedia(ctx context.Context, id int64) (GetPostWithMe
 		&i.Media,
 	)
 	return i, err
+}
+
+const getPostsByCaptionsMedia = `-- name: GetPostsByCaptionsMedia :many
+SELECT
+    p.id, p.title, p.description, p.user_id, p.username, p.url,
+    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,
+    pm.media_id AS video_id,
+    pm.blocks
+FROM media v
+JOIN post_media pm ON pm.media_id = v.id
+JOIN posts p ON p.id = pm.post_id
+WHERE v.captions_media_id = $1::bigint
+ORDER BY p.created_at DESC, p.id, pm.media_id
+`
+
+type GetPostsByCaptionsMediaRow struct {
+	ID          int64           `json:"id"`
+	Title       string          `json:"title"`
+	Description string          `json:"description"`
+	UserID      int64           `json:"user_id"`
+	Username    string          `json:"username"`
+	Url         string          `json:"url"`
+	PostType    string          `json:"post_type"`
+	PostStatus  string          `json:"post_status"`
+	PostParent  sql.NullInt64   `json:"post_parent"`
+	MenuOrder   int32           `json:"menu_order"`
+	CreatedAt   time.Time       `json:"created_at"`
+	ChangedAt   time.Time       `json:"changed_at"`
+	VideoID     int64           `json:"video_id"`
+	Blocks      json.RawMessage `json:"blocks"`
+}
+
+// "Used in" for a captions file (#507): it is in no post_media row itself, so these are
+// the posts using a video it captions, with that video's post_media blocks (the handler
+// keeps the video blocks: they are what render the <track>).
+func (q *Queries) GetPostsByCaptionsMedia(ctx context.Context, captionsMediaID int64) ([]GetPostsByCaptionsMediaRow, error) {
+	rows, err := q.db.QueryContext(ctx, getPostsByCaptionsMedia, captionsMediaID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetPostsByCaptionsMediaRow{}
+	for rows.Next() {
+		var i GetPostsByCaptionsMediaRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Description,
+			&i.UserID,
+			&i.Username,
+			&i.Url,
+			&i.PostType,
+			&i.PostStatus,
+			&i.PostParent,
+			&i.MenuOrder,
+			&i.CreatedAt,
+			&i.ChangedAt,
+			&i.VideoID,
+			&i.Blocks,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getPostsByMedia = `-- name: GetPostsByMedia :many
@@ -1208,7 +1301,7 @@ func (q *Queries) GetUserMediaCount(ctx context.Context, userID int64) (int64, e
 }
 
 const listImageMediaAfter = `-- name: ListImageMediaAfter :many
-SELECT id, name, description, alt, media_path, user_id, created_at, changed_at, file_size, mime_type, width, height, duration, original_filename, metadata, variants, focal_x, focal_y, decorative FROM media
+SELECT id, name, description, alt, media_path, user_id, created_at, changed_at, file_size, mime_type, width, height, duration, original_filename, metadata, variants, focal_x, focal_y, decorative, captions_media_id, captions_lang FROM media
 WHERE mime_type LIKE 'image/%' AND id > $1
   AND (
     NOT $2::boolean
@@ -1267,6 +1360,8 @@ func (q *Queries) ListImageMediaAfter(ctx context.Context, arg ListImageMediaAft
 			&i.FocalX,
 			&i.FocalY,
 			&i.Decorative,
+			&i.CaptionsMediaID,
+			&i.CaptionsLang,
 		); err != nil {
 			return nil, err
 		}
@@ -1283,7 +1378,7 @@ func (q *Queries) ListImageMediaAfter(ctx context.Context, arg ListImageMediaAft
 
 const listMedia = `-- name: ListMedia :many
 SELECT
-    m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata, m.variants, m.focal_x, m.focal_y, m.decorative,
+    m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata, m.variants, m.focal_x, m.focal_y, m.decorative, m.captions_media_id, m.captions_lang,
     COUNT(pm.post_id) as post_count,
     COUNT(DISTINCT pm.post_id) FILTER (WHERE p.post_status = 'published') as published_post_count
 FROM media m
@@ -1341,6 +1436,8 @@ type ListMediaRow struct {
 	FocalX             sql.NullFloat64 `json:"focal_x"`
 	FocalY             sql.NullFloat64 `json:"focal_y"`
 	Decorative         bool            `json:"decorative"`
+	CaptionsMediaID    sql.NullInt64   `json:"captions_media_id"`
+	CaptionsLang       string          `json:"captions_lang"`
 	PostCount          int64           `json:"post_count"`
 	PublishedPostCount int64           `json:"published_post_count"`
 }
@@ -1386,6 +1483,8 @@ func (q *Queries) ListMedia(ctx context.Context, arg ListMediaParams) ([]ListMed
 			&i.FocalX,
 			&i.FocalY,
 			&i.Decorative,
+			&i.CaptionsMediaID,
+			&i.CaptionsLang,
 			&i.PostCount,
 			&i.PublishedPostCount,
 		); err != nil {
@@ -1575,7 +1674,7 @@ SET
     variants = COALESCE($8::jsonb, '{}'::jsonb),
     changed_at = now()
 WHERE id = $9
-RETURNING id, name, description, alt, media_path, user_id, created_at, changed_at, file_size, mime_type, width, height, duration, original_filename, metadata, variants, focal_x, focal_y, decorative
+RETURNING id, name, description, alt, media_path, user_id, created_at, changed_at, file_size, mime_type, width, height, duration, original_filename, metadata, variants, focal_x, focal_y, decorative, captions_media_id, captions_lang
 `
 
 type ReplaceMediaFileParams struct {
@@ -1627,13 +1726,15 @@ func (q *Queries) ReplaceMediaFile(ctx context.Context, arg ReplaceMediaFilePara
 		&i.FocalX,
 		&i.FocalY,
 		&i.Decorative,
+		&i.CaptionsMediaID,
+		&i.CaptionsLang,
 	)
 	return i, err
 }
 
 const searchMediaByName = `-- name: SearchMediaByName :many
 SELECT 
-    m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata, m.variants, m.focal_x, m.focal_y, m.decorative,
+    m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata, m.variants, m.focal_x, m.focal_y, m.decorative, m.captions_media_id, m.captions_lang,
     COUNT(pm.post_id) as post_count
 FROM media m
 LEFT JOIN post_media pm ON m.id = pm.media_id
@@ -1687,6 +1788,8 @@ type SearchMediaByNameRow struct {
 	FocalX           sql.NullFloat64 `json:"focal_x"`
 	FocalY           sql.NullFloat64 `json:"focal_y"`
 	Decorative       bool            `json:"decorative"`
+	CaptionsMediaID  sql.NullInt64   `json:"captions_media_id"`
+	CaptionsLang     string          `json:"captions_lang"`
 	PostCount        int64           `json:"post_count"`
 }
 
@@ -1726,6 +1829,8 @@ func (q *Queries) SearchMediaByName(ctx context.Context, arg SearchMediaByNamePa
 			&i.FocalX,
 			&i.FocalY,
 			&i.Decorative,
+			&i.CaptionsMediaID,
+			&i.CaptionsLang,
 			&i.PostCount,
 		); err != nil {
 			return nil, err
@@ -1745,7 +1850,7 @@ const setMediaVariants = `-- name: SetMediaVariants :one
 UPDATE media
 SET variants = $1
 WHERE id = $2
-RETURNING id, name, description, alt, media_path, user_id, created_at, changed_at, file_size, mime_type, width, height, duration, original_filename, metadata, variants, focal_x, focal_y, decorative
+RETURNING id, name, description, alt, media_path, user_id, created_at, changed_at, file_size, mime_type, width, height, duration, original_filename, metadata, variants, focal_x, focal_y, decorative, captions_media_id, captions_lang
 `
 
 type SetMediaVariantsParams struct {
@@ -1778,6 +1883,8 @@ func (q *Queries) SetMediaVariants(ctx context.Context, arg SetMediaVariantsPara
 		&i.FocalX,
 		&i.FocalY,
 		&i.Decorative,
+		&i.CaptionsMediaID,
+		&i.CaptionsLang,
 	)
 	return i, err
 }
@@ -1842,7 +1949,7 @@ SET
     original_filename = COALESCE($11, original_filename),
     changed_at = now()
 WHERE id = $1
-RETURNING id, name, description, alt, media_path, user_id, created_at, changed_at, file_size, mime_type, width, height, duration, original_filename, metadata, variants, focal_x, focal_y, decorative
+RETURNING id, name, description, alt, media_path, user_id, created_at, changed_at, file_size, mime_type, width, height, duration, original_filename, metadata, variants, focal_x, focal_y, decorative, captions_media_id, captions_lang
 `
 
 type UpdateMediaParams struct {
@@ -1894,6 +2001,8 @@ func (q *Queries) UpdateMedia(ctx context.Context, arg UpdateMediaParams) (Mediu
 		&i.FocalX,
 		&i.FocalY,
 		&i.Decorative,
+		&i.CaptionsMediaID,
+		&i.CaptionsLang,
 	)
 	return i, err
 }
@@ -1909,20 +2018,27 @@ SET
     -- focal_y, where NULL clears it.
     focal_x = CASE WHEN $5::boolean THEN $6::double precision ELSE focal_x END,
     focal_y = CASE WHEN $5::boolean THEN $7::double precision ELSE focal_y END,
+    -- A video's captions (#507): set_captions false keeps the file; true writes
+    -- captions_media_id, where NULL removes them. captions_lang NULL keeps the language.
+    captions_media_id = CASE WHEN $8::boolean THEN $9::bigint ELSE captions_media_id END,
+    captions_lang = COALESCE($10::text, captions_lang),
     changed_at = now()
-WHERE id = $8
-RETURNING id, name, description, alt, media_path, user_id, created_at, changed_at, file_size, mime_type, width, height, duration, original_filename, metadata, variants, focal_x, focal_y, decorative
+WHERE id = $11
+RETURNING id, name, description, alt, media_path, user_id, created_at, changed_at, file_size, mime_type, width, height, duration, original_filename, metadata, variants, focal_x, focal_y, decorative, captions_media_id, captions_lang
 `
 
 type UpdateMediaMetadataParams struct {
-	Name          sql.NullString  `json:"name"`
-	Description   sql.NullString  `json:"description"`
-	Alt           sql.NullString  `json:"alt"`
-	Decorative    sql.NullBool    `json:"decorative"`
-	SetFocalPoint bool            `json:"set_focal_point"`
-	FocalX        sql.NullFloat64 `json:"focal_x"`
-	FocalY        sql.NullFloat64 `json:"focal_y"`
-	ID            int64           `json:"id"`
+	Name            sql.NullString  `json:"name"`
+	Description     sql.NullString  `json:"description"`
+	Alt             sql.NullString  `json:"alt"`
+	Decorative      sql.NullBool    `json:"decorative"`
+	SetFocalPoint   bool            `json:"set_focal_point"`
+	FocalX          sql.NullFloat64 `json:"focal_x"`
+	FocalY          sql.NullFloat64 `json:"focal_y"`
+	SetCaptions     bool            `json:"set_captions"`
+	CaptionsMediaID sql.NullInt64   `json:"captions_media_id"`
+	CaptionsLang    sql.NullString  `json:"captions_lang"`
+	ID              int64           `json:"id"`
 }
 
 // Metadata-only update used by PUT /media/:id. The file columns (media_path,
@@ -1938,6 +2054,9 @@ func (q *Queries) UpdateMediaMetadata(ctx context.Context, arg UpdateMediaMetada
 		arg.SetFocalPoint,
 		arg.FocalX,
 		arg.FocalY,
+		arg.SetCaptions,
+		arg.CaptionsMediaID,
+		arg.CaptionsLang,
 		arg.ID,
 	)
 	var i Medium
@@ -1961,6 +2080,8 @@ func (q *Queries) UpdateMediaMetadata(ctx context.Context, arg UpdateMediaMetada
 		&i.FocalX,
 		&i.FocalY,
 		&i.Decorative,
+		&i.CaptionsMediaID,
+		&i.CaptionsLang,
 	)
 	return i, err
 }

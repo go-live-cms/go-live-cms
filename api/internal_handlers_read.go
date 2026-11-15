@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+
+	db "github.com/go-live-cms/go-live-cms/db/sqlc"
 )
 
 // getInternalDocAccess tells the collab WebSocket server whether a user may
@@ -27,7 +29,8 @@ import (
 //   - id: User's database primary key (the ticket's user_id claim)
 //
 // Query parameters:
-//   - doc: The collab document name, "post-<id>" (the ticket's doc claim)
+//   - doc: The collab document name, "post-<id>" or "template-<id>" (#490; the
+//     ticket's doc claim)
 //   - issued_at: The ticket's iat as Unix seconds
 //
 // Authentication: Shared secret (requireInternalSecret), no user token.
@@ -38,7 +41,7 @@ import (
 //   - 401 Unauthorized: Missing or wrong shared secret
 //   - 403 Forbidden: The ticket predates the user's latest password change, or
 //     the user may not read the post (canReadPost, #393; e.g. unpublished since)
-//   - 404 Not Found: User or post does not exist
+//   - 404 Not Found: User, post or template does not exist
 //   - 410 Gone: The post is in the trash (#327), {"code": "post_trashed"}
 //   - 500 Internal Server Error: Database query failure
 func (server *Server) getInternalDocAccess(c *gin.Context) {
@@ -48,7 +51,7 @@ func (server *Server) getInternalDocAccess(c *gin.Context) {
 		return
 	}
 
-	postID, ok := postIDFromCollabDoc(c.Query("doc"))
+	kind, docID, ok := collabDocRef(c.Query("doc"))
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid doc"})
 		return
@@ -74,6 +77,12 @@ func (server *Server) getInternalDocAccess(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "token was issued before the latest password change"})
 		return
 	}
+
+	if kind == collabDocTemplate {
+		server.templateDocAccess(c, user, docID)
+		return
+	}
+	postID := docID
 
 	// Everyone's lookup reads the post now, moderators' too: nobody may open a
 	// post in the trash (#327).
@@ -115,4 +124,21 @@ func (server *Server) getInternalDocAccess(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"role": user.Role, "can_edit": canEdit})
+}
+
+// templateDocAccess answers the access lookup for template-<id> (#490, design 7.2):
+// templates and parts are admins' only, so only an admin gets can_edit. Everyone else
+// gets can_edit false with their role, which the collab server's kind-aware accessMode
+// turns into a denial at connect and a close (access-revoked) on a re-check, never a
+// read-only view. A template that was deleted is a 404, like a deleted post.
+func (server *Server) templateDocAccess(c *gin.Context, user db.User, templateID int64) {
+	if _, err := server.store.GetSiteTemplate(c.Request.Context(), templateID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "template not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get template"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"role": user.Role, "can_edit": isSiteAdmin(user)})
 }

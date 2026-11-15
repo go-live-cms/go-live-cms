@@ -31,7 +31,8 @@ import "@gl-admin/assets/styles/pages/media.scss"
 // The board's "1.2 GB" total has no API (the count line shows files only).
 
 const PAGE_SIZE = 24
-const ACCEPT = "image/*,video/*,audio/*,.pdf,.doc,.docx,.txt"
+// .vtt: a video's captions (#507).
+const ACCEPT = "image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.vtt"
 
 export default function Media() {
   const user = useAuthUser()

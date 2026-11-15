@@ -14,6 +14,8 @@ import (
 	"math"
 	"regexp"
 	"sort"
+
+	"github.com/go-live-cms/go-live-cms/api/sitedesign"
 )
 
 // blockDocKind is what a block doc is (design 4.2): a post's body, a block template or a
@@ -49,8 +51,9 @@ const (
 var (
 	// A theme menu location's name (`menuLocations`, /public/menus/:location).
 	menuLocationPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`)
-	// A template part's slug, as site_templates.slug's CHECK allows it.
-	templatePartSlugPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,79}$`)
+	// A template part's slug, as site_templates.slug's CHECK allows it (one rule for both,
+	// #490).
+	templatePartSlugPattern = sitedesign.SlugPattern
 )
 
 // sanitizeSiteBlockAttrs keeps a site block's own attrs, each valid, defaults left out.

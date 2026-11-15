@@ -270,17 +270,6 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 		}
 		server.themeTokens = tokens
 
-		themesPath := filepath.Join("web", "themes")
-		discoveredThemes, err := ScanThemesDirectory(themesPath)
-		if err != nil {
-			server.logger.Warn("failed to scan themes directory", "path", themesPath, "error", err)
-		} else {
-			server.logger.Info("scanned themes directory", "path", themesPath, "themes", len(discoveredThemes))
-			if err := server.SyncThemesToDatabase(discoveredThemes); err != nil {
-				server.logger.Warn("failed to sync themes", "error", err)
-			}
-		}
-
 		// Plugins (#455): registered like themes, but never deleted (themes_scanner.go).
 		// Without the directory nothing is synced, so nothing is marked missing.
 		discoveredPlugins, err := ScanPluginsDirectory(filepath.FromSlash(pluginsPath))
@@ -296,6 +285,21 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 			merged, pluginBlocks := mergePluginBlockSpecs(server.themeBlocks, discoveredPlugins)
 			server.themeBlocks = merged
 			server.logger.Info("loaded plugin blocks", "plugin_blocks", pluginBlocks)
+		}
+
+		// Themes after plugins: a theme's shipped block templates (#490) are validated
+		// against every installed block, theme and plugin blocks alike, before the sync
+		// stores them in the theme's config.
+		themesPath := filepath.Join("web", "themes")
+		discoveredThemes, err := ScanThemesDirectory(themesPath)
+		if err != nil {
+			server.logger.Warn("failed to scan themes directory", "path", themesPath, "error", err)
+		} else {
+			server.logger.Info("scanned themes directory", "path", themesPath, "themes", len(discoveredThemes))
+			applyThemeBlockTemplates(discoveredThemes, server.themeBlocks)
+			if err := server.SyncThemesToDatabase(discoveredThemes); err != nil {
+				server.logger.Warn("failed to sync themes", "error", err)
+			}
 		}
 	}
 

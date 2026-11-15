@@ -496,9 +496,9 @@ var publicCachePurgeRoutes = map[string]string{
 	"PUT /api/v1/posts/:id/taxonomy-terms/:term_id":    "term links and counts",
 	"DELETE /api/v1/posts/:id/taxonomy-terms/:term_id": "term links and counts",
 	// Media shown on published pages (alt, focal point, file, missing).
-	"PUT /api/v1/media/:id":          "alt text, decorative, focal point",
-	"POST /api/v1/media/:id/replace": "the file and its variants",
-	"DELETE /api/v1/media/:id":       "published blocks leave it out",
+	"PUT /api/v1/media/:id":          "alt text, decorative, focal point, a video's captions",
+	"POST /api/v1/media/:id/replace": "the file and its variants (a captions file too)",
+	"DELETE /api/v1/media/:id":       "published blocks leave it out (and a deleted captions file)",
 	// Site config.
 	"PUT /api/v1/settings":                   "title, tagline, language, front page, URL structure",
 	"PUT /api/v1/extension-settings":         "theme settings",
@@ -554,6 +554,7 @@ var publicCacheNoPurgeRoutes = map[string]string{
 	"POST /api/v1/posts/:id/duplicate":                             "a new draft",
 	"PUT /api/v1/site-design/global-styles":                        "the styles draft is never public; publish purges",
 	"POST /api/v1/site-design/preview":                             "a preview token; previews are never cached",
+	"POST /api/v1/site-design/templates":                           "a template's working copy is never public; publish purges (#492)",
 	"POST /api/v1/post-templates":                                  "templates are never public",
 	"PUT /api/v1/post-templates/:id":                               "templates are never public",
 	"DELETE /api/v1/post-templates/:id":                            "templates are never public",
@@ -588,4 +589,6 @@ var publicCacheNoPurgeRoutes = map[string]string{
 	"DELETE /api/v1/redirects/:id":                                 "redirect lookups aren't cached; the web caches its own 301s",
 	// Internal listener.
 	"PUT /internal/posts/:id/collab": "the working copy; publish purges",
+	// A template's or part's working copy (#490): never public; publishing the design purges (#492).
+	"PUT /internal/site-templates/:id/collab": "a template's working copy; publish purges",
 }

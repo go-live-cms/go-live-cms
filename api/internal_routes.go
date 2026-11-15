@@ -30,11 +30,13 @@ import (
 // newInternalRouter builds the internal engine.
 //
 // Route Structure:
-//   - GET /internal/users/:id/access?doc=post-<id>&issued_at=<unix seconds>
+//   - GET /internal/users/:id/access?doc=post-<id>|template-<id>&issued_at=<unix seconds>
 //     (WS per-connection document access check, #135)
 //   - GET /internal/posts/:id/collab, PUT /internal/posts/:id/collab
 //     (Hocuspocus load/store of block_doc + Yjs state, #206/#280;
 //     internal_handlers_collab.go)
+//   - GET /internal/site-templates/:id/collab, PUT /internal/site-templates/:id/collab
+//     (the template-<id> document kind, #490; internal_handlers_site_templates.go)
 //   - GET /metrics (Prometheus text, public router's request counts and
 //     latency; metrics.go). Unauthenticated: the listener being unreachable
 //     from the internet is what restricts it.
@@ -60,6 +62,9 @@ func (server *Server) newInternalRouter() *gin.Engine {
 	internal.GET("/users/:id/access", server.getInternalDocAccess)  // GET /internal/users/123/access?doc=post-7&issued_at=1760000000
 	internal.GET("/posts/:id/collab", server.getInternalPostCollab) // collab server load (#280)
 	internal.PUT("/posts/:id/collab", server.putInternalPostCollab) // collab server store (#280; hocuspocus only)
+	// The template-<id> document kind (#490): templates and parts, same contract.
+	internal.GET("/site-templates/:id/collab", server.getInternalSiteTemplateCollab)
+	internal.PUT("/site-templates/:id/collab", server.putInternalSiteTemplateCollab)
 
 	return router
 }

@@ -16,10 +16,10 @@ rollback. Guards, reseeding and verification: `docs/operations/collab-cutover.md
 
 | File | What |
 |------|------|
-| `access.ts` | `verifyTicket`, `TicketReplayGuard`, `ticketIdentity`, `fetchDocAccess`, `isCollabDocName`, plus `accessMode` (write / read / deny). |
+| `access.ts` | `verifyTicket`, `TicketReplayGuard`, `ticketIdentity`, `fetchDocAccess`, `isCollabDocName` / `docKind` (`post-<id>`, `template-<id>`), plus the kind-aware `accessMode` / `accessModeFor` (write / read / deny). |
 | `auth.ts` | `onAuthenticate` (`createAuthenticate`, deps injected). |
 | `recheck.ts` | `createAccessRecheck`: periodic access re-check of open connections (#313). |
-| `api.ts` | Client for the API's internal listener (#280 contract). |
+| `api.ts` | Client for the API's internal listener (#280 contract): posts, and templates and parts (#490). |
 | `load.ts` | `onLoadDocument`: restore stored state, or seed from `block_doc`. |
 | `store.ts` | `onStoreDocument` pipeline (`prepareStore`). |
 | `blockEdits.ts` | The block change tracker (#328): who changed which block, sent with stores that write `block_doc`. |
@@ -55,6 +55,37 @@ validated by the store like theme blocks; `collab_listening` logs `plugin_blocks
 reads which plugins are enabled. Details:
 `gl-admin/lib/collaboration/CLAUDE.md`, "Theme blocks".
 
+## Document kinds (#490)
+
+Two kinds of document on one server, one schema and one fingerprint (design
+`docs/design/theme-builder.md` 7.2-7.4): `post-<id>` (a post's body) and `template-<id>` (a
+block template or a template part: both are rows of `site_templates`, so they share the prefix).
+`isCollabDocName` accepts both, `docKind(name)` returns `{kind, id}`, and the API's
+`collabDocNamePattern` (`api/collab_tickets_utils.go`) must match. What the kind changes:
+- **API client:** a template loads and stores through `GET/PUT /internal/site-templates/:id/collab`,
+  the #280 contract unchanged plus `doc_kind` (`template` / `part`) on the GET. A record without a
+  known `doc_kind` fails the load (`getTemplateCollab`), never stores under some default kind.
+- **Access (admins only):** `accessMode(access, kind)` gives a template `write` or nothing:
+  `can_edit` false (the API's `templateDocAccess`: only an admin edits) is **denied at connect**
+  (`permission-denied`) and **closed with `access-revoked` on a re-check** (an admin demoted while
+  connected), never a read-only view or `demoted`. Trash (`post-trashed`) never applies. An API outage past
+  the grace period doesn't make a template read-only (`unverified`) either: its connections close with
+  `access-unavailable` (4503), which the client treats as an ordinary close, reconnecting and retrying its
+  auth with backoff until the API answers, its unsynced edits kept.
+- **Store:** the same pipeline, with `validateBlockDoc(doc, { kind })` (`StoreInput.kind`: `post`, or the
+  template's `template` / `part`). A part holding a `template_part` is `kept-invalid`; the same block in
+  a template stores. **No block change tracker** (`Session.tracker` is null, design 7.2): no `block_edits` are
+  sent (`putTemplateCollab` strips them, the API refuses them).
+- **Load and seed:** the same `loadIntoDoc` (rule 11; #453's reseed of uninstalled extension blocks too), the
+  same epoch and revision guards (rule 12): a `block_doc` written around the server reseeds under a new epoch.
+- **Flush:** `POST /internal/documents/template-<id>/flush` is the existing route; the API's
+  `flushCollabTemplate` calls it (publish, #492). Re-checks by user (`POST /internal/users/:id/recheck`)
+  cover template connections too.
+- Tests: `access.test.ts`, `auth.test.ts`, `recheck.test.ts`, `pipeline.test.ts` (kinds, the template
+  client), `process.test.ts` (the bundle on `template-<id>`: admins only, kept-invalid, flush), and the relay's
+  `gl-admin/lib/collaboration/templateDocs.hocuspocus.test.ts`. `FakeCollabApi` has `templates` /
+  `addTemplate` / `writeAroundTemplate` / `templatePuts`.
+
 Tests: `npx vitest run --project collab-server` (from `web/`; plain Node env).
 `testkit.ts` has signed tickets, `FakeCollabApi` (the #280 contract in memory, and over
 HTTP for the process test; users can be demoted, deleted or given a `passwordChangedAt`),
@@ -66,7 +97,7 @@ Same order and rules the old y-websocket server had (history: #216, #223, #233, 
 The ticket arrives in Hocuspocus's first **auth message**, not the URL, so no proxy log
 ever sees it.
 
-doc name (`isCollabDocName`) → ticket present → `verifyTicket` (sig, iss, aud
+doc name (`isCollabDocName`: `post-<id>` or `template-<id>`) → ticket present → `verifyTicket` (sig, iss, aud
 `golive.admin-ws`, `ws_ticket`, exp, `doc === documentName`) → **burn the jti**
 (`TicketReplayGuard`, before the lookup) → `ticketIdentity` → **schema fingerprint** (#416)
 → `fetchDocAccess` (`GET /internal/users/:id/access`, 3s timeout, `X-Request-ID`) → mode →
@@ -87,7 +118,7 @@ epoch check.
   the reason and keeps retrying with backoff (≤30s), each refused (`ws_deny`,
   `client_schema: "missing"`) until it is reloaded or closed: noisy, never a write.
 
-- **Mode** (`accessMode`): `can_edit: true` (admins, editors, a contributor on their own
+- **Mode** (`accessModeFor`, by the doc's kind; a template is write or denied, see Document kinds): `can_edit: true` (admins, editors, a contributor on their own
   post, #135, or with an edit access grant on a published post, #321) → read-write. Any other content role (`admin`/`editor`/`contributor`,
   `READ_ROLES`) → **`connectionConfig.readOnly = true`**: a live read-only view;
   Hocuspocus drops that connection's updates. Anything else, a 403/404 from the API, or
@@ -116,6 +147,8 @@ differs, and the API compares it with the password change alone).
   #135) → **`connection.readOnly = true`** (Hocuspocus drops its updates from then on) and
   `sendStateless` `{"type":"access","mode":"read","reason":"demoted"}`. Promoted again →
   read-write, `reason:"restored"`.
+  **Not on a template (#490):** there `can_edit` false has no mode, so an admin demoted while connected is
+  closed with `access-revoked` (below), never made read-only.
 - 403/404 (user or post deleted, ticket predates the password change) or no content role
   → `connection.close` with reason **`access-revoked`** (`ACCESS_REVOKED`); the client
   shows "session ended, sign in again" and never reconnects.
@@ -156,7 +189,8 @@ differs, and the API compares it with the password change alone).
 
 ## Load (`load.ts`) and the epoch
 
-`GET /internal/posts/:id/collab` → `{block_doc, block_revision, ydoc_state?, epoch?}`.
+`GET /internal/posts/:id/collab` → `{block_doc, block_revision, ydoc_state?, epoch?}` (a template:
+`GET /internal/site-templates/:id/collab`, plus `doc_kind`).
 - Stored state at the post's current revision → `Y.applyUpdate` it. The API omits stale
   state; if it also sends `ydoc_block_revision`, the server checks the match itself.
   **Unless it needs a reseed (#453):** the state goes into a scratch `Y.Doc` first, and a

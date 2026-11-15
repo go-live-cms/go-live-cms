@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
 import AltTextField from "@gl-admin/components/media/AltTextField"
+import CaptionsField from "@gl-admin/components/media/CaptionsField"
 import FocalPointPicker, { FocalCropPreviews, formatFocalPoint } from "@gl-admin/components/media/FocalPointPicker"
 import { KindIcon } from "@gl-admin/components/media/MediaCard"
 import UsedIn, { useUsedIn } from "@gl-admin/components/media/UsedIn"
@@ -17,7 +18,9 @@ import { errorMessage } from "@gl-admin/lib/api/errors"
 import { formatDate } from "@gl-admin/utils/formatting"
 import {
   altTextValue,
+  canHaveCaptions,
   formatDimensions,
+  isCaptionsFile,
   formatFileSize,
   formatTag,
   hasAltText,
@@ -236,7 +239,8 @@ export default function MediaDetail() {
               <input
                 ref={replaceInput}
                 type="file"
-                accept={media.mime_type || undefined}
+                // A .vtt has no registered type on some systems, so name the extension too (#507).
+                accept={isCaptionsFile(media) ? "text/vtt,.vtt" : media.mime_type || undefined}
                 onChange={(e) => {
                   const file = e.currentTarget.files?.[0]
                   e.currentTarget.value = "" // so picking the same file again still fires onChange
@@ -309,6 +313,14 @@ export default function MediaDetail() {
               <dt>Description</dt>
               <dd>{media.description || "None"}</dd>
             </dl>
+          )}
+
+          {canHaveCaptions(media) && (
+            <CaptionsField
+              media={media}
+              canWrite={canWrite}
+              onUpdated={(saved) => setMedia((prev) => (prev ? { ...prev, captions_media_id: saved.captions_media_id, captions_lang: saved.captions_lang, changed_at: saved.changed_at } : prev))}
+            />
           )}
 
           <hr className="gl-media-detail__rule" />

@@ -29,6 +29,9 @@ type DiscoveredTheme struct {
 	Config      map[string]interface{}
 	Path        string
 	PostTypes   []DiscoveredPostType
+	// BlockTemplateFiles are its templates/ and parts/ files (#490), read by the scan and
+	// validated by applyThemeBlockTemplates once the block manifests are loaded.
+	BlockTemplateFiles []themeBlockTemplateFile `json:"-"`
 }
 
 // DiscoveredPostType represents a post type declared in a theme's config
@@ -103,6 +106,8 @@ func ScanThemesDirectory(themesPath string) ([]DiscoveredTheme, error) {
 			slog.Warn("skipping theme: failed to parse theme config", "theme", entry.Name(), "error", err)
 			continue
 		}
+
+		theme.BlockTemplateFiles = readThemeBlockTemplates(entry.Name(), themePath)
 
 		themes = append(themes, theme)
 	}

@@ -42,3 +42,30 @@ export function downloadName(media: BlockMedia): string | undefined {
   const name = (media.filename ?? "").replace(/[\p{Cc}/\\]/gu, "").trim()
   return name || undefined
 }
+
+export interface BlockTrack {
+  /** The WebVTT file's URL, always under /uploads. */
+  url: string
+  /** The track's srclang; undefined when the API sent none or an odd one. */
+  lang?: string
+  /** The track's label in the player's captions menu (never empty). */
+  label: string
+}
+
+// A BCP-47 tag in the shape the API accepts (`captionsLangPattern`, #507).
+const TRACK_LANG = /^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*$/
+
+/**
+ * A video's captions track (#507), from its block media entry's `captions` (the API adds
+ * them from the media item's WebVTT file), or null when there are none or the URL isn't a
+ * file under /uploads.
+ */
+export function blockCaptionsFor(media: BlockMedia): BlockTrack | null {
+  const captions = media.captions
+  if (!captions || typeof captions !== "object") return null
+  const url = uploadsUrl(captions.url)
+  if (!url) return null
+  const lang = typeof captions.lang === "string" && TRACK_LANG.test(captions.lang) ? captions.lang : undefined
+  const label = (typeof captions.label === "string" ? captions.label.trim() : "") || lang || "Captions"
+  return { url, lang, label }
+}

@@ -14,6 +14,9 @@ func (server *Server) registerSiteDesignRoutes(router *gin.RouterGroup) {
 		design.POST("/publish", server.publishSiteDesign)
 		// A design preview token (#486) for the Astro server's preview cookie.
 		design.POST("/preview", server.createDesignPreview)
+		// Templates and parts (#490): Customize or New template. Edited through the
+		// collab server (template-<id>), never by REST.
+		design.POST("/templates", server.createSiteTemplate)
 	}
 	// The named exception to requireSiteAdmin (design 12): the bearer is a design preview
 	// token, and the handler re-checks that its user is still an admin on every read.

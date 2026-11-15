@@ -273,6 +273,12 @@ interface BlockComponentProps {
   `download` = the uploaded file's name. Nothing renders for a block with no file, a media the
   API lists in `media_missing` (deleted: left out with its caption, the image too), or one with
   no entry (the lookup failed; an image then renders from its own `src`).
+  **Captions (#507):** a video's entry may carry `captions: {url, lang, label}` (the API adds
+  them from the media item's WebVTT file); `PlayableBlock` then renders `<track kind="captions"
+  src srclang label default>` first inside the `<video>` (`utils/mediaFile.ts`
+  `blockCaptionsFor`: the URL only under `/uploads/`, an odd `lang` dropped, the label falling
+  back to the language, then "Captions"). No captions, or a URL elsewhere: no track. Audio never
+  gets one. Same origin, so no `crossorigin`.
 - **Embeds (#425, `embed/`, "Published · media & embeds"):** `figure.embed-block > div.embed-frame` (`.is-card`
   for X, `.is-compact` for SoundCloud and Spotify) with `.embed-provider`, `p.embed-title`, the Load
   button (`[data-embed-load]`, `.btn.btn-primary`, X's `.btn-secondary`) and `.embed-note` ("Loading it

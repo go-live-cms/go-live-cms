@@ -113,6 +113,9 @@ export interface Media {
   decorative?: boolean
   // GET /media only: how many of the posts using it are published.
   published_post_count?: number
+  // A video's captions (#507): the WebVTT media item (null for none) and its language.
+  captions_media_id?: number | null
+  captions_lang?: string
 }
 
 export interface Post {

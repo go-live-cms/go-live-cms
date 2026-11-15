@@ -274,11 +274,6 @@ func TestHTMLSnippetRoutesRequireRole(t *testing.T) {
 				addAuthorization(t, request, server.tokenMaker, authorizationTypeBearer, caller.ID, caller.Username, time.Minute)
 				recorder = httptest.NewRecorder()
 				server.router.ServeHTTP(recorder, request)
-				if strings.HasPrefix(siteDesignRoutes[key], "previewTokenOnly") {
-					// An access token, whoever's, is never a preview token.
-					require.Equal(t, http.StatusUnauthorized, recorder.Code, "%s answers a %s's access token", key, caller.Role)
-					continue
-				}
 				require.Equal(t, http.StatusForbidden, recorder.Code, "%s answers a %s", key, caller.Role)
 			}
 		})
@@ -300,6 +295,7 @@ var siteDesignRoutes = map[string]string{
 	"POST /api/v1/site-design/publish":      "requireSiteAdmin",
 	"POST /api/v1/site-design/preview":      "requireSiteAdmin: mints a preview token",
 	"GET /api/v1/site-design/draft":         "previewTokenOnly: the draft, for a preview token whose user is still an admin",
+	"POST /api/v1/site-design/templates":    "requireSiteAdmin: templates and parts are admins' only (#490)",
 }
 
 func TestSiteDesignRoutesRequireAdmin(t *testing.T) {
