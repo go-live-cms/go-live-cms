@@ -617,7 +617,32 @@ kept so references in code stay valid.
     views, paste), `extensions/SiteBlocks.collab.test.tsx` (a client writing one into a post's doc on the relay: every
     peer, the stored doc, nothing rendered; two people on one block's settings; a restart),
     `src/components/blocks/siteBlocks.test.tsx`, `src/lib/siteRenderContext.test.ts`, `themes/default/siteBlocks.test.ts`,
-    Go `post_blocks_site_test.go`.- **Inline nodes (#320, `components/editor/extensions/InlineNodes.ts`, rules in
+    Go `post_blocks_site_test.go`.
+- **Site blocks II (#489, the same files, design `docs/design/theme-builder.md` 4.1–4.5).** Ten more flow atoms
+  (`queryTitle`, `termDescription`, `postTitle`, `postContent`, `postExcerpt`, `postFeaturedImage`, `postDate`,
+  `postByline`, `postTerms`, `postNavigation`), the query loop's pager `queryPagination` (an atom that, like a
+  `footnote`, lives only in its container: `isNestedOnlyType`) and three containers, rows of the nesting table:
+  `query` (top level or in a group; holds `postTemplate`, `queryPagination`, `queryNoResults`), `postTemplate` and
+  `queryNoResults` (only in a query; flow, columns, details and media & text, **never a group or a query**, so the
+  table stays acyclic). `SITE_FLOW_BLOCK_TYPES` / `SITE_ATOM_TYPES` / `SITE_CONTAINER_TYPES` split them where it
+  matters (flow, the placeholder views, the frames `SiteContainerView`); the bridge's site branch builds a site
+  container's children like any container's.
+  - **`termIds` is a comma list on the node, an array in Block Spec** (`normalizeTermIds` both ways, the API too): a
+    node attr must be a scalar, or y-tiptap would rewrite the element on every sync.
+  - **Paste:** no parse rules, and the query loop's containers are never `data-pm-slice` contexts
+    (`SLICE_CONTEXT_TYPES`), so a slice copied from inside a post template pastes as its blocks, never a query.
+  - **Where they may sit:** `post_content` never in a part, never inside a `post_template` at any depth, at most
+    one per template (`siteBlockKindIssues`, Go `checkSiteBlockPlacement`, the vectors). Like #488's rules these are
+    the store's, not the schema's: in a template two people can still put two in, and that store is `kept-invalid`
+    (the Yjs state stored) until one is removed. In a post nothing is refused.
+  - **Stale clients:** a bundle from before #489 lacks the fourteen nodes (and a narrower doc, group and flow
+    containers); the fingerprint guard (#416) refuses it (`schemaFingerprint.test.ts`), so open tabs reload once.
+  - Tests: `extensions/QueryLoop.test.ts` (schema, bridge, drops and synthesized ids, views, paste),
+    `ui/QuerySettings.test.tsx`, `SiteBlocks.collab.test.tsx` (a whole query loop written into a post's doc on the
+    relay: every peer, the stored doc, nothing rendered, a restart), `src/components/blocks/queryLoop.test.tsx`,
+    `src/lib/siteRenderContext.test.ts`, `themes/default/siteBlocks.test.ts`, the vectors in `nestingVectors.json`
+    and `siteBlockVectors.json`, Go `post_blocks_site_test.go`, `public_posts_query*_test.go`.
+- **Inline nodes (#320, `components/editor/extensions/InlineNodes.ts`, rules in
   `blocks-spec/inlineNodes.ts`): `mention` {userId, label}, `contentLink` {postId, label},
   `dateChip` {date, time, reminder}.** Inline **atoms** in the `inline` group, so they live in a
   text block's `pm` (paragraph, heading, list item, quote, pull quote, table cell; never a

@@ -125,6 +125,21 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
       schema.navigation,
       schema.search,
       schema.templatePart,
+      // #489: the query loop, the query title, the term description and the post blocks.
+      schema.queryTitle,
+      schema.termDescription,
+      schema.postTitle,
+      schema.postContent,
+      schema.postExcerpt,
+      schema.postFeaturedImage,
+      schema.postDate,
+      schema.postByline,
+      schema.postTerms,
+      schema.postNavigation,
+      schema.queryPagination,
+      schema.query,
+      schema.postTemplate,
+      schema.queryNoResults,
       schema.siteBlockCommands,
       schema.blockId,
       // #488: which kind of document this editor holds (a post until the Site editor, #493); no schema.
@@ -175,6 +190,18 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
             case "navigation":
             case "search":
             case "templatePart":
+            // #489: the site atoms have no text of their own.
+            case "queryTitle":
+            case "termDescription":
+            case "postTitle":
+            case "postContent":
+            case "postExcerpt":
+            case "postFeaturedImage":
+            case "postDate":
+            case "postByline":
+            case "postTerms":
+            case "postNavigation":
+            case "queryPagination":
               return ""
             case "imageCaption":
             case "tableCaption":

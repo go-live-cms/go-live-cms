@@ -17,10 +17,21 @@ import { EMBED_PROVIDERS, isValidEmbedRef, normalizeEmbedTitle, type EmbedProvid
 import { isSnippetId } from "./customHtml"
 import {
   isBlockDocKind,
+  isContentName,
   isMenuId,
   isMenuLocation,
+  isPositiveId,
   isTemplatePartSlug,
   normalizeSiteText,
+  normalizeTermIds,
+  POST_EXCERPT_DEFAULT_WORDS,
+  POST_EXCERPT_MAX_WORDS,
+  POST_EXCERPT_MIN_WORDS,
+  POST_TERMS_DEFAULT_TAXONOMY,
+  QUERY_DEFAULT_PER_PAGE,
+  QUERY_DEFAULT_POST_TYPE,
+  QUERY_MAX_PER_PAGE,
+  QUERY_MIN_PER_PAGE,
   SEARCH_BUTTON_MAX_LENGTH,
   SEARCH_LABEL_MAX_LENGTH,
   SEARCH_PLACEHOLDER_MAX_LENGTH,
@@ -30,6 +41,7 @@ import {
   SITE_LOGO_MIN_WIDTH,
   type BlockDocKind,
   type NavigationAttrs,
+  type QueryAttrs,
   type SearchAttrs,
   type SiteLogoAttrs,
   type SiteTitleAttrs,
@@ -98,6 +110,21 @@ export type KnownBlockType =
   | "navigation"
   | "search"
   | "template_part"
+  // #489
+  | "query_title"
+  | "term_description"
+  | "post_title"
+  | "post_content"
+  | "post_excerpt"
+  | "post_featured_image"
+  | "post_date"
+  | "post_byline"
+  | "post_terms"
+  | "post_navigation"
+  | "query_pagination"
+  | "query"
+  | "post_template"
+  | "query_no_results"
 
 /** BlockType allows known types + arbitrary custom types from themes */
 export type BlockType = KnownBlockType | (string & {})
@@ -708,6 +735,10 @@ export type SiteLogoBlock = BaseBlock<"site_logo", SiteLogoAttrs>
 export type NavigationBlock = BaseBlock<"navigation", NavigationAttrs>
 export type SearchBlock = BaseBlock<"search", SearchAttrs>
 export type TemplatePartBlock = BaseBlock<"template_part", TemplatePartAttrs>
+/** #489: the query loop's containers hold their blocks by id, like a group. */
+export type QueryBlock = BaseBlock<"query", QueryAttrs>
+export type PostTemplateBlock = BaseBlock<"post_template", Record<string, never>>
+export type QueryNoResultsBlock = BaseBlock<"query_no_results", Record<string, never>>
 
 export interface BlockDocV1 {
   doc_version: 1 // spec version
@@ -1128,6 +1159,79 @@ export const zTemplatePart = zBase.extend({
   attrs: z.object({ slug: z.string().refine(isTemplatePartSlug, "is not a part slug").optional() }).strict(),
 })
 
+// Site blocks II (#489, siteBlocks.ts): the same rule, every attr as `normalizeSiteBlockAttrs`
+// writes it. The query loop's containers hold their children by id (the nesting table's
+// types and counts).
+const zNoAttrs = z.object({}).strict()
+const zContentName = z.string().refine(isContentName, "is not a post type or taxonomy name")
+const zPositiveId = z.number().refine(isPositiveId, "is not an id")
+
+export const zQuery = zBase.extend({
+  type: z.literal("query"),
+  attrs: z
+    .object({
+      inherit: z.literal(true).optional(),
+      postType: zContentName.refine((name) => name !== QUERY_DEFAULT_POST_TYPE, "the default post type is left out").optional(),
+      perPage: z
+        .number()
+        .int()
+        .min(QUERY_MIN_PER_PAGE)
+        .max(QUERY_MAX_PER_PAGE)
+        .refine((n) => n !== QUERY_DEFAULT_PER_PAGE, "the default page size is left out")
+        .optional(),
+      orderBy: z.literal("title").optional(),
+      order: z.literal("asc").optional(),
+      taxonomy: zContentName.optional(),
+      termIds: z
+        .array(zPositiveId)
+        .refine((ids) => JSON.stringify(normalizeTermIds(ids)) === JSON.stringify(ids), "terms must be distinct ids, ascending, at most 10")
+        .optional(),
+      authorId: zPositiveId.optional(),
+    })
+    .strict()
+    .refine((attrs) => (attrs.taxonomy === undefined) === (attrs.termIds === undefined), "a taxonomy and its terms, or neither"),
+  children: z.array(zBlockID),
+})
+
+export const zPostTemplate = zBase.extend({ type: z.literal("post_template"), attrs: zNoAttrs, children: z.array(zBlockID) })
+export const zQueryNoResults = zBase.extend({ type: z.literal("query_no_results"), attrs: zNoAttrs, children: z.array(zBlockID) })
+export const zQueryPagination = zBase.extend({ type: z.literal("query_pagination"), attrs: zNoAttrs })
+export const zQueryTitle = zBase.extend({ type: z.literal("query_title"), attrs: z.object({ level: z.literal(2).optional() }).strict() })
+export const zTermDescription = zBase.extend({ type: z.literal("term_description"), attrs: zNoAttrs })
+export const zPostTitle = zBase.extend({
+  type: z.literal("post_title"),
+  attrs: z.object({ level: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]).optional(), link: z.boolean().optional() }).strict(),
+})
+export const zPostContent = zBase.extend({ type: z.literal("post_content"), attrs: zNoAttrs })
+export const zPostExcerpt = zBase.extend({
+  type: z.literal("post_excerpt"),
+  attrs: z
+    .object({
+      length: z
+        .number()
+        .int()
+        .min(POST_EXCERPT_MIN_WORDS)
+        .max(POST_EXCERPT_MAX_WORDS)
+        .refine((n) => n !== POST_EXCERPT_DEFAULT_WORDS, "the default length is left out")
+        .optional(),
+    })
+    .strict(),
+})
+export const zPostFeaturedImage = zBase.extend({
+  type: z.literal("post_featured_image"),
+  attrs: z.object({ aspect: z.enum(["16-9", "3-2", "1-1"]).optional(), link: z.literal(true).optional() }).strict(),
+})
+export const zPostDate = zBase.extend({
+  type: z.literal("post_date"),
+  attrs: z.object({ which: z.literal("modified").optional(), format: z.literal("short").optional() }).strict(),
+})
+export const zPostByline = zBase.extend({ type: z.literal("post_byline"), attrs: z.object({ avatars: z.literal(false).optional() }).strict() })
+export const zPostTerms = zBase.extend({
+  type: z.literal("post_terms"),
+  attrs: z.object({ taxonomy: zContentName.refine((name) => name !== POST_TERMS_DEFAULT_TAXONOMY, "the default taxonomy is left out").optional() }).strict(),
+})
+export const zPostNavigation = zBase.extend({ type: z.literal("post_navigation"), attrs: zNoAttrs })
+
 /**
  * Catch-all for theme/custom block types not in the known set. Any version: a theme
  * block keeps the version its theme wrote even when that theme isn't installed here.
@@ -1177,6 +1281,20 @@ const knownBlockSchemas: Record<KnownBlockType, z.ZodTypeAny> = {
   navigation: zNavigation,
   search: zSearch,
   template_part: zTemplatePart,
+  query_title: zQueryTitle,
+  term_description: zTermDescription,
+  post_title: zPostTitle,
+  post_content: zPostContent,
+  post_excerpt: zPostExcerpt,
+  post_featured_image: zPostFeaturedImage,
+  post_date: zPostDate,
+  post_byline: zPostByline,
+  post_terms: zPostTerms,
+  post_navigation: zPostNavigation,
+  query_pagination: zQueryPagination,
+  query: zQuery,
+  post_template: zPostTemplate,
+  query_no_results: zQueryNoResults,
 }
 
 // A known type must match its own schema; only other types fall back to the custom

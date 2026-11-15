@@ -300,7 +300,21 @@ interface BlockComponentProps {
   disclosure for children; with `has-overlay` a `details.nav-overlay` menu button for phones, no script),
   `form.search-form.search-block` (a GET to `/search`, the label visually hidden), and
   `header|footer|div.template-part.template-part--<slug>` around the resolved part's own `BlockRenderer`
-  (nothing inside a part: no recursion). A missing menu, part or logo renders nothing.- **Cover, media & text (#427, "Published · media & embeds", `cover/`, `media_text/`):** `div.cover`
+  (nothing inside a part: no recursion). A missing menu, part or logo renders nothing.
+- **Site blocks II (#489, the same boards; one module, `utils/postBlocks.tsx`, registered by `query/`,
+  `post_template/`, `query_pagination/`, `query_no_results/`, `query_title/`, `term_description/` and
+  the `post_*/` folders):** the same context, the same rule (nothing in a post). They render the default
+  theme's list and post pieces: `div.query-loop` around a `ul.post-list` of `li.post-item`s (`has-media`;
+  each row's blocks in `div.post-item-body`, a featured image placed directly in the post template after
+  it as `a.post-item-media > img.media`), the pager `nav.pagination` with `Pagination.astro`'s markup and
+  #349's URLs (only for a query using the page's own list), `div.query-no-results` for an empty list;
+  `h1.title` (`query_title`: the term, "Posts by …", "Search results for …", the type), `p.dek` (the
+  term's description); `h1.title` for the page's post or `h3.post-item-title > a` in a list (`post_title`),
+  `div.prose` around the post's own `BlockRenderer` with `site={null}` and its anchors (`post_content`),
+  `p.post-item-excerpt`, `figure.post-featured` (`img.is-aspect-16-9|3-2|1-1`), `p.meta.post-date > time`
+  ("Updated …" for the modified date), `div.byline.meta` with `span.avatars` (or "By …"), `a.eyebrow` (the
+  category) or `dl.post-terms` chips, and `nav.post-nav`. A query whose posts aren't in the context (it
+  failed, or is over the page's four) renders nothing, its pager and no results included.- **Cover, media & text (#427, "Published · media & embeds", `cover/`, `media_text/`):** `div.cover`
   (`alignwide` / `alignfull`, `--dim` the overlay as a fraction) with the image, then `div.cover-inner`
   holding the blocks; `div.media-text` (`is-media-right`) with `figure.media-text-media` first, so it
   sits above the text on phones, then `div.media-text-body`. The image comes from the `media` map

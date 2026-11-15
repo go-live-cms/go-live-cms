@@ -446,6 +446,39 @@ breakpoint, so it needs no script. The render context is
 `post_content` (T7) must render the post's body with `site={null}`, or the post's own site
 blocks would come alive inside the template.
 
+**As built (T7, #489):** the fourteen blocks of site blocks II are in the same module
+(`blocks-spec/siteBlocks.ts`, `SITE_BLOCK_TYPES` = the flow atoms, `query_pagination`, and the three
+containers), with the same vectors. Details the table left open:
+
+- **The query loop's shape.** A `query` holds only its `post_template`, `query_pagination` and
+  `query_no_results` (new rows of the nesting table; the pager is an atom that, like a `footnote`,
+  exists only in its container). `query_no_results` holds what a post template does (flow, columns,
+  details, media & text). A new query comes whole: a post template with a title, a short date and an
+  excerpt, the pager, and "Nothing here yet."
+- **Attrs.** `termIds` is a comma list on the node ("3,5": y-tiptap compares attrs by identity, so
+  an array would be rewritten on every sync) and an array in Block Spec; ids distinct, ascending, at
+  most 10, and only with a `taxonomy`. The Block tab offers one category; the attr takes up to ten
+  terms of one taxonomy, and a post matches when it has **any** of them in its published terms.
+  `post_title`'s `level` and `link` are absent by default: "as the page needs it", an H1 for the
+  page's post and a linked H3 in a list. `post_excerpt`'s `length` is words (5–100, 35).
+- **`post_content`'s rules** are `siteBlockKindIssues` / `checkSiteBlockPlacement`: never in a part,
+  never inside a `post_template` at any depth, at most one per template, each anywhere in the doc,
+  referenced or not (as `template_part` in a part). In a post nothing is refused.
+- **The route.** A query reads `GET /public/posts/type/:type`, the list with #349's pagination and
+  the published rows the theme's lists render (byline, featured image, category), which gained
+  `per_page` (capped at 24), `order_by` (`date`, `title`: the published title), `order`, `terms` and
+  `author_id`, the last two on the **published** terms and byline. `GET /public/posts` (the feeds) is
+  unchanged. Every filter is in the cache key (#185), which is the whole query string.
+- **The collector** is `collectTemplateNeeds` (`src/lib/siteRenderContext.ts`): the template's
+  queries in reading order with each part's where the template places it, keyed by part and block id
+  (`queryKey`), then parts the template doesn't place (a code layout's `<TemplatePart>`). The fifth
+  and later render nothing (`site_block_query_limit`, once). `loadSiteRenderContext` takes the
+  route (`SiteRoute`: its post, its own list, term, author or search) from the layout (#491), so an
+  inheriting query reuses `route.list` and fetches nothing; on a route without a list it renders
+  nothing. The context also carries the site's date settings for `post_date`.
+- **A list row carries no terms yet** (`PostListItem`'s note), so `post_terms` shows nothing in a
+  post template until the list rows carry their published terms.
+
 Theme and plugin blocks work in templates exactly as in posts, with their own renderers and
 #456's boundary for plugins. **Data-reading ("dynamic") blocks from themes or plugins are not
 in v1.** They would need a data contract (who fetches, with what limits). That belongs with

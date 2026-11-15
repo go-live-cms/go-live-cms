@@ -53,3 +53,29 @@ describe("the site blocks' rules", () => {
     expect(section.replace(/\/\*[\s\S]*?\*\//g, "")).not.toMatch(/#[0-9a-f]{3,8}\b/i)
   })
 })
+// Site blocks II (#489): the query loop and the post blocks reuse the list's and the post's
+// markup, so their section only adds what the blocks bring of their own.
+describe("the query loop's and post blocks' rules (#489)", () => {
+  const second = css.slice(css.indexOf("/* ---------- site blocks II (#489)"))
+
+  it("are their own section, after the list's and the post's, which they don't change", () => {
+    expect(css.indexOf("/* ---------- site blocks II (#489)")).toBeGreaterThan(css.indexOf(".post-item {"))
+    expect(css.indexOf("/* ---------- site blocks II (#489)")).toBeGreaterThan(css.indexOf(".post-featured {"))
+  })
+
+  it("lay out the loop, its pager and its no results", () => {
+    expect(rule(".query-loop", second)).toContain("flex-direction: column")
+    expect(rule(".query-loop > .pagination", second)).toContain("padding-top: 0")
+    expect(rule(".query-no-results", second)).toContain("color: var(--color-text-muted)")
+  })
+
+  it("crop a featured image to its shape, in a list and on the page", () => {
+    expect(second).toMatch(/\.post-item \.media\.is-aspect-16-9,\s*\.post-featured img\.is-aspect-16-9 \{\s*aspect-ratio: 16 \/ 9;/)
+    expect(second).toMatch(/\.post-item \.media\.is-aspect-3-2,\s*\.post-featured img\.is-aspect-3-2 \{\s*aspect-ratio: 3 \/ 2;/)
+    expect(second).toMatch(/\.post-item \.media\.is-aspect-1-1,\s*\.post-featured img\.is-aspect-1-1 \{\s*aspect-ratio: 1 \/ 1;/)
+  })
+
+  it("only read the theme's tokens", () => {
+    expect(second.replace(/\/\*[\s\S]*?\*\//g, "")).not.toMatch(/#[0-9a-f]{3,8}\b/i)
+  })
+})

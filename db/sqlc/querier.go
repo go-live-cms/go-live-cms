@@ -636,6 +636,7 @@ type Querier interface {
 	// of these pairs; anything else falls through to the id tiebreaker.
 	// changed_at sorts as GREATEST(changed_at, created_at): never-updated posts
 	// keep the 0001-01-01 sentinel and rank by creation time instead.
+	// published_title (#489, the public query loop) sorts by the title the site shows.
 	ListPostsWithMeta(ctx context.Context, arg ListPostsWithMetaParams) ([]ListPostsWithMetaRow, error)
 	// Home's "Needs attention" (#326): published posts whose working copy differs from
 	// the site, most recently changed first, with the collab server's last editor.

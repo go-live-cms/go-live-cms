@@ -41,6 +41,7 @@ import {
 import { attrProblem, isExtensionBlockType, themeBlockSpecOf, type ThemeBlockSpec } from "../blocks-spec/themeBlocks"
 import {
   isSiteBlockType,
+  isSiteContainerType,
   normalizeSiteBlockAttrs,
   SITE_BLOCK_NODE_NAMES,
   SITE_BLOCK_VERSION,
@@ -1047,8 +1048,10 @@ function blockToPMNode(block: Block, allBlocks: Record<BlockID, Block>, ctx: Con
   }
 
   // #488: the node's every attr, defaults filled in, from the stored ones (`siteBlockNodeAttrs`).
+  // #489: the query loop's containers hold their children like any container.
   if (isSiteBlockType(block.type)) {
-    return { type: SITE_BLOCK_NODE_NAMES[block.type], attrs: { ...baseAttrs, ...siteBlockNodeAttrs(block.type, block.attrs) } }
+    const node = { type: SITE_BLOCK_NODE_NAMES[block.type], attrs: { ...baseAttrs, ...siteBlockNodeAttrs(block.type, block.attrs) } }
+    return isSiteContainerType(block.type) ? { ...node, content: containerChildrenToPM(block, allBlocks, ctx) } : node
   }
 
   switch (block.type) {

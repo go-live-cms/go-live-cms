@@ -33,7 +33,7 @@ type blockContainer struct {
 // columns, never the reverse, and the table stays acyclic. A group may hold media & text,
 // never a cover.
 var blockContainers = map[string]blockContainer{
-	"group":      {accepts: []string{"flow", "details", "columns", "media_text"}, min: 1},
+	"group":      {accepts: []string{"flow", "details", "columns", "media_text", "query"}, min: 1},
 	"details":    {accepts: []string{"flow"}, min: 1},
 	"gallery":    {accepts: []string{"image"}, min: 0},
 	"columns":    {accepts: []string{"column"}, min: 2, max: 4},
@@ -43,6 +43,13 @@ var blockContainers = map[string]blockContainer{
 	// #422: the post's one list of notes. Only the store enforces "one, last": Yjs can merge
 	// two (footnotes.ts on the web side), and the collab server repairs them before a store.
 	"footnotes": {accepts: []string{"footnote"}, min: 1, onePerDocLast: true},
+	// #489, the query loop (post_blocks_site.go): a query at the top level or in a group holds
+	// its post template, its pager and what it shows when empty. A post template and no
+	// results exist only in a query and hold flow, columns, details and media & text, never a
+	// group or a query: group → query → post_template → group would be a cycle.
+	"query":            {accepts: []string{"post_template", queryPaginationBlockType, "query_no_results"}, min: 1},
+	"post_template":    {accepts: []string{"flow", "columns", "details", "media_text"}, min: 1, nestedOnly: true},
+	"query_no_results": {accepts: []string{"flow", "columns", "details", "media_text"}, min: 1, nestedOnly: true},
 }
 
 // flowBlockTypes are the core types that hold no blocks. Lists count as flow (their
@@ -61,9 +68,12 @@ var flowBlockTypes = map[string]bool{
 	"html": true,
 	// #426: a row of buttons keeps its buttons in its pm.
 	"buttons": true, "spacer": true,
-	// #488: the site blocks (post_blocks_site.go), which hold no blocks.
+	// #488, #489: the site blocks that are flow (post_blocks_site.go), which hold no blocks.
 	"site_title": true, "site_tagline": true, "site_logo": true,
 	"navigation": true, "search": true, "template_part": true,
+	"query_title": true, "term_description": true, "post_title": true, "post_content": true,
+	"post_excerpt": true, "post_featured_image": true, "post_date": true, "post_byline": true,
+	"post_terms": true, "post_navigation": true,
 }
 
 // listBlockTypes have their items as children (Block Spec `LIST_ITEMS`): list_item for
@@ -76,10 +86,16 @@ var listItemBlockTypes = map[string]bool{"list_item": true, "todo_item": true}
 // footnoteBlockType is a note (#422): a block with an id that only lives in a footnotes list.
 const footnoteBlockType = "footnote"
 
+// queryPaginationBlockType is a query's pager (#489): an atom that only lives in a query.
+const queryPaginationBlockType = "query_pagination"
+
+// nestedOnlyAtoms are core types that hold no blocks and only exist inside their container.
+var nestedOnlyAtoms = map[string]bool{footnoteBlockType: true, queryPaginationBlockType: true}
+
 // isCoreBlockType: a type this build knows (flow, the list items, the containers).
 func isCoreBlockType(t string) bool {
 	_, container := blockContainers[t]
-	return flowBlockTypes[t] || listItemBlockTypes[t] || container || t == footnoteBlockType
+	return flowBlockTypes[t] || listItemBlockTypes[t] || container || nestedOnlyAtoms[t]
 }
 
 // isFlowBlockType: a core flow type, or any type that isn't core (a theme block, a type
@@ -147,7 +163,8 @@ func (doc *BlockDocV1) deduplicateBlocks() {
 //  3. no cycles;
 //  4. a container's children are of the types and in the count the table allows, a core
 //     block that is neither a container nor a list has no children, and a container that
-//     only exists inside its parent (a column) isn't in blocks_order, nor is a footnote, and a
+//     only exists inside its parent (a column, a post template) isn't in blocks_order, nor is a
+//     footnote or a query's pager (#489), and a
 //     footnotes list is the only one in the doc and the last block of blocks_order (#422).
 //
 // An unreferenced block is not an error. children that isn't an array of strings is.
@@ -184,7 +201,7 @@ func (doc *BlockDocV1) checkBlockNesting() error {
 		}
 		blockType := typeOf(id)
 		rule := blockContainers[blockType]
-		if rule.nestedOnly || blockType == footnoteBlockType {
+		if rule.nestedOnly || nestedOnlyAtoms[blockType] {
 			return fmt.Errorf("block %q: a %s can't be at the top level", truncateID(id), blockType)
 		}
 		// Being last is also what makes it the only one: any other would be before it.

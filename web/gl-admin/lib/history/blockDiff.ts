@@ -17,7 +17,7 @@
 import { CALLOUT_TONE_LABELS, normalizeGalleryColumns, type Block, type BlockDocV1 } from "../blocks-spec"
 // The nesting table only: pure, no imports of its own, so the worker stays small.
 import { isContainerType } from "../blocks-spec/nesting"
-import { isSiteBlockType, normalizeSiteBlockAttrs, SITE_BLOCK_LABELS, SITE_BLOCK_TYPES } from "../blocks-spec/siteBlocks"
+import { isSiteBlockType, normalizeSiteBlockAttrs, SITE_ATOM_TYPES, SITE_BLOCK_LABELS } from "../blocks-spec/siteBlocks"
 import { EMBED_PROVIDER_SPECS, embedTargetOf } from "../blocks-spec/embeds"
 // Pure too.
 import { COLUMNS_LAYOUT_LABELS, isColumnsLayout, spacerPx, type ColumnsLayout } from "../blocks-spec/layoutBlocks"
@@ -267,8 +267,9 @@ const TYPE_LABELS: Record<string, string> = {
 }
 
 /** The media blocks without text of their own (#423): their caption or label is diffed instead. */
-// The site blocks (#488) have no text either: their attrs are compared on their own.
-const MEDIA_ONLY = new Set(["image", "video", "audio", "file", "embed", "html", ...SITE_BLOCK_TYPES])
+// The site atoms (#488, #489) have no text either: their attrs are compared on their own. (The
+// query loop's containers are compared by their children, like a group.)
+const MEDIA_ONLY = new Set<string>(["image", "video", "audio", "file", "embed", "html", ...SITE_ATOM_TYPES])
 /** The blocks whose caption is a word diff (an image's, a table's, a video's, an audio block's). */
 const CAPTIONED = new Set(["image", "table", "video", "audio", "embed"])
 

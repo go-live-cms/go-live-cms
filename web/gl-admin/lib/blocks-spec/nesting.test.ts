@@ -110,20 +110,27 @@ describe("the nesting table", () => {
   })
 
   it("derives the content expressions", () => {
-    expect(containerContent("group")).toBe("(block | tableBlock | video | audio | file | embed | html | buttons | spacer | siteTitle | siteTagline | siteLogo | navigation | search | templatePart | details | columns | mediaText)+")
+    // Flow: TipTap's block group and the standalone flow nodes (the site atoms of #488 and #489 included).
+    const FLOW = "block | tableBlock | video | audio | file | embed | html | buttons | spacer | siteTitle | siteTagline | siteLogo | navigation | search | templatePart | queryTitle | termDescription | postTitle | postContent | postExcerpt | postFeaturedImage | postDate | postByline | postTerms | postNavigation"
+    expect(containerContent("group")).toBe(`(${FLOW} | details | columns | mediaText | query)+`)
     // #421: its part first, then flow.
-    expect(containerContent("details")).toBe("detailsSummary (block | tableBlock | video | audio | file | embed | html | buttons | spacer | siteTitle | siteTagline | siteLogo | navigation | search | templatePart)+")
+    expect(containerContent("details")).toBe(`detailsSummary (${FLOW})+`)
     // #424: image blocks, none is fine, then its caption.
     expect(containerContent("gallery")).toBe("image* galleryCaption")
     // #426: the 2–4 limit is the table's, not the schema's (`countNotInSchema`), each column holding flow and details.
     expect(containerContent("columns")).toBe("column+")
-    expect(containerContent("column")).toBe("(block | tableBlock | video | audio | file | embed | html | buttons | spacer | siteTitle | siteTagline | siteLogo | navigation | search | templatePart | details)+")
+    expect(containerContent("column")).toBe(`(${FLOW} | details)+`)
     // #422: notes only. "One list, last" is the table's rule, not the schema's (`onePerDocLast`).
     expect(containerContent("footnotes")).toBe("footnote+")
     // #427: `*`, so a merge that empties one doesn't cost its image (`emptyNotInSchema`); the table still says 1+.
-    expect(containerContent("cover")).toBe("(block | tableBlock | video | audio | file | embed | html | buttons | spacer | siteTitle | siteTagline | siteLogo | navigation | search | templatePart)*")
-    expect(containerContent("media_text")).toBe("(block | tableBlock | video | audio | file | embed | html | buttons | spacer | siteTitle | siteTagline | siteLogo | navigation | search | templatePart | details)*")
-    expect(topLevelContent()).toBe("(block | tableBlock | video | audio | file | embed | html | buttons | spacer | siteTitle | siteTagline | siteLogo | navigation | search | templatePart | group | details | gallery | columns | footnotes | cover | mediaText)+")
+    expect(containerContent("cover")).toBe(`(${FLOW})*`)
+    expect(containerContent("media_text")).toBe(`(${FLOW} | details)*`)
+    expect(topLevelContent()).toBe(`(${FLOW} | group | details | gallery | columns | footnotes | cover | mediaText | query)+`)
+    // #489: the query loop. Its parts only in a query; a post template and no results hold flow,
+    // columns, details and media & text, never a group or a query.
+    expect(containerContent("query")).toBe("(postTemplate | queryPagination | queryNoResults)+")
+    expect(containerContent("post_template")).toBe(`(${FLOW} | columns | details | mediaText)+`)
+    expect(containerContent("query_no_results")).toBe(`(${FLOW} | columns | details | mediaText)+`)
   })
 
   it("a cover or media & text with no image to show is out of the reading order, with its blocks (#427)", () => {

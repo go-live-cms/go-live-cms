@@ -19,9 +19,16 @@ const publishedStatus = "published"
 // page of a public post type's published posts, newest first, posts_per_page
 // at a time, with the total for numbered pages (pagination.go). A type that
 // isn't registered, active and public is a 404, like a page past the end.
+// A block template's query loop (#489) also passes per_page, order_by, order,
+// terms and author_id (public_posts_query.go).
 func (server *Server) getPublicPostsByType(c *gin.Context) {
 	postType := c.Param("type")
-	req, ok := server.publicPageRequest(c)
+	filters, err := parsePublicPostsQuery(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	req, ok := server.publicPageRequestOf(c, filters.PerPage)
 	if !ok {
 		return
 	}
@@ -33,8 +40,10 @@ func (server *Server) getPublicPostsByType(c *gin.Context) {
 
 	// The count takes the page query's filters, so total and the rows agree.
 	total, err := server.store.CountFilteredPosts(ctx, db.CountFilteredPostsParams{
-		PostType:   postType,
-		PostStatus: publishedStatus,
+		PostType:          postType,
+		PostStatus:        publishedStatus,
+		PublishedTermIds:  filters.TermIDs,
+		PublishedAuthorID: filters.AuthorID,
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count posts"})
@@ -47,12 +56,14 @@ func (server *Server) getPublicPostsByType(c *gin.Context) {
 	}
 
 	posts, err := server.store.ListPostsWithMeta(ctx, db.ListPostsWithMetaParams{
-		PostType:      postType,
-		PostStatus:    publishedStatus,
-		SortColumn:    "created_at",
-		SortDirection: sortDesc,
-		OffsetCount:   req.offset(),
-		LimitCount:    req.PerPage,
+		PostType:          postType,
+		PostStatus:        publishedStatus,
+		SortColumn:        filters.SortColumn,
+		SortDirection:     filters.SortDirection,
+		PublishedTermIds:  filters.TermIDs,
+		PublishedAuthorID: filters.AuthorID,
+		OffsetCount:       req.offset(),
+		LimitCount:        req.PerPage,
 		// The site credits the published byline (#319).
 		PublishedByline: true,
 	})

@@ -88,15 +88,23 @@ func (server *Server) postsPerPage(ctx context.Context) (int32, error) {
 // publicPageRequest is the page a public list asked for. On an error it has
 // already answered (400 or 500) and returns false.
 func (server *Server) publicPageRequest(c *gin.Context) (pageRequest, bool) {
+	return server.publicPageRequestOf(c, 0)
+}
+
+// publicPageRequestOf is publicPageRequest with the page size a request chose (a query loop's
+// per_page, #489), or the posts_per_page setting when perPage is 0.
+func (server *Server) publicPageRequestOf(c *gin.Context, perPage int32) (pageRequest, bool) {
 	page, err := parsePageQuery(c)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return pageRequest{}, false
 	}
-	perPage, err := server.postsPerPage(c.Request.Context())
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read settings"})
-		return pageRequest{}, false
+	if perPage <= 0 {
+		perPage, err = server.postsPerPage(c.Request.Context())
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read settings"})
+			return pageRequest{}, false
+		}
 	}
 	// A page whose first row is past what an int32 offset can address is past
 	// any real list's end too.

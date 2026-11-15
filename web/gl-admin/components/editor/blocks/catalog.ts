@@ -515,6 +515,22 @@ export const SITE_BLOCKS: readonly CatalogEntry[] = [
   siteEntry("navigation", ["menu", "links", "nav"]),
   siteEntry("search", ["find", "form"]),
   siteEntry("template_part", ["header", "footer", "part"]),
+  // #489. A query loop comes whole (a post template, the pager, "no results"); the three
+  // only go in a query (the nesting table), so the menus offer them there only.
+  siteEntry("query", ["loop", "posts", "list", "archive", "latest"]),
+  siteEntry("post_template", ["item", "repeat"]),
+  siteEntry("query_pagination", ["pages", "pager", "next", "older"]),
+  siteEntry("query_no_results", ["empty", "none", "nothing"]),
+  siteEntry("query_title", ["archive", "heading", "category", "author"]),
+  siteEntry("term_description", ["category", "tag", "description"]),
+  siteEntry("post_title", ["heading", "name"]),
+  siteEntry("post_content", ["body", "blocks", "content"]),
+  siteEntry("post_excerpt", ["summary", "description"]),
+  siteEntry("post_featured_image", ["image", "thumbnail", "cover"]),
+  siteEntry("post_date", ["time", "published", "updated"]),
+  siteEntry("post_byline", ["author", "credits"]),
+  siteEntry("post_terms", ["category", "tags"]),
+  siteEntry("post_navigation", ["next", "previous", "older", "newer"]),
 ]
 
 function siteEntry(type: SiteBlockType, keywords: readonly string[]): CatalogEntry {

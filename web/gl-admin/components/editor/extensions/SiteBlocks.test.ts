@@ -4,7 +4,7 @@ import { NodeSelection } from "@tiptap/pm/state"
 import type { Schema } from "@tiptap/pm/model"
 import { schemaExtensions } from "@gl-admin/lib/collaboration/schema"
 import { blockDocToPM, pmToBlockDoc } from "@gl-admin/lib/collaboration/blockBridge"
-import { SITE_BLOCK_NODE_NAMES, SITE_BLOCK_TYPES, siteBlockNodeAttrs, type BlockDocV1, type SiteBlockType } from "@gl-admin/lib/blocks-spec"
+import { SITE_BLOCK_NODE_NAMES, SITE_BLOCK_TYPES, SITE_FLOW_BLOCK_TYPES, siteBlockNodeAttrs, type BlockDocV1, type SiteBlockType } from "@gl-admin/lib/blocks-spec"
 import { BlockNodeViews } from "./BlockNodeViews"
 import { PasteSanitizer } from "./PasteSanitizer"
 import { editorDocKind, SiteBlockContext } from "./SiteBlocks"
@@ -59,7 +59,7 @@ const topTypes = (ed: Editor) => {
 describe("site blocks in the schema (#488)", () => {
   it("are atoms outside the block group, so a quote or a list item can't hold one", () => {
     const schema = schemaOf()
-    for (const type of SITE_BLOCK_TYPES) {
+    for (const type of SITE_FLOW_BLOCK_TYPES) {
       const node = schema.nodes[SITE_BLOCK_NODE_NAMES[type]]
       expect(node.spec.atom, type).toBe(true)
       expect(node.isInGroup("block"), type).toBe(false)
