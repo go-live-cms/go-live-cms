@@ -5,9 +5,11 @@
 //   GET /internal/users/:id/access?doc=&issued_at=  → { role, can_edit }   (access.ts)
 //   GET /internal/posts/:id/collab                  → CollabRecord
 //   PUT /internal/posts/:id/collab  CollabStoreBody → { block_revision }   (+ block_edits, #328)
+//   GET /internal/site-templates/:id/collab          → CollabRecord + doc_kind  (#490)
+//   PUT /internal/site-templates/:id/collab  CollabStoreBody (no block_edits) → { block_revision }
 //
 // Must NOT import yjs.
-import type { BlockDocV1 } from "../gl-admin/lib/blocks-spec"
+import type { BlockDocKind, BlockDocV1 } from "../gl-admin/lib/blocks-spec"
 import { fetchDocAccess, type DocAccess, type TicketIdentity } from "./access"
 
 /**
@@ -22,6 +24,12 @@ export interface CollabRecord {
   ydoc_state?: string | null
   epoch?: string | null
   ydoc_block_revision?: number | null
+  /**
+   * A template's kind (#490, GET /internal/site-templates/:id/collab): `template` or
+   * `part`, whose rules each store validates with (`validateBlockDoc(doc, { kind })`,
+   * design 4.2). Absent for a post.
+   */
+  doc_kind?: BlockDocKind
 }
 
 /**
@@ -84,6 +92,14 @@ export function normalizeBlockDoc(raw: unknown): BlockDocV1 | null {
   throw new InternalApiError("collab load failed: block_doc is not a Block Spec v1 document", null)
 }
 
+const withoutRaw = ({ block_doc, block_revision, ydoc_state, epoch, ydoc_block_revision }: CollabRecord): CollabRecord => ({
+  block_doc,
+  block_revision,
+  ydoc_state,
+  epoch,
+  ydoc_block_revision,
+})
+
 export class InternalApiError extends Error {
   constructor(
     message: string,
@@ -99,6 +115,10 @@ export interface InternalApi {
   /** null when the post doesn't exist (404). */
   getCollab(postId: string, opts?: { requestId?: string }): Promise<CollabRecord | null>
   putCollab(postId: string, body: CollabStoreBody, opts?: { requestId?: string }): Promise<CollabStoreResult>
+  /** A template or part (#490): null when it doesn't exist (404). Carries `doc_kind`. */
+  getTemplateCollab(templateId: string, opts?: { requestId?: string }): Promise<CollabRecord | null>
+  /** A template or part's store (#490): the post contract without `block_edits`. */
+  putTemplateCollab(templateId: string, body: CollabStoreBody, opts?: { requestId?: string }): Promise<CollabStoreResult>
 }
 
 export interface InternalApiConfig {
@@ -124,10 +144,45 @@ export function createInternalApi({
     if (requestId) h["X-Request-ID"] = requestId
     return h
   }
-  const collabUrl = (postId: string) => `${base}/internal/posts/${encodeURIComponent(postId)}/collab`
+  const postUrl = (postId: string) => `${base}/internal/posts/${encodeURIComponent(postId)}/collab`
+  const templateUrl = (templateId: string) => `${base}/internal/site-templates/${encodeURIComponent(templateId)}/collab`
   const fail = (what: string, status: number): never => {
     if (status === 401) throw new InternalApiError(`${what} failed: API rejected ROLE_LOOKUP_SECRET (401)`, status)
     throw new InternalApiError(`${what} failed: API responded ${status}`, status)
+  }
+
+  async function getRecord(url: string, requestId: string | undefined): Promise<(CollabRecord & { raw: Partial<CollabRecord> }) | null> {
+    const res = await fetchImpl(url, {
+      method: "GET",
+      headers: headers(requestId),
+      signal: AbortSignal.timeout(documentTimeoutMs),
+    })
+    if (res.status === 404) return null
+    if (!res.ok) fail("collab load", res.status)
+    const body = (await res.json()) as Partial<CollabRecord> | null
+    if (!body || typeof body.block_revision !== "number") {
+      throw new InternalApiError("collab load failed: malformed response", res.status)
+    }
+    return {
+      raw: body,
+      block_doc: normalizeBlockDoc(body.block_doc),
+      block_revision: body.block_revision,
+      ydoc_state: body.ydoc_state ?? null,
+      epoch: body.epoch ?? null,
+      ydoc_block_revision: typeof body.ydoc_block_revision === "number" ? body.ydoc_block_revision : null,
+    }
+  }
+
+  async function putRecord(url: string, body: CollabStoreBody, requestId: string | undefined): Promise<CollabStoreResult> {
+    const res = await fetchImpl(url, {
+      method: "PUT",
+      headers: { ...headers(requestId), "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(documentTimeoutMs),
+    })
+    if (!res.ok) fail("collab store", res.status)
+    const result = (await res.json().catch(() => null)) as { block_revision?: unknown } | null
+    return { block_revision: typeof result?.block_revision === "number" ? result.block_revision : null }
   }
 
   return {
@@ -135,36 +190,29 @@ export function createInternalApi({
       fetchDocAccess(base, identity, docName, secret, { fetchImpl, timeoutMs: accessTimeoutMs, requestId }),
 
     async getCollab(postId, { requestId } = {}) {
-      const res = await fetchImpl(collabUrl(postId), {
-        method: "GET",
-        headers: headers(requestId),
-        signal: AbortSignal.timeout(documentTimeoutMs),
-      })
-      if (res.status === 404) return null
-      if (!res.ok) fail("collab load", res.status)
-      const body = (await res.json()) as Partial<CollabRecord> | null
-      if (!body || typeof body.block_revision !== "number") {
-        throw new InternalApiError("collab load failed: malformed response", res.status)
-      }
-      return {
-        block_doc: normalizeBlockDoc(body.block_doc),
-        block_revision: body.block_revision,
-        ydoc_state: body.ydoc_state ?? null,
-        epoch: body.epoch ?? null,
-        ydoc_block_revision: typeof body.ydoc_block_revision === "number" ? body.ydoc_block_revision : null,
-      }
+      const record = await getRecord(postUrl(postId), requestId)
+      return record ? withoutRaw(record) : null
     },
 
-    async putCollab(postId, body, { requestId } = {}) {
-      const res = await fetchImpl(collabUrl(postId), {
-        method: "PUT",
-        headers: { ...headers(requestId), "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(documentTimeoutMs),
-      })
-      if (!res.ok) fail("collab store", res.status)
-      const result = (await res.json().catch(() => null)) as { block_revision?: unknown } | null
-      return { block_revision: typeof result?.block_revision === "number" ? result.block_revision : null }
+    putCollab: (postId, body, { requestId } = {}) => putRecord(postUrl(postId), body, requestId),
+
+    async getTemplateCollab(templateId, { requestId } = {}) {
+      const record = await getRecord(templateUrl(templateId), requestId)
+      if (!record) return null
+      const raw = record.raw
+      // The kind decides the store's rules: a record without a known one is refused (the
+      // load fails), never stored as some default kind.
+      if (raw.doc_kind !== "template" && raw.doc_kind !== "part") {
+        throw new InternalApiError("collab load failed: the template has no known doc_kind", null)
+      }
+      return { ...withoutRaw(record), doc_kind: raw.doc_kind }
+    },
+
+    putTemplateCollab: (templateId, body, { requestId } = {}) => {
+      // A template has no per-block attribution (design 7.2): never send it.
+      const rest: CollabStoreBody = { ...body }
+      delete rest.block_edits
+      return putRecord(templateUrl(templateId), rest, requestId)
     },
   }
 }

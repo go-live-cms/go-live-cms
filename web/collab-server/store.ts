@@ -8,14 +8,15 @@
 //   2. fragment → ProseMirror → pmToBlockDoc, per top-level node (fragmentToBlockDoc),
 //      with the blocks seeding dropped (meta.dropped) merged back (restoreDroppedBlocks),
 //      then repeats within one list removed (dedupeBlockRefs, #414);
-//   3. validateBlockDoc (Zod) — #214 part 2. An invalid doc is NOT written: the Yjs
+//   3. validateBlockDoc (Zod) — #214 part 2 — with the doc's kind (#490: a template or a
+//      part has its own placement rules, design 4.2). An invalid doc is NOT written: the Yjs
 //      state is stored alone and `posts.block_doc` keeps its last valid version;
 //   4. empty-doc guard: an empty result is written only if a client edited the doc since
 //      it was loaded (someone deleted everything), never as the fallout of a failed seed;
 //   5. PUT /internal/posts/:id/collab.
 import * as Y from "yjs"
 import type { Schema } from "prosemirror-model"
-import { dedupeBlockRefs, validateBlockDoc, type BlockDocV1 } from "../gl-admin/lib/blocks-spec"
+import { dedupeBlockRefs, validateBlockDoc, type BlockDocKind, type BlockDocV1 } from "../gl-admin/lib/blocks-spec"
 import { themeBlockLookup } from "../gl-admin/lib/blocks-spec/themeBlocks"
 import {
   EDITOR_FRAGMENT,
@@ -35,6 +36,12 @@ export interface StoreInput {
   /** Whether a client changed the doc since it was loaded. */
   clientEdited: boolean
   lastEditorId: string | null
+  /**
+   * What the doc is (design 4.2): a post's body, a block template or a template part
+   * (#490). The kind's rules decide whether a derived doc is valid (no template_part in a
+   * part); a doc that fails them is `kept-invalid`. Default: a post.
+   */
+  kind?: BlockDocKind
 }
 
 export type BlockDocDecision =
@@ -101,7 +108,7 @@ export function prepareStore(doc: Y.Doc, schema: Schema, input: StoreInput): Pre
   try {
     // Installed theme blocks are checked against their spec too (#376), with the same
     // rules the API applies, so the API never has to refuse a block_doc we send.
-    validateBlockDoc(derived, { themeBlocks: themeBlockLookup(schema) })
+    validateBlockDoc(derived, { themeBlocks: themeBlockLookup(schema), kind: input.kind ?? "post" })
     if (derived.blocks_order.length === 0 && !input.clientEdited && !isEmpty(input.previous)) {
       decision = { write: false, reason: "empty-without-edit" }
     } else if (sameDoc(input.previous, derived) || (isEmpty(input.previous) && !hasContent(derived))) {

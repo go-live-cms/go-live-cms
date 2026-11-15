@@ -7,12 +7,12 @@
 import * as Y from "yjs"
 import { Server, type Document, type Hocuspocus } from "@hocuspocus/server"
 import type { Schema } from "prosemirror-model"
-import type { BlockDocV1 } from "../gl-admin/lib/blocks-spec"
+import type { BlockDocKind, BlockDocV1 } from "../gl-admin/lib/blocks-spec"
 import { EDITOR_FRAGMENT } from "../gl-admin/lib/collaboration/fragmentBridge"
 import { schemaFingerprint } from "../gl-admin/lib/collaboration/schemaFingerprint"
 import { getInstalledCollabSchema } from "../gl-admin/lib/theme-blocks/collabSchema"
-import { isCollabDocName, postIdOf, TicketReplayGuard, type TicketClaims } from "./access"
-import type { CollabBlockEdit, CollabStoreBody, InternalApi } from "./api"
+import { docKind, TicketReplayGuard, type CollabDocRef, type TicketClaims } from "./access"
+import type { CollabBlockEdit, CollabRecord, CollabStoreBody, CollabStoreResult, InternalApi } from "./api"
 import { AuthRejection, createAuthenticate, DENY, type CollabContext } from "./auth"
 import { BlockChangeTracker, blockEditsFor, type BlockEditCapture } from "./blockEdits"
 import { loadIntoDoc, readMeta } from "./load"
@@ -61,7 +61,10 @@ export type CommentsMessage = { type: "comments" }
 export type StoreResult = { ok: true; skipped: boolean } | { ok: false; error: string }
 
 interface Session {
-  postId: string
+  /** Which document this is (#490): a post, or a template or part (`template-<id>`). */
+  doc: CollabDocRef
+  /** The rules its stores are validated with: `post`, or the template's `template` / `part`. */
+  kind: BlockDocKind
   previous: BlockDocV1 | null
   revision: number | null
   clientEdited: boolean
@@ -71,15 +74,18 @@ interface Session {
   failed: boolean
   retryTimer: NodeJS.Timeout | null
   retryDelay: number
-  /** Which block each user changed since the last store that wrote block_doc (#328). */
-  tracker: BlockChangeTracker
+  /**
+   * Which block each user changed since the last store that wrote block_doc (#328). Posts
+   * only: off for templates in v1 (design 7.2), which show no per-block attribution.
+   */
+  tracker: BlockChangeTracker | null
 }
 
-/** onLoadDocument for a post the API doesn't have (404). */
-class PostNotFoundError extends Error {
-  constructor() {
-    super("post not found")
-    this.name = "PostNotFoundError"
+/** onLoadDocument for a post or template the API doesn't have (404). */
+class DocNotFoundError extends Error {
+  constructor(kind: CollabDocRef["kind"]) {
+    super(`${kind} not found`)
+    this.name = "DocNotFoundError"
   }
 }
 
@@ -116,6 +122,14 @@ export function createCollabServer(options: CollabServerOptions) {
   })
   let hocuspocus: Hocuspocus
 
+  // The API client per document kind (#490, design 7.2): a post's body through
+  // /internal/posts/:id/collab, a template or part through /internal/site-templates/:id/collab,
+  // with the #280 contract unchanged.
+  const getRecord = (ref: CollabDocRef, opts: { requestId?: string }): Promise<CollabRecord | null> =>
+    ref.kind === "post" ? api.getCollab(ref.id, opts) : api.getTemplateCollab(ref.id, opts)
+  const putRecord = (ref: CollabDocRef, body: CollabStoreBody, opts: { requestId?: string } = {}): Promise<CollabStoreResult> =>
+    ref.kind === "post" ? api.putCollab(ref.id, body, opts) : api.putTemplateCollab(ref.id, body, opts)
+
   /** The loaded (or loading) document, without loading it. */
   const loadedDocument = async (docName: string): Promise<Document | null> => {
     const loading = hocuspocus.loadingDocuments.get(docName)
@@ -148,7 +162,7 @@ export function createCollabServer(options: CollabServerOptions) {
         return readMeta(document).epoch
       } catch (error) {
         // A deleted post is a final answer, not an outage the client should retry.
-        if (error instanceof PostNotFoundError) throw new AuthRejection(DENY.forbidden, "Post not found")
+        if (error instanceof DocNotFoundError) throw new AuthRejection(DENY.forbidden, "Document not found")
         throw error
       }
     },
@@ -187,7 +201,7 @@ export function createCollabServer(options: CollabServerOptions) {
     // attribution, never the store.
     let capture: BlockEditCapture | null = null
     let edits: CollabBlockEdit[] = []
-    if (decision.write) {
+    if (decision.write && session.tracker) {
       try {
         capture = session.tracker.capture()
         const fallback =
@@ -219,10 +233,10 @@ export function createCollabServer(options: CollabServerOptions) {
     }
 
     try {
-      const result = await api.putCollab(session.postId, body)
+      const result = await putRecord(session.doc, body)
       if (decision.write) session.previous = decision.blockDoc
       // Only what this store was prepared with; edits made during the PUT stay.
-      if (capture) session.tracker.clear(capture)
+      if (capture) session.tracker?.clear(capture)
       if (result.block_revision !== null) session.revision = result.block_revision
       session.storedSnapshot = storing
       session.failed = false
@@ -304,24 +318,35 @@ export function createCollabServer(options: CollabServerOptions) {
     },
 
     async onLoadDocument({ document, documentName, context }) {
-      if (!isCollabDocName(documentName)) throw new Error("invalid document name")
-      const postId = postIdOf(documentName)
+      const ref = docKind(documentName)
+      if (!ref) throw new Error("invalid document name")
       const requestId = contextOf(context).requestId
       const doc = docNameForLog(documentName)
-      let record
+      let record: CollabRecord | null
       try {
-        record = await api.getCollab(postId, { requestId })
+        record = await getRecord(ref, { requestId })
       } catch (error) {
         logEvent("error", "collab_load_failed", { request_id: requestId, doc, error: errorMessage(error) })
         throw error
       }
       if (!record) {
-        logEvent("warn", "collab_load_failed", { request_id: requestId, doc, error: "post not found" })
-        throw new PostNotFoundError()
+        logEvent("warn", "collab_load_failed", { request_id: requestId, doc, error: `${ref.kind} not found` })
+        throw new DocNotFoundError(ref.kind)
       }
+      // A template's stores follow its kind's rules (template or part). One without a
+      // known kind fails the load: storing it under the wrong rules could let a part hold
+      // a template_part.
+      const kind: BlockDocKind | null = ref.kind === "post" ? "post" : record.doc_kind === "template" || record.doc_kind === "part" ? record.doc_kind : null
+      if (!kind) {
+        logEvent("error", "collab_load_failed", { request_id: requestId, doc, error: "the template has no known kind" })
+        throw new Error("the template has no known kind")
+      }
+      // The same loadIntoDoc for every kind (design 7.2): the only place a doc is seeded
+      // (rule 11), with #453's reseed of uninstalled extension blocks for templates too.
       const outcome = loadIntoDoc(document, record, schema, newEpoch)
       const session: Session = {
-        postId,
+        doc: ref,
+        kind,
         previous: record.block_doc,
         revision: record.block_revision,
         clientEdited: false,
@@ -331,7 +356,8 @@ export function createCollabServer(options: CollabServerOptions) {
         retryTimer: null,
         retryDelay: storeRetryMs,
         // After the load: what it wrote (seed, cleanup) is the server's, not a client's.
-        tracker: new BlockChangeTracker(document.getXmlFragment(EDITOR_FRAGMENT)),
+        // Posts only (design 7.2: off for templates in v1).
+        tracker: ref.kind === "post" ? new BlockChangeTracker(document.getXmlFragment(EDITOR_FRAGMENT)) : null,
       }
       sessions.set(documentName, session)
       logEvent(outcome.kind === "seeded" && outcome.reason === "revision-mismatch" ? "warn" : "info", "collab_load", {
@@ -353,8 +379,8 @@ export function createCollabServer(options: CollabServerOptions) {
       if (outcome.kind === "seeded") {
         try {
           const { epoch } = readMeta(document)
-          await api.putCollab(
-            postId,
+          await putRecord(
+            ref,
             withBaseRevision(
               { state: Buffer.from(Y.encodeStateAsUpdate(document)).toString("base64"), epoch: epoch as string },
               session,
@@ -395,7 +421,7 @@ export function createCollabServer(options: CollabServerOptions) {
     async afterUnloadDocument({ documentName }) {
       const session = sessions.get(documentName)
       if (session?.retryTimer) clearTimeout(session.retryTimer)
-      session?.tracker.destroy()
+      session?.tracker?.destroy()
       sessions.delete(documentName)
     },
 

@@ -68,7 +68,7 @@ func toThemeResponse(theme db.Theme) ThemeResponse {
 		Description: theme.Description.String,
 		Version:     theme.Version,
 		Author:      theme.Author.String,
-		Config:      theme.Config,
+		Config:      themeConfigForResponse(theme.Config),
 		Active:      theme.Active,
 		CreatedAt:   theme.CreatedAt.Format(time.RFC3339),
 		ChangedAt:   theme.ChangedAt.Format(time.RFC3339),
@@ -83,7 +83,7 @@ func toActiveThemeWithSettingsResponse(theme db.GetActiveThemeWithSettingsRow) A
 		Description:  theme.Description.String,
 		Version:      theme.Version,
 		Author:       theme.Author.String,
-		Config:       theme.Config,
+		Config:       themeConfigForResponse(theme.Config),
 		Active:       theme.Active,
 		Settings:     themeSettingsObject(theme.Settings),
 		GlobalStyles: emptyObjectIfBlank(theme.GlobalStyles),
@@ -101,6 +101,48 @@ func toThemeSettingResponse(setting db.ThemeSetting) ThemeSettingResponse {
 		CreatedAt:    setting.CreatedAt.Format(time.RFC3339),
 		ChangedAt:    setting.ChangedAt.Format(time.RFC3339),
 	}
+}
+
+// themeConfigForResponse is a theme's stored config as the theme routes answer it: the
+// block templates and parts the theme ships (#490, block_templates / block_parts) keep
+// their title and hash but not their doc. /themes/active is read on every page request,
+// and only "Customize" needs a doc, which it reads from the stored config
+// (themeBlockTemplateFromConfig); rendering them is the resolve route's (#491). Anything
+// else in the config, or a config that doesn't decode, is passed through as stored.
+func themeConfigForResponse(config json.RawMessage) json.RawMessage {
+	var fields map[string]json.RawMessage
+	if len(config) == 0 || json.Unmarshal(config, &fields) != nil {
+		return config
+	}
+	changed := false
+	for _, key := range []string{"block_templates", "block_parts"} {
+		raw, ok := fields[key]
+		if !ok {
+			continue
+		}
+		var bySlug map[string]ThemeBlockTemplate
+		if json.Unmarshal(raw, &bySlug) != nil {
+			continue
+		}
+		summary := make(map[string]map[string]string, len(bySlug))
+		for slug, template := range bySlug {
+			summary[slug] = map[string]string{"title": template.Title, "hash": template.Hash}
+		}
+		encoded, err := json.Marshal(summary)
+		if err != nil {
+			continue
+		}
+		fields[key] = encoded
+		changed = true
+	}
+	if !changed {
+		return config
+	}
+	encoded, err := json.Marshal(fields)
+	if err != nil {
+		return config
+	}
+	return encoded
 }
 
 // themeSettingsObject returns the active theme's settings as a JSON object. The query

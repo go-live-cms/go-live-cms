@@ -23,7 +23,7 @@
 // import yjs.
 import type { IncomingHttpHeaders } from "node:http"
 import { decodeCollabAuthToken, SCHEMA_FINGERPRINT_PATTERN } from "../gl-admin/lib/collaboration/schemaFingerprint"
-import { accessMode, isCollabDocName, ticketIdentity, type DocAccess, type TicketClaims, type TicketIdentity } from "./access"
+import { accessModeFor, isCollabDocName, ticketIdentity, type DocAccess, type TicketClaims, type TicketIdentity } from "./access"
 import { clientContextForLog, docNameForLog, errorMessage, logEvent, requestIdFrom } from "./logsafe"
 
 /** Reasons sent to the client in the permission-denied message. */
@@ -164,7 +164,8 @@ export function createAuthenticate(deps: AuthDeps) {
     if (access?.trashed) {
       throw reject(DENY.trashed, "The post is in the trash", { warn: true, userId: identity.userId })
     }
-    const mode = accessMode(access)
+    // Kind-aware (#490): a template or part is write or nothing, never read-only.
+    const mode = accessModeFor(access, rawDocName)
     if (!mode) {
       throw reject(DENY.forbidden, `Forbidden: role ${access?.role || "none"} cannot open this document`, {
         warn: true,

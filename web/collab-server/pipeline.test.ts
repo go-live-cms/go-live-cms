@@ -153,6 +153,51 @@ describe("normalizeBlockDoc (#304)", () => {
     await expect(apiReturning({}).getCollab("1410")).resolves.toMatchObject({ block_doc: null, block_revision: 1 })
   })
 
+  it("getTemplateCollab (#490) reads /internal/site-templates/:id/collab and requires a known doc_kind", async () => {
+    const urls: string[] = []
+    const api = (body: unknown) =>
+      createInternalApi({
+        apiUrl: "http://api.test",
+        secret: "s",
+        fetchImpl: (async (url: string) => {
+          urls.push(url)
+          return new Response(JSON.stringify(body), { status: 200 })
+        }) as unknown as typeof fetch,
+      })
+    await expect(api({ doc_kind: "part", block_doc: {}, block_revision: 2 }).getTemplateCollab("8")).resolves.toEqual({
+      doc_kind: "part",
+      block_doc: null,
+      block_revision: 2,
+      ydoc_state: null,
+      epoch: null,
+      ydoc_block_revision: null,
+    })
+    expect(urls).toEqual(["http://api.test/internal/site-templates/8/collab"])
+    for (const doc_kind of [undefined, "post", "page"]) {
+      await expect(api({ doc_kind, block_doc: {}, block_revision: 2 }).getTemplateCollab("8")).rejects.toThrow(/doc_kind/)
+    }
+    // A post's record carries no doc_kind.
+    await expect(api({ doc_kind: "part", block_doc: {}, block_revision: 2 }).getCollab("8")).resolves.not.toHaveProperty("doc_kind")
+  })
+
+  it("putTemplateCollab never sends block_edits (#490: no per-block attribution on templates)", async () => {
+    const sent: { url: string; body: Record<string, unknown> }[] = []
+    const api = createInternalApi({
+      apiUrl: "http://api.test",
+      secret: "s",
+      fetchImpl: (async (url: string, init: RequestInit) => {
+        sent.push({ url, body: JSON.parse(String(init.body)) })
+        return new Response(JSON.stringify({ block_revision: 3 }), { status: 200 })
+      }) as unknown as typeof fetch,
+    })
+    const body = { state: "AA==", epoch: "e", block_doc: canonical(paragraphDoc("x")), block_edits: [{ block_id: "b", user_id: 1, edited_at: "t" }] }
+    await expect(api.putTemplateCollab("8", body)).resolves.toEqual({ block_revision: 3 })
+    expect(sent[0].url).toBe("http://api.test/internal/site-templates/8/collab")
+    expect(sent[0].body).not.toHaveProperty("block_edits")
+    // The caller's body is left alone.
+    expect(body.block_edits).toHaveLength(1)
+  })
+
   it("getCollab rejects a malformed block_doc (the load fails, the content is untouched)", async () => {
     await expect(apiReturning({ blocks: [{ type: "paragraph" }], blocks_order: ["a"] }).getCollab("1410")).rejects.toThrow(
       /not a Block Spec v1 document/,
@@ -178,6 +223,31 @@ describe("store", () => {
     const roundTrip = new Y.Doc()
     Y.applyUpdate(roundTrip, Buffer.from(body.state, "base64"))
     expect(paragraphs(roundTrip)).toEqual(["one", "two", "three"])
+  })
+
+  it("validates with the doc's kind (#490): a template_part in a part is kept-invalid, in a template or a post it stores", () => {
+    const withPart = () => {
+      const doc = loaded()
+      const fragment = doc.getXmlFragment(EDITOR_FRAGMENT)
+      doc.transact(() => {
+        const part = new Y.XmlElement("templatePart")
+        fragment.insert(fragment.length, [part])
+        part.setAttribute("data-block-id", "blk-nested-part1")
+        part.setAttribute("slug", "footer")
+      })
+      return doc
+    }
+    const store = (kind?: "post" | "template" | "part") =>
+      prepareStore(withPart(), schema, { previous: record().block_doc, clientEdited: true, lastEditorId: "1", kind })
+    const part = store("part")
+    expect(part.decision).toMatchObject({ write: false, reason: "invalid" })
+    expect(part.body.block_doc).toBeUndefined()
+    expect(part.body.state).toBeTruthy()
+    for (const kind of ["template", "post", undefined] as const) {
+      const { decision, body } = store(kind)
+      expect(decision.write, String(kind)).toBe(true)
+      expect(body.block_doc?.blocks["blk-nested-part1"], String(kind)).toMatchObject({ type: "template_part", attrs: { slug: "footer" } })
+    }
   })
 
   it("writes a real block_doc on the first edit of a post that had block_doc {} (#304)", () => {

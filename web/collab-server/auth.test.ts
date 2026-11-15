@@ -82,6 +82,22 @@ describe("onAuthenticate", () => {
     expect(p.connectionConfig.readOnly).toBe(true)
   })
 
+  it("a template (#490): an admin connects read-write; an editor is refused at connect, never read-only", async () => {
+    const doc = "template-5"
+    const admin = deps({ role: "admin", canEdit: true })
+    const p = payload({ token: await sign({ ...iat, doc }), documentName: doc })
+    expect((await createAuthenticate(admin.all)(p)).readOnly).toBe(false)
+    expect(admin.fetchAccess).toHaveBeenCalledWith(expect.anything(), doc, expect.anything())
+
+    for (const role of ["editor", "contributor"]) {
+      const { all } = deps({ role, canEdit: false })
+      const denied = payload({ token: await sign({ ...iat, doc }), documentName: doc })
+      const error = await rejection(createAuthenticate(all)(denied))
+      expect(error.reason).toBe(DENY.forbidden)
+      expect(denied.connectionConfig.readOnly).toBe(false)
+    }
+  })
+
   it("a contributor on their own post connects read-write (#135)", async () => {
     const { all } = deps({ role: "contributor", canEdit: true })
     const p = payload({ token: await sign(iat) })
