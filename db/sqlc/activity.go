@@ -17,8 +17,8 @@ const (
 	// Plugins (#455): admin-only in the feed; object_id is plugins.id.
 	ActivityObjectPlugin = "plugin"
 	// The site design (#485, docs/design/theme-builder.md section 12): admin-only in the
-	// feed. object_id is the theme's id (global_styles_updated) or the release's
-	// (site_design_published).
+	// feed. object_id is the theme's id (global_styles_updated), the release's
+	// (site_design_published) or the template's (site_template_*, #490).
 	ActivityObjectSiteDesign = "site_design"
 )
 
@@ -126,4 +126,9 @@ const (
 	// when it was published anyway, so the warning stays visible afterwards).
 	ActivityGlobalStylesUpdated = "global_styles_updated"
 	ActivitySiteDesignPublished = "site_design_published"
+	// Templates and parts (#490): created by Customize or New template (payload kind, slug,
+	// source), edited through the collab server (throttled like a post's "edited", written
+	// in StoreSiteTemplateCollabTx under the row lock, no payload).
+	ActivitySiteTemplateCreated = "site_template_created"
+	ActivitySiteTemplateEdited  = "site_template_edited"
 )

@@ -19,6 +19,14 @@ content.** The Hocuspocus server (`web/collab-server/`) owns persistence:
 versions, media sync), and **only the collab server writes it** for an existing post.
 Publish asks the API, which flushes the collab server before reading `block_doc`.
 
+**A second document kind (#490, design `docs/design/theme-builder.md` 7):** block templates and
+template parts (`site_templates`, admins only) are `template-<id>` documents on the same server, with
+the same schema, fingerprint, editor and rules. `HocuspocusCollaboration`'s `docKind: "template"` opens
+one (the Site editor, #493). Only an admin connects: anyone else is **refused at connect**, and an admin
+demoted while connected is **closed** (`access-revoked`), never given a read-only view. Each store is
+validated with the template's kind (a part holding a `template_part` is `kept-invalid`); there is no
+per-block attribution (#328) on templates. The server half: `collab-server/CLAUDE.md`, "Document kinds".
+
 **History:** until P5 (#285) a y-websocket server (`websocket/`, LevelDB) relayed the doc
 and every client autosaved through `PUT /posts/:id/blocks`, which made the client
 reconcile three stores (its Yjs doc, LevelDB, `block_doc`). Every bug class of the
@@ -205,17 +213,23 @@ kept so references in code stay valid.
    `onLoadDocument` is the only place a doc is seeded, and only when no stored Yjs state
    matches the post's current `block_revision`. The client never seeds and never writes
    content outside the editor (no REST save exists any more). The only writers of
-   `block_doc` are the collab server's store (`PUT /internal/posts/:id/collab`), and for a
+   `block_doc` are the collab server's store (`PUT /internal/posts/:id/collab`; for a template or part,
+   `PUT /internal/site-templates/:id/collab`, #490), and for a
    new post's initial body (nothing is live yet) `POST /posts`, `POST
    /posts/:id/duplicate` (#354: a copy with new block ids and no Yjs state, seeded like
    any new post; `duplicatePost.collab.test.ts`) and `POST /post-templates/:id/posts`
    (#322: a template's content with new block ids, the same Go function, no Yjs state;
-   `postFromTemplate.collab.test.ts`). Templates themselves live in their own table and
-   never reach the collab server. A server-side
+   `postFromTemplate.collab.test.ts`). Post templates (#322) live in their own table and
+   never reach the collab server. **Block templates and parts (#490)** do: `site_templates.block_doc`
+   is written by `POST /site-design/templates` when a row is created (Customize from the theme default,
+   a starter or blank; no Yjs state yet, like `POST /posts`) and by the collab store after that. Reset
+   (#492) sets `working_state` and never writes `block_doc`; "Start over" and restoring a version go
+   through the editor (rule 9). A server-side
    restore, import or migration tool would have to go through the collab server
    (`openDirectConnection`, #286), not `UPDATE posts`.
 
-12. **The revision and epoch guards stay.** `post_ydoc_state` records the
+12. **The revision and epoch guards stay.** `post_ydoc_state` (and `site_template_ydoc_state` for
+   `template-<id>`, #490; both start at `block_revision` 1) records the
    `block_revision` it was stored at; if `block_doc` was written some other way anyway (a
    restored backup, a manual fix), the API withholds the stale state and the server
    reseeds under a **new epoch**. A client that still holds structs of the old seed
@@ -606,8 +620,8 @@ kept so references in code stay valid.
     `location`, and two people picking at once (both set) keeps `menuId`, everywhere; the Block tab clears the other
     in the same transaction.
   - **Where they may sit** (`validateBlockDoc(doc, { kind })`, Go `prepareForStoreAs`): a `template_part` never in a
-    part, referenced or not, so parts can't recurse. The collab store stores posts only until #490 adds the
-    template document kind, which must pass its kind.
+    part, referenced or not, so parts can't recurse. The collab store passes the document's kind (#490:
+    `post`, or a template's `template` / `part`); a part holding one is `kept-invalid`.
   - **Old data:** like `callout` in #419, a stored pre-#376 custom block whose type is one of the six names
     (`navigation`, `search`, …) now reads as the site block: its `pm` and `text` are dropped by the bridge and
     the API. No such type shipped in a theme; check before restoring an old backup that had one.

@@ -171,6 +171,13 @@ type Querier interface {
 	// redeemed (ConfirmSignupTx).
 	CreateSignupRequest(ctx context.Context, arg CreateSignupRequestParams) (SignupRequest, error)
 	CreateSiteDesignRelease(ctx context.Context, arg CreateSiteDesignReleaseParams) (SiteDesignRelease, error)
+	// Block templates and template parts (#490, docs/design/theme-builder.md 5.1, 7). The
+	// collab server reaches the working copy through the API's internal listener
+	// (GET/PUT /internal/site-templates/:id/collab); the writes run together in
+	// StoreSiteTemplateCollabTx, as post_collab.sql's do in StorePostCollabTx.
+	// "Customize" or "New template" (POST /site-design/templates): the only writer of
+	// block_doc besides the collab store, for a row with no Yjs state yet (rule 11).
+	CreateSiteTemplate(ctx context.Context, arg CreateSiteTemplateParams) (SiteTemplate, error)
 	// Taxonomy Terms Management
 	CreateTaxonomyTerm(ctx context.Context, arg CreateTaxonomyTermParams) (TaxonomyTerm, error)
 	// Taxonomy Types Management
@@ -393,6 +400,9 @@ type Querier interface {
 	GetSessionByRefreshTokenHash(ctx context.Context, refreshTokenHash []byte) (Session, error)
 	GetSessionForUpdate(ctx context.Context, id uuid.UUID) (Session, error)
 	GetSettings(ctx context.Context) (Setting, error)
+	GetSiteTemplate(ctx context.Context, id int64) (SiteTemplate, error)
+	GetSiteTemplateBySlug(ctx context.Context, arg GetSiteTemplateBySlugParams) (SiteTemplate, error)
+	GetSiteTemplateCollab(ctx context.Context, id int64) (GetSiteTemplateCollabRow, error)
 	GetTaxonomyTerm(ctx context.Context, id int64) (TaxonomyTerm, error)
 	GetTaxonomyTermBySlug(ctx context.Context, slug string) (GetTaxonomyTermBySlugRow, error)
 	// Hierarchical term tree (for categories)
@@ -735,6 +745,7 @@ type Querier interface {
 	// hand or an unpublish (the 000035 trigger deletes it), or claimed again after this
 	// claim's lease ran out. Nothing is published then.
 	LockScheduledUpdateClaim(ctx context.Context, arg LockScheduledUpdateClaimParams) (LockScheduledUpdateClaimRow, error)
+	LockSiteTemplateForCollabStore(ctx context.Context, id int64) (int64, error)
 	// Taken by refresh-token rotation so it cannot interleave with a password
 	// change on the same user (which holds the row FOR UPDATE).
 	LockUserForShare(ctx context.Context, id int64) error
@@ -1014,6 +1025,9 @@ type Querier interface {
 	UpdateSession(ctx context.Context, arg UpdateSessionParams) (Session, error)
 	UpdateSessionsUsername(ctx context.Context, arg UpdateSessionsUsernameParams) ([]Session, error)
 	UpdateSettings(ctx context.Context, arg UpdateSettingsParams) (Setting, error)
+	// Only stores that carry a block_doc reach this query (the collab server sends one only
+	// when the derived doc changed), so state-only stores leave changed_at alone, as for posts.
+	UpdateSiteTemplateBlockDocFromCollab(ctx context.Context, arg UpdateSiteTemplateBlockDocFromCollabParams) (int64, error)
 	// parent_id is assigned as is (no COALESCE) so a NULL moves the term to the top
 	// level; the handler passes the current parent when it isn't changing.
 	UpdateTaxonomyTerm(ctx context.Context, arg UpdateTaxonomyTermParams) (TaxonomyTerm, error)
@@ -1040,6 +1054,8 @@ type Querier interface {
 	// one whole: a new snapshot, a new time, no attempts, failure or claim, so an apply
 	// in flight for the old one is fenced off. No row: the post isn't published.
 	UpsertScheduledUpdateFromPost(ctx context.Context, arg UpsertScheduledUpdateFromPostParams) (UpsertScheduledUpdateFromPostRow, error)
+	// A last_editor_id that no longer exists is stored as NULL rather than failing the store.
+	UpsertSiteTemplateYdocState(ctx context.Context, arg UpsertSiteTemplateYdocStateParams) error
 	UpsertThemeSetting(ctx context.Context, arg UpsertThemeSettingParams) (ThemeSetting, error)
 }
 

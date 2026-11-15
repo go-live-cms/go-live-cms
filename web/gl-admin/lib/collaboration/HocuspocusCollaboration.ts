@@ -125,6 +125,12 @@ export interface HocuspocusCollaborationOptions {
   authRetryMs?: number
   /** HocuspocusProviderWebsocket reconnect delays (tests shorten them). */
   reconnectDelayMs?: number
+  /**
+   * The document kind (#490): a post's body (`post-<id>`, the default) or a block template or
+   * template part (`template-<id>`, the Site editor's, admins only). The id is the
+   * constructor's either way; only the name the server sees changes.
+   */
+  docKind?: "post" | "template"
 }
 
 /** `url` with `?epoch=` set (or replaced). */
@@ -170,7 +176,7 @@ export class HocuspocusCollaboration {
 
   constructor(postId: number, options: HocuspocusCollaborationOptions) {
     this.postId = postId
-    this.docName = `post-${postId}`
+    this.docName = `${options.docKind ?? "post"}-${postId}`
     this.baseUrl = options.url
     this.authRetryMs = options.authRetryMs ?? 1000
     this.authRetryDelay = this.authRetryMs

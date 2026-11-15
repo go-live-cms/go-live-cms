@@ -80,6 +80,7 @@ type Store interface {
 	SetMediaVariantsTx(ctx context.Context, arg SetMediaVariantsTxParams) (Medium, error)
 
 	StorePostCollabTx(ctx context.Context, arg StorePostCollabTxParams) (StorePostCollabTxResult, error)
+	StoreSiteTemplateCollabTx(ctx context.Context, arg StoreSiteTemplateCollabTxParams) (StoreSiteTemplateCollabTxResult, error)
 
 	PublishPostTx(ctx context.Context, arg PublishPostTxParams) (PublishPostTxResult, error)
 	PublishScheduledPostTx(ctx context.Context, arg PublishScheduledPostTxParams) (PublishPostTxResult, error)

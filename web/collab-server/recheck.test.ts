@@ -109,6 +109,41 @@ describe("access re-check (recheck.ts)", () => {
     expect(events("ws_access_revoked")).toEqual([expect.objectContaining({ doc: DOC, user_id: "2", from: "write" })])
   })
 
+  it("closes an admin demoted while on a template with access-revoked, never read-only (#490)", async () => {
+    api.users.set("1", { role: "admin" })
+    api.addTemplate("5", null)
+    const checks = recheck()
+    const template = new FakeConnection()
+    const post = new FakeConnection()
+    checks.add(template, { userId: "1", issuedAt: ISSUED, docName: "template-5" })
+    checks.add(post, { userId: "1", issuedAt: ISSUED, docName: DOC })
+    await clock.advance(MINUTE)
+    expect(template.closed).toBeNull()
+
+    api.users.set("1", { role: "editor" })
+    expect(checks.checkUser("1")).toBe(2)
+    await clock.advance(1)
+    expect(template.closed).toEqual({ code: 4403, reason: ACCESS_REVOKED })
+    expect(template.readOnly).toBe(false)
+    expect(template.messages).toEqual([])
+    // The same demotion leaves a post writable: an editor still edits posts.
+    expect(post.closed).toBeNull()
+    expect(post.readOnly).toBe(false)
+    expect(checks.size).toBe(1)
+    expect(events("ws_access_revoked")).toEqual([expect.objectContaining({ doc: "template-5", user_id: "1", role: "editor" })])
+  })
+
+  it("closes a template connection when the template is deleted (#490)", async () => {
+    api.users.set("1", { role: "admin" })
+    api.addTemplate("5", null)
+    const checks = recheck()
+    const conn = new FakeConnection()
+    checks.add(conn, { userId: "1", issuedAt: ISSUED, docName: "template-5" })
+    api.templates.delete("5")
+    await clock.advance(MINUTE)
+    expect(conn.closed?.reason).toBe(ACCESS_REVOKED)
+  })
+
   it("closes a user who lost every content role", async () => {
     const checks = recheck()
     const conn = new FakeConnection()

@@ -15,6 +15,8 @@
 //   - read → write (promoted again) → read-write again, client told.
 //   - denied (403/404: user deleted, post deleted, ticket predates a password change;
 //     or no content role any more) → the connection is closed with `access-revoked`.
+//     On a template or part (#490) `can_edit` false is a denial too: an admin who is
+//     demoted is closed, never made read-only (accessMode is kind-aware).
 //   - lookup failed (API down, slow, 5xx) → the connection KEEPS its mode, the failure
 //     is logged once and retried after `retryMs`. Fail-open for `graceMs` after the
 //     last confirmed lookup (at connect, or the last successful re-check) only: an API blip
@@ -31,7 +33,7 @@
 //
 // Pure + dependency-injected (lookup, clock, random); unit tested in recheck.test.ts.
 // Must NOT import yjs.
-import { accessMode, type DocAccess, type TicketIdentity } from "./access"
+import { accessModeFor, type DocAccess, type TicketIdentity } from "./access"
 import { docNameForLog, errorMessage, logEvent, requestIdFrom } from "./logsafe"
 
 /** The close reason a client sees when its access is gone (shown as "session ended"). */
@@ -244,7 +246,9 @@ export function createAccessRecheck(options: AccessRecheckOptions) {
         connection.close({ code: CLOSE_CODE, reason: POST_TRASHED })
         continue
       }
-      const mode = accessMode(access)
+      // Kind-aware (#490): an admin demoted while on a template has no mode (closed with
+      // access-revoked below), never read-only.
+      const mode = accessModeFor(access, group.docName)
       if (!mode) {
         logEvent("warn", "ws_access_revoked", {
           request_id: requestId,

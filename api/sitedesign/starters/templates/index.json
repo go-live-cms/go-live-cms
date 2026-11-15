@@ -1,0 +1,11 @@
+{
+  "title": "Template",
+  "doc": {
+    "doc_version": 1,
+    "blocks_order": ["starter-index-header", "starter-index-footer"],
+    "blocks": {
+      "starter-index-header": { "id": "starter-index-header", "type": "template_part", "version": 1, "attrs": { "slug": "header" } },
+      "starter-index-footer": { "id": "starter-index-footer", "type": "template_part", "version": 1, "attrs": { "slug": "footer" } }
+    }
+  }
+}
