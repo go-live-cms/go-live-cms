@@ -678,6 +678,8 @@ type Querier interface {
 	// One page of the archive, newest first. Same columns as ListPostsWithMeta so rows
 	// share its presenter. A post in both a parent and its child is listed once.
 	ListPublishedPostsByTerm(ctx context.Context, arg ListPublishedPostsByTermParams) ([]ListPublishedPostsByTermRow, error)
+	// The published version number of each of a theme's rows (the overview, one query).
+	ListPublishedSiteTemplateVersionNos(ctx context.Context, themeSlug string) ([]ListPublishedSiteTemplateVersionNosRow, error)
 	// Settings › URLs & redirects, newest first, with who made each (public fields).
 	ListRedirects(ctx context.Context, arg ListRedirectsParams) ([]ListRedirectsRow, error)
 	// Up to @limit_count published posts of @post_type ranked by the terms they share

@@ -112,6 +112,8 @@ func TestPublishSiteDesignTemplates(t *testing.T) {
 	require.Equal(t, http.StatusOK, status)
 	require.JSONEq(t, `2`, string(list["unpublished_changes"]))
 	require.Contains(t, string(list["templates"]), `"change":"publish"`)
+	require.NotContains(t, string(list["templates"]), `"block_doc"`, "the overview carries no docs")
+	require.NotContains(t, string(list["templates"]), `"published_block_doc"`)
 
 	// The public cache is warm before the publish.
 	p.activeThemeStyles(t)
@@ -143,6 +145,9 @@ func TestPublishSiteDesignTemplates(t *testing.T) {
 	require.Equal(t, 1, p.releases())
 	require.Equal(t, 1, p.versions(single.ID))
 	require.Equal(t, 1, p.versions(header.ID))
+	_, list = p.call(http.MethodGet, "/api/v1/site-design/templates", "")
+	require.JSONEq(t, `0`, string(list["unpublished_changes"]))
+	require.Contains(t, string(list["templates"]), `"published_version_no":1`)
 	require.True(t, p.row(single.ID).PublishedBlockDoc.Valid)
 	require.JSONEq(t, string(p.row(single.ID).BlockDoc), string(p.row(single.ID).PublishedBlockDoc.RawMessage))
 	require.GreaterOrEqual(t, p.flushes(single.ID), 1)

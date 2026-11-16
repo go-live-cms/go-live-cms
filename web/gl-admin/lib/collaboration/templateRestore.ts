@@ -26,6 +26,7 @@ export interface TemplateRestoreApi {
   recordSiteTemplateRestore: typeof siteDesignApi.recordSiteTemplateRestore
   getSiteTemplateDefault: typeof siteDesignApi.getSiteTemplateDefault
   recordSiteTemplateStartOver: typeof siteDesignApi.recordSiteTemplateStartOver
+  resetSiteTemplate: typeof siteDesignApi.resetSiteTemplate
 }
 
 const defaultApi: TemplateRestoreApi = siteDesignApi
@@ -84,18 +85,24 @@ export async function restoreTemplateVersion(
 }
 
 /**
- * Discard changes (8.2): the published copy back into the working copy, through the
- * editor: it is History's restore of the published version. An item never published
- * throws `NeverPublishedError` (Delete is its discard). A reset that was published needs no
- * doc: Keep editing is enough when the working copy is already the published one, but
- * restoring the published version covers both.
+ * Discard changes (8.2): what the site shows becomes the working state again.
+ * - A published copy: restored through the editor (History's restore of the published
+ *   version), which also ends a reset not yet published.
+ * - The last publish reset it (the theme's default is live, `published` false, its
+ *   version has no doc): discard is Reset to theme default again. The working copy stays
+ *   as it is, as every reset keeps it (section 9); nothing goes through the editor.
+ * - Never published: `NeverPublishedError` (Delete is its discard; it asks first).
  */
 export async function discardTemplateChanges(
   target: TemplateRestoreTarget,
-  template: Pick<SiteTemplate, "published_version_no">,
+  template: Pick<SiteTemplate, "published" | "published_version_no">,
   options: { api?: TemplateRestoreApi; timeoutMs?: number } = {}
 ): Promise<TemplateRestoreResult> {
   if (template.published_version_no == null) throw new NeverPublishedError()
+  if (!template.published) {
+    const api = options.api ?? defaultApi
+    return { saved: true, dropped: 0, template: await api.resetSiteTemplate(target.templateId) }
+  }
   return restoreTemplateVersion(target, template.published_version_no, options)
 }
 

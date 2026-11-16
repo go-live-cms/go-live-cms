@@ -256,6 +256,42 @@ func (q *Queries) GetSiteTemplateVersionByID(ctx context.Context, id int64) (Sit
 	return i, err
 }
 
+const listPublishedSiteTemplateVersionNos = `-- name: ListPublishedSiteTemplateVersionNos :many
+SELECT t.id, v.version_no
+FROM site_templates t
+JOIN site_template_versions v ON v.id = t.published_version_id
+WHERE t.theme_slug = $1
+`
+
+type ListPublishedSiteTemplateVersionNosRow struct {
+	ID        int64 `json:"id"`
+	VersionNo int32 `json:"version_no"`
+}
+
+// The published version number of each of a theme's rows (the overview, one query).
+func (q *Queries) ListPublishedSiteTemplateVersionNos(ctx context.Context, themeSlug string) ([]ListPublishedSiteTemplateVersionNosRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPublishedSiteTemplateVersionNos, themeSlug)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPublishedSiteTemplateVersionNosRow{}
+	for rows.Next() {
+		var i ListPublishedSiteTemplateVersionNosRow
+		if err := rows.Scan(&i.ID, &i.VersionNo); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSiteTemplateVersions = `-- name: ListSiteTemplateVersions :many
 SELECT
     v.id,

@@ -32,7 +32,7 @@ type SiteTemplateDetailResponse struct {
 	// back) or "" (nothing to publish).
 	Change                string          `json:"change"`
 	HasUnpublishedChanges bool            `json:"has_unpublished_changes"`
-	PublishedBlockDoc     json.RawMessage `json:"published_block_doc"`
+	PublishedBlockDoc     json.RawMessage `json:"published_block_doc,omitempty"`
 	PublishedVersionNo    *int32          `json:"published_version_no"`
 	// DefaultChanged: the theme's default (or the starter) this row started from has
 	// changed since (section 9's "Default changed since you customized").
@@ -64,30 +64,65 @@ func (server *Server) siteTemplateDefault(theme db.Theme, row db.SiteTemplate, f
 	return starter.Doc, sitedesign.Hash(normalized), siteTemplateFromStarter, true
 }
 
+// siteTemplateDetail is one row's detail (GET /templates/:id and the per-item routes'
+// answers): with its published doc, its published version number looked up.
 func (server *Server) siteTemplateDetail(c *gin.Context, theme *db.Theme, row db.SiteTemplate) SiteTemplateDetailResponse {
+	var versionNo *int32
+	if row.PublishedVersionID.Valid {
+		if version, err := server.store.GetSiteTemplateVersionByID(c, row.PublishedVersionID.Int64); err == nil {
+			no := version.VersionNo
+			versionNo = &no
+		}
+	}
+	detail := server.siteTemplateSummary(row, versionNo, server.defaultHashes(theme))
+	detail.PublishedBlockDoc = json.RawMessage(`null`)
+	if row.PublishedBlockDoc.Valid {
+		detail.PublishedBlockDoc = row.PublishedBlockDoc.RawMessage
+	}
+	return detail
+}
+
+// siteTemplateSummary is a row's state without its docs (the overview leaves both out:
+// a template can be megabytes, and the list needs titles and states).
+func (server *Server) siteTemplateSummary(row db.SiteTemplate, versionNo *int32, defaultHash func(db.SiteTemplate) (string, bool)) SiteTemplateDetailResponse {
 	change := siteTemplateChange(row)
 	detail := SiteTemplateDetailResponse{
 		SiteTemplateResponse:  toSiteTemplateResponse(row),
 		Change:                change,
 		HasUnpublishedChanges: change != "",
 		CanDelete:             !row.PublishedBlockDoc.Valid,
-		PublishedBlockDoc:     json.RawMessage(`null`),
+		PublishedVersionNo:    versionNo,
 	}
-	if row.PublishedBlockDoc.Valid {
-		detail.PublishedBlockDoc = row.PublishedBlockDoc.RawMessage
-	}
-	if row.PublishedVersionID.Valid {
-		if version, err := server.store.GetSiteTemplateVersionByID(c, row.PublishedVersionID.Int64); err == nil {
-			no := version.VersionNo
-			detail.PublishedVersionNo = &no
-		}
-	}
-	if theme != nil && theme.Slug == row.ThemeSlug && row.Source != siteTemplateFromBlank {
-		if _, hash, _, ok := server.siteTemplateDefault(*theme, row, row.Source); ok && hash != row.SourceHash {
+	if row.Source != siteTemplateFromBlank {
+		if hash, ok := defaultHash(row); ok && hash != row.SourceHash {
 			detail.DefaultChanged = true
 		}
 	}
 	return detail
+}
+
+// defaultHashes answers the hash of the default a row of the active theme started from
+// (for "Default changed since you customized"), each (kind, slug, source) computed once:
+// a starter's hash runs the store's checks. No theme or another theme's row: no answer.
+func (server *Server) defaultHashes(theme *db.Theme) func(db.SiteTemplate) (string, bool) {
+	type key struct{ kind, slug, source string }
+	type answer struct {
+		hash string
+		ok   bool
+	}
+	memo := map[key]answer{}
+	return func(row db.SiteTemplate) (string, bool) {
+		if theme == nil || theme.Slug != row.ThemeSlug {
+			return "", false
+		}
+		k := key{row.Kind, row.Slug, row.Source}
+		if a, done := memo[k]; done {
+			return a.hash, a.ok
+		}
+		_, hash, _, ok := server.siteTemplateDefault(*theme, row, row.Source)
+		memo[k] = answer{hash, ok}
+		return hash, ok
+	}
 }
 
 // siteTemplateParam reads :id and its row, answering 400/404/500 itself.
@@ -136,10 +171,27 @@ func (server *Server) listSiteTemplates(c *gin.Context) {
 	if !ok {
 		return
 	}
+	versions, err := server.store.ListPublishedSiteTemplateVersionNos(c, theme.Slug)
+	if err != nil {
+		server.requestLog(c).Error("site_design_read_failed", "theme", theme.Slug, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get the site design"})
+		return
+	}
+	versionNos := make(map[int64]int32, len(versions))
+	for _, v := range versions {
+		versionNos[v.ID] = v.VersionNo
+	}
+	defaultHash := server.defaultHashes(&theme)
 	items := make([]SiteTemplateDetailResponse, 0, len(rows))
 	changes := 0
 	for _, row := range rows {
-		detail := server.siteTemplateDetail(c, &theme, row)
+		var versionNo *int32
+		if no, ok := versionNos[row.ID]; ok {
+			versionNo = &no
+		}
+		detail := server.siteTemplateSummary(row, versionNo, defaultHash)
+		// The overview carries no docs: GET /templates/:id has them.
+		detail.BlockDoc = nil
 		if detail.HasUnpublishedChanges {
 			changes++
 		}
@@ -400,12 +452,7 @@ func versionBlockDoc(doc pqtype.NullRawMessage) json.RawMessage {
 	if !doc.Valid {
 		return json.RawMessage(`null`)
 	}
-	if parsed, err := parseStoredBlockDoc(doc.RawMessage); err == nil {
-		if encoded, err := json.Marshal(parsed); err == nil {
-			return encoded
-		}
-	}
-	return doc.RawMessage
+	return normalizedBlockDocJSON(doc.RawMessage)
 }
 
 // getSiteTemplateVersion handles GET /site-design/templates/:id/versions/:no (admin): the

@@ -95,6 +95,7 @@ function fakeApi(versions: Record<number, BlockDocV1 | null>) {
       recordedAfter.push(storedTexts())
       return row()
     }),
+    resetSiteTemplate: vi.fn(async () => row("reset")),
   }
   return { api, recordedAfter }
 }
@@ -128,12 +129,24 @@ describe("template restore through the editor (#492, rule 9)", () => {
     const a = await peer("1")
     const { api } = fakeApi({ 3: templateDoc("published"), 4: null })
 
-    await expect(discardTemplateChanges(a.target, { published_version_no: null }, { api })).rejects.toBeInstanceOf(NeverPublishedError)
+    await expect(discardTemplateChanges(a.target, { published: false, published_version_no: null }, { api })).rejects.toBeInstanceOf(NeverPublishedError)
     await expect(restoreTemplateVersion(a.target, 4, { api })).rejects.toBeInstanceOf(ResetVersionError)
     expect(api.recordSiteTemplateRestore).not.toHaveBeenCalled()
     expect(paragraphs(a.collab.doc)).toContain("working one")
 
-    await discardTemplateChanges(a.target, { published_version_no: 3 }, { api })
+    await discardTemplateChanges(a.target, { published: true, published_version_no: 3 }, { api })
+    expect(storedTexts()).toEqual(["published"])
+    expect(api.resetSiteTemplate).not.toHaveBeenCalled()
+
+    // The last publish reset it (the theme default is live): discard is Reset again, and the
+    // working copy stays as it is (nothing through the editor, nothing recorded as a restore).
+    const putsBefore = relay.api.templatePuts.length
+    const versionReads = vi.mocked(api.getSiteTemplateVersion).mock.calls.length
+    const reset = await discardTemplateChanges(a.target, { published: false, published_version_no: 4 }, { api })
+    expect(reset.template.working_state).toBe("reset")
+    expect(api.resetSiteTemplate).toHaveBeenCalledWith(TEMPLATE_ID)
+    expect(vi.mocked(api.getSiteTemplateVersion).mock.calls.length).toBe(versionReads)
+    expect(relay.api.templatePuts.length).toBe(putsBefore)
     expect(storedTexts()).toEqual(["published"])
     expect(api.recordSiteTemplateRestore).toHaveBeenCalledWith(TEMPLATE_ID, 3)
   })

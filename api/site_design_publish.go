@@ -14,6 +14,7 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -59,23 +60,52 @@ func sameJSON(a, b json.RawMessage) bool {
 	return reflect.DeepEqual(left, right)
 }
 
+// blankLayoutContainers hold nothing of their own: one is blank when every block in it is.
+// (A details has its summary, a gallery its caption, a list its items: those count.)
+var blankLayoutContainers = map[string]bool{"group": true, "columns": true, "column": true}
+
 // blockDocIsEmpty: nothing renders. No blocks, or only paragraphs with no inline content
-// (what the editor adds on its own), the collab server's hasContent the other way round
-// (web/collab-server/store.ts).
+// (what the editor adds on its own, the collab server's hasContent the other way round,
+// web/collab-server/store.ts), at the top or inside groups and columns holding only those.
 func blockDocIsEmpty(doc BlockDocV1) bool {
-	for _, id := range doc.BlocksOrder {
+	seen := map[string]bool{}
+	var blank func(id string) bool
+	blank = func(id string) bool {
+		if seen[id] {
+			return true // a cycle: the store refuses those; nothing more renders here
+		}
+		seen[id] = true
 		block, _ := doc.Blocks[id].(map[string]any)
-		if block == nil || block["type"] != "paragraph" {
+		if block == nil {
 			return false
 		}
 		attrs, _ := block["attrs"].(map[string]any)
-		if text, _ := attrs["text"].(string); text != "" {
-			return false
-		}
-		if pm, _ := attrs["pm"].(map[string]any); pm != nil {
-			if content, _ := pm["content"].([]any); len(content) > 0 {
+		switch blockType, _ := block["type"].(string); {
+		case blockType == "paragraph":
+			if text, _ := attrs["text"].(string); text != "" {
 				return false
 			}
+			if pm, _ := attrs["pm"].(map[string]any); pm != nil {
+				if content, _ := pm["content"].([]any); len(content) > 0 {
+					return false
+				}
+			}
+			return true
+		case blankLayoutContainers[blockType]:
+			children, _ := block["children"].([]any)
+			for _, child := range children {
+				childID, ok := child.(string)
+				if !ok || !blank(childID) {
+					return false
+				}
+			}
+			return true
+		}
+		return false
+	}
+	for _, id := range doc.BlocksOrder {
+		if !blank(id) {
+			return false
 		}
 	}
 	return true
@@ -171,16 +201,26 @@ func (p siteDesignPlan) liveDoc(row db.SiteTemplate) json.RawMessage {
 
 // validate checks what this publish would put live (8.2 step 1): each published working
 // copy passes its kind's store checks (a block uninstalled since is template_invalid), no
-// template is empty, and every template_part slug of every template live afterwards
-// resolves (4.2): to a part this theme has live after the publish, else the part the
-// theme ships, else core's starter part. An empty part is allowed: a site may have no
-// footer.
+// template is empty, and every template_part slug this publish could break resolves
+// (4.2): to a part this theme has live after the publish, else the part the theme ships,
+// else core's starter part. That is every part of a template being published, and of a
+// template already live only the parts this publish changes: a template broken by
+// something else (a theme deploy that dropped a shipped part) doesn't block unrelated
+// publishes, and renders that part as nothing until someone edits it, as today. An empty
+// part is allowed: a site may have no footer.
 func (server *Server) validateSiteDesignPlan(theme db.Theme, plan siteDesignPlan) []SiteDesignProblem {
 	problems := []SiteDesignProblem{}
 	liveParts := map[string]bool{}
+	changedParts := map[string]bool{}
 	for _, row := range plan.rows {
-		if row.Kind == sitedesign.KindPart && plan.liveDoc(row) != nil {
+		if row.Kind != sitedesign.KindPart {
+			continue
+		}
+		if plan.liveDoc(row) != nil {
 			liveParts[row.Slug] = true
+		}
+		if plan.changes[row.ID] != "" {
+			changedParts[row.Slug] = true
 		}
 	}
 	resolves := func(slug string) bool {
@@ -206,11 +246,16 @@ func (server *Server) validateSiteDesignPlan(theme db.Theme, plan siteDesignPlan
 			problems = append(problems, problem)
 			continue
 		}
-		if plan.changes[row.ID] == siteTemplateChangePublish {
+		published := plan.changes[row.ID] == siteTemplateChangePublish
+		if published {
 			// The store already checked it; re-checked because the build may have
-			// changed since (a theme or plugin block uninstalled).
-			checked := doc
-			if err := checked.prepareForStoreAs(server.themeBlocks, blockDocKind(row.Kind)); err != nil {
+			// changed since (a theme or plugin block uninstalled). Its own parse: the
+			// checks normalize the doc in place.
+			checked, err := parseStoredBlockDoc(live)
+			if err == nil {
+				err = checked.prepareForStoreAs(server.themeBlocks, blockDocKind(row.Kind))
+			}
+			if err != nil {
 				problem.Code, problem.Reason = siteDesignTemplateInvalid, err.Error()
 				problems = append(problems, problem)
 				continue
@@ -225,6 +270,9 @@ func (server *Server) validateSiteDesignPlan(theme db.Theme, plan siteDesignPlan
 			continue
 		}
 		for _, part := range templatePartSlugs(doc) {
+			if !published && !changedParts[part] {
+				continue
+			}
 			if !resolves(part) {
 				problems = append(problems, SiteDesignProblem{
 					Code: siteDesignPartUnresolved, ID: row.ID, Kind: row.Kind, Slug: row.Slug, Part: part,
@@ -265,18 +313,36 @@ func (server *Server) listSiteDesignRows(c *gin.Context, theme string) ([]db.Sit
 // flushSiteDesign asks the collab server to store every custom template and part of the
 // theme now (8.2 step 1), outside any transaction, so block_doc holds every edit made
 // before the publish. A reset row's working copy isn't published, so it isn't flushed.
-// The first failure stops it: nothing is published (as for posts, #206).
+// Up to siteDesignFlushParallel at a time (each is bounded by collabFlushTimeout); any
+// failure means nothing is published (as for posts, #206), and the first failed row in
+// list order is the one named.
 func (server *Server) flushSiteDesign(c *gin.Context, rows []db.SiteTemplate) (db.SiteTemplate, error) {
-	for _, row := range rows {
+	ctx, requestID := c.Request.Context(), requestIDFromContext(c)
+	errs := make([]error, len(rows))
+	slots := make(chan struct{}, siteDesignFlushParallel)
+	var wg sync.WaitGroup
+	for i, row := range rows {
 		if row.WorkingState == siteTemplateReset {
 			continue
 		}
-		if err := server.flushCollabTemplate(c.Request.Context(), row.ID, requestIDFromContext(c)); err != nil {
-			return row, err
+		wg.Add(1)
+		slots <- struct{}{}
+		go func(i int, id int64) {
+			defer func() { <-slots; wg.Done() }()
+			errs[i] = server.flushCollabTemplate(ctx, id, requestID)
+		}(i, row.ID)
+	}
+	wg.Wait()
+	for i, err := range errs {
+		if err != nil {
+			return rows[i], err
 		}
 	}
 	return db.SiteTemplate{}, nil
 }
+
+// siteDesignFlushParallel bounds the flushes a publish has in flight at once.
+const siteDesignFlushParallel = 4
 
 // publishedSiteTemplateHook is the hook PublishSiteDesignTx runs inside its transaction
 // for every row it publishes (design 8.2: "sync site_template_media's published rows").

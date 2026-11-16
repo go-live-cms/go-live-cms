@@ -74,8 +74,8 @@ every server boot — **read process logs from the very top**.
 - `liveRestore.ts`: rule 9. `setEditorBlockDoc`, then the version's dropped record into
   `meta.dropped`, then await `stored`.
 - `templateRestore.ts` (#492): rule 9 for a template or part (`template-<id>`): History's Restore
-  (`restoreTemplateVersion`), Discard changes (the published version's restore;
-  `NeverPublishedError` when there is none, whose discard is Delete) and Start over from the theme
+  (`restoreTemplateVersion`), Discard changes (the published version's restore; after a
+  published reset, Reset again; `NeverPublishedError` when never published, whose discard is Delete) and Start over from the theme
   default (`startOverTemplate`). Each fetches the doc over REST, puts it in through
   `restoreVersionLive`, and only **after** the server's `stored` tells the API to record it
   (`POST /site-design/templates/:id/versions/:no/restore` / `.../start-over`: working_state,

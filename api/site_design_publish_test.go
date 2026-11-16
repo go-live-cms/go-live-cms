@@ -86,7 +86,7 @@ func TestPublishSiteDesignFlushesBeforeTheTransaction(t *testing.T) {
 	store.EXPECT().PublishSiteDesignTx(gomock.Any(), gomock.Any()).DoAndReturn(func(_ any, arg db.PublishSiteDesignTxParams) (db.PublishSiteDesignTxResult, error) {
 		// Every custom row was flushed before, the reset ones never; and nothing is
 		// flushed while the transaction runs.
-		require.Equal(t, []string{"/internal/documents/template-1/flush", "/internal/documents/template-2/flush"}, collab.calls())
+		require.ElementsMatch(t, []string{"/internal/documents/template-1/flush", "/internal/documents/template-2/flush"}, collab.calls())
 		require.Nil(t, arg.StylesDraftRevision, "the styles had no changes")
 		require.Equal(t, []int64{1, 3, 2}, arg.Publish, "templates first, then parts by slug")
 		require.Len(t, arg.Rows, 4)
@@ -169,6 +169,18 @@ func TestPublishSiteDesignRefusals(t *testing.T) {
 		require.Contains(t, string(rsp["problems"]), `"part":"promo"`)
 	})
 
+	t.Run("a live template broken by something else doesn't block an unrelated publish", func(t *testing.T) {
+		server, store := publishServer(t, &flushRecorder{})
+		broken := `{"doc_version":1,"blocks_order":["blk-part-0000001"],"blocks":{"blk-part-0000001":{"id":"blk-part-0000001","type":"template_part","version":1,"attrs":{"slug":"gone"}}}}`
+		expectPublishReads(store, []db.SiteTemplate{publishRow(1, "template", "single", broken, &broken, "custom")}, stylesRow(`{"radius":{"md":"10px"}}`, `{}`, 1))
+		store.EXPECT().PublishSiteDesignTx(gomock.Any(), gomock.Any()).Return(db.PublishSiteDesignTxResult{
+			Release:       db.SiteDesignRelease{ID: 91, ThemeSlug: siteDesignTheme.Slug, PublishedAt: time.Now()},
+			StylesVersion: &db.GlobalStyleVersion{VersionNo: 1},
+			Styles:        stylesRow(`{"radius":{"md":"10px"}}`, `{"radius":{"md":"10px"}}`, 1),
+		}, nil)
+		requireStatus(t, siteDesignRequest(t, server, store, http.MethodPost, "/api/v1/site-design/publish", ""), http.StatusOK)
+	})
+
 	t.Run("database errors", func(t *testing.T) {
 		server, store := publishServer(t, &flushRecorder{})
 		store.EXPECT().GetActiveTheme(gomock.Any()).Return(db.Theme{}, sql.ErrNoRows)
@@ -200,6 +212,10 @@ func TestSiteDesignHelpers(t *testing.T) {
 	require.False(t, empty(`{"doc_version":1,"blocks_order":["p"],"blocks":{"p":{"type":"paragraph","attrs":{"text":"hi"}}}}`))
 	require.False(t, empty(`{"doc_version":1,"blocks_order":["p"],"blocks":{"p":{"type":"paragraph","attrs":{"pm":{"content":[{"type":"hardBreak"}]}}}}}`))
 	require.False(t, empty(`{"doc_version":1,"blocks_order":["s"],"blocks":{"s":{"type":"site_title"}}}`))
+	require.True(t, empty(`{"doc_version":1,"blocks_order":["g"],"blocks":{"g":{"type":"group","children":["c"]},"c":{"type":"columns","children":["k"]},"k":{"type":"column","children":["p"]},"p":{"type":"paragraph","attrs":{"text":""}}}}`), "groups and columns of blank lines")
+	require.False(t, empty(`{"doc_version":1,"blocks_order":["g"],"blocks":{"g":{"type":"group","children":["h"]},"h":{"type":"heading","attrs":{"text":"Hi"}}}}`))
+	require.False(t, empty(`{"doc_version":1,"blocks_order":["g"],"blocks":{"g":{"type":"group","children":[7]}}}`))
+	require.True(t, empty(`{"doc_version":1,"blocks_order":["g"],"blocks":{"g":{"type":"group","children":["g"]}}}`), "a cycle ends")
 
 	doc, err := parseStoredBlockDoc(json.RawMessage(`{"doc_version":1,"blocks_order":["g"],"blocks":{"g":{"type":"group","children":["b","c"]},"b":{"type":"template_part","attrs":{"slug":"footer"}},"c":{"type":"template_part","attrs":{"slug":"aside"}},"d":{"type":"template_part","attrs":{"slug":"footer"}}}}`))
 	require.NoError(t, err)

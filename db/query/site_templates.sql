@@ -149,3 +149,10 @@ FROM site_template_versions v
 JOIN site_templates t ON t.id = v.template_id
 WHERE v.release_id = ANY(@release_ids::bigint[])
 ORDER BY v.release_id DESC, t.kind, t.slug;
+
+-- name: ListPublishedSiteTemplateVersionNos :many
+-- The published version number of each of a theme's rows (the overview, one query).
+SELECT t.id, v.version_no
+FROM site_templates t
+JOIN site_template_versions v ON v.id = t.published_version_id
+WHERE t.theme_slug = $1;

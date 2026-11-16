@@ -1672,12 +1672,14 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   `published_block_doc` by JSON value, or was never published → `publish`; a reset row that still has a
   published copy → `reset`; plus the styles when draft ≠ published), in three phases:
   1. **Outside any transaction:** `flushSiteDesign` flushes every *custom* row (a reset row's working copy
-     isn't published), the first failure → 503 `collab_unavailable` naming it (`id`, `kind`, `slug`), nothing
-     published. Rows are read again, then `validateSiteDesignPlan`: each published working copy re-runs
+     isn't published), up to 4 at a time; any failure → 503 `collab_unavailable` naming the first failed row
+     (`id`, `kind`, `slug`), nothing published, a styles-only release included (the issue's rule). Rows are read again, then `validateSiteDesignPlan`: each published working copy re-runs
      `prepareForStoreAs` (a block uninstalled since → `template_invalid`), no **template** is empty
-     (`blockDocIsEmpty`: only blank paragraphs; an empty **part** is allowed, a site may have no footer), and
-     every `template_part` slug of every template live **after** the publish resolves (4.2: a part live after it,
-     else the theme's shipped part, else core's starter) → `part_unresolved` with `part`. All problems at once:
+     (`blockDocIsEmpty`: only blank paragraphs, also inside groups and columns; an empty **part** is allowed, a
+     site may have no footer), and the `template_part` slugs this publish could break resolve (4.2: a part live
+     after it, else the theme's shipped part, else core's starter) → `part_unresolved` with `part`: every slug of
+     a template being published, and of an unchanged live template only the parts this release changes (a
+     template broken by a theme deploy doesn't block unrelated publishes). All problems at once:
      409 `design_invalid` with `problems`. Then the styles as #485 (`styles_invalid`, `global_styles_unsupported`,
      `contrast_unconfirmed` with `pairs`; only when the styles are in the release).
   2. **`PublishSiteDesignTx`**: styles row `FOR UPDATE` (revision → `ErrGlobalStylesChanged`), then every row of
@@ -1694,7 +1696,7 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   Response: `release`, `global_styles` (null without styles), `templates` (`{id, kind, slug, title, version_no,
   reset}`, templates first), `styles`.
 - **Per item** (all `requireSiteAdmin`, none purges: nothing public changes until publish): `GET
-  /site-design/templates` (the active theme's rows with `change`, `has_unpublished_changes`,
+  /site-design/templates` (the active theme's rows **without docs**, with `change`, `has_unpublished_changes`,
   `published_block_doc`, `published_version_no`, `default_changed`, `can_delete`, and `unpublished_changes`, the
   Publish button's count, styles counted once), `GET /templates/:id` (any theme's row). **Reset** `POST
   /templates/:id/reset` / **Keep editing** `.../keep-editing` set `working_state` only, never `block_doc`
@@ -1707,7 +1709,7 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   .../versions/:no` (`block_doc` null for a reset version), and after the editor restored it (rule 9) `POST
   .../versions/:no/restore` (custom again, so a reset published as NULL comes back on the next publish; a reset
   version → 409 `version_is_reset`). **Discard changes** for a template is the restore of `published_version_no`
-  (the web's `templateRestore.ts`); never published → Delete is its discard.
+  (the web's `templateRestore.ts`); after a published reset it is Reset again; never published → Delete is its discard.
 - **History:** `GET /site-design/releases?limit=&before=` (newest first, paged by id, `next_before`; each with
   `items` = its template/part versions and `global_styles_version`, names joined at read time). Styles: `GET
   /global-styles/versions[/:no]`, `POST /global-styles/versions/:no/restore {base_revision}` (validated against
