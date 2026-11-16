@@ -76,9 +76,11 @@ export default function GlobalStylesPage() {
     }
   }, [])
 
+  // Nothing to read at phone width (the screen only asks for a larger one); widening the
+  // window loads it then.
   useEffect(() => {
-    void load()
-  }, [load])
+    if (!isPhone && !loaded) void load()
+  }, [load, isPhone, loaded])
 
   if (isPhone) {
     return (
@@ -222,7 +224,9 @@ function StylesEditor({ initial }: { initial: GlobalStylesResponse }) {
     heading?.focus({ preventScroll: true })
   }
 
-  const publishCount = server.has_unpublished_changes ? 1 : 0
+  // Styles are one item of the release (#492 adds templates and parts): it counts while it
+  // differs from the published copy, or while a change of it is still being saved.
+  const publishCount = server.has_unpublished_changes || draft.unsaved ? 1 : 0
 
   return (
     <div className="gl-styles">
@@ -247,7 +251,7 @@ function StylesEditor({ initial }: { initial: GlobalStylesResponse }) {
         <Button
           variant="primary"
           onClick={() => void openPublish()}
-          disabled={publishCount === 0 && !draft.unsaved}
+          disabled={publishCount === 0}
           aria-label={`Publish site design, ${publishCount} ${publishCount === 1 ? "change" : "changes"}`}
         >
           Publish site design{" "}
@@ -275,7 +279,7 @@ function StylesEditor({ initial }: { initial: GlobalStylesResponse }) {
               onDismiss={draft.dismissConflict}
             >
               {draft.conflict.change
-                ? `Your last change, ${draft.conflict.change}, wasn't saved. `
+                ? `Your last change, ${draft.conflict.change}, wasn't saved${draft.conflict.later ? ", nor what you changed after it" : ""}. `
                 : "Nothing of yours was published. "}
               The form now shows their version. Make the change again if you still want it.
             </Notice>
@@ -286,14 +290,14 @@ function StylesEditor({ initial }: { initial: GlobalStylesResponse }) {
             </Notice>
           )}
 
-          {form.colors.length > 0 && (
+          {groupHasFields(form, "colors") && (
             <StyleSection id="colors" overrides={overrides} onReset={reset}>
               <ColorTable rows={form.colors} fieldProps={fieldProps} flagged={contrast.flagged} caption="Colours" />
               <ContrastPanel summary={contrast} />
             </StyleSection>
           )}
 
-          {form.blockColors.length > 0 && (
+          {groupHasFields(form, "blockColors") && (
             <section
               className="gl-styles__section gl-styles__disclosure"
               aria-labelledby={`${SECTION_ID.blockColors}-h`}
@@ -331,7 +335,7 @@ function StylesEditor({ initial }: { initial: GlobalStylesResponse }) {
             </section>
           )}
 
-          {form.fonts.length > 0 && (
+          {groupHasFields(form, "fonts") && (
             <StyleSection id="fonts" overrides={overrides} onReset={reset}>
               <div className="gl-styles__grid gl-styles__grid--3">
                 {form.fonts.map((field) => (
@@ -349,7 +353,7 @@ function StylesEditor({ initial }: { initial: GlobalStylesResponse }) {
             </StyleSection>
           )}
 
-          {form.fontSizes.length + form.lineHeights.length > 0 && (
+          {groupHasFields(form, "typeScale") && (
             <StyleSection id="typeScale" overrides={overrides} onReset={reset}>
               {form.fontSizes.length > 0 && (
                 <ul className="gl-styles__scale" aria-label="Font sizes">
@@ -386,7 +390,7 @@ function StylesEditor({ initial }: { initial: GlobalStylesResponse }) {
             </StyleSection>
           )}
 
-          {form.layout.length > 0 && (
+          {groupHasFields(form, "layout") && (
             <StyleSection id="layout" overrides={overrides} onReset={reset}>
               <div className="gl-styles__grid gl-styles__grid--3">
                 {form.layout.map((field) => (
@@ -399,7 +403,7 @@ function StylesEditor({ initial }: { initial: GlobalStylesResponse }) {
             </StyleSection>
           )}
 
-          {form.spacing.length + form.radius.length > 0 && (
+          {groupHasFields(form, "spacingRadius") && (
             <StyleSection id="spacingRadius" overrides={overrides} onReset={reset}>
               {form.spacing.length > 0 && (
                 <div className="gl-styles__grid gl-styles__grid--5">

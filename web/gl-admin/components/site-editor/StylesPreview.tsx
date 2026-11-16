@@ -72,12 +72,15 @@ export default function StylesPreview({ reloadKey }: { reloadKey: number }) {
     }
   }, [])
 
+  // Saves can come faster than tokens: only the newest load may say the preview failed.
+  const loadSeq = useRef(0)
   const load = useCallback(async () => {
+    const seq = ++loadSeq.current
     setStatus("loading")
     try {
       await openDesignPreview(frameName, path)
     } catch {
-      setStatus("error")
+      if (seq === loadSeq.current) setStatus("error")
     }
   }, [frameName, path])
 

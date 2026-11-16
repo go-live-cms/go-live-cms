@@ -54,8 +54,27 @@ async function conflictBody(response: Response): Promise<Record<string, unknown>
     .catch(() => null)) as Record<string, unknown> | null
 }
 
+/**
+ * authenticatedFetch, plus apiCall's 401 rule: the server may revoke a token the client
+ * still thinks is fresh (a password change), so a 401 gets a real refresh and one retry.
+ * A form open for a long time would otherwise fail every save until the refresh timer.
+ */
+export async function designFetch(url: string, init: RequestInit = {}): Promise<Response> {
+  const response = await authenticatedFetch(url, init)
+  if (response.status !== 401) return response
+  // Imported here, as apiCall does, to keep the auth module out of this one's import cycle.
+  const { authManager } = await import("../auth")
+  let refreshed = false
+  try {
+    refreshed = await authManager.forceRefresh()
+  } catch {
+    // A failed refresh clears auth itself; the 401 stands.
+  }
+  return refreshed ? authenticatedFetch(url, init) : response
+}
+
 export async function getGlobalStyles(): Promise<GlobalStylesResponse> {
-  const response = await authenticatedFetch("/api/v1/site-design/global-styles")
+  const response = await designFetch("/api/v1/site-design/global-styles")
   if (!response.ok) throw await apiErrorFromResponse(response, { fallback: "Loading the styles failed" })
   return response.json()
 }
@@ -69,7 +88,7 @@ export async function saveGlobalStyles(
   styles: Record<string, unknown>,
   baseRevision: number
 ): Promise<GlobalStylesResponse> {
-  const response = await authenticatedFetch("/api/v1/site-design/global-styles", {
+  const response = await designFetch("/api/v1/site-design/global-styles", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ styles, base_revision: baseRevision }),
@@ -91,7 +110,7 @@ export async function saveGlobalStyles(
 export async function publishSiteDesign({
   confirmContrast = false,
 }: { confirmContrast?: boolean } = {}): Promise<SiteDesignPublishResponse> {
-  const response = await authenticatedFetch("/api/v1/site-design/publish", {
+  const response = await designFetch("/api/v1/site-design/publish", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ confirm_contrast: confirmContrast }),

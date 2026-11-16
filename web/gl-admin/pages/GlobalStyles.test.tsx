@@ -327,7 +327,7 @@ describe("the global styles screen", () => {
     media.phone = true
     await render()
     expect(container.textContent).toContain("Use a larger screen to edit styles")
-    expect(api.getGlobalStyles).toHaveBeenCalled()
+    expect(api.getGlobalStyles).not.toHaveBeenCalled()
     expect(await violations()).toEqual([])
   })
 
@@ -358,5 +358,57 @@ describe("the global styles screen", () => {
     expect(container.querySelector("iframe")!.style.width).toBe("375px")
     await click(button("Dark"))
     expect(button("Dark").getAttribute("aria-pressed")).toBe("true")
+  })
+
+  it("sends a change still waiting for its pause when the page goes away", async () => {
+    vi.useFakeTimers()
+    await render()
+    await type(byLabel("Gutter"), "24px")
+    expect(api.saveGlobalStyles).not.toHaveBeenCalled()
+    act(() => root.render(<MemoryRouter />))
+    expect(api.saveGlobalStyles).toHaveBeenCalledWith({ layout: { gutter: "24px" } }, 3)
+  })
+
+  it("asks before a link leaves a value that can't be saved", async () => {
+    await render()
+    const size = byLabel("Size xl")
+    await type(size, "calc(1rem + 1px)")
+    await commit(size)
+    const link = document.createElement("a")
+    link.href = "/gl-admin/posts"
+    document.body.appendChild(link)
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false)
+    const event = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 })
+    link.dispatchEvent(event)
+    expect(confirm).toHaveBeenCalledWith("Your last change to the styles isn't saved. Leave anyway?")
+    expect(event.defaultPrevented).toBe(true)
+    confirm.mockRestore()
+    link.remove()
+  })
+
+  it("names the refused change and says later edits went too", async () => {
+    let finish: (value: unknown) => void = () => {}
+    const theirs = response({ draft: { colors: { light: { primary: "#1b7760" } } }, draft_revision: 9 })
+    api.saveGlobalStyles.mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          finish = () => reject(new StylesChangedError(theirs))
+        })
+    )
+    await render()
+    const primary = byLabel("Primary (light)")
+    await type(primary, "#155e4b")
+    await commit(primary)
+    // Typed while the first save is in flight.
+    await type(byLabel("Gutter"), "24px")
+    await act(async () => finish(null))
+    await act(async () => {})
+    const notice = [...document.querySelectorAll('[role="alert"]')].find((n) =>
+      n.textContent?.includes("Another admin")
+    )
+    expect(notice?.textContent).toContain(
+      "Your last change, Primary (light) to #155e4b, wasn't saved, nor what you changed after it."
+    )
+    expect(byLabel("Gutter").value).toBe("clamp(20px, 4vw, 40px)")
   })
 })

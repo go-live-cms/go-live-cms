@@ -25,8 +25,10 @@ export const SAVE_DELAY_MS = 600
 export type SaveState = "saved" | "pending" | "saving" | "invalid" | "failed"
 
 export interface StylesConflict {
-  /** "Primary (light) to #155e4b" */
+  /** "Primary (light) to #155e4b": the change the refused save carried. */
   change: string | null
+  /** Something was typed while it was being saved: replaced as well. */
+  later?: boolean
 }
 
 export function useStylesDraft(initial: GlobalStylesResponse, { onSaved }: { onSaved: () => void }) {
@@ -106,6 +108,8 @@ export function useStylesDraft(initial: GlobalStylesResponse, { onSaved }: { onS
       }
       setSaveState("saving")
       setSaveError(null)
+      // The change this save carries: a 409 names it, not one typed while it was in flight.
+      const sent = lastChangeRef.current
       const run = (async () => {
         try {
           const response = await saveGlobalStyles(draft, revisionRef.current)
@@ -115,9 +119,11 @@ export function useStylesDraft(initial: GlobalStylesResponse, { onSaved }: { onS
           return true
         } catch (error) {
           if (error instanceof StylesChangedError) {
-            const change = lastChangeRef.current
+            // Edits typed meanwhile are replaced by their draft too, so the notice says so.
+            const later = lastChangeRef.current !== sent
+            const form = formRef.current
             adopt(error.current, true)
-            setConflict({ change: change ? describeChange(formRef.current, change) : null })
+            setConflict({ change: sent ? describeChange(form, sent) : null, later })
             onSavedRef.current()
             return true
           }
