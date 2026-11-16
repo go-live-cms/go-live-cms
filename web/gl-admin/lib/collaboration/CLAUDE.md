@@ -73,6 +73,14 @@ every server boot — **read process logs from the very top**.
   notice.
 - `liveRestore.ts`: rule 9. `setEditorBlockDoc`, then the version's dropped record into
   `meta.dropped`, then await `stored`.
+- `templateRestore.ts` (#492): rule 9 for a template or part (`template-<id>`): History's Restore
+  (`restoreTemplateVersion`), Discard changes (the published version's restore; after a
+  published reset, Reset again; `NeverPublishedError` when never published, whose discard is Delete) and Start over from the theme
+  default (`startOverTemplate`). Each fetches the doc over REST, puts it in through
+  `restoreVersionLive`, and only **after** the server's `stored` tells the API to record it
+  (`POST /site-design/templates/:id/versions/:no/restore` / `.../start-over`: working_state,
+  source, activity; never `block_doc`). The editor must be editable: the Site editor unlocks a
+  reset item's editor (or calls Keep editing) first. Pinned by `templateRestore.hocuspocus.test.ts`.
 - `components/editor/Editor.tsx`: theme gate → connect → first sync → schema gate (rule
   10) → bind. Users who may read but not edit the post (a contributor on someone else's
   post, `postEditorAccess` in `lib/roles.ts`) get a **live read-only** view; the server

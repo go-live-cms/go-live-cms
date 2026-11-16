@@ -83,11 +83,13 @@ func toGlobalStylesResponse(theme db.Theme, tokens ThemeTokens, known bool, row 
 }
 
 // SiteDesignPublishResponse is a publish's result: the release, what the styles part of
-// it changed (group names), how many contrast pairs failed (published anyway), and the
-// styles as they now are.
+// it changed (null when the styles weren't in it), the templates and parts it published
+// (a reset one with reset: true), and the styles as they now are. A styles-only publish
+// answers the keys #485's did.
 type SiteDesignPublishResponse struct {
 	Release      SiteDesignReleaseResponse `json:"release"`
-	GlobalStyles GlobalStylesPublished     `json:"global_styles"`
+	GlobalStyles *GlobalStylesPublished    `json:"global_styles"`
+	Templates    []SiteTemplatePublished   `json:"templates"`
 	Styles       GlobalStylesResponse      `json:"styles"`
 }
 
@@ -101,4 +103,15 @@ type GlobalStylesPublished struct {
 	VersionNo        int32    `json:"version_no"`
 	Groups           []string `json:"groups"`
 	ContrastFailures int      `json:"contrast_failures"`
+}
+
+// SiteTemplatePublished is one template or part a release published: its new version,
+// and reset when that version put the theme's default back (published copy NULL).
+type SiteTemplatePublished struct {
+	ID        int64  `json:"id"`
+	Kind      string `json:"kind"`
+	Slug      string `json:"slug"`
+	Title     string `json:"title"`
+	VersionNo int32  `json:"version_no"`
+	Reset     bool   `json:"reset"`
 }

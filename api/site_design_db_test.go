@@ -27,6 +27,8 @@ type siteDesignDBFixture struct {
 	server *Server
 	admin  db.User
 	theme  db.Theme
+	// collab is the fake collab server publish flushes (#492): set collab.fail to fail it.
+	collab *stubCollab
 }
 
 // newSiteDesignDBFixture activates a theme of its own (the vectors' tokens), so nothing
@@ -34,7 +36,10 @@ type siteDesignDBFixture struct {
 // theme is put back afterwards.
 func newSiteDesignDBFixture(t *testing.T) siteDesignDBFixture {
 	t.Helper()
-	conn, store, server := publicCacheDBServer(t)
+	conn, store := scheduleTestDB(t)
+	collab := newStubCollab(t, 0)
+	server := scheduleServer(t, store, collab)
+	withMiniredis(t, server)
 	ctx := context.Background()
 	slug := "gl485-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:12]
 	server.themeTokens = fixtureThemeTokens(t, slug)
@@ -50,11 +55,12 @@ func newSiteDesignDBFixture(t *testing.T) siteDesignDBFixture {
 		if previousErr == nil {
 			_, _ = store.ActivateTheme(ctx, previous.ID)
 		}
+		_, _ = conn.Exec(`DELETE FROM site_templates WHERE theme_slug = $1`, slug)
 		_, _ = conn.Exec(`DELETE FROM global_styles WHERE theme_slug = $1`, slug)
 		_, _ = conn.Exec(`DELETE FROM site_design_releases WHERE theme_slug = $1`, slug)
 		_ = store.DeleteTheme(ctx, theme.ID)
 	})
-	return siteDesignDBFixture{conn: conn, store: store, server: server, admin: scheduleUser(t, store, RoleAdmin), theme: theme}
+	return siteDesignDBFixture{conn: conn, store: store, server: server, admin: scheduleUser(t, store, RoleAdmin), theme: theme, collab: collab}
 }
 
 func (f siteDesignDBFixture) request(t *testing.T, caller *db.User, method, path, body string) *httptest.ResponseRecorder {
@@ -146,7 +152,7 @@ func TestGlobalStylesSaveAndPublish(t *testing.T) {
 		SELECT r.summary, v.version_no, v.styles FROM site_design_releases r
 		JOIN global_style_versions v ON v.release_id = r.id
 		WHERE r.id = $1`, published.Release.ID).Scan(&summary, &versionNo, &versionStyles))
-	require.JSONEq(t, `{"global_styles":{"groups":["colors"],"contrast_failures":3}}`, string(summary))
+	require.JSONEq(t, `{"templates":[],"global_styles":{"groups":["colors"],"contrast_failures":3}}`, string(summary))
 	require.Equal(t, 1, versionNo)
 	require.JSONEq(t, `{"colors":{"light":{"text":"#cccccc"}}}`, string(versionStyles))
 
@@ -168,7 +174,7 @@ func TestGlobalStylesSaveAndPublish(t *testing.T) {
 	require.NoError(t, rows.Err())
 	require.Equal(t, []string{
 		fmt.Sprintf(`global_styles_updated:%d {"groups": ["colors"]}`, f.theme.ID),
-		fmt.Sprintf(`site_design_published:%d {"theme_slug": "%s", "contrast_failures": 3, "global_styles_groups": ["colors"]}`, published.Release.ID, f.theme.Slug),
+		fmt.Sprintf(`site_design_published:%d {"parts": 0, "slugs": [], "resets": 0, "templates": 0, "theme_slug": "%s", "contrast_failures": 3, "global_styles_groups": ["colors"]}`, published.Release.ID, f.theme.Slug),
 	}, events)
 }
 
@@ -231,8 +237,8 @@ func TestDraftGlobalStylesNeverPublic(t *testing.T) {
 	require.Contains(t, recorder.Body.String(), draftMarker)
 }
 
-// PublishGlobalStylesTx refuses a revision that moved, writing nothing.
-func TestPublishGlobalStylesTxStaleRevision(t *testing.T) {
+// PublishSiteDesignTx's styles part refuses a revision that moved, writing nothing.
+func TestPublishSiteDesignTxStaleStylesRevision(t *testing.T) {
 	f := newSiteDesignDBFixture(t)
 	ctx := context.Background()
 	require.NoError(t, f.store.EnsureGlobalStyles(ctx, f.theme.Slug))
@@ -240,27 +246,37 @@ func TestPublishGlobalStylesTxStaleRevision(t *testing.T) {
 		Draft: json.RawMessage(`{"radius":{"md":"10px"}}`), ThemeSlug: f.theme.Slug, BaseRevision: 0,
 	})
 	require.NoError(t, err)
+	styles := func(revision int64) db.PublishSiteDesignTxParams {
+		return db.PublishSiteDesignTxParams{ThemeSlug: f.theme.Slug, StylesDraftRevision: &revision, Summary: json.RawMessage(`{}`)}
+	}
 
-	_, err = f.store.PublishGlobalStylesTx(ctx, db.PublishGlobalStylesTxParams{ThemeSlug: f.theme.Slug, DraftRevision: 0, Summary: json.RawMessage(`{}`)})
+	_, err = f.store.PublishSiteDesignTx(ctx, styles(0))
 	require.ErrorIs(t, err, db.ErrGlobalStylesChanged)
 	var releases int
 	require.NoError(t, f.conn.QueryRow(`SELECT count(*) FROM site_design_releases WHERE theme_slug = $1`, f.theme.Slug).Scan(&releases))
 	require.Zero(t, releases)
 
-	result, err := f.store.PublishGlobalStylesTx(ctx, db.PublishGlobalStylesTxParams{ThemeSlug: f.theme.Slug, DraftRevision: 1, Summary: json.RawMessage(`{}`)})
+	result, err := f.store.PublishSiteDesignTx(ctx, styles(1))
 	require.NoError(t, err)
-	require.EqualValues(t, 1, result.Version.VersionNo)
+	require.EqualValues(t, 1, result.StylesVersion.VersionNo)
 	require.JSONEq(t, `{"radius":{"md":"10px"}}`, string(result.Styles.Published))
-	require.Equal(t, result.Version.ID, result.Styles.PublishedVersionID.Int64)
+	require.Equal(t, result.StylesVersion.ID, result.Styles.PublishedVersionID.Int64)
+	require.Empty(t, result.Templates)
 
 	// A second publish of the same theme is version 2.
 	_, err = f.store.UpdateGlobalStylesDraft(ctx, db.UpdateGlobalStylesDraftParams{Draft: json.RawMessage(`{}`), ThemeSlug: f.theme.Slug, BaseRevision: 1})
 	require.NoError(t, err)
-	result, err = f.store.PublishGlobalStylesTx(ctx, db.PublishGlobalStylesTxParams{ThemeSlug: f.theme.Slug, DraftRevision: 2, Summary: json.RawMessage(`{}`)})
+	result, err = f.store.PublishSiteDesignTx(ctx, styles(2))
 	require.NoError(t, err)
-	require.EqualValues(t, 2, result.Version.VersionNo)
+	require.EqualValues(t, 2, result.StylesVersion.VersionNo)
 
-	// No row at all.
-	_, err = f.store.PublishGlobalStylesTx(ctx, db.PublishGlobalStylesTxParams{ThemeSlug: f.theme.Slug + "-none", DraftRevision: 0, Summary: json.RawMessage(`{}`)})
-	require.ErrorIs(t, err, sql.ErrNoRows)
+	// No row at all: nothing to publish under that revision.
+	none := int64(0)
+	_, err = f.store.PublishSiteDesignTx(ctx, db.PublishSiteDesignTxParams{ThemeSlug: f.theme.Slug + "-none", StylesDraftRevision: &none, Summary: json.RawMessage(`{}`)})
+	require.ErrorIs(t, err, db.ErrGlobalStylesChanged)
+	// Neither styles nor templates: refused, no empty release.
+	_, err = f.store.PublishSiteDesignTx(ctx, db.PublishSiteDesignTxParams{ThemeSlug: f.theme.Slug, Summary: json.RawMessage(`{}`)})
+	require.Error(t, err)
+	require.NoError(t, f.conn.QueryRow(`SELECT count(*) FROM site_design_releases WHERE theme_slug = $1`, f.theme.Slug).Scan(&releases))
+	require.Equal(t, 2, releases)
 }

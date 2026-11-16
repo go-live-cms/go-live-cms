@@ -43,6 +43,18 @@ func siteDesignRequest(t *testing.T, server *Server, store *mockdb.MockStore, me
 	return recorder
 }
 
+// expectPublishReads stubs what POST /site-design/publish reads before its transaction:
+// the active theme, its templates and parts (before and after the flush; the test
+// server's fake collab answers every flush 200), then the styles row.
+func expectPublishReads(store *mockdb.MockStore, rows []db.SiteTemplate, styles *db.GlobalStyle) {
+	store.EXPECT().GetActiveTheme(gomock.Any()).Return(siteDesignTheme, nil)
+	if rows == nil {
+		rows = []db.SiteTemplate{}
+	}
+	store.EXPECT().ListSiteTemplatesByTheme(gomock.Any(), siteDesignTheme.Slug).Times(2).Return(rows, nil)
+	expectStylesRow(store, styles)
+}
+
 // expectStylesRow stubs the active theme and its stored row (nil = never saved).
 func expectStylesRow(store *mockdb.MockStore, row *db.GlobalStyle) {
 	store.EXPECT().GetActiveTheme(gomock.Any()).Return(siteDesignTheme, nil)
@@ -283,16 +295,16 @@ func TestPublishSiteDesign(t *testing.T) {
 
 	t.Run("nothing to publish", func(t *testing.T) {
 		server, store := siteDesignServer(t)
-		expectStylesRow(store, stylesRow(`{"radius":{"md":"10px"}}`, `{"radius":{"md":"10px"}}`, 3))
+		expectPublishReads(store, nil, stylesRow(`{"radius":{"md":"10px"}}`, `{"radius":{"md":"10px"}}`, 3))
 		requireCode(t, siteDesignRequest(t, server, store, http.MethodPost, "/api/v1/site-design/publish", ""), http.StatusConflict, "nothing_to_publish")
 
-		expectStylesRow(store, nil)
+		expectPublishReads(store, nil, nil)
 		requireCode(t, siteDesignRequest(t, server, store, http.MethodPost, "/api/v1/site-design/publish", `{}`), http.StatusConflict, "nothing_to_publish")
 	})
 
 	t.Run("failing contrast asks for confirmation, naming the pairs", func(t *testing.T) {
 		server, store := siteDesignServer(t)
-		expectStylesRow(store, stylesRow(failing, `{}`, 2))
+		expectPublishReads(store, nil, stylesRow(failing, `{}`, 2))
 		recorder := siteDesignRequest(t, server, store, http.MethodPost, "/api/v1/site-design/publish", `{"confirm_contrast":false}`)
 		rsp := requireCode(t, recorder, http.StatusConflict, "contrast_unconfirmed")
 		var pairs []ContrastFailure
@@ -308,16 +320,18 @@ func TestPublishSiteDesign(t *testing.T) {
 
 	t.Run("confirmed, it publishes anyway and records how many pairs failed", func(t *testing.T) {
 		server, store := siteDesignServer(t)
-		expectStylesRow(store, stylesRow(failing, `{"radius":{"md":"10px"}}`, 2))
-		store.EXPECT().PublishGlobalStylesTx(gomock.Any(), gomock.Any()).DoAndReturn(func(_ any, arg db.PublishGlobalStylesTxParams) (db.PublishGlobalStylesTxResult, error) {
+		expectPublishReads(store, nil, stylesRow(failing, `{"radius":{"md":"10px"}}`, 2))
+		store.EXPECT().PublishSiteDesignTx(gomock.Any(), gomock.Any()).DoAndReturn(func(_ any, arg db.PublishSiteDesignTxParams) (db.PublishSiteDesignTxResult, error) {
 			require.Equal(t, siteDesignTheme.Slug, arg.ThemeSlug)
-			require.EqualValues(t, 2, arg.DraftRevision)
+			require.NotNil(t, arg.StylesDraftRevision)
+			require.EqualValues(t, 2, *arg.StylesDraftRevision)
+			require.Empty(t, arg.Publish)
 			require.Equal(t, siteDesignAdmin.ID, arg.PublishedBy.Int64)
-			require.JSONEq(t, `{"global_styles":{"groups":["colors","radius"],"contrast_failures":3}}`, string(arg.Summary))
-			return db.PublishGlobalStylesTxResult{
-				Release: db.SiteDesignRelease{ID: 77, ThemeSlug: arg.ThemeSlug, PublishedAt: time.Now()},
-				Version: db.GlobalStyleVersion{ID: 5, VersionNo: 4},
-				Styles:  *stylesRow(failing, failing, 2),
+			require.JSONEq(t, `{"templates":[],"global_styles":{"groups":["colors","radius"],"contrast_failures":3}}`, string(arg.Summary))
+			return db.PublishSiteDesignTxResult{
+				Release:       db.SiteDesignRelease{ID: 77, ThemeSlug: arg.ThemeSlug, PublishedAt: time.Now()},
+				StylesVersion: &db.GlobalStyleVersion{ID: 5, VersionNo: 4},
+				Styles:        stylesRow(failing, failing, 2),
 			}, nil
 		})
 		recorder := siteDesignRequest(t, server, store, http.MethodPost, "/api/v1/site-design/publish", `{"confirm_contrast":true}`)
@@ -332,23 +346,25 @@ func TestPublishSiteDesign(t *testing.T) {
 
 		rec := activityOf(t, server)
 		require.Equal(t, []string{"site_design_published site_design:77"}, rec.verbs())
-		require.JSONEq(t, `{"theme_slug":"vectors","global_styles_groups":["colors","radius"],"contrast_failures":3}`, string(rec.events[0].Payload))
+		require.JSONEq(t, `{"theme_slug":"vectors","global_styles_groups":["colors","radius"],"contrast_failures":3,"templates":0,"parts":0,"resets":0,"slugs":[]}`, string(rec.events[0].Payload))
+		require.Empty(t, rsp.Templates)
 	})
 
 	t.Run("passing contrast needs no confirmation", func(t *testing.T) {
 		server, store := siteDesignServer(t)
-		expectStylesRow(store, stylesRow(`{"layout":{"contentWidth":"720px"}}`, `{}`, 1))
-		store.EXPECT().PublishGlobalStylesTx(gomock.Any(), gomock.Any()).Return(db.PublishGlobalStylesTxResult{
-			Release: db.SiteDesignRelease{ID: 78, ThemeSlug: siteDesignTheme.Slug, PublishedAt: time.Now()},
-			Version: db.GlobalStyleVersion{VersionNo: 1},
+		expectPublishReads(store, nil, stylesRow(`{"layout":{"contentWidth":"720px"}}`, `{}`, 1))
+		store.EXPECT().PublishSiteDesignTx(gomock.Any(), gomock.Any()).Return(db.PublishSiteDesignTxResult{
+			Release:       db.SiteDesignRelease{ID: 78, ThemeSlug: siteDesignTheme.Slug, PublishedAt: time.Now()},
+			StylesVersion: &db.GlobalStyleVersion{VersionNo: 1},
+			Styles:        stylesRow(`{"layout":{"contentWidth":"720px"}}`, `{"layout":{"contentWidth":"720px"}}`, 1),
 		}, nil)
 		requireStatus(t, siteDesignRequest(t, server, store, http.MethodPost, "/api/v1/site-design/publish", ""), http.StatusOK)
 	})
 
 	t.Run("the draft changed during the publish", func(t *testing.T) {
 		server, store := siteDesignServer(t)
-		expectStylesRow(store, stylesRow(`{"radius":{"md":"10px"}}`, `{}`, 1))
-		store.EXPECT().PublishGlobalStylesTx(gomock.Any(), gomock.Any()).Return(db.PublishGlobalStylesTxResult{}, db.ErrGlobalStylesChanged)
+		expectPublishReads(store, nil, stylesRow(`{"radius":{"md":"10px"}}`, `{}`, 1))
+		store.EXPECT().PublishSiteDesignTx(gomock.Any(), gomock.Any()).Return(db.PublishSiteDesignTxResult{}, db.ErrGlobalStylesChanged)
 		expectStylesRow(store, stylesRow(`{"radius":{"md":"12px"}}`, `{}`, 2))
 		rsp := requireCode(t, siteDesignRequest(t, server, store, http.MethodPost, "/api/v1/site-design/publish", ""), http.StatusConflict, "styles_changed")
 		require.Contains(t, string(rsp["current"]), "12px")
@@ -357,7 +373,7 @@ func TestPublishSiteDesign(t *testing.T) {
 
 	t.Run("a draft the theme no longer fits", func(t *testing.T) {
 		server, store := siteDesignServer(t)
-		expectStylesRow(store, stylesRow(`{"colors":{"light":{"retired":"#123456"}}}`, `{}`, 1))
+		expectPublishReads(store, nil, stylesRow(`{"colors":{"light":{"retired":"#123456"}}}`, `{}`, 1))
 		rsp := requireCode(t, siteDesignRequest(t, server, store, http.MethodPost, "/api/v1/site-design/publish", ""), http.StatusConflict, "styles_invalid")
 		require.JSONEq(t, `"colors.light.retired"`, string(rsp["path"]))
 		require.JSONEq(t, `"unknown_token"`, string(rsp["reason"]))
@@ -366,14 +382,14 @@ func TestPublishSiteDesign(t *testing.T) {
 	t.Run("a theme without global styles", func(t *testing.T) {
 		server, store := siteDesignServer(t)
 		server.themeTokens = ThemeTokenManifest{}
-		expectStylesRow(store, stylesRow(`{"radius":{"md":"10px"}}`, `{}`, 1))
+		expectPublishReads(store, nil, stylesRow(`{"radius":{"md":"10px"}}`, `{}`, 1))
 		requireCode(t, siteDesignRequest(t, server, store, http.MethodPost, "/api/v1/site-design/publish", ""), http.StatusConflict, "global_styles_unsupported")
 	})
 
 	t.Run("a failed transaction", func(t *testing.T) {
 		server, store := siteDesignServer(t)
-		expectStylesRow(store, stylesRow(`{"radius":{"md":"10px"}}`, `{}`, 1))
-		store.EXPECT().PublishGlobalStylesTx(gomock.Any(), gomock.Any()).Return(db.PublishGlobalStylesTxResult{}, errors.New("down"))
+		expectPublishReads(store, nil, stylesRow(`{"radius":{"md":"10px"}}`, `{}`, 1))
+		store.EXPECT().PublishSiteDesignTx(gomock.Any(), gomock.Any()).Return(db.PublishSiteDesignTxResult{}, errors.New("down"))
 		requireStatus(t, siteDesignRequest(t, server, store, http.MethodPost, "/api/v1/site-design/publish", ""), http.StatusInternalServerError)
 		require.Empty(t, activityOf(t, server).verbs())
 	})

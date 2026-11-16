@@ -1257,6 +1257,21 @@ func (mr *MockStoreMockRecorder) CreateSiteTemplate(arg0, arg1 interface{}) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateSiteTemplate", reflect.TypeOf((*MockStore)(nil).CreateSiteTemplate), arg0, arg1)
 }
 
+// CreateSiteTemplateVersion mocks base method.
+func (m *MockStore) CreateSiteTemplateVersion(arg0 context.Context, arg1 db.CreateSiteTemplateVersionParams) (db.SiteTemplateVersion, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateSiteTemplateVersion", arg0, arg1)
+	ret0, _ := ret[0].(db.SiteTemplateVersion)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateSiteTemplateVersion indicates an expected call of CreateSiteTemplateVersion.
+func (mr *MockStoreMockRecorder) CreateSiteTemplateVersion(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateSiteTemplateVersion", reflect.TypeOf((*MockStore)(nil).CreateSiteTemplateVersion), arg0, arg1)
+}
+
 // CreateTaxonomyTerm mocks base method.
 func (m *MockStore) CreateTaxonomyTerm(arg0 context.Context, arg1 db.CreateTaxonomyTermParams) (db.TaxonomyTerm, error) {
 	m.ctrl.T.Helper()
@@ -1950,6 +1965,21 @@ func (mr *MockStoreMockRecorder) DeleteTrashedPostTx(arg0, arg1 interface{}) *go
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTrashedPostTx", reflect.TypeOf((*MockStore)(nil).DeleteTrashedPostTx), arg0, arg1)
 }
 
+// DeleteUnpublishedSiteTemplate mocks base method.
+func (m *MockStore) DeleteUnpublishedSiteTemplate(arg0 context.Context, arg1 int64) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteUnpublishedSiteTemplate", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DeleteUnpublishedSiteTemplate indicates an expected call of DeleteUnpublishedSiteTemplate.
+func (mr *MockStoreMockRecorder) DeleteUnpublishedSiteTemplate(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteUnpublishedSiteTemplate", reflect.TypeOf((*MockStore)(nil).DeleteUnpublishedSiteTemplate), arg0, arg1)
+}
+
 // DeleteUser mocks base method.
 func (m *MockStore) DeleteUser(arg0 context.Context, arg1 int64) error {
 	m.ctrl.T.Helper()
@@ -2198,6 +2228,21 @@ func (m *MockStore) GetFeaturedImage(arg0 context.Context, arg1 int64) (db.GetFe
 func (mr *MockStoreMockRecorder) GetFeaturedImage(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFeaturedImage", reflect.TypeOf((*MockStore)(nil).GetFeaturedImage), arg0, arg1)
+}
+
+// GetGlobalStyleVersion mocks base method.
+func (m *MockStore) GetGlobalStyleVersion(arg0 context.Context, arg1 db.GetGlobalStyleVersionParams) (db.GlobalStyleVersion, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetGlobalStyleVersion", arg0, arg1)
+	ret0, _ := ret[0].(db.GlobalStyleVersion)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetGlobalStyleVersion indicates an expected call of GetGlobalStyleVersion.
+func (mr *MockStoreMockRecorder) GetGlobalStyleVersion(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetGlobalStyleVersion", reflect.TypeOf((*MockStore)(nil).GetGlobalStyleVersion), arg0, arg1)
 }
 
 // GetGlobalStyles mocks base method.
@@ -3175,6 +3220,36 @@ func (mr *MockStoreMockRecorder) GetSiteTemplateCollab(arg0, arg1 interface{}) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSiteTemplateCollab", reflect.TypeOf((*MockStore)(nil).GetSiteTemplateCollab), arg0, arg1)
 }
 
+// GetSiteTemplateVersion mocks base method.
+func (m *MockStore) GetSiteTemplateVersion(arg0 context.Context, arg1 db.GetSiteTemplateVersionParams) (db.SiteTemplateVersion, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetSiteTemplateVersion", arg0, arg1)
+	ret0, _ := ret[0].(db.SiteTemplateVersion)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetSiteTemplateVersion indicates an expected call of GetSiteTemplateVersion.
+func (mr *MockStoreMockRecorder) GetSiteTemplateVersion(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSiteTemplateVersion", reflect.TypeOf((*MockStore)(nil).GetSiteTemplateVersion), arg0, arg1)
+}
+
+// GetSiteTemplateVersionByID mocks base method.
+func (m *MockStore) GetSiteTemplateVersionByID(arg0 context.Context, arg1 int64) (db.SiteTemplateVersion, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetSiteTemplateVersionByID", arg0, arg1)
+	ret0, _ := ret[0].(db.SiteTemplateVersion)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetSiteTemplateVersionByID indicates an expected call of GetSiteTemplateVersionByID.
+func (mr *MockStoreMockRecorder) GetSiteTemplateVersionByID(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSiteTemplateVersionByID", reflect.TypeOf((*MockStore)(nil).GetSiteTemplateVersionByID), arg0, arg1)
+}
+
 // GetTaxonomyTerm mocks base method.
 func (m *MockStore) GetTaxonomyTerm(arg0 context.Context, arg1 int64) (db.TaxonomyTerm, error) {
 	m.ctrl.T.Helper()
@@ -3845,6 +3920,36 @@ func (mr *MockStoreMockRecorder) ListFailedScheduledPosts(arg0, arg1 interface{}
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListFailedScheduledPosts", reflect.TypeOf((*MockStore)(nil).ListFailedScheduledPosts), arg0, arg1)
 }
 
+// ListGlobalStyleVersions mocks base method.
+func (m *MockStore) ListGlobalStyleVersions(arg0 context.Context, arg1 string) ([]db.ListGlobalStyleVersionsRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListGlobalStyleVersions", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListGlobalStyleVersionsRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListGlobalStyleVersions indicates an expected call of ListGlobalStyleVersions.
+func (mr *MockStoreMockRecorder) ListGlobalStyleVersions(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListGlobalStyleVersions", reflect.TypeOf((*MockStore)(nil).ListGlobalStyleVersions), arg0, arg1)
+}
+
+// ListGlobalStyleVersionsByRelease mocks base method.
+func (m *MockStore) ListGlobalStyleVersionsByRelease(arg0 context.Context, arg1 []int64) ([]db.ListGlobalStyleVersionsByReleaseRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListGlobalStyleVersionsByRelease", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListGlobalStyleVersionsByReleaseRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListGlobalStyleVersionsByRelease indicates an expected call of ListGlobalStyleVersionsByRelease.
+func (mr *MockStoreMockRecorder) ListGlobalStyleVersionsByRelease(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListGlobalStyleVersionsByRelease", reflect.TypeOf((*MockStore)(nil).ListGlobalStyleVersionsByRelease), arg0, arg1)
+}
+
 // ListHookPlugins mocks base method.
 func (m *MockStore) ListHookPlugins(arg0 context.Context) ([]db.ListHookPluginsRow, error) {
 	m.ctrl.T.Helper()
@@ -4400,6 +4505,21 @@ func (mr *MockStoreMockRecorder) ListPublishedPostsByTerm(arg0, arg1 interface{}
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPublishedPostsByTerm", reflect.TypeOf((*MockStore)(nil).ListPublishedPostsByTerm), arg0, arg1)
 }
 
+// ListPublishedSiteTemplateVersionNos mocks base method.
+func (m *MockStore) ListPublishedSiteTemplateVersionNos(arg0 context.Context, arg1 string) ([]db.ListPublishedSiteTemplateVersionNosRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListPublishedSiteTemplateVersionNos", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListPublishedSiteTemplateVersionNosRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListPublishedSiteTemplateVersionNos indicates an expected call of ListPublishedSiteTemplateVersionNos.
+func (mr *MockStoreMockRecorder) ListPublishedSiteTemplateVersionNos(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPublishedSiteTemplateVersionNos", reflect.TypeOf((*MockStore)(nil).ListPublishedSiteTemplateVersionNos), arg0, arg1)
+}
+
 // ListPublishedSiteTemplatesForResolve mocks base method.
 func (m *MockStore) ListPublishedSiteTemplatesForResolve(arg0 context.Context, arg1 db.ListPublishedSiteTemplatesForResolveParams) ([]db.ListPublishedSiteTemplatesForResolveRow, error) {
 	m.ctrl.T.Helper()
@@ -4518,6 +4638,66 @@ func (m *MockStore) ListSessionsByUsername(arg0 context.Context, arg1 string) ([
 func (mr *MockStoreMockRecorder) ListSessionsByUsername(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListSessionsByUsername", reflect.TypeOf((*MockStore)(nil).ListSessionsByUsername), arg0, arg1)
+}
+
+// ListSiteDesignReleases mocks base method.
+func (m *MockStore) ListSiteDesignReleases(arg0 context.Context, arg1 db.ListSiteDesignReleasesParams) ([]db.ListSiteDesignReleasesRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListSiteDesignReleases", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListSiteDesignReleasesRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListSiteDesignReleases indicates an expected call of ListSiteDesignReleases.
+func (mr *MockStoreMockRecorder) ListSiteDesignReleases(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListSiteDesignReleases", reflect.TypeOf((*MockStore)(nil).ListSiteDesignReleases), arg0, arg1)
+}
+
+// ListSiteTemplateVersions mocks base method.
+func (m *MockStore) ListSiteTemplateVersions(arg0 context.Context, arg1 int64) ([]db.ListSiteTemplateVersionsRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListSiteTemplateVersions", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListSiteTemplateVersionsRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListSiteTemplateVersions indicates an expected call of ListSiteTemplateVersions.
+func (mr *MockStoreMockRecorder) ListSiteTemplateVersions(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListSiteTemplateVersions", reflect.TypeOf((*MockStore)(nil).ListSiteTemplateVersions), arg0, arg1)
+}
+
+// ListSiteTemplateVersionsByRelease mocks base method.
+func (m *MockStore) ListSiteTemplateVersionsByRelease(arg0 context.Context, arg1 []int64) ([]db.ListSiteTemplateVersionsByReleaseRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListSiteTemplateVersionsByRelease", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListSiteTemplateVersionsByReleaseRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListSiteTemplateVersionsByRelease indicates an expected call of ListSiteTemplateVersionsByRelease.
+func (mr *MockStoreMockRecorder) ListSiteTemplateVersionsByRelease(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListSiteTemplateVersionsByRelease", reflect.TypeOf((*MockStore)(nil).ListSiteTemplateVersionsByRelease), arg0, arg1)
+}
+
+// ListSiteTemplatesByTheme mocks base method.
+func (m *MockStore) ListSiteTemplatesByTheme(arg0 context.Context, arg1 string) ([]db.SiteTemplate, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListSiteTemplatesByTheme", arg0, arg1)
+	ret0, _ := ret[0].([]db.SiteTemplate)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListSiteTemplatesByTheme indicates an expected call of ListSiteTemplatesByTheme.
+func (mr *MockStoreMockRecorder) ListSiteTemplatesByTheme(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListSiteTemplatesByTheme", reflect.TypeOf((*MockStore)(nil).ListSiteTemplatesByTheme), arg0, arg1)
 }
 
 // ListTaxonomyTermsByType mocks base method.
@@ -4819,6 +4999,21 @@ func (mr *MockStoreMockRecorder) LockSiteTemplateForCollabStore(arg0, arg1 inter
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockSiteTemplateForCollabStore", reflect.TypeOf((*MockStore)(nil).LockSiteTemplateForCollabStore), arg0, arg1)
 }
 
+// LockSiteTemplatesByTheme mocks base method.
+func (m *MockStore) LockSiteTemplatesByTheme(arg0 context.Context, arg1 string) ([]db.SiteTemplate, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LockSiteTemplatesByTheme", arg0, arg1)
+	ret0, _ := ret[0].([]db.SiteTemplate)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LockSiteTemplatesByTheme indicates an expected call of LockSiteTemplatesByTheme.
+func (mr *MockStoreMockRecorder) LockSiteTemplatesByTheme(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockSiteTemplatesByTheme", reflect.TypeOf((*MockStore)(nil).LockSiteTemplatesByTheme), arg0, arg1)
+}
+
 // LockUserForShare mocks base method.
 func (m *MockStore) LockUserForShare(arg0 context.Context, arg1 int64) error {
 	m.ctrl.T.Helper()
@@ -4951,6 +5146,21 @@ func (mr *MockStoreMockRecorder) NextGlobalStyleVersionNo(arg0, arg1 interface{}
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NextGlobalStyleVersionNo", reflect.TypeOf((*MockStore)(nil).NextGlobalStyleVersionNo), arg0, arg1)
 }
 
+// NextSiteTemplateVersionNo mocks base method.
+func (m *MockStore) NextSiteTemplateVersionNo(arg0 context.Context, arg1 int64) (int32, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NextSiteTemplateVersionNo", arg0, arg1)
+	ret0, _ := ret[0].(int32)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// NextSiteTemplateVersionNo indicates an expected call of NextSiteTemplateVersionNo.
+func (mr *MockStoreMockRecorder) NextSiteTemplateVersionNo(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NextSiteTemplateVersionNo", reflect.TypeOf((*MockStore)(nil).NextSiteTemplateVersionNo), arg0, arg1)
+}
+
 // Ping mocks base method.
 func (m *MockStore) Ping(arg0 context.Context) error {
 	m.ctrl.T.Helper()
@@ -4977,21 +5187,6 @@ func (m *MockStore) PrunePostBlockEdits(arg0 context.Context, arg1 db.PrunePostB
 func (mr *MockStoreMockRecorder) PrunePostBlockEdits(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PrunePostBlockEdits", reflect.TypeOf((*MockStore)(nil).PrunePostBlockEdits), arg0, arg1)
-}
-
-// PublishGlobalStylesTx mocks base method.
-func (m *MockStore) PublishGlobalStylesTx(arg0 context.Context, arg1 db.PublishGlobalStylesTxParams) (db.PublishGlobalStylesTxResult, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PublishGlobalStylesTx", arg0, arg1)
-	ret0, _ := ret[0].(db.PublishGlobalStylesTxResult)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// PublishGlobalStylesTx indicates an expected call of PublishGlobalStylesTx.
-func (mr *MockStoreMockRecorder) PublishGlobalStylesTx(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishGlobalStylesTx", reflect.TypeOf((*MockStore)(nil).PublishGlobalStylesTx), arg0, arg1)
 }
 
 // PublishPostTx mocks base method.
@@ -5037,6 +5232,21 @@ func (m *MockStore) PublishScheduledUpdateTx(arg0 context.Context, arg1 db.Publi
 func (mr *MockStoreMockRecorder) PublishScheduledUpdateTx(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishScheduledUpdateTx", reflect.TypeOf((*MockStore)(nil).PublishScheduledUpdateTx), arg0, arg1)
+}
+
+// PublishSiteDesignTx mocks base method.
+func (m *MockStore) PublishSiteDesignTx(arg0 context.Context, arg1 db.PublishSiteDesignTxParams) (db.PublishSiteDesignTxResult, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PublishSiteDesignTx", arg0, arg1)
+	ret0, _ := ret[0].(db.PublishSiteDesignTxResult)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PublishSiteDesignTx indicates an expected call of PublishSiteDesignTx.
+func (mr *MockStoreMockRecorder) PublishSiteDesignTx(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishSiteDesignTx", reflect.TypeOf((*MockStore)(nil).PublishSiteDesignTx), arg0, arg1)
 }
 
 // ReassignPostBylines mocks base method.
@@ -5950,6 +6160,51 @@ func (m *MockStore) SetScheduledUpdateBlockDoc(arg0 context.Context, arg1 db.Set
 func (mr *MockStoreMockRecorder) SetScheduledUpdateBlockDoc(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetScheduledUpdateBlockDoc", reflect.TypeOf((*MockStore)(nil).SetScheduledUpdateBlockDoc), arg0, arg1)
+}
+
+// SetSiteTemplatePublished mocks base method.
+func (m *MockStore) SetSiteTemplatePublished(arg0 context.Context, arg1 db.SetSiteTemplatePublishedParams) (db.SiteTemplate, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetSiteTemplatePublished", arg0, arg1)
+	ret0, _ := ret[0].(db.SiteTemplate)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SetSiteTemplatePublished indicates an expected call of SetSiteTemplatePublished.
+func (mr *MockStoreMockRecorder) SetSiteTemplatePublished(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetSiteTemplatePublished", reflect.TypeOf((*MockStore)(nil).SetSiteTemplatePublished), arg0, arg1)
+}
+
+// SetSiteTemplateSource mocks base method.
+func (m *MockStore) SetSiteTemplateSource(arg0 context.Context, arg1 db.SetSiteTemplateSourceParams) (db.SiteTemplate, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetSiteTemplateSource", arg0, arg1)
+	ret0, _ := ret[0].(db.SiteTemplate)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SetSiteTemplateSource indicates an expected call of SetSiteTemplateSource.
+func (mr *MockStoreMockRecorder) SetSiteTemplateSource(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetSiteTemplateSource", reflect.TypeOf((*MockStore)(nil).SetSiteTemplateSource), arg0, arg1)
+}
+
+// SetSiteTemplateWorkingState mocks base method.
+func (m *MockStore) SetSiteTemplateWorkingState(arg0 context.Context, arg1 db.SetSiteTemplateWorkingStateParams) (db.SiteTemplate, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetSiteTemplateWorkingState", arg0, arg1)
+	ret0, _ := ret[0].(db.SiteTemplate)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SetSiteTemplateWorkingState indicates an expected call of SetSiteTemplateWorkingState.
+func (mr *MockStoreMockRecorder) SetSiteTemplateWorkingState(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetSiteTemplateWorkingState", reflect.TypeOf((*MockStore)(nil).SetSiteTemplateWorkingState), arg0, arg1)
 }
 
 // SetUserAvatar mocks base method.

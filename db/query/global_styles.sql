@@ -44,3 +44,43 @@ SET published = @published,
     published_version_id = @published_version_id
 WHERE theme_slug = @theme_slug
 RETURNING *;
+
+-- History and restore (#492, design 5.3).
+
+-- name: ListSiteDesignReleases :many
+SELECT
+    r.id,
+    r.theme_slug,
+    r.published_by,
+    r.published_at,
+    r.summary,
+    COALESCE(u.full_name, '')::varchar AS published_by_name
+FROM site_design_releases r
+LEFT JOIN users u ON u.id = r.published_by
+WHERE r.theme_slug = @theme_slug
+  AND (sqlc.narg(before)::bigint IS NULL OR r.id < sqlc.narg(before)::bigint)
+ORDER BY r.id DESC
+LIMIT @limit_count;
+
+-- name: ListGlobalStyleVersions :many
+SELECT
+    v.id,
+    v.release_id,
+    v.version_no,
+    v.created_at,
+    r.published_by,
+    COALESCE(u.full_name, '')::varchar AS published_by_name
+FROM global_style_versions v
+JOIN site_design_releases r ON r.id = v.release_id
+LEFT JOIN users u ON u.id = r.published_by
+WHERE v.theme_slug = $1
+ORDER BY v.version_no DESC
+LIMIT 200;
+
+-- name: GetGlobalStyleVersion :one
+SELECT * FROM global_style_versions WHERE theme_slug = @theme_slug AND version_no = @version_no;
+
+-- name: ListGlobalStyleVersionsByRelease :many
+SELECT release_id, version_no
+FROM global_style_versions
+WHERE release_id = ANY(@release_ids::bigint[]);

@@ -397,6 +397,15 @@ are the most fragile part of the codebase. **Before editing anything under
   the cookie is `no-store` (`httpCache.ts` counts it as a session cookie). The admin CSP has
   `frame-src 'self'` for the Site editor's frame; `gl-admin/lib/api/designPreview.ts`
   `openDesignPreview(target, path)` posts a fresh token into it (#487).
+- **Publish site design (#492, `gl-admin/lib/api/siteDesign.ts`):** `publishSiteDesign({ confirmContrast })` is
+  the one "Publish site design" call (styles, templates and parts of the active theme in one release; the styles
+  screen and the Site editor both use it), plus the overview (`getSiteDesignOverview`: per item `change`, the
+  Publish button's `unpublished_changes`), Reset / Keep editing / Delete, history (`listSiteDesignReleases`, versions)
+  and the styles' REST restore and discard. Templates and parts restore through the editor only:
+  `lib/collaboration/templateRestore.ts` (rule 9). The publish (#487's fetch with one 401 refresh) throws
+  `ContrastUnconfirmedError` (`pairs`), `StylesChangedError` (`current`) and `DesignInvalidError` (`problems`:
+  `template_empty`, `template_invalid`, `part_unresolved`); `design_changed`, `nothing_to_publish` and 503
+  `collab_unavailable` (naming the item it couldn't flush) are ApiErrors with the server's message.
 - **Theme contract (#484, `themes/README.md` "The theme contract", design
   `docs/design/theme-builder.md` 3.5):** core emits tokens (`src/lib/themeTokens.ts`:
   `themeCssVariables(resolveThemeTokens(config, Astro.locals.globalStyles))`; the middleware

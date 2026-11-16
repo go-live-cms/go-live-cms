@@ -1599,11 +1599,11 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   `groups`); `POST /site-design/publish` (`{confirm_contrast}`): nothing changed → 409
   `nothing_to_publish`; the draft re-validated (a token the theme stopped declaring → 409
   `styles_invalid`, `reason`, `path`); **contrast is a warning**: failing pairs → 409
-  `contrast_unconfirmed` with `pairs`, unless `confirm_contrast: true`; then
-  `PublishGlobalStylesTx` (row `FOR UPDATE`, revision re-checked → `ErrGlobalStylesChanged`
+  `contrast_unconfirmed` with `pairs`, unless `confirm_contrast: true`; then the styles
+  part of `PublishSiteDesignTx` (row `FOR UPDATE`, revision re-checked → `ErrGlobalStylesChanged`
   = 409 `styles_changed`), the purge after commit (`publicCachePurgeRoutes`) and
-  `site_design_published` on the release id (`theme_slug`, `global_styles_groups`,
-  `contrast_failures`). Activity object type `site_design` is admin-only in the feed.
+  `site_design_published` on the release id. #492 generalized this route to templates and
+  parts (below); the body and a styles-only answer are unchanged. Activity object type `site_design` is admin-only in the feed.
 - **Contrast pairs** (`contrastPairs`) are core's `CONTRAST_PAIRS`, the list the default
   theme's `tokens.test.ts` checks, plus each block colour as text on background/surface/
   surface2 and the text on its fill; pairs naming an undeclared colour are skipped.
@@ -1662,7 +1662,7 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   theme **and plugin** block manifests load, so `NewServer` now scans plugins first) validates each with its kind's rules
   and stores the valid ones as `config.block_templates` / `config.block_parts` (slug → `{title, doc, hash}`). Invalid
   files are logged and left out; a slug that also has a code layout at its rank logs that the block template wins.
-- `flushCollabTemplate` (`template-<id>`) is ready for #492's publish. Publishing (#492) isn't here.
+- `flushCollabTemplate` (`template-<id>`) is what #492's publish calls.
 - **The public resolve (#491, `site_templates_resolve.go`, design 3.3, 4.2):** `GET /public/site-templates/resolve?theme=
   <slug>&slugs=<a,b>` (1–8 distinct slugs in rank order; 400 `invalid_slugs`/`invalid_theme`; a theme that isn't the
   active one is 404 `theme_inactive`). One read, `ListPublishedSiteTemplatesForResolve` (**published copies only**: a
@@ -1677,6 +1677,67 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   `archive`, `home`, `search`, `404`, plus `index`); `author`/`taxonomy` start from `archive`, `custom` from `page`,
   `front-page` from `home` (`starterAliases`); #498 replaces them. Tests: `site_templates_resolve_test.go`,
   `site_templates_resolve_db_test.go`, `sitedesign_test.go`.
+- Tests: `site_templates_test.go` (mock: names, access, tickets, the internal routes, Customize), `site_templates_db_test.go`
+  (real DB through the routes), `theme_block_templates_test.go` (the scan), `sitedesign/sitedesign_test.go`,
+  `db/sqlc/site_template_collab_tx_test.go` (the transaction and 000058's constraints).
+
+## Publish site design, history, reset and restore (#492, `site_design_publish.go`, `site_templates_manage.go`, `site_design_history.go`, `db/sqlc/site_design_tx.go`, design `docs/design/theme-builder.md` 5.3, 8, 9, 12)
+
+- **One publish for everything** (`POST /site-design/publish {confirm_contrast}`, the only "Publish site
+  design" route; #485's styles-only publish, generalized, same body and keys). It publishes every item of the
+  **active theme** with unpublished changes (`siteTemplateChange`: a custom row whose `block_doc` differs from
+  `published_block_doc` by JSON value, or was never published → `publish`; a reset row that still has a
+  published copy → `reset`; plus the styles when draft ≠ published), in three phases:
+  1. **Outside any transaction:** `flushSiteDesign` flushes every *custom* row (a reset row's working copy
+     isn't published), up to 4 at a time; any failure → 503 `collab_unavailable` naming the first failed row
+     (`id`, `kind`, `slug`), nothing published, a styles-only release included (the issue's rule). Rows are read again, then `validateSiteDesignPlan`: each published working copy re-runs
+     `prepareForStoreAs` (a block uninstalled since → `template_invalid`), no **template** is empty
+     (`blockDocIsEmpty`: only blank paragraphs, also inside groups and columns; an empty **part** is allowed, a
+     site may have no footer), and the `template_part` slugs this publish could break resolve (4.2: a part live
+     after it, else the theme's shipped part, else core's starter) → `part_unresolved` with `part`: every slug of
+     a template being published, and of an unchanged live template only the parts this release changes (a
+     template broken by a theme deploy doesn't block unrelated publishes). All problems at once:
+     409 `design_invalid` with `problems`. Then the styles as #485 (`styles_invalid`, `global_styles_unsupported`,
+     `contrast_unconfirmed` with `pairs`; only when the styles are in the release).
+  2. **`PublishSiteDesignTx`**: styles row `FOR UPDATE` (revision → `ErrGlobalStylesChanged`), then every row of
+     the theme `FOR UPDATE` in id order (`LockSiteTemplatesByTheme`) compared with the **stamps** the caller
+     validated (`SiteTemplateStamp`: id, `block_revision`, `working_state`, `published_version_id`; a row added,
+     deleted or changed → `ErrSiteDesignChanged` = 409 `design_changed`, publish again). One release, a version
+     **only for the changed items** (`block_doc` NULL for a reset) and their published copy (a reset publishes
+     NULL), the styles' version. **No network call inside.** `PublishedTemplate` is the in-transaction hook per
+     published row (`publishedSiteTemplateHook`, nil until #496 syncs `site_template_media` there).
+  3. **After commit:** the purge (`publicCachePurgeRoutes`; a failed purge is logged, never fails the publish)
+     and `site_design_published` on the release (`theme_slug`, `templates`, `parts`, `resets`, `slugs` capped at 8
+     as `kind:slug`, `global_styles_groups` and `contrast_failures` when styles were in it). The release's
+     `summary` has every item (`templates: [{id, kind, slug, reset}]`) and `global_styles`.
+  Response: `release`, `global_styles` (null without styles), `templates` (`{id, kind, slug, title, version_no,
+  reset}`, templates first), `styles`.
+- **Per item** (all `requireSiteAdmin`, none purges: nothing public changes until publish): `GET
+  /site-design/templates` (the active theme's rows **without docs**, with `change`, `has_unpublished_changes`,
+  `published_block_doc`, `published_version_no`, `default_changed`, `can_delete`, and `unpublished_changes`, the
+  Publish button's count, styles counted once), `GET /templates/:id` (any theme's row). **Reset** `POST
+  /templates/:id/reset` / **Keep editing** `.../keep-editing` set `working_state` only, never `block_doc`
+  (rule 11); twice is a 200 with no event. **Delete** `DELETE /templates/:id` removes only a row with
+  `published_block_doc IS NULL` (`DeleteUnpublishedSiteTemplate`, one statement: a publish that got there first
+  wins → 409 `template_published`), versions and Yjs state cascade, then `recheckCollabTemplate` closes its
+  editors. **Start over** `GET /templates/:id/default?from=` (the theme's shipped default, else the starter,
+  fresh block ids; 404 `no_default`, also for another theme's row) and, after the editor applied it, `POST
+  .../start-over {from?}` (source + the server's hash, custom again). **Restore** `GET .../versions`, `GET
+  .../versions/:no` (`block_doc` null for a reset version), and after the editor restored it (rule 9) `POST
+  .../versions/:no/restore` (custom again, so a reset published as NULL comes back on the next publish; a reset
+  version → 409 `version_is_reset`). **Discard changes** for a template is the restore of `published_version_no`
+  (the web's `templateRestore.ts`); after a published reset it is Reset again; never published → Delete is its discard.
+- **History:** `GET /site-design/releases?limit=&before=` (newest first, paged by id, `next_before`; each with
+  `items` = its template/part versions and `global_styles_version`, names joined at read time). Styles: `GET
+  /global-styles/versions[/:no]`, `POST /global-styles/versions/:no/restore {base_revision}` (validated against
+  the theme now → 409 `styles_invalid`; stale → 409 `styles_changed`) and `POST /global-styles/discard
+  {base_revision}` (draft = published), both by REST into the draft.
+- **Activity** (object `site_design`, admin-only): `site_template_reset`, `_reset_cancelled`, `_deleted` (`kind`,
+  `slug`), `_restored` (`version_no`), `_started_over` (`kind`, `slug`, `source`); `global_styles_restored`
+  (`version_no`), `global_styles_discarded` (`groups`).
+- Tests: `site_design_publish_test.go` (mock: every flush before the transaction and none after, refusals, the
+  helpers), `site_design_publish_db_test.go` (real DB through the routes: each acceptance item of #492, history,
+  styles restore/discard, the transaction's stamps and hook rollback), the #485 tests in `site_design*_test.go`.
 - Tests: `site_templates_test.go` (mock: names, access, tickets, the internal routes, Customize), `site_templates_db_test.go`
   (real DB through the routes), `theme_block_templates_test.go` (the scan), `sitedesign/sitedesign_test.go`,
   `db/sqlc/site_template_collab_tx_test.go` (the transaction and 000058's constraints).

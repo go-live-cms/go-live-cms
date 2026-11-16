@@ -25,14 +25,8 @@ func (s globalStylesState) response() GlobalStylesResponse {
 // loadGlobalStylesState reads the active theme's styles, answering the request itself
 // (404 without an active theme, 500 on a database error) when ok is false.
 func (server *Server) loadGlobalStylesState(c *gin.Context) (globalStylesState, bool) {
-	theme, err := server.store.GetActiveTheme(c)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "no active theme found"})
-			return globalStylesState{}, false
-		}
-		server.requestLog(c).Error("global_styles_read_failed", "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get active theme"})
+	theme, ok := server.siteDesignTheme(c)
+	if !ok {
 		return globalStylesState{}, false
 	}
 	state := globalStylesState{theme: theme}

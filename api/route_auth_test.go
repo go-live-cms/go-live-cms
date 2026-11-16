@@ -290,12 +290,27 @@ func TestHTMLSnippetRoutesRequireRole(t *testing.T) {
 // (TestDesignDraftRead). The published styles' only public read is GET /themes/active
 // (TestDraftGlobalStylesNeverPublic proves the draft isn't there or on any /public route).
 var siteDesignRoutes = map[string]string{
-	"GET /api/v1/site-design/global-styles": "requireSiteAdmin: the draft",
-	"PUT /api/v1/site-design/global-styles": "requireSiteAdmin",
-	"POST /api/v1/site-design/publish":      "requireSiteAdmin",
-	"POST /api/v1/site-design/preview":      "requireSiteAdmin: mints a preview token",
-	"GET /api/v1/site-design/draft":         "previewTokenOnly: the draft, for a preview token whose user is still an admin",
-	"POST /api/v1/site-design/templates":    "requireSiteAdmin: templates and parts are admins' only (#490)",
+	"GET /api/v1/site-design/global-styles":                       "requireSiteAdmin: the draft",
+	"PUT /api/v1/site-design/global-styles":                       "requireSiteAdmin",
+	"POST /api/v1/site-design/publish":                            "requireSiteAdmin",
+	"POST /api/v1/site-design/preview":                            "requireSiteAdmin: mints a preview token",
+	"GET /api/v1/site-design/draft":                               "previewTokenOnly: the draft, for a preview token whose user is still an admin",
+	"POST /api/v1/site-design/templates":                          "requireSiteAdmin: templates and parts are admins' only (#490)",
+	"GET /api/v1/site-design/templates":                           "requireSiteAdmin: working copies and what a publish would do (#492)",
+	"GET /api/v1/site-design/templates/:id":                       "requireSiteAdmin: a working copy (#492)",
+	"DELETE /api/v1/site-design/templates/:id":                    "requireSiteAdmin (#492)",
+	"POST /api/v1/site-design/templates/:id/reset":                "requireSiteAdmin (#492)",
+	"POST /api/v1/site-design/templates/:id/keep-editing":         "requireSiteAdmin (#492)",
+	"GET /api/v1/site-design/templates/:id/default":               "requireSiteAdmin: the theme default for Start over (#492)",
+	"POST /api/v1/site-design/templates/:id/start-over":           "requireSiteAdmin (#492)",
+	"GET /api/v1/site-design/templates/:id/versions":              "requireSiteAdmin: history (#492)",
+	"GET /api/v1/site-design/templates/:id/versions/:no":          "requireSiteAdmin: a version, for the editor's restore (#492)",
+	"POST /api/v1/site-design/templates/:id/versions/:no/restore": "requireSiteAdmin (#492)",
+	"GET /api/v1/site-design/releases":                            "requireSiteAdmin: history (#492)",
+	"GET /api/v1/site-design/global-styles/versions":              "requireSiteAdmin: history (#492)",
+	"GET /api/v1/site-design/global-styles/versions/:no":          "requireSiteAdmin: a version (#492)",
+	"POST /api/v1/site-design/global-styles/versions/:no/restore": "requireSiteAdmin (#492)",
+	"POST /api/v1/site-design/global-styles/discard":              "requireSiteAdmin (#492)",
 }
 
 func TestSiteDesignRoutesRequireAdmin(t *testing.T) {

@@ -46,7 +46,7 @@ type SiteTemplateResponse struct {
 	Kind          string          `json:"kind"`
 	Slug          string          `json:"slug"`
 	Title         string          `json:"title"`
-	BlockDoc      json.RawMessage `json:"block_doc"`
+	BlockDoc      json.RawMessage `json:"block_doc,omitempty"`
 	BlockRevision int64           `json:"block_revision"`
 	WorkingState  string          `json:"working_state"`
 	Source        string          `json:"source"`
@@ -58,14 +58,19 @@ type SiteTemplateResponse struct {
 	ChangedAt time.Time `json:"changed_at"`
 }
 
-func toSiteTemplateResponse(row db.SiteTemplate) SiteTemplateResponse {
-	doc, err := parseStoredBlockDoc(row.BlockDoc)
-	blockDoc := json.RawMessage(row.BlockDoc)
-	if err == nil {
+// normalizedBlockDocJSON is a stored doc as responses give it: `{}` as a well-formed empty
+// Block Spec doc (#304), anything unreadable as stored.
+func normalizedBlockDocJSON(raw json.RawMessage) json.RawMessage {
+	if doc, err := parseStoredBlockDoc(raw); err == nil {
 		if encoded, err := json.Marshal(doc); err == nil {
-			blockDoc = encoded
+			return encoded
 		}
 	}
+	return raw
+}
+
+func toSiteTemplateResponse(row db.SiteTemplate) SiteTemplateResponse {
+	blockDoc := normalizedBlockDocJSON(row.BlockDoc)
 	return SiteTemplateResponse{
 		ID:            row.ID,
 		ThemeSlug:     row.ThemeSlug,

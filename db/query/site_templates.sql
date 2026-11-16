@@ -59,6 +59,104 @@ SET state = EXCLUDED.state,
     last_editor_id = EXCLUDED.last_editor_id,
     changed_at = EXCLUDED.changed_at;
 
+-- Publish, history, reset and restore (#492, docs/design/theme-builder.md 5.3, 8, 9).
+
+-- name: ListSiteTemplatesByTheme :many
+SELECT * FROM site_templates WHERE theme_slug = $1 ORDER BY kind, slug;
+
+-- name: LockSiteTemplatesByTheme :many
+-- PublishSiteDesignTx's lock on every row of the theme, in id order (one order for every
+-- locker), so the rows it validated can't change under it.
+SELECT * FROM site_templates WHERE theme_slug = $1 ORDER BY id FOR UPDATE;
+
+-- name: NextSiteTemplateVersionNo :one
+SELECT (COALESCE(MAX(version_no), 0) + 1)::int AS version_no
+FROM site_template_versions
+WHERE template_id = $1;
+
+-- name: CreateSiteTemplateVersion :one
+-- block_doc NULL: this release reset the item to the theme's default (section 9).
+INSERT INTO site_template_versions (template_id, release_id, version_no, block_doc)
+VALUES (@template_id, @release_id, @version_no, sqlc.narg(block_doc))
+RETURNING *;
+
+-- name: SetSiteTemplatePublished :one
+-- The published side only: block_doc (the working copy) is the collab server's (rule 11).
+UPDATE site_templates
+SET published_block_doc = sqlc.narg(published_block_doc),
+    published_version_id = @published_version_id
+WHERE id = @id
+RETURNING *;
+
+-- name: SetSiteTemplateWorkingState :one
+-- Reset to theme default and Keep editing (section 9): never block_doc.
+UPDATE site_templates
+SET working_state = @working_state,
+    changed_at = now()
+WHERE id = @id
+RETURNING *;
+
+-- name: SetSiteTemplateSource :one
+-- "Start over from the theme default" after the editor replaced the working copy (rule 9):
+-- where it starts from now, so "Default changed since you customized" clears.
+UPDATE site_templates
+SET source = @source,
+    source_hash = @source_hash,
+    working_state = 'custom',
+    changed_at = now()
+WHERE id = @id
+RETURNING *;
+
+-- name: DeleteUnpublishedSiteTemplate :execrows
+-- Delete (section 9) removes only a row with no published override; its versions and Yjs
+-- state cascade. 0 rows: gone, or published (by a publish that got there first).
+DELETE FROM site_templates WHERE id = $1 AND published_block_doc IS NULL;
+
+-- name: ListSiteTemplateVersions :many
+SELECT
+    v.id,
+    v.template_id,
+    v.release_id,
+    v.version_no,
+    (v.block_doc IS NULL)::bool AS reset,
+    v.created_at,
+    r.published_by,
+    COALESCE(u.full_name, '')::varchar AS published_by_name
+FROM site_template_versions v
+JOIN site_design_releases r ON r.id = v.release_id
+LEFT JOIN users u ON u.id = r.published_by
+WHERE v.template_id = $1
+ORDER BY v.version_no DESC
+LIMIT 200;
+
+-- name: GetSiteTemplateVersion :one
+SELECT * FROM site_template_versions WHERE template_id = @template_id AND version_no = @version_no;
+
+-- name: GetSiteTemplateVersionByID :one
+SELECT * FROM site_template_versions WHERE id = $1;
+
+-- name: ListSiteTemplateVersionsByRelease :many
+-- The items of a page of releases (History), with what each item is now.
+SELECT
+    v.release_id,
+    v.template_id,
+    v.version_no,
+    (v.block_doc IS NULL)::bool AS reset,
+    t.kind,
+    t.slug,
+    t.title
+FROM site_template_versions v
+JOIN site_templates t ON t.id = v.template_id
+WHERE v.release_id = ANY(@release_ids::bigint[])
+ORDER BY v.release_id DESC, t.kind, t.slug;
+
+-- name: ListPublishedSiteTemplateVersionNos :many
+-- The published version number of each of a theme's rows (the overview, one query).
+SELECT t.id, v.version_no
+FROM site_templates t
+JOIN site_template_versions v ON v.id = t.published_version_id
+WHERE t.theme_slug = $1;
+
 -- name: ListPublishedSiteTemplatesForResolve :many
 -- The published copies the public site renders (#491, GET /public/site-templates/resolve):
 -- the theme's published templates among the asked slugs, and every published part of the

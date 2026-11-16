@@ -69,6 +69,13 @@ func (server *Server) recheckCollabDoc(requestID string, postID int64) {
 	server.recheckCollab(requestID, "collab_doc_recheck", fmt.Sprintf("/internal/documents/post-%d/recheck", postID), "post_id", postID)
 }
 
+// recheckCollabTemplate is recheckCollabDoc for template-<id> (#492): after a template or
+// part is deleted the access lookup answers 404 for it, so its open editors close now
+// instead of at the next periodic re-check. Best effort, after the response.
+func (server *Server) recheckCollabTemplate(requestID string, templateID int64) {
+	server.recheckCollab(requestID, "collab_doc_recheck", fmt.Sprintf("/internal/documents/template-%d/recheck", templateID), "template_id", templateID)
+}
+
 // notifyCollabComments asks the collab server to tell post-<id>'s open editors
 // that its comments changed (#192): it broadcasts {"type":"comments"} to the
 // doc's connections and the editors refetch GET /posts/:id/comments. Best effort
