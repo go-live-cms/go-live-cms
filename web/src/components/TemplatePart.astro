@@ -4,18 +4,46 @@
  *
  *   <TemplatePart slug="header"><SiteHeader … /></TemplatePart>
  *
- * renders the site's published part for `slug` when there is one (#491) and its slot, the
- * theme's own markup, otherwise. Until #491 it is always the slot, with no markup of its own,
- * so wrapping a header or footer in it changes nothing a reader gets. A slug that a part could
- * never have (lib/templateParts.ts) is logged once and renders the slot.
+ * renders the site's **published** part for `slug` when an admin customized and published one
+ * (#491: the override the route's template resolve carries, lib/siteTemplates.ts
+ * templatePartOverride), and its slot, the theme's own markup, otherwise: no override, a reset
+ * one, the 500 page (which never resolves), or a resolve that failed. The theme's shipped part
+ * and core's starter never replace the slot: the theme's own markup is its default here. With
+ * no override it renders the slot with no markup of its own, so the page is what it was.
+ *
+ * An override renders in the markup a template_part block gives it (`header.template-part
+ * .template-part--header`, so the theme lays it out the same way in both, 3.5), from a site
+ * render context of its own: its site blocks, its menus and up to four queries (the part placed
+ * alone, design 4.3). Its headings get no ids, so they never take one the theme's content uses.
+ * A slug that a part could never have (lib/templateParts.ts) is logged once and renders the slot.
  */
+import BlockRenderer from '@/components/BlockRenderer'
 import { checkTemplatePartSlug } from '@/lib/templateParts'
+import { templatePartOverride } from '@/lib/siteTemplates'
+import { loadSiteRenderContext } from '@/lib/siteRenderContext'
+import { resolveSiteUrl } from '@/lib/seo'
 
 interface Props {
   slug: string
 }
 
-checkTemplatePartSlug(Astro.props.slug)
+const { slug } = Astro.props
+const override = checkTemplatePartSlug(slug) ? templatePartOverride(Astro.locals, slug) : null
+const context = override
+  ? await loadSiteRenderContext(Astro.locals, {
+      // The part placed alone, so its queries are counted and read as a template's would be.
+      docs: [{ doc_version: 1, blocks_order: ['part'], blocks: { part: { id: 'part', type: 'template_part', version: 1, attrs: { slug } } } } as any],
+      parts: { [slug]: override.doc },
+      menusById: override.menusById,
+      currentPath: Astro.url.pathname,
+      siteUrl: resolveSiteUrl(Astro.url),
+    })
+  : null
+const Tag = slug === 'header' ? 'header' : slug === 'footer' ? 'footer' : 'div'
 ---
 
-<slot />
+{override && context ? (
+  <Tag class={`template-part template-part--${slug}`}><BlockRenderer doc={override.doc} site={{ ...context, kind: 'part', partSlug: slug }} anchors={false} headings={[]} /></Tag>
+) : (
+  <slot />
+)}

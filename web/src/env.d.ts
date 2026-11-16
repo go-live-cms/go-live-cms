@@ -28,6 +28,13 @@ declare namespace App {
     // added, so a rewrite's second middleware pass doesn't add it again.
     designPreview?: import("./lib/designPreview").DesignPreviewState
 
+    // The site design's template resolves of this request (#491, lib/siteTemplates.ts), by
+    // theme and slugs: one read per route, shared by a rewrite or an error page.
+    siteTemplateResolves?: Map<string, Promise<import("./lib/siteTemplates").SiteDesignResolve | null>>
+    // The published override parts the last resolve answered, which a code layout's
+    // <TemplatePart slug> renders in place of the theme's own markup (#491). Unset: the slot.
+    templatePartOverrides?: import("./lib/siteTemplates").TemplatePartOverrides
+
     // Phase 2: Theme functions
     themeFunctions?: import("./lib/theme-api").ThemeFunctions
     themeContext?: import("./lib/theme-api").ThemeFunctionsContext

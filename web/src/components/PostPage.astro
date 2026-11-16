@@ -8,6 +8,11 @@
  * A page renders with its published template (#336): its layouts/page/<template>.astro
  * when the active theme has one in this build, else the theme's default for pages
  * (lib/themeLayout.ts pageLayoutVariant). The front page's canonical URL is /.
+ *
+ * The site design (#491): a published builder template for the route's slugs (single-{type},
+ * single; page-{template}, page; front-page first for the front page) renders through
+ * layouts/BlockTemplateLayout.astro with the same props, when it outranks the active theme's
+ * code layout (lib/siteTemplates.ts resolveTemplate).
  */
 import { getPostLayoutVariant } from '../lib/theme-loader'
 import { getActiveTheme } from '../lib/api'
@@ -19,6 +24,8 @@ import { labelDateChips } from '../lib/dateChips'
 import { getCachedTaxonomyTypes, linkTerms } from '../lib/termPage'
 import type { AuthorProfile, Post, TaxonomyTerm, TaxonomyType } from '@gl-admin/lib/api/types'
 import { log } from '../lib/log'
+import { resolveTemplate, type TemplateRoute } from '../lib/siteTemplates'
+import BlockTemplateLayout from '../layouts/BlockTemplateLayout.astro'
 
 interface Props {
   post: Post
@@ -82,24 +89,33 @@ const layoutVariant = postType === 'page'
   ? pageLayoutVariant(allLayouts, LAYOUT_PREFIX, themeSlug, fullPost.page_template, typeVariant)
   : typeVariant
 
-// Layout fallback chain (lib/themeLayout.ts): the type's own layouts/{postType}/{variant}
-// (never home/archive/error, which hold page layouts), the theme's layouts/post ones, then
-// the default theme's.
-const LayoutComponent = await loadThemeLayout(
-  allLayouts,
-  postLayoutCandidates(LAYOUT_PREFIX, themeSlug, postType, layoutVariant),
-)
-
-if (!LayoutComponent) {
-  log.error('post_layout_not_found', { theme: themeSlug, post_type: postType, variant: layoutVariant })
-  throw new Error('Layout Not Found')
-}
-
 // SEO (#137): the canonical URL follows the site's id/slug setting, so the
 // same post reached by id and by slug points crawlers at one URL.
 // The same per-request lookup the layout, SeoHead and bylines use (#330); it never
 // rejects (defaults when the API is down).
 const site = await getSiteSettings(Astro.locals)
+// The front page (#336) lives at /: that's its address whichever URL reached it.
+const isFrontPage = postType === 'page' && site.frontPageId === fullPost.id
+
+// The site design's one branch (#491, design 3.3): the route's builder template when it wins.
+const templateRoute: TemplateRoute = isFrontPage
+  ? { kind: 'front-page', template: fullPost.page_template }
+  : postType === 'page'
+    ? { kind: 'page', template: fullPost.page_template }
+    : { kind: 'single', postType }
+const blockTemplate = await resolveTemplate(Astro.locals, templateRoute)
+
+// Layout fallback chain (lib/themeLayout.ts): the type's own layouts/{postType}/{variant}
+// (never home/archive/error, which hold page layouts), the theme's layouts/post ones, then
+// the default theme's.
+const LayoutComponent = blockTemplate
+  ? null
+  : await loadThemeLayout(allLayouts, postLayoutCandidates(LAYOUT_PREFIX, themeSlug, postType, layoutVariant))
+
+if (!blockTemplate && !LayoutComponent) {
+  log.error('post_layout_not_found', { theme: themeSlug, post_type: postType, variant: layoutVariant })
+  throw new Error('Layout Not Found')
+}
 // Date chips (#320) in the site's language and date format: the renderer has no settings.
 if (fullPost.published_blocks) labelDateChips(fullPost.published_blocks, site)
 // The published featured image (#358); a getStaticPaths prop may carry its own.
@@ -111,8 +127,7 @@ const urlStructure = normalizeUrlStructure(site.urlStructure)
 // its own), the social image (else the featured image; the API resolves both, as the
 // 1200 x 630 crop), and robots noindex when it's hidden from search engines.
 const siteUrl = resolveSiteUrl(Astro.url)
-// The front page (#336) lives at /: that's its address whichever URL reached it.
-const isFrontPage = postType === 'page' && site.frontPageId === fullPost.id
+
 const ownPath = isFrontPage ? '/' : postPath({ ...fullPost, post_type: postType }, urlStructure)
 const headline = publishedSeo?.title?.trim() || fullPost.title
 const title = pageTitle(headline, site.title)
@@ -145,16 +160,21 @@ const seo: SeoMeta = {
     publisher: site.title,
   }),
 }
+const layoutProps = {
+  post: fullPost,
+  title,
+  description,
+  seo,
+  terms,
+  authors,
+  featuredImage: publicImageUrl(resolveSiteUrl(Astro.url), featuredImage) ?? null,
+  siteTitle: site.title,
+  urlStructure,
+}
 ---
 
-<LayoutComponent
-  post={fullPost}
-  title={title}
-  description={description}
-  seo={seo}
-  terms={terms}
-  authors={authors}
-  featuredImage={publicImageUrl(resolveSiteUrl(Astro.url), featuredImage) ?? null}
-  siteTitle={site.title}
-  urlStructure={urlStructure}
-/>
+{blockTemplate ? (
+  <BlockTemplateLayout kind={templateRoute.kind} choice={blockTemplate} {...layoutProps} />
+) : (
+  <LayoutComponent {...layoutProps} />
+)}
