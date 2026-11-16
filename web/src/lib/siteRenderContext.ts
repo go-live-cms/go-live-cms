@@ -17,30 +17,41 @@
  *   other reads one page of `/public/posts/type/:type` with its filters (`queryRequestParams`),
  *   all in parallel, each within 2 s. A fifth query renders nothing, logged once
  *   (`site_block_query_limit`).
+ * - #497: a `related_posts` block is the other data-reading block. It counts towards the same
+ *   four (a query and a related posts block alike, in reading order), and reads
+ *   `/public/posts/:id/related` for the route's post (`readRelatedPosts`: `limit` and `taxonomy`,
+ *   its two attrs, one to one; the public cache keys the whole query string, #185). On a route
+ *   without a post it reads nothing and renders nothing.
  * - Failures fail soft: that block renders nothing, the rest of the page renders. A failed
- *   query is logged once per request (`site_block_data_failed`, the block type and a count,
- *   never the query string).
+ *   query or related read is logged once per request and block type (`site_block_data_failed`,
+ *   the block type and a count, never the query string).
  */
 import {
   blocksInReadingOrder,
   isMenuLocation,
   isSiteBlockType,
   normalizeQueryPerPage,
+  normalizeRelatedPostsCount,
   normalizeSiteBlockAttrs,
   QUERY_DEFAULT_POST_TYPE,
   type BlockDocV1,
   type QueryAttrs,
+  type RelatedPostsAttrs,
 } from "@gl-admin/lib/blocks-spec"
 import type { Post } from "@gl-admin/lib/api/types"
 import { SERVER_MEDIA_URL } from "@gl-admin/lib/server-api-url"
 import { queryKey, type SiteMenu, type SitePostList, type SiteRenderContext, type SiteRoute } from "@/components/blocks/utils/siteContext"
+import { getRelatedPosts } from "./api"
 import { log, requestIdHeaders } from "./log"
 import { getMenu, withCurrent, type Menu } from "./menus"
 import { listedThumbnail, toListedPosts } from "./postList"
 import { normalizeUrlStructure, type UrlStructure } from "./seo"
 import { getSiteSettings } from "./siteSettings"
 
-/** At most this many query blocks per rendered page, counting parts (design 4.3). */
+/**
+ * At most this many data-reading blocks per rendered page, counting parts (design 4.3): query
+ * blocks (#489) and related posts blocks (#497) together.
+ */
 export const MAX_QUERIES_PER_PAGE = 4
 /** A query's read gives up after this long, as a menu's does. */
 export const SITE_QUERY_TIMEOUT_MS = 2000
@@ -82,11 +93,24 @@ export interface TemplateQueryNeed {
   attrs: QueryAttrs
 }
 
+/** A related posts block a page renders (#497): where its posts go (`queryKey`) and what it asks for. */
+export interface TemplateRelatedNeed {
+  key: string
+  blockId: string
+  part?: string
+  attrs: RelatedPostsAttrs
+}
+
 /** What a block template's render needs loaded first (design 3.4, step 1). */
 export interface TemplateNeeds extends SiteBlockNeeds {
-  /** The query blocks that render, in reading order (parts where the template places them), at most four. */
+  /** The query blocks that render, in reading order (parts where the template places them), within the four. */
   queries: TemplateQueryNeed[]
-  /** How many query loops the page renders: a part placed twice renders its queries twice. */
+  /** #497: the related posts blocks that render, within the same four. */
+  related: TemplateRelatedNeed[]
+  /**
+   * How many data-reading blocks (query loops and related posts) the page renders: a part
+   * placed twice renders its blocks twice.
+   */
   renderedQueries: number
   /** How many more there were than the four: they render nothing. */
   skippedQueries: number
@@ -105,6 +129,7 @@ export interface TemplateNeeds extends SiteBlockNeeds {
 export function collectTemplateNeeds(template: BlockDocV1 | null | undefined, parts: Readonly<Record<string, BlockDocV1 | null>> = {}): TemplateNeeds {
   const base = siteBlockNeeds([template, ...Object.values(parts)])
   const kept = new Map<string, TemplateQueryNeed>()
+  const keptRelated = new Map<string, TemplateRelatedNeed>()
   let rendered = 0
   let logo = false
   const visit = (doc: BlockDocV1 | null | undefined, part?: string) => {
@@ -119,6 +144,13 @@ export function collectTemplateNeeds(template: BlockDocV1 | null | undefined, pa
         if (rendered <= MAX_QUERIES_PER_PAGE && !kept.has(key)) {
           kept.set(key, { key, blockId: id, ...(part ? { part } : {}), attrs: normalizeSiteBlockAttrs("query", block.attrs) as QueryAttrs })
         }
+      } else if (block.type === "related_posts") {
+        // #497: a data-reading block too, counted with the queries.
+        rendered++
+        const key = queryKey(part, id)
+        if (rendered <= MAX_QUERIES_PER_PAGE && !keptRelated.has(key)) {
+          keptRelated.set(key, { key, blockId: id, ...(part ? { part } : {}), attrs: normalizeSiteBlockAttrs("related_posts", block.attrs) as RelatedPostsAttrs })
+        }
       } else if (block.type === "template_part" && part === undefined) {
         const slug = normalizeSiteBlockAttrs("template_part", block.attrs).slug
         if (typeof slug === "string") visit(parts[slug], slug)
@@ -126,7 +158,7 @@ export function collectTemplateNeeds(template: BlockDocV1 | null | undefined, pa
     }
   }
   visit(template)
-  return { ...base, queries: [...kept.values()], renderedQueries: rendered, skippedQueries: Math.max(0, rendered - MAX_QUERIES_PER_PAGE), logo }
+  return { ...base, queries: [...kept.values()], related: [...keptRelated.values()], renderedQueries: rendered, skippedQueries: Math.max(0, rendered - MAX_QUERIES_PER_PAGE), logo }
 }
 
 /**
@@ -212,6 +244,60 @@ export async function loadQueries(
   return Object.fromEntries(entries)
 }
 
+/** The `/public/posts/:id/related` parameters for a related posts block (#497), one to one: the count always, the taxonomy when set. */
+export function relatedRequestParams(attrs: RelatedPostsAttrs): { limit: number; taxonomy?: string } {
+  return { limit: normalizeRelatedPostsCount(attrs.count), ...(attrs.taxonomy ? { taxonomy: attrs.taxonomy } : {}) }
+}
+
+/** What reads a related posts block's posts (tests pass their own). */
+export type RelatedReader = (
+  post: { id: number; post_type: string },
+  attrs: RelatedPostsAttrs,
+  options: { structure: UrlStructure; siteUrl: string },
+) => Promise<SitePostList>
+
+/**
+ * A related posts block's posts (#497): `/public/posts/:id/related` (`getRelatedPosts`: the public
+ * read the theme's "More to read" makes, published posts only, within its own timeout), as one
+ * page of list items with links in the site's URL structure. Throws on a failed read.
+ */
+export async function readRelatedPosts(
+  post: { id: number; post_type: string },
+  attrs: RelatedPostsAttrs,
+  { structure, siteUrl }: { structure: UrlStructure; siteUrl: string },
+  read: typeof getRelatedPosts = getRelatedPosts,
+): Promise<SitePostList> {
+  const rows = await read(post.id, relatedRequestParams(attrs))
+  const items = await toListedPosts(rows, post.post_type, structure, siteUrl)
+  if (!siteUrl) for (const [i, item] of items.entries()) item.image ??= listedThumbnail(rows[i])
+  return { items, page: 1, totalPages: 1, basePath: null }
+}
+
+/**
+ * Each related posts block's posts by key (#497), all at once, for the route's post; none (and no
+ * read) on a route without one. A failure is null for that block and logged once for the request.
+ */
+export async function loadRelated(
+  related: readonly TemplateRelatedNeed[],
+  { route, structure, siteUrl, read = readRelatedPosts }: { route?: SiteRoute; structure: UrlStructure; siteUrl: string; read?: RelatedReader },
+): Promise<Record<string, SitePostList | null>> {
+  const post = route?.post?.post
+  if (!post) return Object.fromEntries(related.map((need) => [need.key, null]))
+  const failures: unknown[] = []
+  const entries = await Promise.all(
+    related.map(async (need): Promise<[string, SitePostList | null]> => {
+      try {
+        return [need.key, await read(post, need.attrs, { structure, siteUrl })]
+      } catch (error) {
+        failures.push(error)
+        return [need.key, null]
+      }
+    }),
+  )
+  if (failures.length > 0) log.warn("site_block_data_failed", { block_type: "related_posts", count: failures.length, error: failures[0] })
+  return Object.fromEntries(entries)
+}
+
 function siteMenu(menu: Menu | null, currentPath: string | undefined): SiteMenu | null {
   if (!menu) return null
   return { name: menu.name, items: currentPath ? withCurrent(menu.items, currentPath) : menu.items }
@@ -234,6 +320,8 @@ export interface LoadSiteRenderContextOptions {
   siteUrl?: string
   /** For tests: what reads a non-inheriting query's posts. */
   readQuery?: QueryReader
+  /** For tests: what reads a related posts block's posts. */
+  readRelated?: RelatedReader
 }
 
 /**
@@ -255,13 +343,18 @@ export async function loadSiteRenderContext(locals: App.Locals | undefined, opti
   }
   const readMenu = options.readMenu ?? ((location: string) => getMenu(location))
   const settingsRead = getSiteSettings(locals)
-  const [settings, menus, queries] = await Promise.all([
+  const [settings, menus, queries, related] = await Promise.all([
     settingsRead,
     Promise.all(locations.map(async (location) => [location, await readMenu(location).catch(() => null)] as const)),
     needs.queries.length === 0
       ? Promise.resolve({})
       : settingsRead.then((site) =>
           loadQueries(needs.queries, { route: options.route, structure: normalizeUrlStructure(site.urlStructure), siteUrl: options.siteUrl ?? "", read: options.readQuery }),
+        ),
+    needs.related.length === 0
+      ? Promise.resolve({})
+      : settingsRead.then((site) =>
+          loadRelated(needs.related, { route: options.route, structure: normalizeUrlStructure(site.urlStructure), siteUrl: options.siteUrl ?? "", read: options.readRelated }),
         ),
   ])
   const menusById = Object.fromEntries(Object.entries(options.menusById ?? {}).map(([id, menu]) => [id, siteMenu(menu, options.currentPath)]))
@@ -277,6 +370,7 @@ export async function loadSiteRenderContext(locals: App.Locals | undefined, opti
     dates: { language: settings.language, timeZone: settings.timeZone, dateFormat: settings.dateFormat },
     ...(options.route ? { route: options.route } : {}),
     queries,
+    related,
   }
 }
 

@@ -68,12 +68,14 @@ var flowBlockTypes = map[string]bool{
 	"html": true,
 	// #426: a row of buttons keeps its buttons in its pm.
 	"buttons": true, "spacer": true,
-	// #488, #489: the site blocks that are flow (post_blocks_site.go), which hold no blocks.
+	// #488, #489, #497: the site blocks that are flow (post_blocks_site.go), which hold no blocks.
 	"site_title": true, "site_tagline": true, "site_logo": true,
 	"navigation": true, "search": true, "template_part": true,
 	"query_title": true, "term_description": true, "post_title": true, "post_content": true,
 	"post_excerpt": true, "post_featured_image": true, "post_date": true, "post_byline": true,
 	"post_terms": true, "post_navigation": true,
+	// #497
+	"related_posts": true, "author_cards": true, "table_of_contents": true, "color_scheme_switch": true,
 }
 
 // listBlockTypes have their items as children (Block Spec `LIST_ITEMS`): list_item for

@@ -145,6 +145,67 @@ describe("site block views", () => {
   })
 })
 
+describe("site blocks III in the editor (#497)", () => {
+  it("round trip through the bridge with their attrs, defaults left out, and the byline's reading time", () => {
+    const doc = docOf(
+      ["related_posts", { count: 5, taxonomy: "post_tag" }],
+      ["author_cards", {}],
+      ["table_of_contents", {}],
+      ["color_scheme_switch", { variant: "menu" }],
+      ["post_byline", { avatars: false, readingTime: true }],
+      ["related_posts", {}],
+    )
+    const ed = open(doc, "template")
+    expect(topTypes(ed)).toEqual(["relatedPosts", "authorCards", "tableOfContents", "colorSchemeSwitch", "postByline", "relatedPosts", "paragraph"])
+    expect(ed.state.doc.child(0).attrs).toMatchObject({ count: 5, taxonomy: "post_tag" })
+    expect(ed.state.doc.child(5).attrs).toMatchObject({ count: 3, taxonomy: null })
+    expect(ed.state.doc.child(4).attrs).toMatchObject({ avatars: false, readingTime: true })
+    const back = pmToBlockDoc(ed.state.doc)
+    for (const id of doc.blocks_order.slice(0, 6)) expect(back.blocks[id]).toEqual(doc.blocks[id])
+  })
+
+  it("a client's extra or bad attrs stop at the bridge", () => {
+    const ed = open(docOf(["related_posts", {}], ["color_scheme_switch", {}]), "template")
+    ed.view.dispatch(ed.state.tr.setNodeMarkup(0, undefined, { ...ed.state.doc.child(0).attrs, count: 40, taxonomy: "Bad name" }))
+    const switchPos = ed.state.doc.child(0).nodeSize
+    ed.view.dispatch(ed.state.tr.setNodeMarkup(switchPos, undefined, { ...ed.state.doc.child(1).attrs, variant: "toggle" }))
+    const back = pmToBlockDoc(ed.state.doc)
+    expect(back.blocks[ID(0)].attrs).toEqual({ count: 6 })
+    expect(back.blocks[ID(1)].attrs).toEqual({})
+  })
+
+  it("are labelled placeholders, and say in a post that they show nothing there", () => {
+    const ed = open(docOf(["related_posts", { count: 1, taxonomy: "category" }], ["author_cards", {}], ["table_of_contents", {}], ["color_scheme_switch", {}], ["post_byline", { readingTime: true }]), "template")
+    const views = [...ed.view.dom.querySelectorAll(".editor-site-block")]
+    expect(views.map((v) => v.querySelector(".editor-site-block__name")!.textContent)).toEqual(["Related posts", "Author cards", "Table of contents", "Colour scheme switch", "Post byline"])
+    expect(views.map((v) => v.querySelector(".editor-site-block__detail")!.textContent)).toEqual([
+      "“More to read” · 1 post, sharing a category",
+      "“Written by” · the post’s credited authors",
+      "“On this page” · the post’s H2s and H3s, from three headings",
+      "Light · Dark · System, side by side",
+      "With avatars · reading time",
+    ])
+    expect(ed.view.dom.querySelector(".is-inert")).toBeNull()
+    ed.destroy()
+    const post = open(docOf(["color_scheme_switch", {}]), "post")
+    expect(post.view.dom.querySelector(".editor-site-block.is-inert [role=note]")?.textContent).toBe("Colour scheme switch only works in the Site editor. In a post it shows nothing on the page. You can remove it.")
+    post.destroy()
+    const part = open(docOf(["table_of_contents", {}], ["related_posts", {}]), "part")
+    expect(part.view.dom.querySelector(".is-inert")).toBeNull()
+  })
+
+  it("insertSiteBlock puts each in with its defaults", () => {
+    const ed = open(null, "template")
+    for (const type of ["related_posts", "author_cards", "table_of_contents", "color_scheme_switch"] as const) {
+      ed.commands.setTextSelection(ed.state.doc.content.size - 1)
+      expect(ed.commands.insertSiteBlock(type), type).toBe(true)
+      const at = topTypes(ed).indexOf(SITE_BLOCK_NODE_NAMES[type])
+      expect(at, type).toBeGreaterThan(-1)
+      expect(ed.state.doc.child(at).attrs, type).toMatchObject(siteBlockNodeAttrs(type, {}))
+    }
+  })
+})
+
 describe("paste can't make a site block (#488, design 4.4: no parse rules)", () => {
   const siteNodes = new Set<string>(Object.values(SITE_BLOCK_NODE_NAMES))
   const hasSiteNode = (ed: Editor) => {

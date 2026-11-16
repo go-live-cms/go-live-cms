@@ -2636,3 +2636,15 @@ div.post-item-media {
 .post-featured > a {
   display: block;
 }
+/* ---------- site blocks III (#497) ----------
+   Related posts, author cards, the table of contents and the colour scheme switch of a block
+   template (#491), with the markup of this theme's own RelatedPosts, AuthorCards,
+   TableOfContents and ThemeSwitch, so their rules above style both. In a post they render
+   nothing. New rules only: the switch, like the header's, works only with JavaScript
+   (theme-init.js sets data-js); without it the page follows the system's scheme. */
+:root:not([data-js]) .color-scheme-switch {
+  display: none;
+}
+.color-scheme-switch {
+  max-width: 360px;
+}

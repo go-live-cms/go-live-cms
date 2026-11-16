@@ -659,6 +659,19 @@ kept so references in code stay valid.
     relay: every peer, the stored doc, nothing rendered, a restart), `src/components/blocks/queryLoop.test.tsx`,
     `src/lib/siteRenderContext.test.ts`, `themes/default/siteBlocks.test.ts`, the vectors in `nestingVectors.json`
     and `siteBlockVectors.json`, Go `post_blocks_site_test.go`, `public_posts_query*_test.go`.
+- **Site blocks III (#497, the same files).** Four more flow atoms, `relatedPosts`, `authorCards`,
+  `tableOfContents`, `colorSchemeSwitch` (Block Spec `related_posts`, `author_cards`, `table_of_contents`,
+  `color_scheme_switch`), and a `readingTime` attr on `postByline`. Everything else is #488's: node attrs, last
+  writer wins, canonical with defaults left out (`related_posts` `count` 1–6 and `taxonomy`; the switch's
+  `variant`), no parse rules (paste makes none), inert in a post, offered in templates and parts.
+  - **Stale clients:** a bundle from before #497 lacks the four nodes (and a narrower doc and containers) and the
+    byline's attr, which y-tiptap would drop when it rewrites the node; the fingerprint guard (#416) refuses it
+    (`schemaFingerprint.test.ts` pins each), so open tabs reload once after the deploy.
+  - Tests: `extensions/SiteBlocks.test.ts` (bridge, views, insert), `SiteBlocks.collab.test.tsx` (written into a
+    post's doc on the relay: the stored doc, nothing rendered, two people on one block's settings, a restart),
+    `src/components/blocks/siteBlocksIII.test.tsx`, `themes/default/siteBlocksMarkup.astro.test.ts` (the theme's
+    components' markup), `themes/default/themeInit.test.ts` (the switch without a script of its own),
+    `src/lib/siteRenderContext.test.ts`, the vectors, Go `post_blocks_site_test.go`.
 - **Inline nodes (#320, `components/editor/extensions/InlineNodes.ts`, rules in
   `blocks-spec/inlineNodes.ts`): `mention` {userId, label}, `contentLink` {postId, label},
   `dateChip` {date, time, reminder}.** Inline **atoms** in the `inline` group, so they live in a

@@ -111,7 +111,7 @@ describe("the nesting table", () => {
 
   it("derives the content expressions", () => {
     // Flow: TipTap's block group and the standalone flow nodes (the site atoms of #488 and #489 included).
-    const FLOW = "block | tableBlock | video | audio | file | embed | html | buttons | spacer | siteTitle | siteTagline | siteLogo | navigation | search | templatePart | queryTitle | termDescription | postTitle | postContent | postExcerpt | postFeaturedImage | postDate | postByline | postTerms | postNavigation"
+    const FLOW = "block | tableBlock | video | audio | file | embed | html | buttons | spacer | siteTitle | siteTagline | siteLogo | navigation | search | templatePart | queryTitle | termDescription | postTitle | postContent | postExcerpt | postFeaturedImage | postDate | postByline | postTerms | postNavigation | relatedPosts | authorCards | tableOfContents | colorSchemeSwitch"
     expect(containerContent("group")).toBe(`(${FLOW} | details | columns | mediaText | query)+`)
     // #421: its part first, then flow.
     expect(containerContent("details")).toBe(`detailsSummary (${FLOW})+`)

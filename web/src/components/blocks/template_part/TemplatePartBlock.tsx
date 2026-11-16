@@ -1,8 +1,9 @@
-import React from "react"
+import React, { useContext } from "react"
 import { normalizeSiteBlockAttrs } from "@gl-admin/lib/blocks-spec"
 import type { BlockComponentProps } from "../types"
 import BlockRenderer from "../../BlockRenderer"
-import { SiteContext, useSiteRenderContext, type SiteRenderContext } from "../utils/siteContext"
+import { SiteContext, TemplateScopeContext, useSiteRenderContext, type SiteRenderContext } from "../utils/siteContext"
+import { PageScopeContext } from "../utils/pageScope"
 
 /**
  * Template part (#488, design 4.2, 7.5): renders the part its slug resolves to (#491: the
@@ -17,6 +18,8 @@ import { SiteContext, useSiteRenderContext, type SiteRenderContext } from "../ut
  */
 const TemplatePartBlock: React.FC<BlockComponentProps> = ({ block, anchorId }) => {
   const site = useSiteRenderContext()
+  // The template's scope, for a table of contents in the part (#497: the post's heading ids skip it).
+  const templateScope = useContext(PageScopeContext)?.reservedIds ?? []
   if (!site || site.kind !== "template") return null
   const slug = normalizeSiteBlockAttrs("template_part", block.attrs).slug as string | undefined
   const doc = slug ? site.parts[slug] : null
@@ -27,7 +30,9 @@ const TemplatePartBlock: React.FC<BlockComponentProps> = ({ block, anchorId }) =
   return (
     <Tag id={anchorId} className={`template-part template-part--${slug}`}>
       <SiteContext.Provider value={inPart}>
-        <BlockRenderer doc={doc} />
+        <TemplateScopeContext.Provider value={templateScope}>
+          <BlockRenderer doc={doc} />
+        </TemplateScopeContext.Provider>
       </SiteContext.Provider>
     </Tag>
   )

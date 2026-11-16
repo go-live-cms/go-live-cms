@@ -531,6 +531,11 @@ export const SITE_BLOCKS: readonly CatalogEntry[] = [
   siteEntry("post_byline", ["author", "credits"]),
   siteEntry("post_terms", ["category", "tags"]),
   siteEntry("post_navigation", ["next", "previous", "older", "newer"]),
+  // #497
+  siteEntry("related_posts", ["more", "read", "similar", "cards"]),
+  siteEntry("author_cards", ["written", "bio", "author"]),
+  siteEntry("table_of_contents", ["toc", "contents", "headings", "outline", "on this page"]),
+  siteEntry("color_scheme_switch", ["theme", "dark", "light", "mode", "appearance"]),
 ]
 
 function siteEntry(type: SiteBlockType, keywords: readonly string[]): CatalogEntry {

@@ -104,6 +104,11 @@ export const PostDate = siteNode("post_date")
 export const PostByline = siteNode("post_byline")
 export const PostTerms = siteNode("post_terms")
 export const PostNavigation = siteNode("post_navigation")
+// #497: related posts, author cards, the table of contents and the colour scheme switch.
+export const RelatedPosts = siteNode("related_posts")
+export const AuthorCards = siteNode("author_cards")
+export const TableOfContents = siteNode("table_of_contents")
+export const ColorSchemeSwitch = siteNode("color_scheme_switch")
 export const QueryPagination = siteNode("query_pagination")
 
 /**

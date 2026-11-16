@@ -433,6 +433,17 @@ are the most fragile part of the codebase. **Before editing anything under
   query nothing and is logged once per request (`site_block_data_failed`, the block type and a count). The pager is
   #349's (`pageLinks`, `pagePath`), only for an inheriting query. Bylines are core's (`src/lib/bylines.ts`), which the
   default theme re-exports.
+- **Site blocks III (#497, design `docs/design/theme-builder.md` 4.5's "As built (T16)"):** `related_posts`,
+  `author_cards`, `table_of_contents`, `color_scheme_switch` and `readingTime` on `post_byline`, the same chain
+  (renderers in `src/components/blocks/utils/postEndBlocks.tsx`). Each renders **the markup of the default theme
+  component it replaces** (`RelatedPosts`, `AuthorCards`, `TableOfContents`, `ThemeSwitch`;
+  `themes/default/siteBlocksMarkup.astro.test.ts` compares them). Related posts are read before the render
+  (`loadRelated`, `/public/posts/:id/related`) and count towards the page's four with the queries. The table of
+  contents and `post_content` share `usePostContentHeadings` (the template's page scope, `TemplateScopeContext`
+  from a part), so its links are the body's ids. The blocks' section ids (`toc-title`, …) are page-wide
+  (`siteBlockTitleIds`, reserved by the outermost renderer). The switch has no script: `theme-init.js` drives it,
+  and `:root:not([data-js]) .color-scheme-switch` hides it without one. Reading time and the byline's names
+  are core's (`src/lib/readingTime.ts`, `src/lib/bylines.ts`), re-exported by the theme.
 - **Site logo (#488):** Settings › General's **Site logo** (`components/settings/SiteLogoField.tsx`, rules
   `lib/siteLogo.ts`): the media picker (images only), Replace and Remove, saved with the page as
   `site_logo_media_id` (sent only when it changed, like the front page). `GET /settings` answers it with `site_logo`

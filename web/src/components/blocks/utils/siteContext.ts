@@ -65,6 +65,13 @@ export interface SiteRenderContext {
    * the block renders nothing.
    */
   queries?: Readonly<Record<string, SitePostList | null>>
+  /**
+   * #497: each `related_posts` block's posts, by `queryKey`, read from
+   * `/public/posts/:id/related` for the route's post before the render. They count towards the
+   * page's four data-reading blocks with the queries (design 4.3). Missing or null: over the
+   * four, failed, or no post here, and the block renders nothing.
+   */
+  related?: Readonly<Record<string, SitePostList | null>>
   /** #489: the part being rendered, so a query in it finds its posts (`queryKey`). */
   partSlug?: string
 }
@@ -135,6 +142,14 @@ export function useSiteRenderContext(): SiteRenderContext | null {
 export function queryKey(partSlug: string | undefined, blockId: string): string {
   return partSlug ? `part:${partSlug}:${blockId}` : blockId
 }
+
+/**
+ * The ids the template's own renderer reserves (its `PageScope.reservedIds`), set by a
+ * `template_part` for the part it renders (#497). The post's body (`post_content`) sits in the
+ * template, never in a part, so its heading ids skip exactly these; a `table_of_contents` in a
+ * part reads them here to link to the same ids (`usePostContentHeadings`).
+ */
+export const TemplateScopeContext = createContext<readonly (string | RegExp)[] | null>(null)
 
 /** The list item a post template is rendering (#489), or null outside a post template. */
 export const SitePostItemContext = createContext<SitePostItem | null>(null)

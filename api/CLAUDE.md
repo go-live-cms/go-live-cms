@@ -793,6 +793,10 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   400 that reads nothing. Only published posts of a public, active type, as before, so no filter reaches a draft, a
   trashed post or a private type (`public_posts_query_db_test.go`). The cache key is the whole sorted query string,
   so every filter keys it (`TestPublicCacheKeysOnEveryQueryFilter`). `GET /public/posts` (feeds) is unchanged.
+- **Site blocks III (#497):** four more flow types, `related_posts` (`count` 1–6, 3 left out; `taxonomy` a name),
+  `author_cards`, `table_of_contents`, `color_scheme_switch` (`variant: menu`), and `readingTime: true` on
+  `post_byline`. Allowlists like the rest (`siteBlockVectors.json`). No route change: related posts read the cached
+  `/public/posts/:id/related` (`limit` ≤ 12, `taxonomy`). No migration.
 ## Categories, merges and redirects (#331, #146, `000047`)
 
 - **One category per post** (taxonomy `category`, `db.CategoryTaxonomy`): `PUT

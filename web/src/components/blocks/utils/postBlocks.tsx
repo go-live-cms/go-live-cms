@@ -1,16 +1,19 @@
 import React, { useContext } from "react"
-import { normalizeSiteBlockAttrs, normalizePostExcerptLength } from "@gl-admin/lib/blocks-spec"
+import { normalizeSiteBlockAttrs, normalizePostExcerptLength, type BlockDocV1 } from "@gl-admin/lib/blocks-spec"
 import BlockRenderer from "../../BlockRenderer"
 import type { BlockComponentProps } from "../types"
 import { bylinePeople, nameSeparator, avatarColor, initial } from "../../../lib/bylines"
 import { pageLinks, pagePath, pageWindow } from "../../../lib/pagination"
 import { firstParagraphText, metaDescription } from "../../../lib/seo"
 import { DEFAULT_DATE_SETTINGS, formatSiteDate } from "../../../lib/siteDates"
-import { HeadingIdsContext } from "./headingAnchors"
+import { readingMinutes } from "../../../lib/readingTime"
+import { HeadingIdsContext, headingAnchors, type HeadingAnchor } from "./headingAnchors"
+import { PageScopeContext } from "./pageScope"
 import {
   queryKey,
   SitePostItemContext,
   SiteQueryContext,
+  TemplateScopeContext,
   useSitePost,
   useSiteRenderContext,
   type SiteLinkedTerm,
@@ -198,20 +201,39 @@ export const PostTitleBlock: React.FC<BlockComponentProps> = ({ block, anchorId 
   )
 }
 
+/** The route's post's published blocks (#489), or null in a list or without a post. */
+export function routePostBlocks(shown: ReturnType<typeof useSitePost>): BlockDocV1 | null {
+  const blocks = shown && !shown.inList ? (shown.item as SiteRoutePost).blocks : null
+  return blocks && Array.isArray(blocks.blocks_order) && blocks.blocks_order.length > 0 ? blocks : null
+}
+
+/**
+ * The heading ids `post_content` gives the post's body (#497), so a `table_of_contents` links to
+ * exactly them: the body's headings skip the template's ids (its reserved ids, its own headings'
+ * and the site blocks' titles: the page scope, #484), and a level-1 heading is an h2 (#481,
+ * `headingLevel`). Both blocks read the template's scope: the one they sit in, or, in a part,
+ * the template's (`TemplateScopeContext`), since `post_content` never sits in a part.
+ */
+export function usePostContentHeadings(blocks: BlockDocV1 | null): HeadingAnchor[] {
+  const template = useContext(TemplateScopeContext)
+  const page = useContext(PageScopeContext)
+  return blocks ? headingAnchors(blocks, template ?? page?.reservedIds ?? []) : []
+}
+
 /**
  * `post_content`: the route's post's published blocks, with their own `b-<id>` anchors, in
  * `div.prose`. Rendered with **no** site context (`site={null}`), or the post's own site blocks
  * would come alive inside the template (design 4.2, 4.5). Its headings skip the ids the
- * template's already use (the page scope, #484). Nothing in a list (a post template can't
- * hold it) or without a post.
+ * template's already use (the page scope, #484), as `usePostContentHeadings` gives them. Nothing
+ * in a list (a post template can't hold it) or without a post.
  */
 export const PostContentBlock: React.FC<BlockComponentProps> = ({ anchorId }) => {
-  const shown = useSitePost()
-  const blocks = shown && !shown.inList ? (shown.item as SiteRoutePost).blocks : null
-  if (!blocks || !Array.isArray(blocks.blocks_order) || blocks.blocks_order.length === 0) return null
+  const blocks = routePostBlocks(useSitePost())
+  const headings = usePostContentHeadings(blocks)
+  if (!blocks) return null
   return (
     <div id={anchorId} className="prose">
-      <BlockRenderer doc={blocks} site={null} />
+      <BlockRenderer doc={blocks} site={null} headings={headings} />
     </div>
   )
 }
@@ -300,14 +322,21 @@ export const PostDateBlock: React.FC<BlockComponentProps> = ({ block, anchorId }
   )
 }
 
-/** `post_byline`: `div.byline.meta`, the credited names linking to their pages, with avatars unless set not to. */
+/**
+ * `post_byline`: `div.byline.meta`, the credited names linking to their pages, with avatars unless
+ * set not to, and with `readingTime` (#497) " · 4 min read" after them, as the theme's byline (the
+ * published body's words at 220 a minute; nothing for a post without text).
+ */
 export const PostBylineBlock: React.FC<BlockComponentProps> = ({ block, anchorId }) => {
   const shown = useSitePost()
   if (!shown) return null
   const credited = !shown.inList && (shown.item as SiteRoutePost).authors?.length ? (shown.item as SiteRoutePost).authors : shown.item.post.authors
   const people = bylinePeople(credited, shown.item.post)
   if (people.length === 0) return null
-  const avatars = normalizeSiteBlockAttrs("post_byline", block.attrs).avatars !== false
+  const attrs = normalizeSiteBlockAttrs("post_byline", block.attrs)
+  const avatars = attrs.avatars !== false
+  const body = (!shown.inList ? (shown.item as SiteRoutePost).blocks : null) ?? shown.item.post.published_blocks
+  const minutes = attrs.readingTime === true ? readingMinutes(body) : null
   const size = shown.inList ? 28 : 36
   const names = people.map((p, i) => (
     <React.Fragment key={p.key + i}>
@@ -326,7 +355,10 @@ export const PostBylineBlock: React.FC<BlockComponentProps> = ({ block, anchorId
           ))}
         </span>
       )}
-      <span>{avatars ? names : <>By {names}</>}</span>
+      <span>
+        {avatars ? names : <>By {names}</>}
+        {minutes && <> · {minutes} min read</>}
+      </span>
     </div>
   )
 }

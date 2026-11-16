@@ -716,6 +716,13 @@ So do the query loop and the post blocks (#489): they render your list's and pos
 that styles those has little left: `.query-loop`, `.query-no-results`, `.post-date` and the featured
 image's shapes (`.is-aspect-16-9`, `-3-2`, `-1-1`). The default theme's are the "site blocks II
 (#489)" section.
+
+Site blocks III (#497) render the default theme's post-end pieces: `.related-posts` with
+`.card-grid > .card`, `.author-cards > .author-card`, `.toc-block > .toc`, and the theme switch's
+`.theme-choices` buttons (`[data-theme-choice]`, `aria-pressed`) inside `.color-scheme-switch`. The
+switch has no script of its own: a theme that wants it working ships a script (a `config.assets`
+entry, never inline) that handles clicks on `[data-theme-choice]`, as the default theme's
+`theme-init.js` does, and hides `.color-scheme-switch` until that script runs.
 ---
 
 ## Theme Functions (`functions.ts`)

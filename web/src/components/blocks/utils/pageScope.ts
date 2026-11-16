@@ -68,6 +68,62 @@ export function docElementIds(doc: BlockDocV1 | null | undefined): (string | Reg
 }
 
 /**
+ * #497: the ids of the section headings the site blocks write, the default theme's components'
+ * (`aria-labelledby` targets: "On this page", "Written by", "More to read"). The theme's own
+ * `THEME_ELEMENT_IDS` reserve the same ones, so its layouts and a block template agree.
+ */
+export const SITE_BLOCK_TITLE_IDS: Readonly<Record<string, string>> = {
+  table_of_contents: "toc-title",
+  author_cards: "written-by",
+  related_posts: "more-to-read",
+}
+
+/**
+ * The title id of each site block on a page that writes one (#497), by `queryKey` (its block id,
+ * prefixed by its part's slug), in reading order: the template's blocks, each part where the
+ * template places it (its first placement; a part placed twice renders its blocks with the same
+ * ids). The first of a type takes the theme's id ("toc-title"), a second one on the page
+ * "toc-title-2", so two never share an id, a part's and the template's included. The page's
+ * headings skip them all: the outermost renderer reserves them, so the template's, its parts'
+ * and the post's (`post_content`) do.
+ */
+export function siteBlockTitleIds(
+  doc: BlockDocV1 | null | undefined,
+  { parts = {}, partSlug }: { parts?: Readonly<Record<string, BlockDocV1 | null>>; partSlug?: string } = {},
+): Map<string, string> {
+  const ids = new Map<string, string>()
+  const seen = new Map<string, number>()
+  const placed = new Set<string>()
+  const visit = (d: BlockDocV1 | null | undefined, part: string | undefined) => {
+    if (!d?.blocks || !Array.isArray(d.blocks_order)) return
+    for (const blockId of blocksInReadingOrder(d)) {
+      const block = d.blocks[blockId] as Block | undefined
+      const base = block ? SITE_BLOCK_TITLE_IDS[block.type] : undefined
+      if (base) {
+        const n = (seen.get(base) ?? 0) + 1
+        seen.set(base, n)
+        ids.set(part ? `part:${part}:${blockId}` : blockId, n === 1 ? base : `${base}-${n}`)
+      } else if (block?.type === "template_part" && part === undefined) {
+        const slug = (block.attrs as { slug?: unknown } | undefined)?.slug
+        if (typeof slug === "string" && !placed.has(slug)) {
+          placed.add(slug)
+          visit(parts[slug], slug)
+        }
+      }
+    }
+  }
+  visit(doc, partSlug)
+  return ids
+}
+
+/**
+ * The page's site block title ids (#497, `siteBlockTitleIds`), by `queryKey`: set by the outermost
+ * renderer of a template (or a part rendered alone) and read by every renderer nested in it. Null
+ * outside one.
+ */
+export const SiteBlockTitleIdsContext = createContext<ReadonlyMap<string, string> | null>(null)
+
+/**
  * The heading ids of docs rendered on one page, in the order given (a template first, then
  * the docs it frames): each list is unique within its doc, skips `reserved`, and skips every
  * id an earlier doc's headings took.

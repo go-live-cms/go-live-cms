@@ -2,7 +2,9 @@
  * Site blocks (design: `docs/design/theme-builder.md` 4.1–4.5, 7.4). Site blocks I (#488):
  * `site_title`, `site_tagline`, `site_logo`, `navigation`, `search` and `template_part`. Site
  * blocks II (#489): the query loop (`query`, `post_template`, `query_pagination`,
- * `query_no_results`), `query_title`, `term_description` and the `post_*` blocks.
+ * `query_no_results`), `query_title`, `term_description` and the `post_*` blocks. Site blocks
+ * III (#497): `related_posts`, `author_cards`, `table_of_contents`, `color_scheme_switch`, and
+ * `readingTime` on `post_byline`, what converting the default theme (#498) needs.
  *
  * They are **core** Block Spec types (not namespaced, not a theme's). Most are flow atoms
  * that hold no text of their own; the query loop's three containers are rows of the nesting
@@ -43,6 +45,11 @@ export const SITE_FLOW_BLOCK_TYPES = [
   "post_byline",
   "post_terms",
   "post_navigation",
+  // #497
+  "related_posts",
+  "author_cards",
+  "table_of_contents",
+  "color_scheme_switch",
 ] as const
 
 /** An atom that only lives in a query (#489): neither flow nor a container, like a `footnote` in its list. */
@@ -78,6 +85,10 @@ export const SITE_BLOCK_NODE_NAMES: Readonly<Record<SiteBlockType, string>> = {
   post_byline: "postByline",
   post_terms: "postTerms",
   post_navigation: "postNavigation",
+  related_posts: "relatedPosts",
+  author_cards: "authorCards",
+  table_of_contents: "tableOfContents",
+  color_scheme_switch: "colorSchemeSwitch",
   query_pagination: "queryPagination",
   query: "query",
   post_template: "postTemplate",
@@ -133,6 +144,10 @@ export const SITE_BLOCK_LABELS: Readonly<Record<SiteBlockType, string>> = {
   post_byline: "Post byline",
   post_terms: "Post terms",
   post_navigation: "Post navigation",
+  related_posts: "Related posts",
+  author_cards: "Author cards",
+  table_of_contents: "Table of contents",
+  color_scheme_switch: "Colour scheme switch",
   query_pagination: "Pagination",
   query: "Query loop",
   post_template: "Post template",
@@ -157,6 +172,10 @@ export const SITE_BLOCK_ICONS: Readonly<Record<SiteBlockType, string>> = {
   post_byline: "M12 4a4 4 0 1 0 0 8a4 4 0 1 0 0-8M4 21c1-4 4-6 8-6s7 2 8 6",
   post_terms: "M3 12V4h8l10 10-8 8zM7.5 8.5h.01",
   post_navigation: "M9 6l-6 6 6 6M15 6l6 6-6 6",
+  related_posts: "M3 4h8v7H3zM13 4h8v7h-8zM3 14h8M3 18h6M13 14h8M13 18h6",
+  author_cards: "M8 5a3 3 0 1 0 0 6a3 3 0 1 0 0-6M3 19c.7-3 2.6-5 5-5s4.3 2 5 5M15 8h6M15 12h6M17 16h4",
+  table_of_contents: "M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01",
+  color_scheme_switch: "M12 3a9 9 0 1 0 0 18zM12 3a9 9 0 0 1 0 18",
   query_pagination: "M4 12h.01M9 12h.01M15 12h.01M20 12h.01M3 7h18M3 17h18",
   query: "M4 4h16v4H4zM4 10h16v4H4zM4 16h16v4H4z",
   post_template: "M4 4h16v16H4zM8 9h8M8 13h5",
@@ -197,6 +216,11 @@ export const SITE_BLOCK_CONTEXTS: Readonly<Record<SiteBlockType, readonly BlockD
   post_byline: ["template", "part"],
   post_terms: ["template", "part"],
   post_navigation: ["template", "part"],
+  // #497. The colour scheme switch belongs in a header part as much as anywhere.
+  related_posts: ["template", "part"],
+  author_cards: ["template", "part"],
+  table_of_contents: ["template", "part"],
+  color_scheme_switch: ["template", "part"],
   query_pagination: ["template", "part"],
   query: ["template", "part"],
   post_template: ["template", "part"],
@@ -460,9 +484,41 @@ export interface PostDateAttrs {
 }
 export interface PostBylineAttrs {
   avatars?: false
+  /** #497: " · 4 min read" after the names, as the theme's byline. */
+  readingTime?: true
 }
 export interface PostTermsAttrs {
   taxonomy?: string
+}
+
+// ── #497: related posts, author cards, table of contents, colour scheme switch ──────
+
+/**
+ * `related_posts`' count (the default theme's "More to read" shows 3, `RELATED_POSTS_LIMIT`).
+ * At most 6: two rows of the theme's card grid, under `/public/posts/:id/related`'s cap of 12.
+ */
+export const RELATED_POSTS_MIN_COUNT = 1
+export const RELATED_POSTS_MAX_COUNT = 6
+export const RELATED_POSTS_DEFAULT_COUNT = 3
+
+/** `color_scheme_switch`'s looks, the theme's `ThemeSwitch` variants: `segmented` (the default) or `menu`. */
+export const COLOR_SCHEME_SWITCH_VARIANTS = ["segmented", "menu"] as const
+export type ColorSchemeSwitchVariant = (typeof COLOR_SCHEME_SWITCH_VARIANTS)[number]
+
+/** Related posts' count: a number rounded and clamped to 1–6, else the default. */
+export function normalizeRelatedPostsCount(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return RELATED_POSTS_DEFAULT_COUNT
+  return Math.min(RELATED_POSTS_MAX_COUNT, Math.max(RELATED_POSTS_MIN_COUNT, Math.round(value)))
+}
+
+export interface RelatedPostsAttrs {
+  /** 1–6; absent: 3. */
+  count?: number
+  /** Only posts sharing a term of this taxonomy (`/related`'s `taxonomy`); absent: any shared term, latest posts filling in. */
+  taxonomy?: string
+}
+export interface ColorSchemeSwitchAttrs {
+  variant?: "menu"
 }
 
 /**
@@ -485,10 +541,13 @@ export interface PostTermsAttrs {
  * - `query_title`: `level: 2`. `post_title`: `level` 1–4, `link` a boolean.
  * - `post_excerpt`: `length` in words, rounded, clamped to 5–100 (35 is the default).
  * - `post_featured_image`: `aspect` "16-9", "3-2" or "1-1"; `link: true`.
- * - `post_date`: `which: "modified"`, `format: "short"`. `post_byline`: `avatars: false`.
+ * - `post_date`: `which: "modified"`, `format: "short"`. `post_byline`: `avatars: false`,
+ *   `readingTime: true` (#497).
  * - `post_terms`: `taxonomy` a taxonomy's name ("category" is the default).
+ * - `related_posts` (#497): `count` rounded, clamped to 1–6 (3 is the default); `taxonomy` a
+ *   taxonomy's name. `color_scheme_switch`: `variant: "menu"`.
  * - `term_description`, `post_content`, `post_navigation`, `query_pagination`,
- *   `post_template`, `query_no_results`: none.
+ *   `post_template`, `query_no_results`, `author_cards`, `table_of_contents`: none.
  */
 export function normalizeSiteBlockAttrs(type: SiteBlockType, attrs: unknown): Record<string, unknown> {
   const a = (attrs && typeof attrs === "object" ? attrs : {}) as Record<string, unknown>
@@ -569,6 +628,18 @@ export function normalizeSiteBlockAttrs(type: SiteBlockType, attrs: unknown): Re
       break
     case "post_byline":
       if (a.avatars === false) out.avatars = false
+      if (a.readingTime === true) out.readingTime = true
+      break
+    case "related_posts": {
+      if (typeof a.count === "number" && Number.isFinite(a.count)) {
+        const count = normalizeRelatedPostsCount(a.count)
+        if (count !== RELATED_POSTS_DEFAULT_COUNT) out.count = count
+      }
+      if (isContentName(a.taxonomy)) out.taxonomy = a.taxonomy
+      break
+    }
+    case "color_scheme_switch":
+      if (a.variant === "menu") out.variant = "menu"
       break
     case "post_terms":
       if (isContentName(a.taxonomy) && a.taxonomy !== POST_TERMS_DEFAULT_TAXONOMY) out.taxonomy = a.taxonomy
@@ -579,6 +650,8 @@ export function normalizeSiteBlockAttrs(type: SiteBlockType, attrs: unknown): Re
     case "query_pagination":
     case "post_template":
     case "query_no_results":
+    case "author_cards":
+    case "table_of_contents":
       break
   }
   return out
@@ -631,7 +704,11 @@ export function siteBlockNodeAttrs(type: SiteBlockType, attrs: unknown): Record<
     case "post_date":
       return { which: stored.which ?? "published", format: stored.format ?? "long" }
     case "post_byline":
-      return { avatars: stored.avatars !== false }
+      return { avatars: stored.avatars !== false, readingTime: stored.readingTime === true }
+    case "related_posts":
+      return { count: stored.count ?? RELATED_POSTS_DEFAULT_COUNT, taxonomy: stored.taxonomy ?? null }
+    case "color_scheme_switch":
+      return { variant: stored.variant ?? "segmented" }
     case "post_terms":
       return { taxonomy: stored.taxonomy ?? POST_TERMS_DEFAULT_TAXONOMY }
     case "term_description":
@@ -640,6 +717,8 @@ export function siteBlockNodeAttrs(type: SiteBlockType, attrs: unknown): Record<
     case "query_pagination":
     case "post_template":
     case "query_no_results":
+    case "author_cards":
+    case "table_of_contents":
       return {}
   }
 }
