@@ -1666,7 +1666,21 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   theme **and plugin** block manifests load, so `NewServer` now scans plugins first) validates each with its kind's rules
   and stores the valid ones as `config.block_templates` / `config.block_parts` (slug → `{title, doc, hash}`). Invalid
   files are logged and left out; a slug that also has a code layout at its rank logs that the block template wins.
-- `flushCollabTemplate` (`template-<id>`) is ready for #492's publish. Rendering (#491) and publishing (#492) aren't here.
+- `flushCollabTemplate` (`template-<id>`) is ready for #492's publish. Publishing (#492) isn't here.
+- **The public resolve (#491, `site_templates_resolve.go`, design 3.3, 4.2):** `GET /public/site-templates/resolve?theme=
+  <slug>&slugs=<a,b>` (1–8 distinct slugs in rank order; 400 `invalid_slugs`/`invalid_theme`; a theme that isn't the
+  active one is 404 `theme_inactive`). One read, `ListPublishedSiteTemplatesForResolve` (**published copies only**: a
+  working copy, a reset row and a never-published one aren't the site's). 200 `{theme, template, parts, menus}`:
+  `template` is the first slug with a published override, else a block template the theme ships (`config.block_templates`),
+  with its `rank`, or null; `parts` holds the parts it places resolved override → theme (`config.block_parts`) → core's
+  starter (`sitedesign.Starter`, through `normalizeSiteTemplateDoc` like a Customize copy), plus **every published
+  override part** (a code layout's `<TemplatePart>`); `menus` the menus its and those parts' navigation blocks name by id
+  (as `/public/menus/:location` serves one, at most 16; deleted or failed = absent). Every doc gets `attachBlockMedia`
+  and `publicizeBlockDocs`. Cached in `publicCacheRoutes` (the key has the theme and slugs); publish, theme activation,
+  menu, media and settings writes purge it. Core's interim starters are one per route kind (`single`, `page`,
+  `archive`, `home`, `search`, `404`, plus `index`); `author`/`taxonomy` start from `archive`, `custom` from `page`,
+  `front-page` from `home` (`starterAliases`); #498 replaces them. Tests: `site_templates_resolve_test.go`,
+  `site_templates_resolve_db_test.go`, `sitedesign_test.go`.
 - Tests: `site_templates_test.go` (mock: names, access, tickets, the internal routes, Customize), `site_templates_db_test.go`
   (real DB through the routes), `theme_block_templates_test.go` (the scan), `sitedesign/sitedesign_test.go`,
   `db/sqlc/site_template_collab_tx_test.go` (the transaction and 000058's constraints).

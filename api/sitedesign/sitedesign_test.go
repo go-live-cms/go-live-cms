@@ -49,7 +49,10 @@ func TestSlugPattern(t *testing.T) {
 
 func TestStartersAreValid(t *testing.T) {
 	names := StarterNames()
-	require.ElementsMatch(t, []string{"template/index", "part/header", "part/footer"}, names)
+	require.ElementsMatch(t, []string{
+		"template/index", "template/single", "template/page", "template/archive", "template/home", "template/search", "template/404",
+		"part/header", "part/footer",
+	}, names)
 	for _, name := range names {
 		kind, slug, _ := strings.Cut(name, "/")
 		file, ok := Starter(kind, slug)
@@ -74,14 +77,33 @@ func TestStarterLookup(t *testing.T) {
 	_, ok = Starter(KindPart, "sidebar")
 	require.False(t, ok, "a part has a starter only for its own slug")
 
-	index, ok := Starter(KindTemplate, "index")
-	require.True(t, ok)
-	// Every template slug has one: its own, a shorter prefix's, or the generic one.
-	for _, slug := range []string{"single", "single-case_study", "front-page", "404", "custom-landing"} {
+	// Every template slug has one: its own, a shorter prefix's, an alias's (#491), or the
+	// generic one.
+	for slug, want := range map[string]string{
+		"single":            "single",
+		"single-case_study": "single",
+		"page":              "page",
+		"page-fullwidth":    "page",
+		"custom-landing":    "page",
+		"archive-post":      "archive",
+		"taxonomy-category": "archive",
+		"author":            "archive",
+		"home":              "home",
+		"front-page":        "home",
+		"search":            "search",
+		"404":               "404",
+		"index":             "index",
+		"unknown-kind":      "index",
+	} {
 		file, ok := Starter(KindTemplate, slug)
 		require.True(t, ok, slug)
-		require.JSONEq(t, string(index.Doc), string(file.Doc), slug)
+		expected, ok := Starter(KindTemplate, want)
+		require.True(t, ok, want)
+		require.JSONEq(t, string(expected.Doc), string(file.Doc), slug)
 	}
+	single, _ := Starter(KindTemplate, "single")
+	index, _ := Starter(KindTemplate, "index")
+	require.NotEqual(t, string(index.Doc), string(single.Doc))
 	for _, slug := range []string{"", "Bad", "../parts/header"} {
 		_, ok := Starter(KindTemplate, slug)
 		require.False(t, ok, slug)

@@ -9,6 +9,8 @@
 import { loadSearchPage, normalizeQuery, parseSearchType, SEARCH_PATH } from '../../lib/search'
 import { pageTitleSuffix, resolveListRequest } from '../../lib/pagination'
 import { loadThemeLayout, themeLayoutCandidates } from '../../lib/themeLayout'
+import { resolveTemplate } from '../../lib/siteTemplates'
+import BlockTemplateLayout from '../../layouts/BlockTemplateLayout.astro'
 
 export const prerender = false
 
@@ -33,18 +35,21 @@ if (!data) {
 }
 
 const themeSlug = Astro.locals.activeTheme || 'default'
-const Layout = await loadThemeLayout(searchLayouts, themeLayoutCandidates('../../../themes', themeSlug, 'search'))
-if (!Layout) {
+// The site design (#491): search, against the theme's layouts/search.
+const blockTemplate = await resolveTemplate(Astro.locals, { kind: 'search' })
+const Layout = blockTemplate ? null : await loadThemeLayout(searchLayouts, themeLayoutCandidates('../../../themes', themeSlug, 'search'))
+if (!blockTemplate && !Layout) {
   throw new Error('No search layout in this build')
 }
 // The query goes into <title> as text; Astro escapes it.
 const heading = query ? `Search: ${query}` : 'Search'
 const title = `${heading}${pageTitleSuffix(page)} | ${data.siteTitle}`
+const layoutProps = {
+  ...data,
+  title,
+  description: `Search ${data.siteTitle}`,
+  seo: { noindex: true, type: 'website' as const, siteName: data.siteTitle },
+}
 ---
 
-<Layout
-  {...data}
-  title={title}
-  description={`Search ${data.siteTitle}`}
-  seo={{ noindex: true, type: 'website', siteName: data.siteTitle }}
-/>
+{blockTemplate ? <BlockTemplateLayout kind="search" choice={blockTemplate} {...layoutProps} /> : <Layout {...layoutProps} />}

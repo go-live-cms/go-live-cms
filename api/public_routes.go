@@ -41,6 +41,10 @@ func (server *Server) registerPublicRoutes(rg *gin.RouterGroup) {
 	// The menu assigned to a theme location (menus_routes.go)
 	rg.GET("/menus/:location", server.getPublicMenu)
 
+	// The block template a route renders, with its parts, media and menus by id: published
+	// copies only (#491, site_templates_resolve.go)
+	rg.GET("/site-templates/resolve", server.resolvePublicSiteTemplate)
+
 	// Full-text search of published posts and pages (#145, search_handlers_read.go)
 	rg.GET("/search", server.getPublicSearch)
 

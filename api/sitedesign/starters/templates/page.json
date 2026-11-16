@@ -1,0 +1,14 @@
+{
+  "title": "Page",
+  "doc": {
+    "doc_version": 1,
+    "blocks_order": ["starter-page-header", "starter-page-title", "starter-page-image", "starter-page-content", "starter-page-footer"],
+    "blocks": {
+      "starter-page-title": { "id": "starter-page-title", "type": "post_title", "version": 1, "attrs": {} },
+      "starter-page-image": { "id": "starter-page-image", "type": "post_featured_image", "version": 1, "attrs": {} },
+      "starter-page-content": { "id": "starter-page-content", "type": "post_content", "version": 1, "attrs": {} },
+      "starter-page-header": { "id": "starter-page-header", "type": "template_part", "version": 1, "attrs": { "slug": "header" } },
+      "starter-page-footer": { "id": "starter-page-footer", "type": "template_part", "version": 1, "attrs": { "slug": "footer" } }
+    }
+  }
+}

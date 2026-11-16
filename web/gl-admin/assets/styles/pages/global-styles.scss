@@ -1,0 +1,629 @@
+// Site editor › Global styles (#487, the canvas's "Site editor · global styles" board): the
+// editor's chrome (a top bar over the form and the preview side by side), the colour
+// table with its contrast flags, and the preview frame. Design tokens only.
+
+// The form and the preview scroll on their own; the page itself never does (a jump to a
+// group would otherwise scroll the top bar away).
+main.admin-main--site-editor {
+  padding: 0;
+  overflow: hidden;
+}
+
+.gl-styles {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  min-height: 0;
+  background: var(--background);
+  color: var(--text-primary);
+
+  &--message {
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-6);
+  }
+
+  &__topbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    min-height: 48px;
+    padding: 6px 12px 6px 16px;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  &__crumb ol {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+
+    li {
+      padding: 0 6px;
+      color: var(--text-secondary);
+      white-space: nowrap;
+    }
+
+    li + li::before {
+      content: "/";
+      margin-right: 10px;
+      color: var(--text-placeholder);
+    }
+
+    [aria-current="page"] {
+      color: var(--text-primary);
+    }
+  }
+
+  &__spacer {
+    flex: 1;
+  }
+
+  &__status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--text-secondary);
+
+    &.is-failed,
+    &.is-invalid {
+      color: var(--danger-text);
+    }
+  }
+
+  &__count {
+    display: inline-grid;
+    place-items: center;
+    min-width: 20px;
+    height: 20px;
+    margin-left: 6px;
+    padding: 0 6px;
+    border-radius: var(--radius-full);
+    background: rgb(255 255 255 / 0.22);
+    font-size: 12px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__body {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+  }
+
+  &__form {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 28px;
+    min-width: 0;
+    overflow-y: auto;
+    padding: 24px 32px 48px;
+  }
+
+  &__groups {
+    align-self: flex-start;
+    flex-wrap: wrap;
+  }
+
+  &__section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+    scroll-margin-top: 16px;
+  }
+
+  &__section-head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  &__group-title {
+    margin: 0;
+    font-size: 16px;
+    line-height: 24px;
+    font-weight: 600;
+
+    &:focus {
+      outline: none;
+    }
+  }
+
+  &__disclosure {
+    padding: 12px 14px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+  }
+
+  &__disclosure-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  &__disclosure-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 4px;
+    margin-left: -4px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+
+    svg {
+      transition: transform var(--duration-fast) var(--ease-out);
+    }
+
+    &[aria-expanded="true"] svg {
+      transform: rotate(90deg);
+    }
+
+    &:hover {
+      background: var(--background-hover);
+    }
+  }
+
+  &__help {
+    display: block;
+    margin: 0;
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 400;
+    color: var(--text-secondary);
+  }
+
+  &__mono {
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+
+  &__tag {
+    display: inline-flex;
+    align-items: center;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 4px;
+    background: var(--background-active);
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  &__none {
+    color: var(--text-secondary);
+    font-size: 12px;
+  }
+
+  &__table {
+    width: 100%;
+    border-collapse: collapse;
+
+    th[scope="col"] {
+      height: 32px;
+      padding: 0 8px;
+      text-align: left;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    th[scope="col"]:first-child {
+      width: 34%;
+    }
+
+    th[scope="row"] {
+      text-align: left;
+      font-weight: 500;
+    }
+
+    th[scope="row"],
+    td {
+      padding: 6px 8px;
+      border-bottom: 1px solid var(--border-color);
+      vertical-align: middle;
+    }
+
+    tr:last-child th[scope="row"],
+    tr:last-child td {
+      border-bottom: 0;
+    }
+  }
+
+  &__token-name {
+    display: block;
+  }
+
+  &__contrast {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 14px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--background-subtle);
+  }
+
+  &__contrast-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px;
+    margin: 0;
+
+    strong {
+      font-weight: 600;
+    }
+  }
+
+  &__grid {
+    display: grid;
+    gap: 16px;
+
+    &--3 {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    &--4 {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    &--5 {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 12px;
+    }
+  }
+
+  &__scale {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+  }
+
+  &__scale-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 52px;
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--border-color);
+
+    &:last-child {
+      border-bottom: 0;
+    }
+  }
+
+  &__scale-key {
+    flex: 0 0 56px;
+    color: var(--text-secondary);
+  }
+
+  &__scale-field {
+    flex: 1;
+    max-width: 420px;
+  }
+
+  &__scale-sample {
+    flex: 0 0 120px;
+    overflow: hidden;
+    line-height: 1;
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  &__skeleton-row {
+    display: flex;
+    gap: 16px;
+  }
+}
+
+// A field of the form: its label above, the value as typed.
+.gl-styles-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+
+  &__label {
+    font-size: 13px;
+    line-height: 20px;
+    font-weight: 500;
+  }
+
+  &__input {
+    height: 32px;
+    min-width: 0;
+    padding: 0 10px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--radius-sm);
+    background: var(--background);
+    color: var(--text-primary);
+
+    &:focus-visible {
+      border-color: var(--focus-ring);
+    }
+  }
+
+  &.is-invalid &__input {
+    border-color: var(--danger-text);
+  }
+}
+
+// A colour: the picker as its swatch, the hex text, "Changed".
+.gl-styles-color {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+
+  &__control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 32px;
+    padding: 0 4px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--radius-sm);
+    background: var(--background);
+
+    &:focus-within {
+      border-color: var(--focus-ring);
+    }
+  }
+
+  &.is-flagged &__control {
+    border-color: var(--warning-text);
+  }
+
+  &.is-invalid &__control {
+    border-color: var(--danger-text);
+  }
+
+  &.is-flagged .gl-field__hint {
+    color: var(--warning-label);
+  }
+
+  &__swatch {
+    flex: none;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    border-radius: 4px;
+    background: none;
+    cursor: pointer;
+
+    &::-webkit-color-swatch-wrapper {
+      padding: 0;
+    }
+
+    &::-webkit-color-swatch {
+      border: 0;
+      border-radius: 4px;
+      box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.16);
+    }
+
+    &::-moz-color-swatch {
+      border: 0;
+      border-radius: 4px;
+    }
+  }
+
+  &__text {
+    flex: 1;
+    min-width: 0;
+    height: 28px;
+    border: 0;
+    background: transparent;
+    color: var(--text-primary);
+
+    &:focus-visible {
+      outline: none;
+    }
+  }
+}
+
+// A contrast result: a tick and the ratio, or a warning and what it needs.
+.gl-styles-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+
+  &.is-pass {
+    color: var(--success-text);
+  }
+
+  &.is-fail {
+    color: var(--warning-label);
+  }
+}
+
+// A segmented control: a row of pressed/unpressed buttons.
+.gl-segmented {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--radius-md);
+  background: var(--background-hover);
+
+  button {
+    display: inline-flex;
+    align-items: center;
+    height: 28px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: pointer;
+
+    &:hover {
+      color: var(--text-primary);
+    }
+
+    &[aria-pressed="true"] {
+      background: var(--background);
+      color: var(--text-primary);
+      box-shadow:
+        var(--card-shadow),
+        0 0 0 1px var(--border-color);
+    }
+  }
+}
+
+// The preview frame (design 8.3): the public site, scaled to fit the panel.
+.gl-styles-preview {
+  display: flex;
+  flex: 0 0 470px;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 16px;
+  border-left: 1px solid var(--border-color);
+  background: var(--background-subtle);
+
+  &__bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+
+  &__spacer {
+    flex: 1;
+  }
+
+  &__stage {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg);
+    background: var(--background);
+  }
+
+  &__frame {
+    display: block;
+    border: 0;
+    transform-origin: top left;
+    background: #ffffff;
+  }
+
+  &__stage.is-phone &__frame {
+    border-right: 1px solid var(--border-color);
+    border-left: 1px solid var(--border-color);
+  }
+
+  &__error {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 16px;
+    text-align: center;
+
+    span {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+  }
+
+  &__note {
+    margin: 0;
+    font-size: 12px;
+    line-height: 16px;
+    color: var(--text-secondary);
+  }
+}
+
+.gl-styles-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+
+  p {
+    margin: 0;
+  }
+
+  &__footer {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  &__changes {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+
+    li {
+      display: flex;
+      flex-direction: column;
+      padding: 10px 12px;
+    }
+  }
+
+  &__change-name {
+    font-weight: 500;
+  }
+
+  &__change-what {
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  &__pairs {
+    margin: 4px 0 8px;
+    border-collapse: collapse;
+    font-size: 13px;
+
+    th {
+      padding: 2px 16px 2px 0;
+      text-align: left;
+      font-weight: 400;
+    }
+
+    td {
+      color: var(--warning-label);
+      font-weight: 500;
+    }
+  }
+}
+
+// The modal's footer is outside .gl-styles-dialog.
+.gl-styles-dialog__footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}

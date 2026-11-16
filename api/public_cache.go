@@ -96,6 +96,9 @@ var publicCacheRoutes = map[string]publicCacheRoute{
 	"/public/terms":                                  {},
 	// Menus (#347): a location with no menu is a 404 on every page.
 	"/public/menus/:location": {notFound: true},
+	// The site design's template resolve (#491), asked on every page: keyed by the theme and
+	// the slugs; a design publish, theme activation, menu or media write purges it.
+	"/public/site-templates/resolve": {},
 	// Site config the public site reads on every request.
 	"/api/v1/settings":                   {},
 	"/api/v1/themes/active":              {},
