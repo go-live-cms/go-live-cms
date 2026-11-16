@@ -4400,6 +4400,21 @@ func (mr *MockStoreMockRecorder) ListPublishedPostsByTerm(arg0, arg1 interface{}
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPublishedPostsByTerm", reflect.TypeOf((*MockStore)(nil).ListPublishedPostsByTerm), arg0, arg1)
 }
 
+// ListPublishedSiteTemplatesForResolve mocks base method.
+func (m *MockStore) ListPublishedSiteTemplatesForResolve(arg0 context.Context, arg1 db.ListPublishedSiteTemplatesForResolveParams) ([]db.ListPublishedSiteTemplatesForResolveRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListPublishedSiteTemplatesForResolve", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListPublishedSiteTemplatesForResolveRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListPublishedSiteTemplatesForResolve indicates an expected call of ListPublishedSiteTemplatesForResolve.
+func (mr *MockStoreMockRecorder) ListPublishedSiteTemplatesForResolve(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPublishedSiteTemplatesForResolve", reflect.TypeOf((*MockStore)(nil).ListPublishedSiteTemplatesForResolve), arg0, arg1)
+}
+
 // ListRedirects mocks base method.
 func (m *MockStore) ListRedirects(arg0 context.Context, arg1 db.ListRedirectsParams) ([]db.ListRedirectsRow, error) {
 	m.ctrl.T.Helper()

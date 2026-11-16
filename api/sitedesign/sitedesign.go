@@ -103,8 +103,10 @@ var starters embed.FS
 // so every template slug has one. ok is false for a part without one, or a slug that
 // isn't a slug.
 //
-// Until the post blocks of #489 and the default theme's own templates (#498) land, the
-// starters hold site blocks only; the default theme's templates replace them (5.7).
+// These are core's interim starters (#491): one per route kind of design 3.2 (single,
+// page, archive, home, search, 404), built from site blocks and styled by the default
+// theme's site-block CSS. The slugs that share a shape take another's (starterAliases).
+// The default theme's own templates replace them (#498, 5.7).
 func Starter(kind, slug string) (File, bool) {
 	if !SlugPattern.MatchString(slug) {
 		return File{}, false
@@ -117,6 +119,11 @@ func Starter(kind, slug string) (File, bool) {
 			if file, ok := readStarter("starters/templates/" + candidate + ".json"); ok {
 				return file, true
 			}
+			if alias, ok := starterAliases[candidate]; ok {
+				if file, ok := readStarter("starters/templates/" + alias + ".json"); ok {
+					return file, true
+				}
+			}
 			cut := strings.LastIndex(candidate, "-")
 			if cut <= 0 {
 				break
@@ -126,6 +133,17 @@ func Starter(kind, slug string) (File, bool) {
 		return readStarter("starters/templates/index.json")
 	}
 	return File{}, false
+}
+
+// starterAliases names the starter a slug (or slug prefix) without its own file starts
+// from: an author page and a term archive are lists like an archive, a builder page
+// template (custom-<name>, design 10) is a page, and the front page lists the latest posts
+// like home (as a page, it customizes `page` or `page-<template>` instead).
+var starterAliases = map[string]string{
+	"author":   "archive",
+	"taxonomy": "archive",
+	"custom":   "page",
+	"front":    "home",
 }
 
 func readStarter(name string) (File, bool) {

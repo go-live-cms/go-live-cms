@@ -1,0 +1,13 @@
+{
+  "title": "Page not found",
+  "doc": {
+    "doc_version": 1,
+    "blocks_order": ["starter-404-header", "starter-404-text", "starter-404-search", "starter-404-footer"],
+    "blocks": {
+      "starter-404-text": { "id": "starter-404-text", "type": "paragraph", "version": 1, "attrs": { "text": "The page you're looking for doesn't exist, or it is no longer published." } },
+      "starter-404-search": { "id": "starter-404-search", "type": "search", "version": 1, "attrs": {} },
+      "starter-404-header": { "id": "starter-404-header", "type": "template_part", "version": 1, "attrs": { "slug": "header" } },
+      "starter-404-footer": { "id": "starter-404-footer", "type": "template_part", "version": 1, "attrs": { "slug": "footer" } }
+    }
+  }
+}
