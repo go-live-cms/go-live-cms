@@ -403,8 +403,8 @@ are the most fragile part of the codebase. **Before editing anything under
   sets `globalStyles` from `/themes/active`'s published `global_styles`, else
   `NO_GLOBAL_STYLES`; `supports.globalStyles`), scripts are
   `config.assets` with `blocking` for `<head>` (`src/lib/themeAssets.ts`,
-  `components/ThemeScripts.astro`), `components/TemplatePart.astro` renders its slot until
-  #491, and nested `BlockRenderer`s share one page scope (`blocks/utils/pageScope.ts`: heading
+  `components/ThemeScripts.astro`), `components/TemplatePart.astro` renders a published override part or its slot
+  (#491), and nested `BlockRenderer`s share one page scope (`blocks/utils/pageScope.ts`: heading
   ids unique across docs, `/gl-embeds.js` once). **The default theme's HTML is pinned by
   `themes/default/theme.astro.test.ts`'s whole-page snapshots** (`__snapshots__/layouts/`);
   Astro whitespace is fragile (an expression or a component at the end of `<body>` adds or
@@ -433,6 +433,21 @@ are the most fragile part of the codebase. **Before editing anything under
   query nothing and is logged once per request (`site_block_data_failed`, the block type and a count). The pager is
   #349's (`pageLinks`, `pagePath`), only for an inheriting query. Bylines are core's (`src/lib/bylines.ts`), which the
   default theme re-exports.
+- **Template rendering (#491, design `docs/design/theme-builder.md` 3.2–3.4, 3.7):** every public route file makes one
+  call, `resolveTemplate(Astro.locals, route)` (`src/lib/siteTemplates.ts`): the route's ranked slugs (`templateRanks`:
+  `single-{type}`/`single`, `page-{template}`/`page`, `front-page` first at `/`, `archive-{type}`/`archive`,
+  `taxonomy-{tax}`/`archive`, `author`/`archive`, `search`, `404`; never the 500 page) go to
+  `GET /public/site-templates/resolve?theme=&slugs=` (published only, cached, 2 s; memoized per request on
+  `locals.siteTemplateResolves`). The builder template wins when its rank is the same as or more specific than the
+  **active theme's** first code layout in the build (`codeLayoutRank`, glob keys only; the default theme's layouts are
+  the last resort and never compared), and the route renders `src/layouts/BlockTemplateLayout.astro` with **the same
+  props** plus `kind` and `choice`; else its code layout, as before. A failed resolve is the code layout
+  (`site_template_resolve_failed`). The layout's head is what the theme's layout gives `SeoHead`
+  (`lib/blockTemplateLayout.ts` `templateHead`, pinned by `BlockTemplateLayout.astro.test.ts`), its body the template in
+  one `BlockRenderer` with `anchors={false}` and `frame="template"` (leading parts, `main#content.site-main`, trailing
+  parts; parts and the template get no `b-<id>`, the post's blocks keep theirs). `<TemplatePart slug>` in a code layout
+  renders a **published override** part (`templatePartOverride`, from the same resolve) and its slot otherwise. A
+  previewed request reads published templates until #492 adds them to the draft read (`templateReaderFor` is the seam).
 - **Site logo (#488):** Settings › General's **Site logo** (`components/settings/SiteLogoField.tsx`, rules
   `lib/siteLogo.ts`): the media picker (images only), Replace and Remove, saved with the page as
   `site_logo_media_id` (sent only when it changed, like the front page). `GET /settings` answers it with `site_logo`

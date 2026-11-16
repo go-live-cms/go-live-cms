@@ -1,0 +1,23 @@
+{
+  "title": "Archive",
+  "doc": {
+    "doc_version": 1,
+    "blocks_order": ["starter-archive-header", "starter-archive-title", "starter-archive-description", "starter-archive-query", "starter-archive-footer"],
+    "blocks": {
+      "starter-archive-title": { "id": "starter-archive-title", "type": "query_title", "version": 1, "attrs": {} },
+      "starter-archive-description": { "id": "starter-archive-description", "type": "term_description", "version": 1, "attrs": {} },
+      "starter-archive-query": { "id": "starter-archive-query", "type": "query", "version": 1, "attrs": { "inherit": true }, "children": ["starter-archive-items", "starter-archive-pager", "starter-archive-empty"] },
+      "starter-archive-items": { "id": "starter-archive-items", "type": "post_template", "version": 1, "attrs": {}, "children": ["starter-archive-item-terms", "starter-archive-item-title", "starter-archive-item-date", "starter-archive-item-excerpt", "starter-archive-item-image"] },
+      "starter-archive-item-terms": { "id": "starter-archive-item-terms", "type": "post_terms", "version": 1, "attrs": {} },
+      "starter-archive-item-title": { "id": "starter-archive-item-title", "type": "post_title", "version": 1, "attrs": {} },
+      "starter-archive-item-date": { "id": "starter-archive-item-date", "type": "post_date", "version": 1, "attrs": { "format": "short" } },
+      "starter-archive-item-excerpt": { "id": "starter-archive-item-excerpt", "type": "post_excerpt", "version": 1, "attrs": {} },
+      "starter-archive-item-image": { "id": "starter-archive-item-image", "type": "post_featured_image", "version": 1, "attrs": { "link": true } },
+      "starter-archive-pager": { "id": "starter-archive-pager", "type": "query_pagination", "version": 1, "attrs": {} },
+      "starter-archive-empty": { "id": "starter-archive-empty", "type": "query_no_results", "version": 1, "attrs": {}, "children": ["starter-archive-empty-text"] },
+      "starter-archive-empty-text": { "id": "starter-archive-empty-text", "type": "paragraph", "version": 1, "attrs": { "text": "Nothing has been published here yet." } },
+      "starter-archive-header": { "id": "starter-archive-header", "type": "template_part", "version": 1, "attrs": { "slug": "header" } },
+      "starter-archive-footer": { "id": "starter-archive-footer", "type": "template_part", "version": 1, "attrs": { "slug": "footer" } }
+    }
+  }
+}

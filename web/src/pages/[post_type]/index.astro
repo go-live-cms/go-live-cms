@@ -10,6 +10,8 @@ import { loadPostList } from '../../lib/postList'
 import { pageTitleSuffix, resolveListRequest } from '../../lib/pagination'
 import { loadThemeLayout, themeLayoutCandidates } from '../../lib/themeLayout'
 import { resolveSiteUrl } from '../../lib/seo'
+import { resolveTemplate } from '../../lib/siteTemplates'
+import BlockTemplateLayout from '../../layouts/BlockTemplateLayout.astro'
 
 export const prerender = false
 
@@ -47,17 +49,20 @@ if (!list) {
 }
 
 const themeSlug = Astro.locals.activeTheme || 'default'
-const Layout = await loadThemeLayout(archiveLayouts, themeLayoutCandidates('../../../themes', themeSlug, 'archive'))
-if (!Layout) {
+// The site design (#491): archive-{type}, then archive, against the theme's layouts/archive.
+const blockTemplate = await resolveTemplate(Astro.locals, { kind: 'archive', postType })
+const Layout = blockTemplate ? null : await loadThemeLayout(archiveLayouts, themeLayoutCandidates('../../../themes', themeSlug, 'archive'))
+if (!blockTemplate && !Layout) {
   throw new Error('No archive layout in this build')
 }
 const title = `${heading}${pageTitleSuffix(page)} | ${list.siteTitle}`
+const layoutProps = {
+  title,
+  description: `Everything published in ${heading} on ${list.siteTitle}`,
+  heading,
+  postType,
+  list,
+}
 ---
 
-<Layout
-  title={title}
-  description={`Everything published in ${heading} on ${list.siteTitle}`}
-  heading={heading}
-  postType={postType}
-  list={list}
-/>
+{blockTemplate ? <BlockTemplateLayout kind="archive" choice={blockTemplate} {...layoutProps} /> : <Layout {...layoutProps} />}

@@ -10,9 +10,15 @@
  * The theme slug comes from the middleware (Astro.locals.activeTheme) rather than a
  * fresh API call: an unreachable API is a common cause of a 500, and the error page
  * must still render then.
+ *
+ * The site design (#491): the 404 renders a published builder `404` template when it
+ * outranks the theme's layouts/error (lib/siteTemplates.ts). The 500 never resolves one:
+ * the API is likely down, and the theme's code is what still works.
  */
 import ErrorLayout from '@/layouts/ErrorLayout.astro'
+import BlockTemplateLayout from '@/layouts/BlockTemplateLayout.astro'
 import { log } from '@/lib/log'
+import { resolveTemplate } from '@/lib/siteTemplates'
 
 interface Props {
   status: number
@@ -31,8 +37,10 @@ const fallbackChain = [
   `../../themes/${themeSlug}/layouts/error/default.astro`,
 ]
 
+const blockTemplate = status === 404 ? await resolveTemplate(Astro.locals, { kind: '404' }) : null
+
 let LayoutComponent = ErrorLayout
-for (const candidatePath of fallbackChain) {
+for (const candidatePath of blockTemplate ? [] : fallbackChain) {
   if (errorLayouts[candidatePath]) {
     try {
       const layoutModule = (await errorLayouts[candidatePath]()) as any
@@ -45,4 +53,4 @@ for (const candidatePath of fallbackChain) {
 }
 ---
 
-<LayoutComponent {...Astro.props} />
+{blockTemplate ? <BlockTemplateLayout kind="404" choice={blockTemplate} {...Astro.props} /> : <LayoutComponent {...Astro.props} />}
