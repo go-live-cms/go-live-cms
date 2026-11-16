@@ -125,8 +125,17 @@ export interface TemplateNeeds extends SiteBlockNeeds {
  * A part the template doesn't place renders nowhere here, so it reads nothing. Only the first
  * `MAX_QUERIES_PER_PAGE` rendered loops get posts; a part placed again after the limit is reached
  * gets none (its key is shared, so it renders what its first placement read, if that was kept).
+ *
+ * A related posts block (#497) counts only where it can render: on a route with a post
+ * (`relatedPosts`, true unless the caller knows the route has none) and outside a query's post
+ * template (it shows the page's post, so in a list it renders nothing). Elsewhere it would take a
+ * slot from a query loop and read posts nobody sees.
  */
-export function collectTemplateNeeds(template: BlockDocV1 | null | undefined, parts: Readonly<Record<string, BlockDocV1 | null>> = {}): TemplateNeeds {
+export function collectTemplateNeeds(
+  template: BlockDocV1 | null | undefined,
+  parts: Readonly<Record<string, BlockDocV1 | null>> = {},
+  { relatedPosts = true }: { relatedPosts?: boolean } = {},
+): TemplateNeeds {
   const base = siteBlockNeeds([template, ...Object.values(parts)])
   const kept = new Map<string, TemplateQueryNeed>()
   const keptRelated = new Map<string, TemplateRelatedNeed>()
@@ -134,6 +143,7 @@ export function collectTemplateNeeds(template: BlockDocV1 | null | undefined, pa
   let logo = false
   const visit = (doc: BlockDocV1 | null | undefined, part?: string) => {
     if (!doc?.blocks) return
+    const listed = blocksInPostTemplates(doc)
     for (const id of blocksInReadingOrder(doc)) {
       const block = doc.blocks[id]
       if (!block) continue
@@ -145,7 +155,8 @@ export function collectTemplateNeeds(template: BlockDocV1 | null | undefined, pa
           kept.set(key, { key, blockId: id, ...(part ? { part } : {}), attrs: normalizeSiteBlockAttrs("query", block.attrs) as QueryAttrs })
         }
       } else if (block.type === "related_posts") {
-        // #497: a data-reading block too, counted with the queries.
+        // #497: a data-reading block too, counted with the queries, where it renders.
+        if (!relatedPosts || listed.has(id)) continue
         rendered++
         const key = queryKey(part, id)
         if (rendered <= MAX_QUERIES_PER_PAGE && !keptRelated.has(key)) {
@@ -161,6 +172,21 @@ export function collectTemplateNeeds(template: BlockDocV1 | null | undefined, pa
   return { ...base, queries: [...kept.values()], related: [...keptRelated.values()], renderedQueries: rendered, skippedQueries: Math.max(0, rendered - MAX_QUERIES_PER_PAGE), logo }
 }
 
+/** The ids of every block inside a query's post template, at any depth (#497: they render once per listed post). */
+function blocksInPostTemplates(doc: BlockDocV1): Set<string> {
+  const inside = new Set<string>()
+  const add = (id: string) => {
+    const block = doc.blocks[id]
+    if (!block || inside.has(id)) return
+    inside.add(id)
+    for (const child of block.children ?? []) add(child)
+  }
+  for (const block of Object.values(doc.blocks)) {
+    if (block?.type === "post_template") for (const child of block.children ?? []) add(child)
+  }
+  return inside
+}
+
 /**
  * The `/public/posts/type/:type` parameters for a query's attrs, one to one (design 4.3): the
  * page size always, the order, the terms and the author when set. Nothing else reaches the
@@ -173,6 +199,18 @@ export function queryRequestParams(attrs: QueryAttrs): URLSearchParams {
   if (attrs.termIds?.length) params.set("terms", attrs.termIds.join(","))
   if (attrs.authorId) params.set("author_id", String(attrs.authorId))
   return params
+}
+
+/**
+ * Rows of a `/public` list as one page of list items with no pager (a query of chosen posts, #489;
+ * related posts, #497). Without the site's URL publicImageUrl can't make an absolute URL and gives
+ * none: keep the row's own same-origin path then (an /uploads one, listedThumbnail's check), so the
+ * image shows.
+ */
+async function onePageOf(rows: Post[], postType: string, structure: UrlStructure, siteUrl: string): Promise<SitePostList> {
+  const items = await toListedPosts(rows, postType, structure, siteUrl)
+  if (!siteUrl) for (const [i, item] of items.entries()) item.image ??= listedThumbnail(rows[i])
+  return { items, page: 1, totalPages: 1, basePath: null }
 }
 
 /** What reads a non-inheriting query's posts (tests pass their own). */
@@ -206,11 +244,7 @@ export async function readQueryPosts(
     if (!response.ok) throw new Error(`HTTP ${response.status}`)
     const body = (await response.json()) as { posts?: unknown }
     const rows = (Array.isArray(body?.posts) ? body.posts : []) as Post[]
-    const items = await toListedPosts(rows, postType, structure, siteUrl)
-    // Without the site's URL publicImageUrl can't make an absolute URL and gives none: keep the
-    // row's own same-origin path then (an /uploads one, listedThumbnail's check), so the image shows.
-    if (!siteUrl) for (const [i, item] of items.entries()) item.image ??= listedThumbnail(rows[i])
-    return { items, page: 1, totalPages: 1, basePath: null }
+    return onePageOf(rows, postType, structure, siteUrl)
   }
   try {
     return await Promise.race([load(), timeout])
@@ -267,10 +301,7 @@ export async function readRelatedPosts(
   { structure, siteUrl }: { structure: UrlStructure; siteUrl: string },
   read: typeof getRelatedPosts = getRelatedPosts,
 ): Promise<SitePostList> {
-  const rows = await read(post.id, relatedRequestParams(attrs))
-  const items = await toListedPosts(rows, post.post_type, structure, siteUrl)
-  if (!siteUrl) for (const [i, item] of items.entries()) item.image ??= listedThumbnail(rows[i])
-  return { items, page: 1, totalPages: 1, basePath: null }
+  return onePageOf(await read(post.id, relatedRequestParams(attrs)), post.post_type, structure, siteUrl)
 }
 
 /**
@@ -335,7 +366,8 @@ export async function loadSiteRenderContext(locals: App.Locals | undefined, opti
   const docs = [...own, ...Object.values(parts)]
   // The template's queries first (the first doc is the template; the others render with it),
   // its parts where it places them; at most four.
-  const needs = collectTemplateNeeds(mergedDoc(own), parts)
+  // A related posts block counts only on a route with a post (#497): elsewhere it renders nothing.
+  const needs = collectTemplateNeeds(mergedDoc(own), parts, { relatedPosts: !!options.route?.post })
   // Every location the docs and every part name, placed or not (a code layout's parts too).
   const { locations } = siteBlockNeeds(docs)
   if (needs.skippedQueries > 0) {

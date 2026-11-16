@@ -1,5 +1,5 @@
 import React, { useContext } from "react"
-import { COLOR_SCHEME_SWITCH_VARIANTS, normalizeSiteBlockAttrs, type ColorSchemeSwitchVariant } from "@gl-admin/lib/blocks-spec"
+import { normalizeSiteBlockAttrs, type ColorSchemeSwitchVariant } from "@gl-admin/lib/blocks-spec"
 import { safeAvatarSrc } from "@gl-admin/lib/presence"
 import type { BlockComponentProps } from "../types"
 import { authorNames, avatarColor, displayName, initial, joinNames } from "../../../lib/bylines"
@@ -161,8 +161,7 @@ const SCHEME_CHOICES = [
 export const ColorSchemeSwitchBlock: React.FC<BlockComponentProps> = ({ block, anchorId }) => {
   const site = useSiteRenderContext()
   if (!site) return null
-  const stored = normalizeSiteBlockAttrs("color_scheme_switch", block.attrs).variant
-  const variant: ColorSchemeSwitchVariant = (COLOR_SCHEME_SWITCH_VARIANTS as readonly unknown[]).includes(stored) ? (stored as ColorSchemeSwitchVariant) : "segmented"
+  const variant: ColorSchemeSwitchVariant = normalizeSiteBlockAttrs("color_scheme_switch", block.attrs).variant === "menu" ? "menu" : "segmented"
   return (
     <div id={anchorId} className="color-scheme-switch" role="group" aria-label="Theme">
       <div className={`theme-choices theme-choices--${variant}`}>

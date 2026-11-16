@@ -19,6 +19,7 @@
 import { createContext } from "react"
 import { blockAnchorId, blocksInReadingOrder, embedTargetOf, FOOTNOTES_TITLE_ID, type Block, type BlockDocV1 } from "@gl-admin/lib/blocks-spec"
 import { embedNoteId, headingAnchors, type HeadingAnchor } from "./headingAnchors"
+import { queryKey } from "./siteContext"
 
 export interface PageScope {
   // Ids a nested renderer's headings never take.
@@ -102,7 +103,7 @@ export function siteBlockTitleIds(
       if (base) {
         const n = (seen.get(base) ?? 0) + 1
         seen.set(base, n)
-        ids.set(part ? `part:${part}:${blockId}` : blockId, n === 1 ? base : `${base}-${n}`)
+        ids.set(queryKey(part, blockId), n === 1 ? base : `${base}-${n}`)
       } else if (block?.type === "template_part" && part === undefined) {
         const slug = (block.attrs as { slug?: unknown } | undefined)?.slug
         if (typeof slug === "string" && !placed.has(slug)) {

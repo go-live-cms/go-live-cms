@@ -254,11 +254,30 @@ describe("related posts' data (#497, design 4.3)", () => {
     warn.mockRestore()
   })
 
-  it("on a route without a post nothing is read and they render nothing", async () => {
+  it("on a route without a post nothing is read, they render nothing, and they take no query's slot", async () => {
     const readRelated = vi.fn()
-    const site = await loadSiteRenderContext(locals(), { docs: [doc(related("r-00000001"))], route: { kind: "archive" }, readRelated })
-    expect(site.related).toEqual({ "r-00000001": null })
+    const readQuery = vi.fn(async () => listOf("Q"))
+    const page = doc({ ...related("r-00000001"), ...query("q-00000001"), ...query("q-00000002"), ...query("q-00000003"), ...query("q-00000004") })
+    const site = await loadSiteRenderContext(locals(), { docs: [page], route: { kind: "archive" }, readRelated, readQuery })
+    expect(site.related).toEqual({})
     expect(readRelated).not.toHaveBeenCalled()
+    expect(readQuery).toHaveBeenCalledTimes(4)
+    expect(collectTemplateNeeds(page, {}, { relatedPosts: false }).skippedQueries).toBe(0)
+  })
+
+  it("inside a post template (a list, where they render nothing) they are neither counted nor read", () => {
+    const page = doc({
+      "q-00000001": { type: "query", attrs: {}, children: ["t-00000001"] } as never,
+      "t-00000001": { type: "post_template", attrs: {}, children: ["g-00000001"] } as never,
+      "g-00000001": { type: "columns", attrs: {}, children: ["c-00000001"] } as never,
+      "c-00000001": { type: "column", attrs: {}, children: ["r-in-list01"] } as never,
+      ...related("r-in-list01"),
+      ...related("r-on-page01"),
+    })
+    page.blocks_order = ["q-00000001", "r-on-page01"]
+    const needs = collectTemplateNeeds(page)
+    expect(needs.related.map((r) => r.key)).toEqual(["r-on-page01"])
+    expect(needs.renderedQueries).toBe(2)
   })
 
   it("a failed read renders that block nothing, logged once with the block type", async () => {
