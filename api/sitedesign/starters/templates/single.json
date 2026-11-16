@@ -1,0 +1,17 @@
+{
+  "title": "Single post",
+  "doc": {
+    "doc_version": 1,
+    "blocks_order": ["starter-single-header", "starter-single-terms", "starter-single-title", "starter-single-byline", "starter-single-image", "starter-single-content", "starter-single-nav", "starter-single-footer"],
+    "blocks": {
+      "starter-single-terms": { "id": "starter-single-terms", "type": "post_terms", "version": 1, "attrs": {} },
+      "starter-single-title": { "id": "starter-single-title", "type": "post_title", "version": 1, "attrs": {} },
+      "starter-single-byline": { "id": "starter-single-byline", "type": "post_byline", "version": 1, "attrs": {} },
+      "starter-single-image": { "id": "starter-single-image", "type": "post_featured_image", "version": 1, "attrs": {} },
+      "starter-single-content": { "id": "starter-single-content", "type": "post_content", "version": 1, "attrs": {} },
+      "starter-single-nav": { "id": "starter-single-nav", "type": "post_navigation", "version": 1, "attrs": {} },
+      "starter-single-header": { "id": "starter-single-header", "type": "template_part", "version": 1, "attrs": { "slug": "header" } },
+      "starter-single-footer": { "id": "starter-single-footer", "type": "template_part", "version": 1, "attrs": { "slug": "footer" } }
+    }
+  }
+}

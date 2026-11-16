@@ -11,6 +11,8 @@ import { listSeo } from '../../lib/postList'
 import { pageTitleSuffix, resolveListRequest } from '../../lib/pagination'
 import { loadThemeLayout, themeLayoutCandidates } from '../../lib/themeLayout'
 import { metaDescription, resolveSiteUrl } from '../../lib/seo'
+import { resolveTemplate } from '../../lib/siteTemplates'
+import BlockTemplateLayout from '../../layouts/BlockTemplateLayout.astro'
 
 export const prerender = false
 
@@ -31,18 +33,22 @@ if (!data) {
 }
 
 const themeSlug = Astro.locals.activeTheme || 'default'
-const Layout = await loadThemeLayout(authorLayouts, themeLayoutCandidates('../../../themes', themeSlug, 'author'))
-if (!Layout) {
+// The site design (#491): author, then archive, against the theme's layouts/author and
+// layouts/archive.
+const blockTemplate = await resolveTemplate(Astro.locals, { kind: 'author' })
+const Layout = blockTemplate ? null : await loadThemeLayout(authorLayouts, themeLayoutCandidates('../../../themes', themeSlug, 'author'))
+if (!blockTemplate && !Layout) {
   throw new Error('No author layout in this build')
 }
 const name = data.author.full_name?.trim() || data.author.username
 const title = `${name}${pageTitleSuffix(page)} | ${data.list.siteTitle}`
 const description = metaDescription(data.author.bio) || `Posts by ${name} on ${data.list.siteTitle}`
+const layoutProps = {
+  ...data,
+  title,
+  description,
+  seo: { ...listSeo(data.list), type: 'website' as const, siteName: data.list.siteTitle },
+}
 ---
 
-<Layout
-  {...data}
-  title={title}
-  description={description}
-  seo={{ ...listSeo(data.list), type: 'website', siteName: data.list.siteTitle }}
-/>
+{blockTemplate ? <BlockTemplateLayout kind="author" choice={blockTemplate} {...layoutProps} /> : <Layout {...layoutProps} />}

@@ -15,6 +15,8 @@ import { loadThemeLayout, themeLayoutCandidates } from "../lib/themeLayout"
 import { homeTitle, resolveSiteUrl } from "../lib/seo"
 import { log } from "../lib/log"
 import PostPage from "../components/PostPage.astro"
+import BlockTemplateLayout from "../layouts/BlockTemplateLayout.astro"
+import { resolveTemplate } from "../lib/siteTemplates"
 
 export const prerender = false
 
@@ -47,8 +49,10 @@ if (!frontPage && !list) {
 }
 
 const themeSlug = Astro.locals.activeTheme || "default"
-const Layout = list ? await loadThemeLayout(homeLayouts, themeLayoutCandidates("../../themes", themeSlug, "home")) : null
-if (list && !Layout) {
+// The site design (#491): front-page, then home, against the theme's layouts/home.
+const blockTemplate = list ? await resolveTemplate(Astro.locals, { kind: "home" }) : null
+const Layout = list && !blockTemplate ? await loadThemeLayout(homeLayouts, themeLayoutCandidates("../../themes", themeSlug, "home")) : null
+if (list && !blockTemplate && !Layout) {
   throw new Error("No front page layout in this build")
 }
 // The site name, with its tagline on the first page (#357, decision 2).
@@ -63,6 +67,8 @@ const title = list ? (page === 1 ? homeTitle(list.siteTitle, list.siteTagline) :
     publishedTerms={frontPage.taxonomy_terms ?? []}
     publishedSeo={frontPage.seo ?? null}
   />
+) : blockTemplate ? (
+  <BlockTemplateLayout kind="home" choice={blockTemplate} title={title} description={list!.siteTagline || `The latest posts from ${list!.siteTitle}`} list={list} />
 ) : (
   /* The tagline describes the site (#330); without one, its own title does, not GoLive. */
   <Layout title={title} description={list!.siteTagline || `The latest posts from ${list!.siteTitle}`} list={list} />

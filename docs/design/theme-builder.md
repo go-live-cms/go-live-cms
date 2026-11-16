@@ -312,6 +312,54 @@ Problem 2 is fixed by a small contract, which the default theme adopts first:
 | Collaborative editing makes a new doc kind | 7 |
 | Export produces a #332 package | 14 |
 
+### 3.7 As built (T9, #491)
+
+- **The slug lists** are `templateRanks` (`web/src/lib/siteTemplates.ts`), one per route kind of 3.2's table, each rank
+  with the code layouts at it. `post`'s own layouts are `single`'s rank, so a builder `single` replaces `layouts/post`;
+  a type's own layouts (`layouts/product`) are `single-{type}`'s. A page's type variant (`layout_variants`) is not a
+  rank: it picks among `layouts/page/*`, which are all `page`'s. A rank whose slug the slug CHECK refuses (a page
+  template named `Landing`, a type with capitals) is left out. A `block:<name>` page template already ranks
+  `custom-<name>` first, for #494.
+- **One read per route.** `GET /public/site-templates/resolve?theme=<active>&slugs=<a,b>` answers 200 with `template`
+  (null when none matches) rather than 404, so the same cached answer also carries every **published override part**:
+  a code layout's `<TemplatePart slug>` renders one in place of the theme's markup, and needs no read of its own. A 404
+  is only "that theme isn't active". The theme is in the query, so the cache key (#185) has everything the answer
+  depends on besides what purges the whole cache anyway (a design publish, theme activation, menus, media, settings).
+- **The comparison** reads only the glob's keys (`codeLayoutRank`), so it is synchronous and loads no layout. The
+  builder wins at the same rank or a more specific one; the default theme's layouts never take part.
+- **`<TemplatePart>` in a code layout** renders only a published override, never the theme's shipped part or core's
+  starter: there the theme's own markup is its default. The override gets the markup a `template_part` block gives
+  it, a render context of its own (the part placed alone, so its queries count and load as 4.3 says), no `b-<id>`
+  anchors and no heading ids (it renders beside the theme's content, not around it, so it can't reserve ids for it).
+- **`BlockTemplateLayout.astro`** renders the template's leading parts, then `main#content.site-main` (the skip link's
+  target) holding everything else, then its trailing parts. Its head is the theme's base layout's, built from the
+  active theme's config and assets; the font preloads a theme's base layout hard-codes aren't there (its stylesheet's
+  `@font-face` still loads them). `SeoHead` gets exactly what the code layout gives it (`templateHead`; the container
+  tests compare the output on the post, page, home, archive, author and search routes).
+- **Preview.** A previewed request renders published templates with the draft global styles. #492 adds templates and
+  parts to `GET /site-design/draft` (`?slugs=`); `templateReaderFor` is where a previewed request then reads those.
+- **Starters.** Core's interim starters are one per route kind (`single`, `page`, `archive`, `home`, `search`, `404`)
+  plus `index`; `author` and `taxonomy-*` start from `archive`, `custom-*` from `page`, `front-page` from `home`. #498
+  replaces them with the default theme's own templates.
+- **Render time**, measured against the code layout on the same route (`blockTemplateRenderTime.astro.test.ts`, the
+  web server's own work per request with an API stub that answers at once):
+
+  | Route (2026-11-16, Node 22, 300 alternating runs after 30 warm-up) | Code layout, median / p95 | Block template, median / p95 |
+  |---|---|---|
+  | Post, `/post/7` (16 blocks; `single` starter: terms, title, byline, image, content, older/newer) | 5.02 / 8.86 ms | 5.85 / 9.53 ms |
+  | Archive, `/post` (10 posts; `archive` starter: title, query loop with 5 blocks per row, pager) | 4.10 / 7.77 ms | 7.54 / 14.29 ms |
+
+  The post page costs under a millisecond more: its body already renders through `BlockRenderer` in the code layout.
+  The archive costs about 3.4 ms more, because its rows render through React (`BlockRenderer`, five blocks each) where
+  the code layout renders Astro components. The first run of this measurement found a cheaper fix on the way:
+  `formatSiteDate` built an `Intl.DateTimeFormat` on every call (a list formats one date per row); it now keeps one per
+  language, zone and style (the first run had the archive at 5.24 ms with the code layout and 9.37 ms with the
+  template; run-to-run noise is about a millisecond). Both paths make the same
+  reads but one: the builder's resolve, measured on the API (`/public/site-templates/resolve`, Postgres 12 and
+  miniredis in containers, 200 runs) at a median of 1.35 ms on a cache miss (the published rows, a starter part
+  normalized, media and menus) and 0.27 ms on a hit. Every route already makes that read, also when it renders its code
+  layout, since the answer carries the override parts a `<TemplatePart>` renders.
+
 ---
 
 ## 4. Site blocks

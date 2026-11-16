@@ -54,6 +54,20 @@ export function normalizeDateSettings(raw: { language?: unknown; timeZone?: unkn
 // "long": October 27, 2026 (posts). "short": Oct 27, 2026 (lists, cards).
 export type DateStyle = "long" | "short"
 
+// Formatters by language, zone and style: building one costs far more than formatting a date,
+// and a list formats one per row (#491: a query loop's post dates). The keys are the site's few
+// languages and zones, so the map stays small.
+const formatters = new Map<string, Intl.DateTimeFormat>()
+function dateFormatter(language: string, timeZone: string, month: "2-digit" | DateStyle): Intl.DateTimeFormat {
+  const key = `${language}\n${timeZone}\n${month}`
+  let format = formatters.get(key)
+  if (!format) {
+    format = new Intl.DateTimeFormat(language, { timeZone, year: "numeric", month, day: month === "2-digit" ? "2-digit" : "numeric" })
+    formatters.set(key, format)
+  }
+  return format
+}
+
 /**
  * The date as the site shows it, or "" for an invalid date.
  *
@@ -68,12 +82,12 @@ export function formatSiteDate(date: Date | string | number, settings: DateSetti
   const { language, timeZone, dateFormat } = settings
 
   if (dateFormat === "iso") {
-    const parts = new Intl.DateTimeFormat("en-US", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(d)
+    const parts = dateFormatter("en-US", timeZone, "2-digit").formatToParts(d)
     const get = (type: string) => parts.find((p) => p.type === type)?.value ?? ""
     return `${get("year")}-${get("month")}-${get("day")}`
   }
 
-  const format = new Intl.DateTimeFormat(language, { timeZone, year: "numeric", month: style, day: "numeric" })
+  const format = dateFormatter(language, timeZone, style)
   const parts = format.formatToParts(d)
   const order = parts.filter((p) => p.type === "day" || p.type === "month").map((p) => p.type)
   const dayFirst = order[0] === "day"

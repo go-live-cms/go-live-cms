@@ -684,9 +684,26 @@ import TemplatePart from '@/components/TemplatePart.astro'
 <TemplatePart slug="footer"><SiteFooter … /></TemplatePart>
 ```
 
-It renders the published part for that slug when there is one (#491) and your markup
-otherwise, and has no markup of its own. Slugs are `^[a-z0-9][a-z0-9_-]{0,79}$`; `header`
-and `footer` are the ones every theme should offer.
+It renders the site's published part for that slug when an admin customized and published
+one (#491), and your markup otherwise, with no markup of its own then. A published part
+renders as `<header class="template-part template-part--header">` (`<footer>` for `footer`,
+a `<div>` for any other slug), the same markup a block template gives it, so style
+`.template-part--<slug>` to lay its blocks out (the default theme puts the header's in one
+row). Your markup is your default here: a part your theme ships in `parts/` and core's
+starter parts are only used by block templates. Slugs are `^[a-z0-9][a-z0-9_-]{0,79}$`;
+`header` and `footer` are the ones every theme should offer.
+
+**Block templates replace layouts by rank** (#491, `docs/design/theme-builder.md` 3.2). Each
+route has a ranked list of template slugs, most specific first, and each rank has its code
+layouts: `single-{type}` (your `layouts/{type}/`), `single` (`layouts/post/`), `page-{template}`
+(`layouts/page/{template}.astro`), `page` (`layouts/page/`), `front-page` (none), `home`,
+`archive-{type}` (none), `archive`, `taxonomy-{taxonomy}` (`layouts/term/`), `author`, `search`
+and `404` (`layouts/error/404.astro` or `default.astro`). A published builder template, or one
+your theme ships in `templates/<slug>.json`, renders instead of your layout when its rank is the
+same or more specific: customizing "Single" replaces `layouts/post`, never your own
+`layouts/product`. The page then renders through core's `BlockTemplateLayout`, which uses your
+tokens (item 1), your registered styles and scripts (item 2), and the props your layout would
+have had. The 500 page always renders your error layout.
 
 **4. One page, several docs.** A block template renders its own block doc and, inside it,
 the post's (and its parts'). `BlockRenderer` keeps two things unique per page, not per doc:

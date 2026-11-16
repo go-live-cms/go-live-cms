@@ -156,3 +156,15 @@ SELECT t.id, v.version_no
 FROM site_templates t
 JOIN site_template_versions v ON v.id = t.published_version_id
 WHERE t.theme_slug = $1;
+
+-- name: ListPublishedSiteTemplatesForResolve :many
+-- The published copies the public site renders (#491, GET /public/site-templates/resolve):
+-- the theme's published templates among the asked slugs, and every published part of the
+-- theme. Never a working copy: published_block_doc is written only by publish (#492), and a
+-- reset one is NULL, so it isn't here and the theme's default renders.
+SELECT kind, slug, title, published_block_doc
+FROM site_templates
+WHERE theme_slug = @theme_slug
+  AND published_block_doc IS NOT NULL
+  AND (kind = 'part' OR (kind = 'template' AND slug = ANY(@slugs::varchar[])))
+ORDER BY kind, slug;

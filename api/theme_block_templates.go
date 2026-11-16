@@ -199,15 +199,8 @@ func themeBlockTemplateFromConfig(config json.RawMessage, kind, slug string) (Th
 	if kind == sitedesign.KindPart {
 		key = "block_parts"
 	}
-	var stored map[string]json.RawMessage
-	if len(config) == 0 || json.Unmarshal(config, &stored) != nil {
-		return ThemeBlockTemplate{}, false
-	}
-	var byslug map[string]ThemeBlockTemplate
-	if raw, ok := stored[key]; !ok || json.Unmarshal(raw, &byslug) != nil {
-		return ThemeBlockTemplate{}, false
-	}
-	template, ok := byslug[slug]
+	template, ok := shippedBlockTemplates(config, key)[slug]
+
 	if !ok || len(template.Doc) == 0 {
 		return ThemeBlockTemplate{}, false
 	}

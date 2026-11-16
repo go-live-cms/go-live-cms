@@ -12,6 +12,8 @@ import { pageTitleSuffix } from '../lib/pagination'
 import { loadTermPage, termPhrase } from '../lib/termPage'
 import { loadThemeLayout, themeLayoutCandidates } from '../lib/themeLayout'
 import { metaDescription, resolveSiteUrl } from '../lib/seo'
+import { resolveTemplate } from '../lib/siteTemplates'
+import BlockTemplateLayout from '../layouts/BlockTemplateLayout.astro'
 
 export const prerender = false
 
@@ -28,18 +30,22 @@ if (!data) {
 }
 
 const themeSlug = Astro.locals.activeTheme || 'default'
-const Layout = await loadThemeLayout(termLayouts, themeLayoutCandidates('../../themes', themeSlug, 'term'))
-if (!Layout) {
+// The site design (#491): taxonomy-{taxonomy}, then archive, against the theme's layouts/term
+// and layouts/archive.
+const blockTemplate = await resolveTemplate(Astro.locals, { kind: 'term', taxonomy: route.taxonomy })
+const Layout = blockTemplate ? null : await loadThemeLayout(termLayouts, themeLayoutCandidates('../../themes', themeSlug, 'term'))
+if (!blockTemplate && !Layout) {
   throw new Error('No term layout in this build')
 }
 const { term, list } = data
 const title = `${term.name}${pageTitleSuffix(page)} | ${list.siteTitle}`
 const description = metaDescription(term.description) || `Posts ${termPhrase(term)} on ${list.siteTitle}`
+const layoutProps = {
+  ...data,
+  title,
+  description,
+  seo: { ...listSeo(list), type: 'website' as const, siteName: list.siteTitle },
+}
 ---
 
-<Layout
-  {...data}
-  title={title}
-  description={description}
-  seo={{ ...listSeo(list), type: 'website', siteName: list.siteTitle }}
-/>
+{blockTemplate ? <BlockTemplateLayout kind="term" choice={blockTemplate} {...layoutProps} /> : <Layout {...layoutProps} />}

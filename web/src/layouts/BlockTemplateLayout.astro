@@ -1,0 +1,93 @@
+---
+/**
+ * The one generic layout of the site design (#491, docs/design/theme-builder.md 3.4,
+ * plugin-system 8.6): a route whose builder template wins (lib/siteTemplates.ts
+ * resolveTemplate) renders this instead of the theme's code layout. It takes **the props of
+ * the layout it replaces** plus `kind` and `choice` (the resolved template, its parts and the
+ * menus by id), so the route computes its SEO, byline, terms and lists exactly as before, and
+ * `SeoHead` gets what the theme's layout would give it (lib/blockTemplateLayout.ts templateHead).
+ *
+ * 1. What the blocks need: `loadSiteRenderContext` walks the template and its parts
+ *    (`collectTemplateNeeds`) and fetches menus by location and up to four queries, each within
+ *    2 s and failing soft; an inheriting query is the route's own list.
+ * 2. The head: `SeoHead`, the active theme's tokens with the site's global styles (the draft
+ *    while previewing, #486), its registered styles and scripts (the theme contract, #484).
+ * 3. The body: the template's doc in one `BlockRenderer` with the context, no `b-<id>` anchors
+ *    (the post's own blocks keep theirs), its leading parts before `main#content` and its
+ *    trailing parts after. Heading ids are unique on the page and the embed loader is added
+ *    once (the page scope, #484).
+ */
+import BlockRenderer from '@/components/BlockRenderer'
+import SeoHead from '@/components/SeoHead.astro'
+import ThemeScripts from '@/components/ThemeScripts.astro'
+import { activeThemeConfig, templateHead, templateSiteRoute, TEMPLATE_ELEMENT_IDS, type BlockTemplateKind } from '@/lib/blockTemplateLayout'
+import { log } from '@/lib/log'
+import { resolveSiteUrl } from '@/lib/seo'
+import { loadSiteRenderContext } from '@/lib/siteRenderContext'
+import { getSiteSettings } from '@/lib/siteSettings'
+import type { BlockTemplateChoice } from '@/lib/siteTemplates'
+import { resolveThemeTokens, themeCssVariables } from '@/lib/themeTokens'
+
+interface Props {
+  kind: BlockTemplateKind
+  choice: BlockTemplateChoice
+  // The props of the code layout this replaces (themes/README.md "Layout Props").
+  [prop: string]: unknown
+}
+
+const { kind, choice, ...layoutProps } = Astro.props
+const { template, parts, menusById } = choice
+const themeSlug = Astro.locals.activeTheme || 'default'
+const siteUrl = resolveSiteUrl(Astro.url)
+
+const [site, themeConfig] = await Promise.all([getSiteSettings(Astro.locals), activeThemeConfig(themeSlug)])
+const head = templateHead(kind, layoutProps, site.title)
+const route = await templateSiteRoute(kind, layoutProps, {
+  docs: [template.doc, ...Object.values(parts)],
+  siteUrl,
+  urlStructure: site.urlStructure,
+})
+const context = await loadSiteRenderContext(Astro.locals, {
+  docs: [template.doc],
+  parts,
+  menusById,
+  currentPath: Astro.url.pathname,
+  route,
+  siteUrl,
+})
+
+let tokens = ''
+try {
+  if (themeConfig) tokens = themeCssVariables(resolveThemeTokens(themeConfig, Astro.locals.globalStyles))
+} catch (error) {
+  // A theme whose config has no tokens of core's shape (#484's contract is optional) gets none.
+  log.warn('template_tokens_failed', { theme: themeSlug, error })
+}
+const themeAssets = Astro.locals.themeAssets || {}
+const legacyCssPath = Astro.locals.themeCssPath
+---
+
+<!doctype html>
+<html lang={site.language}>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="/favicon.ico" />
+    <meta name="generator" content={Astro.generator} />
+    <SeoHead title={head.title} description={head.description} {...head.seo} />
+    <link rel="alternate" type="application/rss+xml" title={site.title} href="/rss.xml" />
+    <ThemeScripts scripts={themeAssets.scripts} placement="head" />
+    {tokens && <style is:inline set:html={tokens}></style>}
+    {themeAssets.styles?.map((style: any) => (
+      <link rel="stylesheet" href={style.src} media={style.media || 'all'} />
+    ))}
+    {!themeAssets.styles?.length && legacyCssPath && <link rel="stylesheet" href={legacyCssPath} />}
+    <slot name="head" />
+  </head>
+  <body>
+    <div class="site site--block-template" data-template={template.slug}>
+      <BlockRenderer doc={template.doc} site={context} anchors={false} frame="template" reservedIds={TEMPLATE_ELEMENT_IDS} />
+    </div>
+    <ThemeScripts scripts={themeAssets.scripts} placement="body" />
+  </body>
+</html>

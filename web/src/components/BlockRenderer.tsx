@@ -35,6 +35,14 @@ interface BlockRendererProps {
   // around this renderer, if any; a post's body has none, so its site blocks render nothing.
   // `null` clears it, for a post's own body rendered inside a template (`post_content`, #489).
   site?: SiteRenderContext | null
+  // Top-level blocks get their `b-<id>` element ids (#356, "Copy link to block"). false for a
+  // block template and its parts (#491, design 3.4): the post rendered by `post_content` keeps
+  // its anchors, so a copied link still points at the post's blocks.
+  anchors?: boolean
+  // "template": a block template's page body (#491). The template parts that open the doc
+  // render before `<main id="content" class="site-main">`, the ones that close it after, and
+  // every other block inside it, so the page has the landmarks a theme's base layout gives it.
+  frame?: "template"
 }
 
 // The embed loader of the page's outermost renderer: added after its blocks if its own doc,
@@ -60,7 +68,7 @@ function rendersBlock(block: Block): boolean {
  * Uses the block registry to delegate rendering to individual block components.
  * WordPress-style architecture for easy extensibility.
  */
-export default function BlockRenderer({ doc, imageSizes = BLOCK_IMAGE_SIZES, headings, reservedIds, site }: BlockRendererProps) {
+export default function BlockRenderer({ doc, imageSizes = BLOCK_IMAGE_SIZES, headings, reservedIds, site, anchors: withAnchors = true, frame }: BlockRendererProps) {
   // The page this doc is part of (#484): set when this renderer is inside another's blocks.
   const page = useContext(PageScopeContext)
   const inheritedSite = useContext(SiteContext)
@@ -68,7 +76,7 @@ export default function BlockRenderer({ doc, imageSizes = BLOCK_IMAGE_SIZES, hea
   const reserved = [...(page?.reservedIds ?? []), ...(reservedIds ?? [])]
   const anchors = headings ?? headingAnchors(doc, reserved)
   const headingIds = new Map(anchors.map((h) => [h.blockId, h.id]))
-  const renderBlock = blockRendererFor(doc, { anchors: true })
+  const renderBlock = blockRendererFor(doc, { anchors: withAnchors })
 
   // Deduplicate blocks_order to prevent duplicate rendering
   const uniqueBlockIds = Array.from(new Set(doc.blocks_order))
@@ -123,7 +131,11 @@ export default function BlockRenderer({ doc, imageSizes = BLOCK_IMAGE_SIZES, hea
           <HeadingIdsContext.Provider value={headingIds}>
             <FootnotesContext.Provider value={footnotes}>
               <PluginBlockChecksContext.Provider value={failedPluginBlocks}>
-                <div className="block-content">{uniqueBlockIds.map((blockId) => renderBlock(blockId))}</div>
+                {frame === "template" ? (
+                  templateFrame(doc, uniqueBlockIds, renderBlock)
+                ) : (
+                  <div className="block-content">{uniqueBlockIds.map((blockId) => renderBlock(blockId))}</div>
+                )}
               </PluginBlockChecksContext.Provider>
             </FootnotesContext.Provider>
             {loader && <EmbedLoader state={loader} />}
@@ -132,6 +144,29 @@ export default function BlockRenderer({ doc, imageSizes = BLOCK_IMAGE_SIZES, hea
         </ImageSizesContext.Provider>
       </PageScopeContext.Provider>
     </SiteContext.Provider>
+  )
+}
+
+/**
+ * A block template's body (#491): the template parts at the start of the doc (a header), then
+ * the rest in `<main id="content" class="site-main" tabindex="-1">` (the skip link's target, as in
+ * a theme's base layout), then the parts at the end (a footer). A part between other blocks stays
+ * in `<main>` where it sits.
+ */
+function templateFrame(doc: BlockDocV1, ids: string[], renderBlock: (blockId: string) => React.ReactElement | null) {
+  const isPart = (id: string) => (doc.blocks[id] as Block | undefined)?.type === "template_part"
+  let start = 0
+  while (start < ids.length && isPart(ids[start])) start++
+  let end = ids.length
+  while (end > start && isPart(ids[end - 1])) end--
+  return (
+    <>
+      {ids.slice(0, start).map((id) => renderBlock(id))}
+      <main id="content" className="site-main" tabIndex={-1}>
+        <div className="block-content">{ids.slice(start, end).map((id) => renderBlock(id))}</div>
+      </main>
+      {ids.slice(end).map((id) => renderBlock(id))}
+    </>
   )
 }
 

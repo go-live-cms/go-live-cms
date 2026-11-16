@@ -680,6 +680,11 @@ type Querier interface {
 	ListPublishedPostsByTerm(ctx context.Context, arg ListPublishedPostsByTermParams) ([]ListPublishedPostsByTermRow, error)
 	// The published version number of each of a theme's rows (the overview, one query).
 	ListPublishedSiteTemplateVersionNos(ctx context.Context, themeSlug string) ([]ListPublishedSiteTemplateVersionNosRow, error)
+	// The published copies the public site renders (#491, GET /public/site-templates/resolve):
+	// the theme's published templates among the asked slugs, and every published part of the
+	// theme. Never a working copy: published_block_doc is written only by publish (#492), and a
+	// reset one is NULL, so it isn't here and the theme's default renders.
+	ListPublishedSiteTemplatesForResolve(ctx context.Context, arg ListPublishedSiteTemplatesForResolveParams) ([]ListPublishedSiteTemplatesForResolveRow, error)
 	// Settings › URLs & redirects, newest first, with who made each (public fields).
 	ListRedirects(ctx context.Context, arg ListRedirectsParams) ([]ListRedirectsRow, error)
 	// Up to @limit_count published posts of @post_type ranked by the terms they share

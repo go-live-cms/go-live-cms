@@ -292,6 +292,59 @@ func (q *Queries) ListPublishedSiteTemplateVersionNos(ctx context.Context, theme
 	return items, nil
 }
 
+const listPublishedSiteTemplatesForResolve = `-- name: ListPublishedSiteTemplatesForResolve :many
+SELECT kind, slug, title, published_block_doc
+FROM site_templates
+WHERE theme_slug = $1
+  AND published_block_doc IS NOT NULL
+  AND (kind = 'part' OR (kind = 'template' AND slug = ANY($2::varchar[])))
+ORDER BY kind, slug
+`
+
+type ListPublishedSiteTemplatesForResolveParams struct {
+	ThemeSlug string   `json:"theme_slug"`
+	Slugs     []string `json:"slugs"`
+}
+
+type ListPublishedSiteTemplatesForResolveRow struct {
+	Kind              string                `json:"kind"`
+	Slug              string                `json:"slug"`
+	Title             string                `json:"title"`
+	PublishedBlockDoc pqtype.NullRawMessage `json:"published_block_doc"`
+}
+
+// The published copies the public site renders (#491, GET /public/site-templates/resolve):
+// the theme's published templates among the asked slugs, and every published part of the
+// theme. Never a working copy: published_block_doc is written only by publish (#492), and a
+// reset one is NULL, so it isn't here and the theme's default renders.
+func (q *Queries) ListPublishedSiteTemplatesForResolve(ctx context.Context, arg ListPublishedSiteTemplatesForResolveParams) ([]ListPublishedSiteTemplatesForResolveRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPublishedSiteTemplatesForResolve, arg.ThemeSlug, pq.Array(arg.Slugs))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPublishedSiteTemplatesForResolveRow{}
+	for rows.Next() {
+		var i ListPublishedSiteTemplatesForResolveRow
+		if err := rows.Scan(
+			&i.Kind,
+			&i.Slug,
+			&i.Title,
+			&i.PublishedBlockDoc,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSiteTemplateVersions = `-- name: ListSiteTemplateVersions :many
 SELECT
     v.id,
