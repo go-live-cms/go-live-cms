@@ -1,7 +1,7 @@
 # Reader comments on published posts (#499)
 
-Status: **design, for review**, 2026-11. No code ships with this document. Section 18 lists
-the questions that need an answer before the sub-issues in section 17 are filed.
+Status: **design, accepted with the decisions in section 18**, 2026-11. No code ships with
+this document. The sub-issues of section 17 are filed.
 
 Builds on: `docs/design/theme-builder.md` (#475: decision 9 in section 16, the site blocks of
 section 4, caching in section 11; the comments block is its T18, #500) and
@@ -71,8 +71,8 @@ comments, the public discussion under a published post:
     `comment.approved`, …, ids only), and a declared `comment.before_create` guard can hold
     or spam a comment, never approve one (section 14).
 
-The phased plan is section 17. Section 18 holds the decisions this design proposes and the
-questions that need an answer.
+The phased plan and the filed sub-issues are section 17. Section 18 records the decisions
+taken on review.
 
 ---
 
@@ -149,8 +149,8 @@ questions that need an answer.
 `comment_*`, so every new name says `ReaderComment`, `reader_comment` or `discussion`. The
 admin calls the moderation screen
 **Discussion** (WordPress's name for the same settings), so "Comments" in the editor keeps
-meaning #192's. The public site says "Comments", since readers never see #192's. Open
-question 4.
+meaning #192's. The public site says "Comments", since readers never see #192's. Decision
+4 in section 18.
 
 ### 1.2 Problems found while writing this
 
@@ -181,14 +181,14 @@ and a guard; admin and public screens (drawn on the canvases, section 16).
 **Not in this design:**
 
 - **Reader accounts.** Signing in on the public site, profiles, "my comments" across
-  browsers. Open question 1; section 3.1 says what they would need.
-- **Reader edits.** A reader deletes a comment and writes it again (open question 5).
+  browsers. Decision 1 in section 18; section 3.1 says what they would need.
+- **Reader edits.** A reader deletes a comment and writes it again (section 18, decision 5).
 - **Rich text, images, Markdown and embeds in comments.** Plain text with links.
 - **Reactions, votes, sorting by popularity, pinned comments.**
 - **Mentions (#320) in reader comments.** `@name` is plain text: letting any reader mail a
   member is an abuse channel.
-- **Comment feeds (RSS), comments in site search, comment counts on lists** (open question
-  11).
+- **Comment feeds (RSS), comments in site search, comment counts on lists** (section 18,
+  decision 11).
 - **Comments on anything but posts of a public type** (not on templates, media or terms).
 - **Importing comments** from WordPress or Disqus. The storage allows it later (section 6.1
   keeps `created_at` writable for an importer).
@@ -333,7 +333,7 @@ the admin's preview).
 |---|---|
 | Admin | Everything, the settings, commenters, export and erasure |
 | Editor | Moderate and reply on every post; commenters' pages; no settings, no erasure |
-| Contributor | **No access in v1** (assumed, open question 3) |
+| Contributor | **No access in v1** (section 18, decision 3) |
 
 `canModeratePosts` (editors and admins) gates every `/discussion` route; settings and erasure
 are `requireSiteAdmin`. A contributor approving a comment would put reader text on the site
@@ -379,7 +379,7 @@ Comments on a post that isn't published (draft, archived, trash) stay in the que
 **No CAPTCHA in core.** It needs a third-party script on every post page, sends readers' data
 to that service, and fails readers who can't solve it. #191 decided the same for signup. A
 CAPTCHA belongs in a plugin: a guard to verify the answer, and a public page injection to
-add its widget once plugin-system S13 exists (open question 7).
+add its widget once plugin-system S13 exists (section 18, decision 7).
 
 ### 5.2 Honeypot and timing
 
@@ -547,12 +547,12 @@ and "Show more replies" (a link to `?thread=<root id>`, a page of that thread al
 
 ### 6.4 Editing and deletion
 
-- **Readers don't edit in v1** (open question 5). Editing needs the reader to be recognised on
-  the page, which makes the page personal (3.3, 10), and an edit after approval would need
-  moderating again. A reader deletes a comment (13.2) and writes it again.
+- **Readers don't edit in v1** (section 18, decision 5). Editing needs the reader to be
+  recognised on the page, which makes the page personal (3.3, 10), and an edit after approval
+  would need moderating again. A reader deletes a comment (13.2) and writes it again.
 - **Members edit their own comments** from the drawer. The comment shows "Edited".
-- **Moderators don't edit readers' text** (open question 9). They approve, unapprove, mark
-  spam, trash, or delete. Putting words in a reader's name is worse than removing them.
+- **Moderators don't edit readers' text** (section 18, decision 9). They approve, unapprove,
+  mark spam, trash, or delete. Putting words in a reader's name is worse than removing them.
 - **Trash** keeps the row (`trash`, `trashed_from`). Unlike posts' trash (#327, which is never
   emptied on its own), comments' trash is emptied after 30 days: a moderated thread produces
   far more trash than a post list, and nobody restores a reader's comment a year later.
@@ -613,7 +613,7 @@ brings back data erased after the backup was taken.
 | Data | Public | Moderators | Logs, activity, plugin events |
 |---|---|---|---|
 | Name as posted, text, time, status "approved" | Yes | Yes | Never the text or name |
-| Email | **Never** | Yes (open question 6) | **Never** |
+| Email | **Never** | Yes (section 18, decision 6) | **Never** |
 | IP address | Never | Never stored | Never |
 | Network hash | Never | Only as "N other commenters from this network" | Never |
 | Browser key, tokens | Never | Never | Never |
@@ -650,7 +650,7 @@ Under the form, always: "Your email is never shown. We use it to confirm your co
 you ask, to tell you about replies. Confirming keeps a cookie on this browser so you won't be
 asked again." Admins can replace it (`comments_notice`, plain text, at most 400 characters)
 and point it at a privacy page (`comments_privacy_page_id`, a published page, linked as
-"Privacy"). Open question 12.
+"Privacy"). Decision 12 in section 18.
 
 ---
 
@@ -687,7 +687,7 @@ All use `mailer/templates/` (text and HTML), the site's title and language, and 
 Profile gains **Notifications** (members' own, `users` columns):
 
 - **Comments on my posts:** Each one (coalesced, 8.4) · Daily digest · Off. Default: Daily
-  digest (open question 8).
+  digest (section 18, decision 8).
 - **Comments to moderate** (editors and admins): Each hour at most · Off. Default: each hour.
 
 ### 8.4 Delivery
@@ -1159,27 +1159,29 @@ moderators a queue. The milestone is Post-MVP, like #499.
 | **2. Writing** | C4 the write path, confirmation and browser key; C5 rendering in the default theme and the reader pages | C2; C1, C3, C4 for C5 |
 | **3. Moderation** | C6 Discussion (queue, drawer, staff replies); C7 settings screens. **Comments can be turned on after this phase.** | C1, C2; C4 for C6's reply path |
 | **4. Mail and privacy** | C8 notifications; C9 export and erasure | C4, C6 |
-| **5. Extensions** | C10 plugin events and the comment guard; #500 the comments site block | C4, #458, #459; C5, #489 |
+| **5. Extensions** | C10 plugin events and the comment guard; #500 the comments site block | C4 (#458, #459 done); C5 (#489 done) |
 
-### Proposed sub-issues
+### Sub-issues
 
-Not filed: approved first. P2 is Medium and P3 is Low, as in theme-builder 15.
+Filed on 2026-11-16, all in Post-MVP and as sub-issues of #499: C1 #521, C2 #522, C3 #523,
+C4 #524, C5 #525, C6 #526, C7 #527, C8 #528, C9 #529, C10 #530; #500 was rescoped and is
+blocked by C5 (#525). P2 here is Medium and P3 is Low, as in theme-builder 15.
 
-| # | Title | Size | Priority |
-|---|---|---|---|
-| C1 | design: Discussion boards, the post's comments and reader pages on the canvases | M | P2 |
-| C2 | comments: storage, commenters, settings, the discussion state rule, maintenance jobs | L | P2 |
-| C3 | comments: public thread reads, `discussion` on public posts, caching and purges | M | P2 |
-| C4 | comments: the public write path (confirmation, browser key, rules, honeypot, limits) | L | P2 |
-| C5 | themes: `PostComments`, `gl-comments.js`, the default theme's styles, reader pages | M | P2 |
-| C6 | admin: Discussion (queue, drawer, bulk, staff replies, commenters, Home) | L | P2 |
-| C7 | admin: Settings › Discussion, the post type's Comments field, the editor's Discussion section | M | P2 |
-| C8 | mail: reply, author and moderation notifications, the outbox, unsubscribe, Profile preferences | M | P2 |
-| C9 | privacy: commenter export and erasure, by admins and by readers | M | P2 |
-| C10 | plugins: comment events and the `comment.before_create` guard | M | P3 |
-| #500 | blocks: comments site block (exists; its scope is restated below) | S | P3 |
+| # | Issue | Title | Size | Priority |
+|---|---|---|---|---|
+| C1 | #521 | design: Discussion boards, the post's comments and reader pages on the canvases | M | P2 |
+| C2 | #522 | comments: storage, commenters, settings, the discussion state rule, maintenance jobs | L | P2 |
+| C3 | #523 | comments: public thread reads, `discussion` on public posts, caching and purges | M | P2 |
+| C4 | #524 | comments: the public write path (confirmation, browser key, rules, honeypot, limits) | L | P2 |
+| C5 | #525 | themes: `PostComments`, `gl-comments.js`, the default theme's styles, reader pages | M | P2 |
+| C6 | #526 | admin: Discussion (queue, drawer, bulk, staff replies, commenters, Home) | L | P2 |
+| C7 | #527 | admin: Settings › Discussion, the post type's Comments field, the editor's Discussion section | M | P2 |
+| C8 | #528 | mail: reply, author and moderation notifications, the outbox, unsubscribe, Profile preferences | M | P2 |
+| C9 | #529 | privacy: commenter export and erasure, by admins and by readers | M | P2 |
+| C10 | #530 | plugins: comment events and the `comment.before_create` guard | M | P3 |
+| — | #500 | blocks: comments site block (existed; its scope is restated below) | S | P3 |
 
-**C1. design: Discussion boards, comments on the post, reader pages**
+**C1 (#521). design: Discussion boards, comments on the post, reader pages**
 - Scope: the boards of section 16 on the redesign and default theme canvases, and the
   comments block on the blocks canvas.
 - Acceptance: every screen in section 16 has a board with its states, light and dark where the
@@ -1187,7 +1189,7 @@ Not filed: approved first. P2 is Medium and P3 is Low, as in theme-builder 15.
   changes a decision.
 - Depends on: nothing.
 
-**C2. storage, commenters, settings, state rule, jobs**
+**C2 (#522). storage, commenters, settings, state rule, jobs**
 - Scope: the tables of 6.1, `posts.discussion` and `posts.first_published_at` (trigger and
   backfill); `supports` gaining `comments` for `post`
   (migration) and its one-field exception for built-in types (12.2); the settings of 12.1 in
@@ -1204,7 +1206,7 @@ Not filed: approved first. P2 is Medium and P3 is Low, as in theme-builder 15.
   `golive_post_settings()` (changing it leaves `has_unpublished_changes` false).
 - Depends on: nothing.
 
-**C3. public reads and caching**
+**C3 (#523). public reads and caching**
 - Scope: `GET /public/posts/:id/comments` (pages, `thread`), `discussion` on the public post
   reads (9.1), cache-aside and the purges of section 10.
 - Acceptance: only approved comments are served, threaded per 6.2 with `replying_to`; a post
@@ -1212,9 +1214,9 @@ Not filed: approved first. P2 is Medium and P3 is Low, as in theme-builder 15.
   check (7.1) passes; no cached answer depends on the clock (`closes_at`, not a computed
   `closed`); every purge event of section 10 is tested against #185's store, and a
   pending-only POST doesn't purge; no purge inside a transaction.
-- Depends on: C2.
+- Depends on: C2 (#522).
 
-**C4. the public write path**
+**C4 (#524). the public write path**
 - Scope: 9.2's write routes, the confirmation (3.3) with its mail template and cooldown, the
   browser key, the rules of 4.2 and the spam routing, the honeypot, the limits and caps of 5.3,
   member-name matching, `bodyLimitOverrides`; the Astro endpoint of 9.4 (origin check, form
@@ -1230,9 +1232,9 @@ Not filed: approved first. P2 is Medium and P3 is Low, as in theme-builder 15.
   carries it; the endpoint and notice pages are `no-store`; rate limits key on the browser's
   address, not the web container's; `publicPOSTRoutes` (15.1) lists every anonymous write
   with its reason.
-- Depends on: C2.
+- Depends on: C2 (#522).
 
-**C5. rendering in the default theme, reader pages**
+**C5 (#525). rendering in the default theme, reader pages**
 - Scope: `PostComments.astro` and its markup in `src/components/blocks/README.md`; the post
   route's fetch and the `comments` layout prop; the default theme's placement and styles;
   `gl-comments.js` (11.4); the reader pages of 11.6; axe cases.
@@ -1241,9 +1243,9 @@ Not filed: approved first. P2 is Medium and P3 is Low, as in theme-builder 15.
   without the section; whole-page snapshots updated with the change listed; the default
   theme's `var()` and contrast tests pass; axe passes on the section, the form in each state
   and the reader pages.
-- Depends on: C1, C3, C4.
+- Depends on: C1 (#521), C3 (#523), C4 (#524).
 
-**C6. admin: Discussion**
+**C6 (#526). admin: Discussion**
 - Scope: section 4.4: the queue, the drawer, bulk actions, staff comments and replies (3.4),
   commenters' pages with Block, the sidebar entry and count, Home's Needs attention, the
   activity verbs of 15.2 and their feed wording; rules in `lib/discussion.ts` (tested); the 375
@@ -1253,43 +1255,43 @@ Not filed: approved first. P2 is Medium and P3 is Low, as in theme-builder 15.
   it first; a member's reply shows its badge (Author on the published byline, else Staff) and
   loses it when the member is removed; Approve and Spam work at 375; keyboard and screen reader
   paths as for the posts list.
-- Depends on: C1, C2, C4.
+- Depends on: C1 (#521), C2 (#522), C4 (#524).
 
-**C7. settings screens**
+**C7 (#527). settings screens**
 - Scope: Settings › Discussion (12.1), with the switch hidden until this issue ships; the
   Comments field on Post types (12.2); the editor's Discussion section (12.3).
 - Acceptance: the form refuses what the API refuses (word lists, ranges); Off hides the rest
   and the site's sections; Posts' Comments field saves while its other fields stay locked; the
   editor's section shows what Default means now from the shared rule and applies at once
   (the public thread reflects it after the purge, with no Update).
-- Depends on: C1, C2.
+- Depends on: C1 (#521), C2 (#522).
 
-**C8. notifications**
+**C8 (#528). notifications**
 - Scope: section 8: `discussion_mail` and `RunDiscussionMail`, the reply, author and
   moderation mails, coalescing, unsubscribe (both forms) and its page, Profile's preferences.
 - Acceptance: an approval that rolls back sends nothing; twenty replies in a minute send one
   mail; a comment trashed before its mail is due is left out; an unsubscribed or erased
   recipient gets nothing; RFC 8058 headers present and the one-click POST works; no address in
   any log line (log-guard test); a member never gets a mail about their own comment.
-- Depends on: C4, C6.
+- Depends on: C4 (#524), C6 (#526).
 
-**C9. export and erasure**
+**C9 (#529). export and erasure**
 - Scope: section 13: the admin's export and erase, the reader's data request, page, per-comment
   delete and erase.
 - Acceptance: the export holds every comment of the address in every status and nothing
   hashed; erase leaves tombstones exactly where approved replies exist and deletes everything
   else including outbox rows, in one transaction; the data request answers the same for any
   address; an editor can't erase; `backups.md` states what erasure doesn't reach.
-- Depends on: C2, C8.
+- Depends on: C2 (#522), C8 (#528).
 
-**C10. plugin events and the comment guard**
+**C10 (#530). plugin events and the comment guard**
 - Scope: section 14: the trigger and the six events, `comments:read`, `comments:private`, the
   guard's declaration, validator vectors (both twins), dispatch on the write path, the stored
   verdict, the Plugins page's lines.
 - Acceptance: no event row without a subscriber; events carry ids only (no name, text or
   address); a guard's hold and spam route the comment and show their reason; an error follows
   `on_error`; the budget is enforced; a webhook can't declare the guard; a guard can't approve.
-- Depends on: C4, #458, #459.
+- Depends on: C4 (#524). Builds on #458 and #459, both done.
 
 **#500. comments site block (restated)**
 - Scope: 11.1's block: `comments` with `title`, the placement rules, the collector's fetch,
@@ -1297,37 +1299,37 @@ Not filed: approved first. P2 is Medium and P3 is Low, as in theme-builder 15.
 - Acceptance: the chain per block as #352 requires; the block renders the same HTML as the
   code layout's component on the same post (parity test); refused in a part, a query and a
   post template; inert in a post's body; the fingerprint test pins the change.
-- Depends on: C5, #489.
+- Depends on: C5 (#525). #489 is done.
 
 ---
 
-## 18. Decisions and open questions
+## 18. Decisions
 
-The working answer is what this design assumes. Questions 1 to 9 change what the sub-issues
-build, so they need an answer before filing.
+All thirteen questions were decided on review (2026-11-16, on #499): every working answer
+this design assumed was accepted. Each question is kept with its answer and the
+alternatives that were set aside.
 
-1. **Who may comment.** Guests with a verified email in v1 (assumed, 3.1). Reader accounts
-   (a `reader` role, public-site sessions) later, if at all. Answer: is that right, or do you
-   want signed-in readers from the start?
-2. **Default moderation.** Hold until a commenter has one approved comment (assumed, 4.2).
-   The alternatives are hold everything or publish everything.
-3. **Contributors.** No access to Discussion in v1 (assumed, 4.3). An option: read-only access
-   to comments on posts they're credited on, with replies held for an editor.
-4. **Names.** "Discussion" in the admin, "Comments" on the site, `reader_comments` in code, so
-   the editor's "Comments" stays #192's (assumed, 1.1). The alternative renames #192's panel to
-   "Notes" and calls this "Comments".
-5. **Reader edits.** None in v1 (assumed, 6.4): delete and write again. An option: edit within
-   15 minutes from the browser that posted, re-running the rules.
-6. **Who sees a commenter's email.** Admins and editors (assumed, 7.1). An option: editors see
-   it masked ("a…@example.com"), admins in full.
-7. **CAPTCHA.** None in core; a plugin's job, after S13 (assumed, 5.1).
-8. **Authors' mail default.** Daily digest (assumed, 8.3). Each one, or off, are the
-   alternatives.
-9. **Moderators editing readers' text.** Not allowed (assumed, 6.4).
-10. **Threading.** Two levels shown, the real parent kept (assumed, 6.2); flat as a setting.
-11. **Comment counts on lists and RSS.** Not in v1 (assumed, section 2). Adding them couples
+1. **Who may comment. Decided: guests with a verified email in v1** (3.1). Reader accounts
+   (a `reader` role, public-site sessions) come later, if at all. Signed-in readers from the
+   start were set aside.
+2. **Default moderation. Decided: hold until the commenter has one approved comment** (4.2).
+   Hold everything and publish everything stay as the other two modes.
+3. **Contributors. Decided: no access to Discussion in v1** (4.3). Read-only access to
+   comments on posts they're credited on, with replies held for an editor, was set aside.
+4. **Names. Decided: "Discussion" in the admin, "Comments" on the site, `reader_comments` in
+   code** (1.1). #192's editor panel keeps "Comments"; renaming it to "Notes" was set aside.
+5. **Reader edits. Decided: none in v1** (6.4): delete and write again. Editing within 15
+   minutes from the browser that posted, re-running the rules, was set aside.
+6. **Who sees a commenter's email. Decided: admins and editors, in full; never public**
+   (7.1). Masking it for editors ("a…@example.com") was set aside.
+7. **CAPTCHA. Decided: none in core;** a plugin's job, after S13 (5.1).
+8. **Authors' mail default. Decided: daily digest** (8.3). Each one and off stay as choices on
+   Profile.
+9. **Moderators editing readers' text. Decided: not allowed** (6.4).
+10. **Threading. Decided: two levels shown, the real parent kept** (6.2); flat as a setting.
+11. **Comment counts on lists and RSS. Decided: not in v1** (section 2). Adding them couples
     every approval to the lists' cache.
-12. **Privacy page.** A Discussion setting picks the page the notice links to (assumed, 7.5).
-    A site-wide "Privacy page" setting, shared with other features, may be better.
-13. **Retention.** Unconfirmed 48 hours, spam and trash 30 days, pending 90, network hash 30
-    days (assumed, 6.6). These could become settings later.
+12. **Privacy page. Decided: a Discussion setting picks the page the notice links to** (7.5).
+    A site-wide "Privacy page" setting shared with other features was set aside for now.
+13. **Retention. Decided: as in 6.6.** Unconfirmed 48 hours, spam and trash 30 days, pending
+    90, network hash 30 days. These could become settings later.
