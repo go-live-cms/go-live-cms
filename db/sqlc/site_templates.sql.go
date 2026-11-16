@@ -9,8 +9,11 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
+	"github.com/sqlc-dev/pqtype"
 )
 
 const createSiteTemplate = `-- name: CreateSiteTemplate :one
@@ -67,6 +70,53 @@ func (q *Queries) CreateSiteTemplate(ctx context.Context, arg CreateSiteTemplate
 		&i.ChangedAt,
 	)
 	return i, err
+}
+
+const createSiteTemplateVersion = `-- name: CreateSiteTemplateVersion :one
+INSERT INTO site_template_versions (template_id, release_id, version_no, block_doc)
+VALUES ($1, $2, $3, $4)
+RETURNING id, template_id, release_id, version_no, block_doc, created_at
+`
+
+type CreateSiteTemplateVersionParams struct {
+	TemplateID int64                 `json:"template_id"`
+	ReleaseID  int64                 `json:"release_id"`
+	VersionNo  int32                 `json:"version_no"`
+	BlockDoc   pqtype.NullRawMessage `json:"block_doc"`
+}
+
+// block_doc NULL: this release reset the item to the theme's default (section 9).
+func (q *Queries) CreateSiteTemplateVersion(ctx context.Context, arg CreateSiteTemplateVersionParams) (SiteTemplateVersion, error) {
+	row := q.db.QueryRowContext(ctx, createSiteTemplateVersion,
+		arg.TemplateID,
+		arg.ReleaseID,
+		arg.VersionNo,
+		arg.BlockDoc,
+	)
+	var i SiteTemplateVersion
+	err := row.Scan(
+		&i.ID,
+		&i.TemplateID,
+		&i.ReleaseID,
+		&i.VersionNo,
+		&i.BlockDoc,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const deleteUnpublishedSiteTemplate = `-- name: DeleteUnpublishedSiteTemplate :execrows
+DELETE FROM site_templates WHERE id = $1 AND published_block_doc IS NULL
+`
+
+// Delete (section 9) removes only a row with no published override; its versions and Yjs
+// state cascade. 0 rows: gone, or published (by a publish that got there first).
+func (q *Queries) DeleteUnpublishedSiteTemplate(ctx context.Context, id int64) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteUnpublishedSiteTemplate, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const getSiteTemplate = `-- name: GetSiteTemplate :one
@@ -165,6 +215,210 @@ func (q *Queries) GetSiteTemplateCollab(ctx context.Context, id int64) (GetSiteT
 	return i, err
 }
 
+const getSiteTemplateVersion = `-- name: GetSiteTemplateVersion :one
+SELECT id, template_id, release_id, version_no, block_doc, created_at FROM site_template_versions WHERE template_id = $1 AND version_no = $2
+`
+
+type GetSiteTemplateVersionParams struct {
+	TemplateID int64 `json:"template_id"`
+	VersionNo  int32 `json:"version_no"`
+}
+
+func (q *Queries) GetSiteTemplateVersion(ctx context.Context, arg GetSiteTemplateVersionParams) (SiteTemplateVersion, error) {
+	row := q.db.QueryRowContext(ctx, getSiteTemplateVersion, arg.TemplateID, arg.VersionNo)
+	var i SiteTemplateVersion
+	err := row.Scan(
+		&i.ID,
+		&i.TemplateID,
+		&i.ReleaseID,
+		&i.VersionNo,
+		&i.BlockDoc,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getSiteTemplateVersionByID = `-- name: GetSiteTemplateVersionByID :one
+SELECT id, template_id, release_id, version_no, block_doc, created_at FROM site_template_versions WHERE id = $1
+`
+
+func (q *Queries) GetSiteTemplateVersionByID(ctx context.Context, id int64) (SiteTemplateVersion, error) {
+	row := q.db.QueryRowContext(ctx, getSiteTemplateVersionByID, id)
+	var i SiteTemplateVersion
+	err := row.Scan(
+		&i.ID,
+		&i.TemplateID,
+		&i.ReleaseID,
+		&i.VersionNo,
+		&i.BlockDoc,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const listSiteTemplateVersions = `-- name: ListSiteTemplateVersions :many
+SELECT
+    v.id,
+    v.template_id,
+    v.release_id,
+    v.version_no,
+    (v.block_doc IS NULL)::bool AS reset,
+    v.created_at,
+    r.published_by,
+    COALESCE(u.full_name, '')::varchar AS published_by_name
+FROM site_template_versions v
+JOIN site_design_releases r ON r.id = v.release_id
+LEFT JOIN users u ON u.id = r.published_by
+WHERE v.template_id = $1
+ORDER BY v.version_no DESC
+LIMIT 200
+`
+
+type ListSiteTemplateVersionsRow struct {
+	ID              int64         `json:"id"`
+	TemplateID      int64         `json:"template_id"`
+	ReleaseID       int64         `json:"release_id"`
+	VersionNo       int32         `json:"version_no"`
+	Reset           bool          `json:"reset"`
+	CreatedAt       time.Time     `json:"created_at"`
+	PublishedBy     sql.NullInt64 `json:"published_by"`
+	PublishedByName string        `json:"published_by_name"`
+}
+
+func (q *Queries) ListSiteTemplateVersions(ctx context.Context, templateID int64) ([]ListSiteTemplateVersionsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSiteTemplateVersions, templateID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSiteTemplateVersionsRow{}
+	for rows.Next() {
+		var i ListSiteTemplateVersionsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TemplateID,
+			&i.ReleaseID,
+			&i.VersionNo,
+			&i.Reset,
+			&i.CreatedAt,
+			&i.PublishedBy,
+			&i.PublishedByName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSiteTemplateVersionsByRelease = `-- name: ListSiteTemplateVersionsByRelease :many
+SELECT
+    v.release_id,
+    v.template_id,
+    v.version_no,
+    (v.block_doc IS NULL)::bool AS reset,
+    t.kind,
+    t.slug,
+    t.title
+FROM site_template_versions v
+JOIN site_templates t ON t.id = v.template_id
+WHERE v.release_id = ANY($1::bigint[])
+ORDER BY v.release_id DESC, t.kind, t.slug
+`
+
+type ListSiteTemplateVersionsByReleaseRow struct {
+	ReleaseID  int64  `json:"release_id"`
+	TemplateID int64  `json:"template_id"`
+	VersionNo  int32  `json:"version_no"`
+	Reset      bool   `json:"reset"`
+	Kind       string `json:"kind"`
+	Slug       string `json:"slug"`
+	Title      string `json:"title"`
+}
+
+// The items of a page of releases (History), with what each item is now.
+func (q *Queries) ListSiteTemplateVersionsByRelease(ctx context.Context, releaseIds []int64) ([]ListSiteTemplateVersionsByReleaseRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSiteTemplateVersionsByRelease, pq.Array(releaseIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSiteTemplateVersionsByReleaseRow{}
+	for rows.Next() {
+		var i ListSiteTemplateVersionsByReleaseRow
+		if err := rows.Scan(
+			&i.ReleaseID,
+			&i.TemplateID,
+			&i.VersionNo,
+			&i.Reset,
+			&i.Kind,
+			&i.Slug,
+			&i.Title,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSiteTemplatesByTheme = `-- name: ListSiteTemplatesByTheme :many
+
+SELECT id, theme_slug, kind, slug, title, block_doc, block_revision, working_state, source, source_hash, published_block_doc, published_version_id, created_by, created_at, changed_at FROM site_templates WHERE theme_slug = $1 ORDER BY kind, slug
+`
+
+// Publish, history, reset and restore (#492, docs/design/theme-builder.md 5.3, 8, 9).
+func (q *Queries) ListSiteTemplatesByTheme(ctx context.Context, themeSlug string) ([]SiteTemplate, error) {
+	rows, err := q.db.QueryContext(ctx, listSiteTemplatesByTheme, themeSlug)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SiteTemplate{}
+	for rows.Next() {
+		var i SiteTemplate
+		if err := rows.Scan(
+			&i.ID,
+			&i.ThemeSlug,
+			&i.Kind,
+			&i.Slug,
+			&i.Title,
+			&i.BlockDoc,
+			&i.BlockRevision,
+			&i.WorkingState,
+			&i.Source,
+			&i.SourceHash,
+			&i.PublishedBlockDoc,
+			&i.PublishedVersionID,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.ChangedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockSiteTemplateForCollabStore = `-- name: LockSiteTemplateForCollabStore :one
 SELECT block_revision
 FROM site_templates
@@ -177,6 +431,180 @@ func (q *Queries) LockSiteTemplateForCollabStore(ctx context.Context, id int64) 
 	var block_revision int64
 	err := row.Scan(&block_revision)
 	return block_revision, err
+}
+
+const lockSiteTemplatesByTheme = `-- name: LockSiteTemplatesByTheme :many
+SELECT id, theme_slug, kind, slug, title, block_doc, block_revision, working_state, source, source_hash, published_block_doc, published_version_id, created_by, created_at, changed_at FROM site_templates WHERE theme_slug = $1 ORDER BY id FOR UPDATE
+`
+
+// PublishSiteDesignTx's lock on every row of the theme, in id order (one order for every
+// locker), so the rows it validated can't change under it.
+func (q *Queries) LockSiteTemplatesByTheme(ctx context.Context, themeSlug string) ([]SiteTemplate, error) {
+	rows, err := q.db.QueryContext(ctx, lockSiteTemplatesByTheme, themeSlug)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SiteTemplate{}
+	for rows.Next() {
+		var i SiteTemplate
+		if err := rows.Scan(
+			&i.ID,
+			&i.ThemeSlug,
+			&i.Kind,
+			&i.Slug,
+			&i.Title,
+			&i.BlockDoc,
+			&i.BlockRevision,
+			&i.WorkingState,
+			&i.Source,
+			&i.SourceHash,
+			&i.PublishedBlockDoc,
+			&i.PublishedVersionID,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.ChangedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const nextSiteTemplateVersionNo = `-- name: NextSiteTemplateVersionNo :one
+SELECT (COALESCE(MAX(version_no), 0) + 1)::int AS version_no
+FROM site_template_versions
+WHERE template_id = $1
+`
+
+func (q *Queries) NextSiteTemplateVersionNo(ctx context.Context, templateID int64) (int32, error) {
+	row := q.db.QueryRowContext(ctx, nextSiteTemplateVersionNo, templateID)
+	var version_no int32
+	err := row.Scan(&version_no)
+	return version_no, err
+}
+
+const setSiteTemplatePublished = `-- name: SetSiteTemplatePublished :one
+UPDATE site_templates
+SET published_block_doc = $1,
+    published_version_id = $2
+WHERE id = $3
+RETURNING id, theme_slug, kind, slug, title, block_doc, block_revision, working_state, source, source_hash, published_block_doc, published_version_id, created_by, created_at, changed_at
+`
+
+type SetSiteTemplatePublishedParams struct {
+	PublishedBlockDoc  pqtype.NullRawMessage `json:"published_block_doc"`
+	PublishedVersionID sql.NullInt64         `json:"published_version_id"`
+	ID                 int64                 `json:"id"`
+}
+
+// The published side only: block_doc (the working copy) is the collab server's (rule 11).
+func (q *Queries) SetSiteTemplatePublished(ctx context.Context, arg SetSiteTemplatePublishedParams) (SiteTemplate, error) {
+	row := q.db.QueryRowContext(ctx, setSiteTemplatePublished, arg.PublishedBlockDoc, arg.PublishedVersionID, arg.ID)
+	var i SiteTemplate
+	err := row.Scan(
+		&i.ID,
+		&i.ThemeSlug,
+		&i.Kind,
+		&i.Slug,
+		&i.Title,
+		&i.BlockDoc,
+		&i.BlockRevision,
+		&i.WorkingState,
+		&i.Source,
+		&i.SourceHash,
+		&i.PublishedBlockDoc,
+		&i.PublishedVersionID,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.ChangedAt,
+	)
+	return i, err
+}
+
+const setSiteTemplateSource = `-- name: SetSiteTemplateSource :one
+UPDATE site_templates
+SET source = $1,
+    source_hash = $2,
+    working_state = 'custom',
+    changed_at = now()
+WHERE id = $3
+RETURNING id, theme_slug, kind, slug, title, block_doc, block_revision, working_state, source, source_hash, published_block_doc, published_version_id, created_by, created_at, changed_at
+`
+
+type SetSiteTemplateSourceParams struct {
+	Source     string `json:"source"`
+	SourceHash string `json:"source_hash"`
+	ID         int64  `json:"id"`
+}
+
+// "Start over from the theme default" after the editor replaced the working copy (rule 9):
+// where it starts from now, so "Default changed since you customized" clears.
+func (q *Queries) SetSiteTemplateSource(ctx context.Context, arg SetSiteTemplateSourceParams) (SiteTemplate, error) {
+	row := q.db.QueryRowContext(ctx, setSiteTemplateSource, arg.Source, arg.SourceHash, arg.ID)
+	var i SiteTemplate
+	err := row.Scan(
+		&i.ID,
+		&i.ThemeSlug,
+		&i.Kind,
+		&i.Slug,
+		&i.Title,
+		&i.BlockDoc,
+		&i.BlockRevision,
+		&i.WorkingState,
+		&i.Source,
+		&i.SourceHash,
+		&i.PublishedBlockDoc,
+		&i.PublishedVersionID,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.ChangedAt,
+	)
+	return i, err
+}
+
+const setSiteTemplateWorkingState = `-- name: SetSiteTemplateWorkingState :one
+UPDATE site_templates
+SET working_state = $1,
+    changed_at = now()
+WHERE id = $2
+RETURNING id, theme_slug, kind, slug, title, block_doc, block_revision, working_state, source, source_hash, published_block_doc, published_version_id, created_by, created_at, changed_at
+`
+
+type SetSiteTemplateWorkingStateParams struct {
+	WorkingState string `json:"working_state"`
+	ID           int64  `json:"id"`
+}
+
+// Reset to theme default and Keep editing (section 9): never block_doc.
+func (q *Queries) SetSiteTemplateWorkingState(ctx context.Context, arg SetSiteTemplateWorkingStateParams) (SiteTemplate, error) {
+	row := q.db.QueryRowContext(ctx, setSiteTemplateWorkingState, arg.WorkingState, arg.ID)
+	var i SiteTemplate
+	err := row.Scan(
+		&i.ID,
+		&i.ThemeSlug,
+		&i.Kind,
+		&i.Slug,
+		&i.Title,
+		&i.BlockDoc,
+		&i.BlockRevision,
+		&i.WorkingState,
+		&i.Source,
+		&i.SourceHash,
+		&i.PublishedBlockDoc,
+		&i.PublishedVersionID,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.ChangedAt,
+	)
+	return i, err
 }
 
 const updateSiteTemplateBlockDocFromCollab = `-- name: UpdateSiteTemplateBlockDocFromCollab :one

@@ -131,4 +131,19 @@ const (
 	// in StoreSiteTemplateCollabTx under the row lock, no payload).
 	ActivitySiteTemplateCreated = "site_template_created"
 	ActivitySiteTemplateEdited  = "site_template_edited"
+	// Publish, reset and restore (#492, design 9, 12). site_design_published (above) also
+	// carries the release's template and part counts and slugs. Reset and Keep editing
+	// (payload kind, slug); deleted (kind, slug: the row is gone); restored (version_no,
+	// after the editor put that version into the working copy: History's Restore and
+	// Discard changes, which restores the published version); started_over (kind, slug,
+	// source: the editor put the theme default or the starter into the working copy).
+	ActivitySiteTemplateReset          = "site_template_reset"
+	ActivitySiteTemplateResetCancelled = "site_template_reset_cancelled"
+	ActivitySiteTemplateDeleted        = "site_template_deleted"
+	ActivitySiteTemplateRestored       = "site_template_restored"
+	ActivitySiteTemplateStartedOver    = "site_template_started_over"
+	// Global styles restored from a version (payload version_no) or discarded back to
+	// the published styles (payload groups), on the theme's id like global_styles_updated.
+	ActivityGlobalStylesRestored  = "global_styles_restored"
+	ActivityGlobalStylesDiscarded = "global_styles_discarded"
 )

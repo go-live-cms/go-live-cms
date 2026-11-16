@@ -178,6 +178,8 @@ type Querier interface {
 	// "Customize" or "New template" (POST /site-design/templates): the only writer of
 	// block_doc besides the collab store, for a row with no Yjs state yet (rule 11).
 	CreateSiteTemplate(ctx context.Context, arg CreateSiteTemplateParams) (SiteTemplate, error)
+	// block_doc NULL: this release reset the item to the theme's default (section 9).
+	CreateSiteTemplateVersion(ctx context.Context, arg CreateSiteTemplateVersionParams) (SiteTemplateVersion, error)
 	// Taxonomy Terms Management
 	CreateTaxonomyTerm(ctx context.Context, arg CreateTaxonomyTermParams) (TaxonomyTerm, error)
 	// Taxonomy Types Management
@@ -246,6 +248,9 @@ type Querier interface {
 	DeleteTheme(ctx context.Context, id int64) error
 	DeleteThemeExtensionSetting(ctx context.Context, key string) (int64, error)
 	DeleteThemeSetting(ctx context.Context, arg DeleteThemeSettingParams) error
+	// Delete (section 9) removes only a row with no published override; its versions and Yjs
+	// state cascade. 0 rows: gone, or published (by a publish that got there first).
+	DeleteUnpublishedSiteTemplate(ctx context.Context, id int64) (int64, error)
 	DeleteUser(ctx context.Context, id int64) error
 	// Removal (#333, #319), after ReassignPostBylines: the member's remaining credits,
 	// returning the posts they were on (CreditOwnersOnEmptyBylines).
@@ -284,6 +289,7 @@ type Querier interface {
 	// applies). Names are joined now; NULL for a member removed since.
 	GetCurrentReviewRequest(ctx context.Context, postID int64) (GetCurrentReviewRequestRow, error)
 	GetFeaturedImage(ctx context.Context, postID int64) (GetFeaturedImageRow, error)
+	GetGlobalStyleVersion(ctx context.Context, arg GetGlobalStyleVersionParams) (GlobalStyleVersion, error)
 	// Global styles (#485, 000056, docs/design/theme-builder.md section 6). Written by the
 	// site design routes (api/site_design_handlers.go); values are validated there first.
 	GetGlobalStyles(ctx context.Context, themeSlug string) (GlobalStyle, error)
@@ -407,6 +413,8 @@ type Querier interface {
 	GetSiteTemplate(ctx context.Context, id int64) (SiteTemplate, error)
 	GetSiteTemplateBySlug(ctx context.Context, arg GetSiteTemplateBySlugParams) (SiteTemplate, error)
 	GetSiteTemplateCollab(ctx context.Context, id int64) (GetSiteTemplateCollabRow, error)
+	GetSiteTemplateVersion(ctx context.Context, arg GetSiteTemplateVersionParams) (SiteTemplateVersion, error)
+	GetSiteTemplateVersionByID(ctx context.Context, id int64) (SiteTemplateVersion, error)
 	GetTaxonomyTerm(ctx context.Context, id int64) (TaxonomyTerm, error)
 	GetTaxonomyTermBySlug(ctx context.Context, slug string) (GetTaxonomyTermBySlugRow, error)
 	// Hierarchical term tree (for categories)
@@ -527,6 +535,8 @@ type Querier interface {
 	// scheduler keeps retrying; a success or a schedule change clears it). viewer_id
 	// 0 = every post, else the viewer's own.
 	ListFailedScheduledPosts(ctx context.Context, arg ListFailedScheduledPostsParams) ([]ListFailedScheduledPostsRow, error)
+	ListGlobalStyleVersions(ctx context.Context, themeSlug string) ([]ListGlobalStyleVersionsRow, error)
+	ListGlobalStyleVersionsByRelease(ctx context.Context, releaseIds []int64) ([]ListGlobalStyleVersionsByReleaseRow, error)
 	// Server hooks (#458, 000055, docs/design/plugin-system.md 7.4 to 7.6). The posts
 	// trigger writes plugin_events; RunPluginHooks (api/plugin_hooks.go) fans each event
 	// out to one plugin_hook_runs row per subscribed plugin, claims due runs, runs the
@@ -700,6 +710,13 @@ type Querier interface {
 	ListReviewers(ctx context.Context, arg ListReviewersParams) ([]ListReviewersRow, error)
 	ListSessionsByUser(ctx context.Context, userID int64) ([]Session, error)
 	ListSessionsByUsername(ctx context.Context, username string) ([]Session, error)
+	// History and restore (#492, design 5.3).
+	ListSiteDesignReleases(ctx context.Context, arg ListSiteDesignReleasesParams) ([]ListSiteDesignReleasesRow, error)
+	ListSiteTemplateVersions(ctx context.Context, templateID int64) ([]ListSiteTemplateVersionsRow, error)
+	// The items of a page of releases (History), with what each item is now.
+	ListSiteTemplateVersionsByRelease(ctx context.Context, releaseIds []int64) ([]ListSiteTemplateVersionsByReleaseRow, error)
+	// Publish, history, reset and restore (#492, docs/design/theme-builder.md 5.3, 8, 9).
+	ListSiteTemplatesByTheme(ctx context.Context, themeSlug string) ([]SiteTemplate, error)
 	ListTaxonomyTermsByType(ctx context.Context, arg ListTaxonomyTermsByTypeParams) ([]ListTaxonomyTermsByTypeRow, error)
 	ListTaxonomyTypes(ctx context.Context) ([]TaxonomyType, error)
 	ListTermPostIDs(ctx context.Context, taxonomyTermID int64) ([]int64, error)
@@ -751,6 +768,9 @@ type Querier interface {
 	// claim's lease ran out. Nothing is published then.
 	LockScheduledUpdateClaim(ctx context.Context, arg LockScheduledUpdateClaimParams) (LockScheduledUpdateClaimRow, error)
 	LockSiteTemplateForCollabStore(ctx context.Context, id int64) (int64, error)
+	// PublishSiteDesignTx's lock on every row of the theme, in id order (one order for every
+	// locker), so the rows it validated can't change under it.
+	LockSiteTemplatesByTheme(ctx context.Context, themeSlug string) ([]SiteTemplate, error)
 	// Taken by refresh-token rotation so it cannot interleave with a password
 	// change on the same user (which holds the row FOR UPDATE).
 	LockUserForShare(ctx context.Context, id int64) error
@@ -774,6 +794,7 @@ type Querier interface {
 	// these files.
 	MarkPluginInvalid(ctx context.Context, arg MarkPluginInvalidParams) (MarkPluginInvalidRow, error)
 	NextGlobalStyleVersionNo(ctx context.Context, themeSlug string) (int32, error)
+	NextSiteTemplateVersionNo(ctx context.Context, templateID int64) (int32, error)
 	// Deletes the rows of blocks that aren't in the post's new block_doc (keep_ids: every
 	// key of its "blocks", hidden blocks included).
 	PrunePostBlockEdits(ctx context.Context, arg PrunePostBlockEditsParams) error
@@ -937,6 +958,13 @@ type Querier interface {
 	SetPublishedVersionOnPost(ctx context.Context, arg SetPublishedVersionOnPostParams) error
 	// Inside ScheduleUpdateTx: the frozen body with its markup.
 	SetScheduledUpdateBlockDoc(ctx context.Context, arg SetScheduledUpdateBlockDocParams) error
+	// The published side only: block_doc (the working copy) is the collab server's (rule 11).
+	SetSiteTemplatePublished(ctx context.Context, arg SetSiteTemplatePublishedParams) (SiteTemplate, error)
+	// "Start over from the theme default" after the editor replaced the working copy (rule 9):
+	// where it starts from now, so "Default changed since you customized" clears.
+	SetSiteTemplateSource(ctx context.Context, arg SetSiteTemplateSourceParams) (SiteTemplate, error)
+	// Reset to theme default and Keep editing (section 9): never block_doc.
+	SetSiteTemplateWorkingState(ctx context.Context, arg SetSiteTemplateWorkingStateParams) (SiteTemplate, error)
 	// Sets (or, with '', removes) the avatar and returns the one it replaced, so the
 	// API can delete that file after the commit. The row lock makes two uploads at
 	// once each see the other's file as the previous one, so neither leaks.

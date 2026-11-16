@@ -9,6 +9,9 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"time"
+
+	"github.com/lib/pq"
 )
 
 const createGlobalStyleVersion = `-- name: CreateGlobalStyleVersion :one
@@ -79,6 +82,29 @@ func (q *Queries) EnsureGlobalStyles(ctx context.Context, themeSlug string) erro
 	return err
 }
 
+const getGlobalStyleVersion = `-- name: GetGlobalStyleVersion :one
+SELECT id, theme_slug, release_id, version_no, styles, created_at FROM global_style_versions WHERE theme_slug = $1 AND version_no = $2
+`
+
+type GetGlobalStyleVersionParams struct {
+	ThemeSlug string `json:"theme_slug"`
+	VersionNo int32  `json:"version_no"`
+}
+
+func (q *Queries) GetGlobalStyleVersion(ctx context.Context, arg GetGlobalStyleVersionParams) (GlobalStyleVersion, error) {
+	row := q.db.QueryRowContext(ctx, getGlobalStyleVersion, arg.ThemeSlug, arg.VersionNo)
+	var i GlobalStyleVersion
+	err := row.Scan(
+		&i.ID,
+		&i.ThemeSlug,
+		&i.ReleaseID,
+		&i.VersionNo,
+		&i.Styles,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getGlobalStyles = `-- name: GetGlobalStyles :one
 
 SELECT theme_slug, draft, draft_revision, published, published_version_id, changed_by, changed_at FROM global_styles WHERE theme_slug = $1
@@ -118,6 +144,158 @@ func (q *Queries) GetGlobalStylesForUpdate(ctx context.Context, themeSlug string
 		&i.ChangedAt,
 	)
 	return i, err
+}
+
+const listGlobalStyleVersions = `-- name: ListGlobalStyleVersions :many
+SELECT
+    v.id,
+    v.release_id,
+    v.version_no,
+    v.created_at,
+    r.published_by,
+    COALESCE(u.full_name, '')::varchar AS published_by_name
+FROM global_style_versions v
+JOIN site_design_releases r ON r.id = v.release_id
+LEFT JOIN users u ON u.id = r.published_by
+WHERE v.theme_slug = $1
+ORDER BY v.version_no DESC
+LIMIT 200
+`
+
+type ListGlobalStyleVersionsRow struct {
+	ID              int64         `json:"id"`
+	ReleaseID       int64         `json:"release_id"`
+	VersionNo       int32         `json:"version_no"`
+	CreatedAt       time.Time     `json:"created_at"`
+	PublishedBy     sql.NullInt64 `json:"published_by"`
+	PublishedByName string        `json:"published_by_name"`
+}
+
+func (q *Queries) ListGlobalStyleVersions(ctx context.Context, themeSlug string) ([]ListGlobalStyleVersionsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listGlobalStyleVersions, themeSlug)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListGlobalStyleVersionsRow{}
+	for rows.Next() {
+		var i ListGlobalStyleVersionsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ReleaseID,
+			&i.VersionNo,
+			&i.CreatedAt,
+			&i.PublishedBy,
+			&i.PublishedByName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listGlobalStyleVersionsByRelease = `-- name: ListGlobalStyleVersionsByRelease :many
+SELECT release_id, version_no
+FROM global_style_versions
+WHERE release_id = ANY($1::bigint[])
+`
+
+type ListGlobalStyleVersionsByReleaseRow struct {
+	ReleaseID int64 `json:"release_id"`
+	VersionNo int32 `json:"version_no"`
+}
+
+func (q *Queries) ListGlobalStyleVersionsByRelease(ctx context.Context, releaseIds []int64) ([]ListGlobalStyleVersionsByReleaseRow, error) {
+	rows, err := q.db.QueryContext(ctx, listGlobalStyleVersionsByRelease, pq.Array(releaseIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListGlobalStyleVersionsByReleaseRow{}
+	for rows.Next() {
+		var i ListGlobalStyleVersionsByReleaseRow
+		if err := rows.Scan(&i.ReleaseID, &i.VersionNo); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSiteDesignReleases = `-- name: ListSiteDesignReleases :many
+
+SELECT
+    r.id,
+    r.theme_slug,
+    r.published_by,
+    r.published_at,
+    r.summary,
+    COALESCE(u.full_name, '')::varchar AS published_by_name
+FROM site_design_releases r
+LEFT JOIN users u ON u.id = r.published_by
+WHERE r.theme_slug = $1
+  AND ($2::bigint IS NULL OR r.id < $2::bigint)
+ORDER BY r.id DESC
+LIMIT $3
+`
+
+type ListSiteDesignReleasesParams struct {
+	ThemeSlug  string        `json:"theme_slug"`
+	Before     sql.NullInt64 `json:"before"`
+	LimitCount int32         `json:"limit_count"`
+}
+
+type ListSiteDesignReleasesRow struct {
+	ID              int64           `json:"id"`
+	ThemeSlug       string          `json:"theme_slug"`
+	PublishedBy     sql.NullInt64   `json:"published_by"`
+	PublishedAt     time.Time       `json:"published_at"`
+	Summary         json.RawMessage `json:"summary"`
+	PublishedByName string          `json:"published_by_name"`
+}
+
+// History and restore (#492, design 5.3).
+func (q *Queries) ListSiteDesignReleases(ctx context.Context, arg ListSiteDesignReleasesParams) ([]ListSiteDesignReleasesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSiteDesignReleases, arg.ThemeSlug, arg.Before, arg.LimitCount)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSiteDesignReleasesRow{}
+	for rows.Next() {
+		var i ListSiteDesignReleasesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ThemeSlug,
+			&i.PublishedBy,
+			&i.PublishedAt,
+			&i.Summary,
+			&i.PublishedByName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const nextGlobalStyleVersionNo = `-- name: NextGlobalStyleVersionNo :one
