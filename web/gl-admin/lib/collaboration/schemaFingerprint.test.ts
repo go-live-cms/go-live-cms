@@ -11,6 +11,8 @@ import { SITE_BLOCK_NODE_NAMES, SITE_BLOCK_TYPES } from "../blocks-spec/siteBloc
 
 // The site blocks of #488, as they shipped (the fingerprint test pins what each change added).
 const SITE_BLOCK_TYPES_488 = ["site_title", "site_tagline", "site_logo", "navigation", "search", "template_part"] as const
+// The site blocks of #497, as they shipped.
+const SITE_BLOCK_TYPES_497 = ["related_posts", "author_cards", "table_of_contents", "color_scheme_switch"] as const
 import { Group } from "../../components/editor/extensions/GroupBlock"
 import { Footnote } from "../../components/editor/extensions/FootnotesBlock"
 import { GlTable, GlTableRow, TableBlock, TableCaption } from "../../components/editor/extensions/TableBlock"
@@ -387,7 +389,7 @@ describe("schemaFingerprint (#416)", () => {
     it("site blocks II (#489) changed it: fourteen node types, the query loop named by the doc and a group", () => {
       // The schema as it was before #489: none of the fourteen, and no content expression naming them.
       const after = getCoreSchema()
-      const types = SITE_BLOCK_TYPES.filter((type) => !(SITE_BLOCK_TYPES_488 as readonly string[]).includes(type))
+      const types = SITE_BLOCK_TYPES.filter((type) => !([...SITE_BLOCK_TYPES_488, ...SITE_BLOCK_TYPES_497] as readonly string[]).includes(type))
       expect(types).toHaveLength(14)
       const names = types.map((type) => SITE_BLOCK_NODE_NAMES[type])
       const unnamed = (content: string | undefined) => (content ?? "").replace(new RegExp(` \\| (${names.join("|")})\\b`, "g"), "")
@@ -421,6 +423,44 @@ describe("schemaFingerprint (#416)", () => {
       }
       // A tab that didn't know an attr would rewrite the element and lose it: refused too.
       for (const [name, attr] of [["query", "inherit"], ["query", "termIds"], ["postTitle", "level"], ["postExcerpt", "length"], ["postFeaturedImage", "aspect"], ["postDate", "which"], ["postByline", "avatars"], ["postTerms", "taxonomy"], ["queryTitle", "level"]] as const) {
+        const spec = after.spec.nodes.get(name)!
+        const { [attr]: _dropped, ...attrs } = spec.attrs as Record<string, unknown>
+        const without = new Schema({ nodes: after.spec.nodes.update(name, { ...spec, attrs: attrs as NonNullable<typeof spec.attrs> }), marks: after.spec.marks, topNode: after.spec.topNode })
+        expect(schemaFingerprint(without), `${name}.${attr}`).not.toBe(core)
+      }
+    })
+    it("site blocks III (#497) changed it: four node types named by the doc and every flow holder, and the byline's readingTime", () => {
+      // The schema as it was before #497: none of the four, no content expression naming them, and a byline without `readingTime`.
+      const after = getCoreSchema()
+      const names = SITE_BLOCK_TYPES_497.map((type) => SITE_BLOCK_NODE_NAMES[type])
+      expect(names).toEqual(["relatedPosts", "authorCards", "tableOfContents", "colorSchemeSwitch"])
+      const unnamed = (content: string | undefined) => (content ?? "").replace(new RegExp(` \\| (${names.join("|")})\\b`, "g"), "")
+      let nodes = after.spec.nodes
+      for (const name of names) nodes = nodes.remove(name)
+      nodes.forEach((name, spec) => {
+        if (spec.content && unnamed(spec.content) !== spec.content) nodes = nodes.update(name, { ...spec, content: unnamed(spec.content) })
+      })
+      const byline = nodes.get("postByline")!
+      const { readingTime: _readingTime, ...bylineAttrs } = byline.attrs as Record<string, unknown>
+      nodes = nodes.update("postByline", { ...byline, attrs: bylineAttrs as NonNullable<typeof byline.attrs> })
+      const before = new Schema({ nodes, marks: after.spec.marks, topNode: after.spec.topNode })
+      for (const name of names) {
+        expect(before.nodes[name], name).toBeUndefined()
+        expect(after.nodes[name], name).toBeDefined()
+        expect(describeSchemaForFingerprint(after)).toContain(name)
+        // Flow atoms: wherever flow may sit, a post template and "no results" included.
+        for (const holder of ["doc", "group", "column", "details", "postTemplate", "queryNoResults"]) {
+          expect(after.nodes[holder].spec.content, `${holder} holds ${name}`).toContain(name)
+        }
+        // No parse rules (design 4.4): paste can't make one.
+        expect(after.nodes[name].spec.parseDOM ?? [], name).toEqual([])
+      }
+      expect(before.nodes.postByline.spec.attrs).not.toHaveProperty("readingTime")
+      expect(schemaFingerprint(before)).not.toBe(core)
+      // Each on its own changes it: a tab without the four, or without readingTime, is refused.
+      const withoutReadingTime = new Schema({ nodes: after.spec.nodes.update("postByline", { ...byline, attrs: bylineAttrs as NonNullable<typeof byline.attrs> }), marks: after.spec.marks, topNode: after.spec.topNode })
+      expect(schemaFingerprint(withoutReadingTime)).not.toBe(core)
+      for (const [name, attr] of [["relatedPosts", "count"], ["relatedPosts", "taxonomy"], ["colorSchemeSwitch", "variant"]] as const) {
         const spec = after.spec.nodes.get(name)!
         const { [attr]: _dropped, ...attrs } = spec.attrs as Record<string, unknown>
         const without = new Schema({ nodes: after.spec.nodes.update(name, { ...spec, attrs: attrs as NonNullable<typeof spec.attrs> }), marks: after.spec.marks, topNode: after.spec.topNode })

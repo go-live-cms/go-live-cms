@@ -390,9 +390,13 @@ theme must be able to render them, and the generic layout depends on them.
 | `post_excerpt` | flow atom | `length` (words) | `postExcerpt` |
 | `post_featured_image` | flow atom | `aspect` (`auto`/`16-9`/`3-2`/`1-1`), `link` | the published featured image |
 | `post_date` | flow atom | `which` (`published`/`modified`), `format` (`long`/`short`) | `formatSiteDate` |
-| `post_byline` | flow atom | `avatars` | the published byline (#319) |
+| `post_byline` | flow atom | `avatars`, `readingTime` (T16) | the published byline (#319), the published body's words |
 | `post_terms` | flow atom | `taxonomy` | the published terms with their links (#348) |
 | `post_navigation` | flow atom | — | `/public/posts/:id/adjacent` (#351) |
+| `related_posts` (T16) | flow atom | `count` (1–6), `taxonomy` | `/public/posts/:id/related` (#351), counted with the queries |
+| `author_cards` (T16) | flow atom | — | the route's credited authors (#350) |
+| `table_of_contents` (T16) | flow atom | — | the route's post's headings, with `post_content`'s ids |
+| `color_scheme_switch` (T16) | flow atom | `variant` (`segmented`/`menu`) | — (the theme's `theme-init.js` drives it) |
 
 A menu named by `menuId` that is deleted renders nothing. The Menus page's delete
 confirmation names the templates and parts that use it.
@@ -530,6 +534,34 @@ containers), with the same vectors. Details the table left open:
   nothing. The context also carries the site's date settings for `post_date`.
 - **A list row carries no terms yet** (`PostListItem`'s note), so `post_terms` shows nothing in a
   post template until the list rows carry their published terms.
+
+**As built (T16, #497):** the four blocks of site blocks III and `readingTime` are in the same module
+and vectors, flow atoms like T6's, offered in templates and parts. Details the table left open:
+
+- **Attrs.** `related_posts`: `count` (1–6, 3 by default, the theme's "More to read") and `taxonomy`
+  (only posts sharing a term of it; none = any shared term, the latest filling in), one to one onto
+  `/public/posts/:id/related`'s `limit` and `taxonomy`. `color_scheme_switch`: `variant` (`segmented`,
+  the phone menu's control, or `menu`, the header popover's list). `post_byline`: `readingTime: true`.
+  `author_cards` and `table_of_contents` have none.
+- **Markup.** Each renders the default theme component it replaces (`RelatedPosts`, `AuthorCards`,
+  `TableOfContents`, `ThemeSwitch`), compared element by element on the same data
+  (`themes/default/siteBlocksMarkup.astro.test.ts`). The switch sits in a `role=group` labelled
+  "Theme" (the header's popover is one), so it is named wherever a template puts it.
+- **No script.** The switch's buttons are `ThemeSwitch`'s (`data-theme-choice`); the theme's
+  `theme-init.js`, a registered `<script src>` (#484), drives every copy, so it works under
+  `script-src 'self'`. Without JavaScript the theme hides it and the page follows the system.
+- **Data.** `related_posts` is the second data-reading block: it counts towards the page's four with
+  the queries, in reading order (`collectTemplateNeeds`' `related`), reads the route's post's related
+  posts before the render (nothing on a route without a post), and fails soft like a query
+  (`site_block_data_failed`, `block_type: related_posts`). The route is public and cached under its
+  whole query string (#185). Author cards read the route's credited authors, already in the context.
+- **Heading ids.** The table of contents links to exactly the ids `post_content` gives the post's
+  headings: both read the template's page scope (its reserved, block anchor and heading ids, #484;
+  from a part, through `TemplateScopeContext`), and a level-1 heading is listed as the h2 it renders as
+  (#481). The blocks' section titles keep the theme's ids (`toc-title`, `written-by`, `more-to-read`),
+  page-wide: the template and its placed parts are numbered together (a second one is `-2`), and every
+  heading on the page skips them.
+- **In a list** the three post blocks render nothing (they show the route's post), as `post_content`.
 
 Theme and plugin blocks work in templates exactly as in posts, with their own renderers and
 #456's boundary for plugins. **Data-reading ("dynamic") blocks from themes or plugins are not

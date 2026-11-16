@@ -7,12 +7,13 @@ import { renderContent, getBlockContent, isBlankParagraph } from "./blocks/utils
 import { ImageSizesContext, BLOCK_IMAGE_SIZES } from "./blocks/utils/responsiveImage"
 import { HeadingIdsContext, headingAnchors, type HeadingAnchor } from "./blocks/utils/headingAnchors"
 import { FootnotesContext } from "./blocks/utils/footnotes"
-import { docElementIds, docHasEmbed, PageScopeContext, type PageScope } from "./blocks/utils/pageScope"
+import { docElementIds, docHasEmbed, PageScopeContext, siteBlockTitleIds, SiteBlockTitleIdsContext, type PageScope } from "./blocks/utils/pageScope"
 import { SiteContext, type SiteRenderContext } from "./blocks/utils/siteContext"
 // Browser-safe: the admin's revision preview renders this component too.
 import { log } from "../lib/log"
 
 const unknownTypesLogged = new Set<string>()
+
 
 /** public/gl-embeds.js: builds an embed's player when a reader clicks Load (#425). */
 export const EMBED_LOADER_SRC = "/gl-embeds.js"
@@ -73,7 +74,17 @@ export default function BlockRenderer({ doc, imageSizes = BLOCK_IMAGE_SIZES, hea
   const page = useContext(PageScopeContext)
   const inheritedSite = useContext(SiteContext)
   const siteContext = site === undefined ? inheritedSite : site
-  const reserved = [...(page?.reservedIds ?? []), ...(reservedIds ?? [])]
+  // #497: the site blocks' section titles ("toc-title", …), for the whole page (the template and
+  // its parts), only where they render. The outermost renderer of a template works them out and
+  // reserves them, so its headings, its parts' and the post's (`post_content`) skip them; nested
+  // renderers read the same map and have them in the page scope already.
+  const inheritedTitleIds = useContext(SiteBlockTitleIdsContext)
+  const ownTitleIds =
+    inheritedTitleIds === null && siteContext?.inTemplate === true
+      ? siteBlockTitleIds(doc, siteContext.kind === "template" ? { parts: siteContext.parts } : { partSlug: siteContext.partSlug })
+      : null
+  const titleIds = inheritedTitleIds ?? ownTitleIds
+  const reserved = [...(page?.reservedIds ?? []), ...(reservedIds ?? []), ...(ownTitleIds?.values() ?? [])]
   const anchors = headings ?? headingAnchors(doc, reserved)
   const headingIds = new Map(anchors.map((h) => [h.blockId, h.id]))
   const renderBlock = blockRendererFor(doc, { anchors: withAnchors })
@@ -131,11 +142,13 @@ export default function BlockRenderer({ doc, imageSizes = BLOCK_IMAGE_SIZES, hea
           <HeadingIdsContext.Provider value={headingIds}>
             <FootnotesContext.Provider value={footnotes}>
               <PluginBlockChecksContext.Provider value={failedPluginBlocks}>
-                {frame === "template" ? (
-                  templateFrame(doc, uniqueBlockIds, renderBlock)
-                ) : (
-                  <div className="block-content">{uniqueBlockIds.map((blockId) => renderBlock(blockId))}</div>
-                )}
+                <SiteBlockTitleIdsContext.Provider value={titleIds}>
+                  {frame === "template" ? (
+                    templateFrame(doc, uniqueBlockIds, renderBlock)
+                  ) : (
+                    <div className="block-content">{uniqueBlockIds.map((blockId) => renderBlock(blockId))}</div>
+                  )}
+                </SiteBlockTitleIdsContext.Provider>
               </PluginBlockChecksContext.Provider>
             </FootnotesContext.Provider>
             {loader && <EmbedLoader state={loader} />}

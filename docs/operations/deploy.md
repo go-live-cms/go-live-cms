@@ -303,6 +303,10 @@ reload loads the new bundle, and nothing typed is lost. Tell editors before such
 
 Releases that did this, newest first:
 
+- **#497, site blocks III** (`related_posts`, `author_cards`, `table_of_contents`,
+  `color_scheme_switch`, and `readingTime` on `post_byline`): four new node types, a new attr on
+  the byline, and a wider doc and containers. No migration. Open editor tabs reload once after
+  the deploy.
 - **#489, site blocks II** (the query loop: `query`, `post_template`, `query_pagination`,
   `query_no_results`; `query_title`, `term_description` and the `post_*` blocks): fourteen new
   node types, and a wider doc and group. No migration. Open editor tabs reload once after the

@@ -320,7 +320,24 @@ interface BlockComponentProps {
   `p.post-item-excerpt`, `figure.post-featured` (`img.is-aspect-16-9|3-2|1-1`), `p.meta.post-date > time`
   ("Updated …" for the modified date), `div.byline.meta` with `span.avatars` (or "By …"), `a.eyebrow` (the
   category) or `dl.post-terms` chips, and `nav.post-nav`. A query whose posts aren't in the context (it
-  failed, or is over the page's four) renders nothing, its pager and no results included.- **Cover, media & text (#427, "Published · media & embeds", `cover/`, `media_text/`):** `div.cover`
+  failed, or is over the page's four) renders nothing, its pager and no results included.
+- **Site blocks III (#497, `utils/postEndBlocks.tsx`, registered by `related_posts/`, `author_cards/`,
+  `table_of_contents/` and `color_scheme_switch/`):** the same context and rule. Each is **the markup of the
+  default theme component it replaces**, compared by `themes/default/siteBlocksMarkup.astro.test.ts`:
+  `section.related-posts` ("More to read", `div.card-grid` of `article.card`s: the image link, `h3.card-title`,
+  `span.meta` with the byline's names and the short date; `RelatedPosts`), `section.author-cards` ("Written
+  by", `div.author-card` each: a 56px `span.avatar`, `h3 > a` to the author page, `p.author-bio`;
+  `AuthorCards`), `nav.toc-block` ("On this page", `ol.toc` with the H3s in `ol.toc.toc--nested`;
+  `TableOfContents`, from three headings) and `div.color-scheme-switch[role=group][aria-label=Theme]` around
+  `ThemeSwitch`'s `div.theme-choices.theme-choices--segmented|menu` buttons (`data-theme-choice`,
+  `aria-pressed`; no script: the theme's `theme-init.js` drives every copy). The section titles carry the
+  theme's ids (`toc-title`, `written-by`, `more-to-read`), a second one on the page `-2`
+  (`siteBlockTitleIds`, reserved for every heading on the page). The table of contents links to exactly the
+  ids `post_content` gives the post's headings (`usePostContentHeadings`: the template's scope, also from a
+  part). The three post ones show the route's post (nothing in a post template); related posts come from the
+  context's `related` (read before the render, counted with the queries), nothing when that read failed.
+  `post_byline`'s `readingTime` adds " · N min read" after the names (`src/lib/readingTime.ts`).
+- **Cover, media & text (#427, "Published · media & embeds", `cover/`, `media_text/`):** `div.cover`
   (`alignwide` / `alignfull`, `--dim` the overlay as a fraction) with the image, then `div.cover-inner`
   holding the blocks; `div.media-text` (`is-media-right`) with `figure.media-text-media` first, so it
   sits above the text on phones, then `div.media-text-body`. The image comes from the `media` map

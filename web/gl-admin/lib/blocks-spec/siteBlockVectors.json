@@ -1,5 +1,5 @@
 {
-  "description": "Site blocks I and II (#488, #489, docs/design/theme-builder.md 4.1-4.2). Read by blocks-spec/siteBlocks.test.ts (normalizeSiteBlockAttrs, validateBlockDoc with a kind) and api/post_blocks_site_test.go (the sanitizer, prepareForStoreAs). `attrs`: what a block of `type` with `input` keeps, defaults left out. `kinds`: whether a doc of `kind` stores.",
+  "description": "Site blocks I, II and III (#488, #489, #497, docs/design/theme-builder.md 4.1-4.2). Read by blocks-spec/siteBlocks.test.ts (normalizeSiteBlockAttrs, validateBlockDoc with a kind) and api/post_blocks_site_test.go (the sanitizer, prepareForStoreAs). `attrs`: what a block of `type` with `input` keeps, defaults left out. `kinds`: whether a doc of `kind` stores.",
   "attrs": [
     { "name": "site_title: the defaults are left out", "type": "site_title", "input": { "level": 0, "link": true }, "expected": {} },
     { "name": "site_title: an H1 that doesn't link", "type": "site_title", "input": { "level": 1, "link": false }, "expected": { "level": 1, "link": false } },
@@ -75,7 +75,21 @@
     { "name": "post_navigation: no attrs", "type": "post_navigation", "input": { "label": "x" }, "expected": {} },
     { "name": "query_pagination: no attrs", "type": "query_pagination", "input": { "page": 2, "base": "/x" }, "expected": {} },
     { "name": "post_template: no attrs", "type": "post_template", "input": { "columns": 3 }, "expected": {} },
-    { "name": "query_no_results: no attrs", "type": "query_no_results", "input": { "text": "x" }, "expected": {} }
+    { "name": "query_no_results: no attrs", "type": "query_no_results", "input": { "text": "x" }, "expected": {} },
+    { "name": "#497 post_byline: the reading time", "type": "post_byline", "input": { "avatars": false, "readingTime": true }, "expected": { "avatars": false, "readingTime": true } },
+    { "name": "#497 post_byline: no reading time is the default, and a string isn't a boolean", "type": "post_byline", "input": { "readingTime": "true" }, "expected": {} },
+    { "name": "#497 post_byline: readingTime false is the default", "type": "post_byline", "input": { "readingTime": false }, "expected": {} },
+    { "name": "#497 related_posts: the defaults are left out", "type": "related_posts", "input": { "count": 3 }, "expected": {} },
+    { "name": "#497 related_posts: a count and a taxonomy", "type": "related_posts", "input": { "count": 6, "taxonomy": "post_tag" }, "expected": { "count": 6, "taxonomy": "post_tag" } },
+    { "name": "#497 related_posts: the category is kept (no default taxonomy: any shared term is)", "type": "related_posts", "input": { "taxonomy": "category" }, "expected": { "taxonomy": "category" } },
+    { "name": "#497 related_posts: a count rounded and clamped to 1-6", "type": "related_posts", "input": { "count": 40.4 }, "expected": { "count": 6 } },
+    { "name": "#497 related_posts: a count clamped up, rounded half up", "type": "related_posts", "input": { "count": 0.5 }, "expected": { "count": 1 } },
+    { "name": "#497 related_posts: a numeric string isn't a count, a bad name isn't a taxonomy, nothing else stays", "type": "related_posts", "input": { "count": "5", "taxonomy": "Tags!", "postIds": [1, 2], "html": "<b>x</b>" }, "expected": {} },
+    { "name": "#497 author_cards: no attrs", "type": "author_cards", "input": { "authors": [1], "bio": false }, "expected": {} },
+    { "name": "#497 table_of_contents: no attrs", "type": "table_of_contents", "input": { "entries": [{ "id": "x" }], "minHeadings": 1 }, "expected": {} },
+    { "name": "#497 color_scheme_switch: the list look", "type": "color_scheme_switch", "input": { "variant": "menu" }, "expected": { "variant": "menu" } },
+    { "name": "#497 color_scheme_switch: side by side is the default; no script, no handler", "type": "color_scheme_switch", "input": { "variant": "segmented", "onclick": "alert(1)", "script": "x" }, "expected": {} },
+    { "name": "#497 color_scheme_switch: a look it doesn't have", "type": "color_scheme_switch", "input": { "variant": "toggle" }, "expected": {} }
   ],
   "kinds": [
     {
@@ -341,6 +355,55 @@
           "query-0001": { "id": "query-0001", "type": "query", "version": 1, "attrs": {}, "children": ["templ-0001"] },
           "templ-0001": { "id": "templ-0001", "type": "post_template", "version": 1, "attrs": {}, "children": ["content-02"] },
           "content-02": { "id": "content-02", "type": "post_content", "version": 1, "attrs": {} }
+        }
+      }
+    },
+    {
+      "name": "#497: a single template with the post's end: the byline's reading time, a table of contents in a group, author cards, related posts and the switch",
+      "kind": "template",
+      "valid": true,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["switch-001", "byline-001", "group-0001", "content-01", "authors-01", "related-01"],
+        "blocks": {
+          "switch-001": { "id": "switch-001", "type": "color_scheme_switch", "version": 1, "attrs": { "variant": "menu" } },
+          "byline-001": { "id": "byline-001", "type": "post_byline", "version": 1, "attrs": { "readingTime": true } },
+          "group-0001": { "id": "group-0001", "type": "group", "version": 1, "attrs": {}, "children": ["toc-000001"] },
+          "toc-000001": { "id": "toc-000001", "type": "table_of_contents", "version": 1, "attrs": {} },
+          "content-01": { "id": "content-01", "type": "post_content", "version": 1, "attrs": {} },
+          "authors-01": { "id": "authors-01", "type": "author_cards", "version": 1, "attrs": {} },
+          "related-01": { "id": "related-01", "type": "related_posts", "version": 1, "attrs": { "count": 4, "taxonomy": "category" } }
+        }
+      }
+    },
+    {
+      "name": "#497: a part may hold all four (a header's switch, a sidebar's table of contents)",
+      "kind": "part",
+      "valid": true,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["switch-001", "toc-000001", "authors-01", "related-01"],
+        "blocks": {
+          "switch-001": { "id": "switch-001", "type": "color_scheme_switch", "version": 1, "attrs": {} },
+          "toc-000001": { "id": "toc-000001", "type": "table_of_contents", "version": 1, "attrs": {} },
+          "authors-01": { "id": "authors-01", "type": "author_cards", "version": 1, "attrs": {} },
+          "related-01": { "id": "related-01", "type": "related_posts", "version": 1, "attrs": {} }
+        }
+      }
+    },
+    {
+      "name": "#497: in a post they are inert, in a post template too",
+      "kind": "post",
+      "valid": true,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["related-01", "query-0001"],
+        "blocks": {
+          "related-01": { "id": "related-01", "type": "related_posts", "version": 1, "attrs": {} },
+          "query-0001": { "id": "query-0001", "type": "query", "version": 1, "attrs": {}, "children": ["templ-0001"] },
+          "templ-0001": { "id": "templ-0001", "type": "post_template", "version": 1, "attrs": {}, "children": ["toc-000001", "switch-001"] },
+          "toc-000001": { "id": "toc-000001", "type": "table_of_contents", "version": 1, "attrs": {} },
+          "switch-001": { "id": "switch-001", "type": "color_scheme_switch", "version": 1, "attrs": {} }
         }
       }
     }

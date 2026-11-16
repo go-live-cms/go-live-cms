@@ -4,7 +4,8 @@ package api
 // site_tagline, site_logo, navigation, search and template_part. Site blocks II (#489): the
 // query loop (query, post_template and query_no_results, rows of blockContainers, and
 // query_pagination, an atom that lives only in a query), query_title, term_description and
-// the post_* blocks. They hold no text of their own: what they show is the site's, read on
+// the post_* blocks. Site blocks III (#497): related_posts, author_cards, table_of_contents,
+// color_scheme_switch, and readingTime on post_byline. They hold no text of their own: what they show is the site's, read on
 // the page. In a post they are inert, never refused (refusing one would make every later
 // store of that post fail).
 //
@@ -42,6 +43,8 @@ var siteBlockTypes = map[string]bool{
 	"post_excerpt": true, "post_featured_image": true, "post_date": true, "post_byline": true,
 	"post_terms": true, "post_navigation": true, queryPaginationBlockType: true,
 	"query": true, "post_template": true, "query_no_results": true,
+	// #497
+	"related_posts": true, "author_cards": true, "table_of_contents": true, "color_scheme_switch": true,
 }
 
 const (
@@ -69,6 +72,11 @@ const (
 	postExcerptDefaultWords = 35
 
 	postTermsDefaultTaxonomy = "category"
+
+	// #497: "More to read" shows 3 by default, at most 6 (/public/posts/:id/related caps at 12).
+	relatedPostsMinCount     = 1
+	relatedPostsMaxCount     = 6
+	relatedPostsDefaultCount = 3
 )
 
 var (
@@ -169,14 +177,27 @@ func sanitizeSiteBlockAttrs(blockType string, attrs map[string]interface{}) {
 			delete(attrs, "format")
 		}
 	case "post_byline":
-		keepOnlyAttrs(attrs, "avatars")
+		keepOnlyAttrs(attrs, "avatars", "readingTime")
 		keepOnlyFalse(attrs, "avatars")
+		keepOnlyTrue(attrs, "readingTime")
+	case "related_posts":
+		keepOnlyAttrs(attrs, "count", "taxonomy")
+		keepClampedInt(attrs, "count", relatedPostsMinCount, relatedPostsMaxCount, relatedPostsDefaultCount)
+		if name, ok := attrs["taxonomy"].(string); !ok || !contentNamePattern.MatchString(name) {
+			delete(attrs, "taxonomy")
+		}
+	case "color_scheme_switch":
+		keepOnlyAttrs(attrs, "variant")
+		if attrs["variant"] != "menu" {
+			delete(attrs, "variant")
+		}
 	case "post_terms":
 		keepOnlyAttrs(attrs, "taxonomy")
 		if name, ok := attrs["taxonomy"].(string); !ok || !contentNamePattern.MatchString(name) || name == postTermsDefaultTaxonomy {
 			delete(attrs, "taxonomy")
 		}
-	case "term_description", "post_content", "post_navigation", queryPaginationBlockType, "post_template", "query_no_results":
+	case "term_description", "post_content", "post_navigation", queryPaginationBlockType, "post_template", "query_no_results",
+		"author_cards", "table_of_contents":
 		keepOnlyAttrs(attrs)
 	}
 }

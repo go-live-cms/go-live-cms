@@ -4,6 +4,7 @@
  * site block (#489) both read these, so a block template and a code layout credit the same
  * people the same way; `themes/default/lib/authors.ts` and `avatar.ts` re-export them.
  */
+import type { Post } from "@gl-admin/lib/api/types"
 import { safeAvatarSrc } from "@gl-admin/lib/presence"
 import { authorPath } from "./seo"
 
@@ -54,6 +55,19 @@ export function bylinePeople(credited: Credited[] | undefined, owner: { user_id?
     })
   }
   return owner.username ? [{ name: owner.username, key: owner.username }] : []
+}
+
+// Names for a list row's byline (#351's "More to read"): every credited author when the API
+// sent them, else the post's owner.
+export function authorNames(post: Pick<Post, "authors" | "username">): string[] {
+  const names = (post.authors ?? []).map((a) => a.full_name?.trim() || a.username).filter(Boolean)
+  return names.length > 0 ? names : post.username ? [post.username] : []
+}
+
+// "Ana", "Ana and Luan", "Ana, Luan and Priya"
+export function joinNames(names: string[]): string {
+  if (names.length <= 1) return names[0] ?? ""
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`
 }
 
 // What goes before the i-th of n names: "", ", " or " and " ("Ana, Luan and Priya").

@@ -24,6 +24,10 @@ import {
   QUERY_DEFAULT_POST_TYPE,
   QUERY_MAX_PER_PAGE,
   QUERY_MIN_PER_PAGE,
+  normalizeRelatedPostsCount,
+  RELATED_POSTS_DEFAULT_COUNT,
+  RELATED_POSTS_MAX_COUNT,
+  RELATED_POSTS_MIN_COUNT,
   type PostFeaturedImageAspect,
   type QueryAttrs,
   type SiteBlockType,
@@ -85,6 +89,12 @@ export function siteBlockHint(type: SiteBlockType): string | null {
       return QUERY_TITLE_HELP
     case "post_navigation":
       return POST_NAVIGATION_HELP
+    case "author_cards":
+      return AUTHOR_CARDS_HELP
+    case "table_of_contents":
+      return TABLE_OF_CONTENTS_HELP
+    case "color_scheme_switch":
+      return COLOR_SCHEME_SWITCH_HELP
     default:
       return null
   }
@@ -100,6 +110,14 @@ export const POST_CONTENT_HELP = "The post’s blocks render here, with their ow
 export const QUERY_TITLE_HELP = "On the page: the category or tag, “Posts by …”, “Search results for …”, or the post type’s name."
 export const POST_NAVIGATION_HELP = "Links to the post before and after this one. The newest links back to its list."
 export const POST_TITLE_HELP = "“Sized for the page” is an H1 for the page’s post and an H3 in a post template, which links to the post."
+
+// #497
+export const RELATED_POSTS_HELP = "Published posts that share the most terms with the page’s post; the latest fill in. Shows nothing without a post."
+export const AUTHOR_CARDS_HELP = "Each credited author of the page’s post, with their bio, linking to their page."
+export const TABLE_OF_CONTENTS_HELP = "Links to the post’s H2s and H3s. A post with fewer than three shows nothing."
+export const COLOR_SCHEME_SWITCH_HELP = "Readers choose Light, Dark or System. Hidden in browsers without JavaScript, where the system’s choice applies."
+const SWITCH_VARIANTS = ["segmented", "menu"] as const
+const SWITCH_VARIANT_LABELS: Record<(typeof SWITCH_VARIANTS)[number], string> = { segmented: "Side by side", menu: "List" }
 
 const QUERY_TITLE_LEVEL_VALUES = ["1", "2"] as const
 const QUERY_TITLE_LEVEL_LABELS: Record<(typeof QUERY_TITLE_LEVEL_VALUES)[number], string> = { "1": "H1", "2": "H2" }
@@ -304,8 +322,13 @@ function QueryFields({ ids, attrs, set }: { ids: string; attrs: Record<string, u
 }
 
 /** The taxonomies a `post_terms` block may show, read when the panel opens; a failed read lists only the current one. */
-function TaxonomyField({ id, taxonomy, onPick }: { id: string; taxonomy: unknown; onPick: (taxonomy: string) => void }) {
-  const current = typeof taxonomy === "string" && taxonomy ? taxonomy : POST_TERMS_DEFAULT_TAXONOMY
+/**
+ * A public taxonomy, by name. With `anyLabel` (#497's related posts) the first option is "none",
+ * picked as null; otherwise the default is the category.
+ */
+function TaxonomyField({ id, taxonomy, onPick, anyLabel }: { id: string; taxonomy: unknown; onPick: (taxonomy: string | null) => void; anyLabel?: string }) {
+  const fallback = anyLabel ? "" : POST_TERMS_DEFAULT_TAXONOMY
+  const current = typeof taxonomy === "string" && taxonomy ? taxonomy : fallback
   const [types, setTypes] = useState<{ name: string; label: string }[]>([])
   useEffect(() => {
     let live = true
@@ -316,13 +339,14 @@ function TaxonomyField({ id, taxonomy, onPick }: { id: string; taxonomy: unknown
       live = false
     }
   }, [])
-  const options = types.some((t) => t.name === current) ? types : [...types, { name: current, label: current === POST_TERMS_DEFAULT_TAXONOMY ? "Category" : current }]
+  const listed = types.some((t) => t.name === current) || current === "" ? types : [...types, { name: current, label: current === POST_TERMS_DEFAULT_TAXONOMY ? "Category" : current }]
+  const options = anyLabel ? [{ name: "", label: anyLabel }, ...listed] : listed
   return (
     <div className="post-settings__field">
       <label className="post-settings__label" htmlFor={id}>
         Taxonomy
       </label>
-      <select id={id} value={current} onChange={(event) => onPick(event.currentTarget.value)}>
+      <select id={id} value={current} onChange={(event) => onPick(event.currentTarget.value || null)}>
         {options.map((t) => (
           <option key={t.name} value={t.name}>
             {t.label}
@@ -427,7 +451,32 @@ export default function SiteBlockSettings({ editor, node, blockRef }: { editor: 
           <p className="post-settings__hint">In the site’s date format, from Settings › General.</p>
         </>
       )}
-      {type === "post_byline" && <Switch className="block-settings__switch" label="Show avatars" checked={attrs.avatars !== false} onChange={(avatars) => set({ avatars })} />}
+      {type === "post_byline" && (
+        <>
+          <Switch className="block-settings__switch" label="Show avatars" checked={attrs.avatars !== false} onChange={(avatars) => set({ avatars })} />
+          <Switch className="block-settings__switch" label="Show reading time" checked={attrs.readingTime === true} onChange={(readingTime) => set({ readingTime })} />
+        </>
+      )}
+      {type === "related_posts" && (
+        <>
+          <NumberField
+            id={`${ids}-count`}
+            label="Posts"
+            value={attrs.count}
+            fallback={RELATED_POSTS_DEFAULT_COUNT}
+            min={RELATED_POSTS_MIN_COUNT}
+            max={RELATED_POSTS_MAX_COUNT}
+            hint={`${RELATED_POSTS_MIN_COUNT} to ${RELATED_POSTS_MAX_COUNT}.`}
+            normalize={normalizeRelatedPostsCount}
+            onCommit={(count) => set({ count })}
+          />
+          <TaxonomyField id={`${ids}-taxonomy`} taxonomy={attrs.taxonomy} anyLabel="Any shared term" onPick={(taxonomy) => set({ taxonomy })} />
+          <p className="post-settings__hint">{RELATED_POSTS_HELP}</p>
+        </>
+      )}
+      {type === "color_scheme_switch" && (
+        <Segment label="Look" values={SWITCH_VARIANTS} labels={SWITCH_VARIANT_LABELS} value={attrs.variant === "menu" ? "menu" : "segmented"} onPick={(variant) => set({ variant })} />
+      )}
       {type === "post_terms" && <TaxonomyField id={`${ids}-taxonomy`} taxonomy={attrs.taxonomy} onPick={(taxonomy) => set({ taxonomy })} />}
       {hint && <p className="post-settings__hint">{hint}</p>}
     </fieldset>

@@ -9,6 +9,7 @@ import { canonical } from "@gl-admin/lib/collaboration/fragmentBridge.fixtures"
 import { startRelay, waitFor, type Relay } from "@gl-admin/lib/collaboration/hocuspocusRelay.testkit"
 import { validateBlockDoc, type BlockDocV1 } from "@gl-admin/lib/blocks-spec"
 import BlockRenderer from "@/components/BlockRenderer"
+import { siteBlockContent } from "./SiteBlocks"
 
 // The site blocks on the real collab server (#488, design theme-builder.md 4.2, 7.4). They are
 // in the one schema, so a post's document can hold one: a client that ignores the post
@@ -146,6 +147,80 @@ describe("site blocks on the relay (#488)", () => {
     expect(c.state.doc.child(0).type.name).toBe("query")
     expect(c.state.doc.child(0).attrs).toMatchObject({ "data-block-id": QUERY, termIds: "5,2", taxonomy: "category" })
   })
+
+  // #497's four atoms and the byline's reading time, written straight into the shared doc.
+  const ids497 = { relatedPosts: "blk-0497-related-0001", authorCards: "blk-0497-authors-0001", tableOfContents: "blk-0497-toc-00000001", colorSchemeSwitch: "blk-0497-switch-00001", postByline: "blk-0497-byline-00001" }
+  function write497(doc: Y.Doc) {
+    const ids = ids497
+    doc.transact(() => {
+      const elements = Object.entries(ids).map(([name, id]) => {
+        const el = new Y.XmlElement(name)
+        el.setAttribute("data-block-id", id)
+        return el
+      })
+      // Things no site block keeps: a script, a handler, a list of posts.
+      elements[0].setAttribute("postIds", "1,2,3")
+      elements[3].setAttribute("onclick", "alert(1)")
+      elements[4].setAttribute("readingTime", true as unknown as string)
+      doc.getXmlFragment("default").insert(0, elements)
+    })
+  }
+
+  it("#497: related posts, author cards, a table of contents, a switch and a byline's reading time written into a post's doc reach every peer, store with their own attrs, and render nothing", async () => {
+    const pa = relay.client("1")
+    const pb = relay.client("2")
+    await Promise.all([pa.whenSynced(), pb.whenSynced()])
+    const b = makeEditor(pb.doc)
+    await waitFor(() => b.getText().includes("after"), { what: "b to load" })
+    const ids = ids497
+    write497(pa.doc)
+    await waitFor(() => b.state.doc.childCount >= 7 && b.state.doc.child(0).type.name === "relatedPosts", { what: "b to see them" })
+    await waitFor(() => !!stored().blocks[ids.postByline], { what: "the store" })
+    expect(stored().blocks[ids.relatedPosts]).toEqual({ id: ids.relatedPosts, type: "related_posts", version: 1, attrs: {} })
+    expect(stored().blocks[ids.colorSchemeSwitch]).toEqual({ id: ids.colorSchemeSwitch, type: "color_scheme_switch", version: 1, attrs: {} })
+    expect(stored().blocks[ids.postByline]).toEqual({ id: ids.postByline, type: "post_byline", version: 1, attrs: { readingTime: true } })
+    expect(JSON.stringify(stored())).not.toMatch(/alert|postIds/)
+    expect(() => validateBlockDoc(stored())).not.toThrow()
+    const html = renderToStaticMarkup(<BlockRenderer doc={stored()} />)
+    expect(html).toContain("after")
+    expect(html).not.toMatch(/related-posts|author-cards|toc-block|theme-choice|byline/)
+  }, 20_000)
+
+  it("#497: two people changing a related posts block's settings converge, and a restart keeps them and the reading time", async () => {
+    const pa = relay.client("1")
+    const pb = relay.client("2")
+    await Promise.all([pa.whenSynced(), pb.whenSynced()])
+    const a = makeEditor(pa.doc)
+    const b = makeEditor(pb.doc)
+    await waitFor(() => a.getText().includes("after") && b.getText().includes("after"), { what: "both to load" })
+    // A adds them from the editor, as the Site editor does (every attr written with the element).
+    a.view.dispatch(a.state.tr.insert(0, [a.schema.nodeFromJSON(siteBlockContent("related_posts")), a.schema.nodeFromJSON(siteBlockContent("post_byline", { readingTime: true }))]))
+    const ids = { relatedPosts: a.state.doc.child(0).attrs["data-block-id"] as string, postByline: a.state.doc.child(1).attrs["data-block-id"] as string }
+    expect(ids.relatedPosts).toBeTruthy()
+    await waitFor(() => b.state.doc.child(0).type.name === "relatedPosts", { what: "b to see them" })
+    await waitFor(() => !!stored().blocks[ids.postByline], { what: "the first store" })
+
+    // A sets the count while B picks a taxonomy: different attrs, both kept.
+    a.view.dispatch(a.state.tr.setNodeMarkup(0, undefined, { ...a.state.doc.child(0).attrs, count: 6 }))
+    b.view.dispatch(b.state.tr.setNodeMarkup(0, undefined, { ...b.state.doc.child(0).attrs, taxonomy: "post_tag" }))
+    await waitFor(
+      () => {
+        const attrs = stored().blocks[ids.relatedPosts]?.attrs as Record<string, unknown> | undefined
+        return attrs?.count === 6 && attrs?.taxonomy === "post_tag"
+      },
+      { what: "the store to have both" }
+    )
+    expect(a.state.doc.child(0).attrs).toMatchObject({ count: 6, taxonomy: "post_tag" })
+    expect(b.state.doc.child(0).attrs).toMatchObject({ count: 6, taxonomy: "post_tag" })
+
+    await relay.restart()
+    const pc = relay.client("3")
+    await pc.whenSynced()
+    const c = makeEditor(pc.doc)
+    await waitFor(() => c.getText().includes("after"), { what: "c to load after the restart" })
+    expect(c.state.doc.child(0).attrs).toMatchObject({ "data-block-id": ids.relatedPosts, count: 6, taxonomy: "post_tag" })
+    expect(c.state.doc.child(1).attrs).toMatchObject({ "data-block-id": ids.postByline, readingTime: true })
+  }, 20_000)
 
   it("two people changing one block's settings converge, and a restart keeps them", async () => {
     const pa = relay.client("1")

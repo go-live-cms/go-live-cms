@@ -11,6 +11,7 @@ import {
   SITE_LOGO_DEFAULT_WIDTH,
   POST_EXCERPT_DEFAULT_WORDS,
   QUERY_DEFAULT_PER_PAGE,
+  RELATED_POSTS_DEFAULT_COUNT,
   siteBlockTypeOfNode,
   type SiteBlockType,
 } from "@gl-admin/lib/blocks-spec"
@@ -86,11 +87,22 @@ export function siteBlockSummary(type: SiteBlockType, attrs: Record<string, unkn
     case "post_date":
       return `${a.which === "modified" ? "updated" : "published"}, ${a.format === "short" ? "short" : "long"}`
     case "post_byline":
-      return a.avatars === false ? "Names only" : "With avatars"
+      return [a.avatars === false ? "Names only" : "With avatars", a.readingTime === true ? "reading time" : null].filter(Boolean).join(" · ")
     case "post_terms":
       return typeof a.taxonomy === "string" ? `Taxonomy: ${a.taxonomy}` : "Category"
     case "post_navigation":
       return "Older · Newer"
+    // #497
+    case "related_posts": {
+      const count = (a.count as number | undefined) ?? RELATED_POSTS_DEFAULT_COUNT
+      return [`“More to read” · ${count} ${count === 1 ? "post" : "posts"}`, typeof a.taxonomy === "string" ? `sharing a ${a.taxonomy}` : null].filter(Boolean).join(", ")
+    }
+    case "author_cards":
+      return "“Written by” · the post’s credited authors"
+    case "table_of_contents":
+      return "“On this page” · the post’s H2s and H3s, from three headings"
+    case "color_scheme_switch":
+      return `Light · Dark · System, ${a.variant === "menu" ? "a list" : "side by side"}`
   }
 }
 

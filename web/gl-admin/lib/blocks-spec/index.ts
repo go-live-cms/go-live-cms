@@ -28,6 +28,9 @@ import {
   POST_EXCERPT_MAX_WORDS,
   POST_EXCERPT_MIN_WORDS,
   POST_TERMS_DEFAULT_TAXONOMY,
+  RELATED_POSTS_DEFAULT_COUNT,
+  RELATED_POSTS_MAX_COUNT,
+  RELATED_POSTS_MIN_COUNT,
   QUERY_DEFAULT_PER_PAGE,
   QUERY_DEFAULT_POST_TYPE,
   QUERY_MAX_PER_PAGE,
@@ -121,6 +124,11 @@ export type KnownBlockType =
   | "post_byline"
   | "post_terms"
   | "post_navigation"
+  // #497
+  | "related_posts"
+  | "author_cards"
+  | "table_of_contents"
+  | "color_scheme_switch"
   | "query_pagination"
   | "query"
   | "post_template"
@@ -1225,12 +1233,37 @@ export const zPostDate = zBase.extend({
   type: z.literal("post_date"),
   attrs: z.object({ which: z.literal("modified").optional(), format: z.literal("short").optional() }).strict(),
 })
-export const zPostByline = zBase.extend({ type: z.literal("post_byline"), attrs: z.object({ avatars: z.literal(false).optional() }).strict() })
+export const zPostByline = zBase.extend({
+  type: z.literal("post_byline"),
+  attrs: z.object({ avatars: z.literal(false).optional(), readingTime: z.literal(true).optional() }).strict(),
+})
 export const zPostTerms = zBase.extend({
   type: z.literal("post_terms"),
   attrs: z.object({ taxonomy: zContentName.refine((name) => name !== POST_TERMS_DEFAULT_TAXONOMY, "the default taxonomy is left out").optional() }).strict(),
 })
 export const zPostNavigation = zBase.extend({ type: z.literal("post_navigation"), attrs: zNoAttrs })
+// #497
+export const zRelatedPosts = zBase.extend({
+  type: z.literal("related_posts"),
+  attrs: z
+    .object({
+      count: z
+        .number()
+        .int()
+        .min(RELATED_POSTS_MIN_COUNT)
+        .max(RELATED_POSTS_MAX_COUNT)
+        .refine((n) => n !== RELATED_POSTS_DEFAULT_COUNT, "the default count is left out")
+        .optional(),
+      taxonomy: zContentName.optional(),
+    })
+    .strict(),
+})
+export const zAuthorCards = zBase.extend({ type: z.literal("author_cards"), attrs: zNoAttrs })
+export const zTableOfContents = zBase.extend({ type: z.literal("table_of_contents"), attrs: zNoAttrs })
+export const zColorSchemeSwitch = zBase.extend({
+  type: z.literal("color_scheme_switch"),
+  attrs: z.object({ variant: z.literal("menu").optional() }).strict(),
+})
 
 /**
  * Catch-all for theme/custom block types not in the known set. Any version: a theme
@@ -1291,6 +1324,10 @@ const knownBlockSchemas: Record<KnownBlockType, z.ZodTypeAny> = {
   post_byline: zPostByline,
   post_terms: zPostTerms,
   post_navigation: zPostNavigation,
+  related_posts: zRelatedPosts,
+  author_cards: zAuthorCards,
+  table_of_contents: zTableOfContents,
+  color_scheme_switch: zColorSchemeSwitch,
   query_pagination: zQueryPagination,
   query: zQuery,
   post_template: zPostTemplate,

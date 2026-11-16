@@ -79,3 +79,25 @@ describe("the query loop's and post blocks' rules (#489)", () => {
     expect(second.replace(/\/\*[\s\S]*?\*\//g, "")).not.toMatch(/#[0-9a-f]{3,8}\b/i)
   })
 })
+
+// Site blocks III (#497): related posts, author cards and the table of contents reuse the
+// theme's own components' markup and rules; the colour scheme switch adds its no-JS rule.
+describe("site blocks III's rules (#497)", () => {
+  const third = css.slice(css.indexOf("/* ---------- site blocks III (#497)"))
+
+  it("are their own section, after the components' rules, which they don't change", () => {
+    expect(css.indexOf("/* ---------- site blocks III (#497)")).toBeGreaterThan(css.indexOf("/* ---------- site blocks II (#489)"))
+    for (const selector of [".related-posts {", ".author-cards {", ".toc {", ".theme-choices--segmented {"]) {
+      expect(css.indexOf(selector), selector).toBeGreaterThan(-1)
+      expect(css.indexOf(selector), selector).toBeLessThan(css.indexOf("/* ---------- site blocks III (#497)"))
+    }
+  })
+
+  it("hide the switch without JavaScript, as the header's: the page follows the system's scheme", () => {
+    expect(rule(":root:not([data-js]) .color-scheme-switch", third)).toContain("display: none")
+  })
+
+  it("only read the theme's tokens", () => {
+    expect(third.replace(/\/\*[\s\S]*?\*\//g, "")).not.toMatch(/#[0-9a-f]{3,8}\b/i)
+  })
+})

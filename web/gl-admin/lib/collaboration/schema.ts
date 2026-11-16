@@ -22,6 +22,10 @@ import { ContentLink, DateChip, Mention } from "../../components/editor/extensio
 import { EmbedBlock, EmbedBlockCommands } from "../../components/editor/extensions/EmbedBlock"
 import { HtmlBlock, HtmlBlockCommands } from "../../components/editor/extensions/HtmlBlock"
 import {
+  AuthorCards,
+  ColorSchemeSwitch,
+  RelatedPosts,
+  TableOfContents,
   Navigation,
   PostByline,
   PostContent,
@@ -191,6 +195,13 @@ export function schemaExtensions({ collaborating }: { collaborating: boolean }) 
     query: Query,
     postTemplate: PostTemplate,
     queryNoResults: QueryNoResults,
+    // #497: related posts, author cards, the table of contents, the colour scheme switch, and
+    // `readingTime` on the byline. Four new node types and a new attr, and a wider doc and
+    // containers, so they change the fingerprint (#416): open tabs reload once after the deploy.
+    relatedPosts: RelatedPosts,
+    authorCards: AuthorCards,
+    tableOfContents: TableOfContents,
+    colorSchemeSwitch: ColorSchemeSwitch,
     siteBlockCommands: SiteBlockCommands,
     blockId: BlockIdExtension,
   }

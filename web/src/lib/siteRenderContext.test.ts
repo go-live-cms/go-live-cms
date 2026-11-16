@@ -6,6 +6,8 @@ import {
   MAX_QUERIES_PER_PAGE,
   queryRequestParams,
   readQueryPosts,
+  readRelatedPosts,
+  relatedRequestParams,
   SITE_QUERY_TIMEOUT_MS,
   siteBlockNeeds,
 } from "./siteRenderContext"
@@ -217,5 +219,101 @@ describe("readQueryPosts (#489)", () => {
     await expect(readQueryPosts({}, { structure: "slug", siteUrl: "" }, hung as never, 50)).rejects.toThrow(/timed out|aborted/)
     expect(Date.now() - started).toBeLessThan(2000)
     expect(SITE_QUERY_TIMEOUT_MS).toBe(2000)
+  })
+})
+
+// #497: related posts are the other data-reading block, counted with the queries.
+const related = (id: string, attrs: Record<string, unknown> = {}) => ({ [id]: { type: "related_posts", attrs } })
+const routePost = { post: { id: 42, post_type: "guide", title: "This one" } as never, href: "/guide/this-one", image: null }
+
+describe("related posts' data (#497, design 4.3)", () => {
+  const locals = () => ({ siteSettings: Promise.resolve({ ...settings, urlStructure: "slug" }) }) as unknown as App.Locals
+
+  it("count towards the page's four with the queries, in reading order, parts included", () => {
+    const sidebar = doc({ ...related("r-part-0001", { count: 5 }) })
+    const page = doc({ ...query("q-tmpl-0001"), ...related("r-tmpl-0001"), "part-00001": { type: "template_part", attrs: { slug: "sidebar" } }, ...query("q-tmpl-0002"), ...related("r-tmpl-0002") })
+    const needs = collectTemplateNeeds(page, { sidebar })
+    expect(needs.queries.map((q) => q.key)).toEqual(["q-tmpl-0001", "q-tmpl-0002"])
+    expect(needs.related.map((r) => r.key)).toEqual(["r-tmpl-0001", "part:sidebar:r-part-0001"])
+    expect(needs.related[1].attrs).toEqual({ count: 5 })
+    expect(needs.renderedQueries).toBe(5)
+    expect(needs.skippedQueries).toBe(1)
+  })
+
+  it("read for the route's post, each with its own attrs; a fifth data block renders nothing, logged once", async () => {
+    const warn = quiet()
+    const readQuery = vi.fn(async () => listOf("Q"))
+    const readRelated = vi.fn(async (_post: { id: number }, attrs: { count?: number }, _options: { structure: string; siteUrl: string }) => listOf(`R${attrs.count ?? 3}`))
+    const page = doc({ ...query("q-00000001"), ...query("q-00000002"), ...related("r-00000001", { count: 2 }), ...query("q-00000003"), ...related("r-00000002") })
+    const site = await loadSiteRenderContext(locals(), { docs: [page], route: { kind: "single", post: routePost }, readQuery, readRelated, siteUrl: "https://blog.example" })
+    expect(readRelated).toHaveBeenCalledTimes(1)
+    expect(readRelated.mock.calls[0][0]).toMatchObject({ id: 42, post_type: "guide" })
+    expect(readRelated.mock.calls[0][2]).toEqual({ structure: "slug", siteUrl: "https://blog.example" })
+    expect(site.related).toEqual({ "r-00000001": listOf("R2") })
+    expect(warn.mock.calls.filter(([msg]) => msg === "site_block_query_limit")).toEqual([["site_block_query_limit", { limit: 4, count: 5 }]])
+    warn.mockRestore()
+  })
+
+  it("on a route without a post nothing is read, they render nothing, and they take no query's slot", async () => {
+    const readRelated = vi.fn()
+    const readQuery = vi.fn(async () => listOf("Q"))
+    const page = doc({ ...related("r-00000001"), ...query("q-00000001"), ...query("q-00000002"), ...query("q-00000003"), ...query("q-00000004") })
+    const site = await loadSiteRenderContext(locals(), { docs: [page], route: { kind: "archive" }, readRelated, readQuery })
+    expect(site.related).toEqual({})
+    expect(readRelated).not.toHaveBeenCalled()
+    expect(readQuery).toHaveBeenCalledTimes(4)
+    expect(collectTemplateNeeds(page, {}, { relatedPosts: false }).skippedQueries).toBe(0)
+  })
+
+  it("inside a post template (a list, where they render nothing) they are neither counted nor read", () => {
+    const page = doc({
+      "q-00000001": { type: "query", attrs: {}, children: ["t-00000001"] } as never,
+      "t-00000001": { type: "post_template", attrs: {}, children: ["g-00000001"] } as never,
+      "g-00000001": { type: "columns", attrs: {}, children: ["c-00000001"] } as never,
+      "c-00000001": { type: "column", attrs: {}, children: ["r-in-list01"] } as never,
+      ...related("r-in-list01"),
+      ...related("r-on-page01"),
+    })
+    page.blocks_order = ["q-00000001", "r-on-page01"]
+    const needs = collectTemplateNeeds(page)
+    expect(needs.related.map((r) => r.key)).toEqual(["r-on-page01"])
+    expect(needs.renderedQueries).toBe(2)
+  })
+
+  it("a failed read renders that block nothing, logged once with the block type", async () => {
+    const warn = quiet()
+    const readRelated = vi.fn(async (_post: unknown, attrs: { count?: number }) => {
+      if (attrs.count) throw new Error("HTTP 503")
+      return listOf("Fine")
+    })
+    const page = doc({ ...related("r-fails-001", { count: 2 }), ...related("r-works-001") })
+    const site = await loadSiteRenderContext(locals(), { docs: [page], route: { kind: "single", post: routePost }, readRelated })
+    expect(site.related).toEqual({ "r-fails-001": null, "r-works-001": listOf("Fine") })
+    const failed = warn.mock.calls.filter(([msg]) => msg === "site_block_data_failed")
+    expect(failed).toHaveLength(1)
+    expect(failed[0][1]).toMatchObject({ block_type: "related_posts", count: 1 })
+    warn.mockRestore()
+  })
+})
+
+describe("readRelatedPosts (#497)", () => {
+  it("maps the attrs one to one onto /public/posts/:id/related (the count always, the taxonomy when set)", () => {
+    expect(relatedRequestParams({})).toEqual({ limit: 3 })
+    expect(relatedRequestParams({ count: 6, taxonomy: "post_tag" })).toEqual({ limit: 6, taxonomy: "post_tag" })
+  })
+
+  it("reads the route post's related posts as list items, with links for its type", async () => {
+    const rows = [{ id: 7, title: "Next", slug: "next", post_type: "guide", post_status: "published", _thumbnail_url: "/uploads/media/n.jpg" }]
+    const read = vi.fn(async () => rows as never)
+    const list = await readRelatedPosts({ id: 42, post_type: "guide" }, { count: 2 }, { structure: "slug", siteUrl: "" }, read)
+    expect(read).toHaveBeenCalledWith(42, { limit: 2 })
+    expect(list).toMatchObject({ page: 1, totalPages: 1, basePath: null })
+    expect(list.items).toHaveLength(1)
+    expect(list.items[0].post.title).toBe("Next")
+    expect(list.items[0].href).toContain("next")
+  })
+
+  it("throws when the read fails, so the block fails soft", async () => {
+    await expect(readRelatedPosts({ id: 42, post_type: "post" }, {}, { structure: "slug", siteUrl: "" }, async () => Promise.reject(new Error("HTTP 500")))).rejects.toThrow("HTTP 500")
   })
 })
