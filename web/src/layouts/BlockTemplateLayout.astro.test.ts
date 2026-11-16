@@ -348,4 +348,13 @@ describe("<TemplatePart> in a code layout", () => {
     // The header has no override: the theme's own SiteHeader.
     expect(html).toContain('class="site-header"')
   })
+
+  it("renders nothing for a published part with no blocks, as a template does", async () => {
+    api.mode = "reset"
+    api.overrideParts = { footer: { source: "override", title: "Footer", doc: docOf([]) } }
+    const html = clean(await (await ROUTES.find((r) => r.kind === "single")!.render()).text())
+    expect(html).toContain("post--default")
+    expect(html).not.toContain('class="site-footer"')
+    expect(html).not.toContain("template-part--footer")
+  })
 })

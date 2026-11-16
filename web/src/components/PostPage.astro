@@ -77,18 +77,6 @@ const [taxonomyTypes, authors] = await Promise.all([
 ])
 const terms = linkTerms(publishedTerms, taxonomyTypes)
 
-// Get layout variant for this post
-const typeVariant = await getPostLayoutVariant(fullPost, postType)
-
-// Get active theme for dynamic layout loading
-const activeTheme = await getActiveTheme()
-const themeSlug = activeTheme.slug
-
-// A page's own template (#336), when the active theme has it; else the type's variant.
-const layoutVariant = postType === 'page'
-  ? pageLayoutVariant(allLayouts, LAYOUT_PREFIX, themeSlug, fullPost.page_template, typeVariant)
-  : typeVariant
-
 // SEO (#137): the canonical URL follows the site's id/slug setting, so the
 // same post reached by id and by slug points crawlers at one URL.
 // The same per-request lookup the layout, SeoHead and bylines use (#330); it never
@@ -105,16 +93,30 @@ const templateRoute: TemplateRoute = isFrontPage
     : { kind: 'single', postType }
 const blockTemplate = await resolveTemplate(Astro.locals, templateRoute)
 
-// Layout fallback chain (lib/themeLayout.ts): the type's own layouts/{postType}/{variant}
-// (never home/archive/error, which hold page layouts), the theme's layouts/post ones, then
-// the default theme's.
-const LayoutComponent = blockTemplate
-  ? null
-  : await loadThemeLayout(allLayouts, postLayoutCandidates(LAYOUT_PREFIX, themeSlug, postType, layoutVariant))
+// The code layout, only when no builder template renders the post (its variant and the
+// theme's slug are code-layout settings).
+let LayoutComponent: any = null
+if (!blockTemplate) {
+  // Get layout variant for this post
+  const typeVariant = await getPostLayoutVariant(fullPost, postType)
 
-if (!blockTemplate && !LayoutComponent) {
-  log.error('post_layout_not_found', { theme: themeSlug, post_type: postType, variant: layoutVariant })
-  throw new Error('Layout Not Found')
+  // Get active theme for dynamic layout loading
+  const activeTheme = await getActiveTheme()
+  const themeSlug = activeTheme.slug
+
+  // A page's own template (#336), when the active theme has it; else the type's variant.
+  const layoutVariant = postType === 'page'
+    ? pageLayoutVariant(allLayouts, LAYOUT_PREFIX, themeSlug, fullPost.page_template, typeVariant)
+    : typeVariant
+
+  // Layout fallback chain (lib/themeLayout.ts): the type's own layouts/{postType}/{variant}
+  // (never home/archive/error, which hold page layouts), the theme's layouts/post ones, then
+  // the default theme's.
+  LayoutComponent = await loadThemeLayout(allLayouts, postLayoutCandidates(LAYOUT_PREFIX, themeSlug, postType, layoutVariant))
+  if (!LayoutComponent) {
+    log.error('post_layout_not_found', { theme: themeSlug, post_type: postType, variant: layoutVariant })
+    throw new Error('Layout Not Found')
+  }
 }
 // Date chips (#320) in the site's language and date format: the renderer has no settings.
 if (fullPost.published_blocks) labelDateChips(fullPost.published_blocks, site)

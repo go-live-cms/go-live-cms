@@ -15,6 +15,9 @@
  * .template-part--header`, so the theme lays it out the same way in both, 3.5), from a site
  * render context of its own: its site blocks, its menus and up to four queries (the part placed
  * alone, design 4.3). Its headings get no ids, so they never take one the theme's content uses.
+ * It has no route (the code layout keeps its props to itself), so post blocks and an inheriting
+ * query in it render nothing here; in a block template they show the route's post and list. A
+ * published part with no blocks renders nothing, as it does in a template.
  * A slug that a part could never have (lib/templateParts.ts) is logged once and renders the slot.
  */
 import BlockRenderer from '@/components/BlockRenderer'
@@ -29,7 +32,9 @@ interface Props {
 
 const { slug } = Astro.props
 const override = checkTemplatePartSlug(slug) ? templatePartOverride(Astro.locals, slug) : null
-const context = override
+// A published part with no blocks: the admin emptied it, so nothing renders (as in a template).
+const empty = !!override && override.doc.blocks_order.length === 0
+const context = override && !empty
   ? await loadSiteRenderContext(Astro.locals, {
       // The part placed alone, so its queries are counted and read as a template's would be.
       docs: [{ doc_version: 1, blocks_order: ['part'], blocks: { part: { id: 'part', type: 'template_part', version: 1, attrs: { slug } } } } as any],
@@ -42,7 +47,7 @@ const context = override
 const Tag = slug === 'header' ? 'header' : slug === 'footer' ? 'footer' : 'div'
 ---
 
-{override && context ? (
+{empty ? null : override && context ? (
   <Tag class={`template-part template-part--${slug}`}><BlockRenderer doc={override.doc} site={{ ...context, kind: 'part', partSlug: slug }} anchors={false} headings={[]} /></Tag>
 ) : (
   <slot />

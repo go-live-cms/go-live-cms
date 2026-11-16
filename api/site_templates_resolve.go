@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/gin-gonic/gin"
 
@@ -246,22 +247,43 @@ func (r *siteDesignResolver) part(slug string) (ResolvedSitePart, bool) {
 			return ResolvedSitePart{Source: siteDesignSourceTheme, Title: shipped.Title, Doc: doc}, true
 		}
 	}
-	starter, ok := sitedesign.Starter(sitedesign.KindPart, slug)
+	starter, ok := r.server.starterPart(slug)
 	if !ok {
 		return ResolvedSitePart{}, false
 	}
-	// A starter is stored nowhere: it goes through the same rules as a stored part, so it
-	// renders exactly as a "Customize" copy of it would.
-	normalized, err := r.server.normalizeSiteTemplateDoc(starter.Doc, sitedesign.KindPart)
-	if err != nil {
-		r.server.requestLog(r.c).Error("site_design_starter_invalid", "slug", slug, "error", err)
-		return ResolvedSitePart{}, false
-	}
-	docMap, ok := r.docMap(normalized, sitedesign.KindPart, slug)
+	docMap, ok := r.docMap(starter.Doc, sitedesign.KindPart, slug)
 	if !ok {
 		return ResolvedSitePart{}, false
 	}
 	return ResolvedSitePart{Source: siteDesignSourceStarter, Title: starter.Title, Doc: docMap}, true
+}
+
+// normalizedStarterParts caches core's starter parts once they went through the part's
+// rules: they are embedded in the binary and hold site blocks only, so one normalization
+// serves every request (a cache miss after each purge would otherwise redo it).
+var normalizedStarterParts sync.Map // slug → sitedesign.File (Doc normalized), or false for none
+
+// starterPart is core's starter part for slug, through the same rules as a stored part, so
+// it renders exactly as a "Customize" copy of it would. ok is false when there is none.
+func (server *Server) starterPart(slug string) (sitedesign.File, bool) {
+	if cached, ok := normalizedStarterParts.Load(slug); ok {
+		file, found := cached.(sitedesign.File)
+		return file, found
+	}
+	starter, ok := sitedesign.Starter(sitedesign.KindPart, slug)
+	if !ok {
+		normalizedStarterParts.Store(slug, false)
+		return sitedesign.File{}, false
+	}
+	normalized, err := server.normalizeSiteTemplateDoc(starter.Doc, sitedesign.KindPart)
+	if err != nil {
+		// The embedded starters are tested (TestStartersPassTheirKindsRules): a build bug.
+		server.logger.Error("site_design_starter_invalid", "slug", slug, "error", err)
+		return sitedesign.File{}, false
+	}
+	starter.Doc = normalized
+	normalizedStarterParts.Store(slug, starter)
+	return starter, true
 }
 
 // docMap parses a stored doc for the answer; a doc that isn't a Block Spec document (it

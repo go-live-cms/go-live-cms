@@ -313,6 +313,8 @@ export async function resolveTemplate(locals: App.Locals | undefined, route: Tem
 export function templatePartOverride(locals: App.Locals | undefined, slug: string): { doc: BlockDocV1; menusById: Record<string, Menu> } | null {
   const overrides = locals?.templatePartOverrides
   const doc = overrides?.parts[slug]
-  if (!overrides || !doc || !Array.isArray(doc.blocks_order) || doc.blocks_order.length === 0) return null
+  // An override with no blocks is still the site's part: it renders nothing, as the
+  // template_part block renders an empty part, never the theme's markup instead.
+  if (!overrides || !doc || !Array.isArray(doc.blocks_order)) return null
   return { doc, menusById: overrides.menusById }
 }
