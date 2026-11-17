@@ -80,6 +80,18 @@ export const SITE_BLOCK_TITLE_IDS: Readonly<Record<string, string>> = {
 }
 
 /**
+ * The title id a site block writes, if any: `SITE_BLOCK_TITLE_IDS`, and (#498) the sidebar's
+ * "In <term>" list (`related_posts` with `layout: "list"`, "in-category") and the front page's
+ * "More posts" (a `query` with `feature`, "more-posts"), the default theme's own ids.
+ */
+export function siteBlockTitleBase(block: Block): string | undefined {
+  const attrs = (block.attrs ?? {}) as Record<string, unknown>
+  if (block.type === "related_posts" && attrs.layout === "list") return "in-category"
+  if (block.type === "query") return attrs.feature === true ? "more-posts" : undefined
+  return SITE_BLOCK_TITLE_IDS[block.type]
+}
+
+/**
  * The title id of each site block on a page that writes one (#497), by `queryKey` (its block id,
  * prefixed by its part's slug), in reading order: the template's blocks, each part where the
  * template places it (its first placement; a part placed twice renders its blocks with the same
@@ -99,7 +111,7 @@ export function siteBlockTitleIds(
     if (!d?.blocks || !Array.isArray(d.blocks_order)) return
     for (const blockId of blocksInReadingOrder(d)) {
       const block = d.blocks[blockId] as Block | undefined
-      const base = block ? SITE_BLOCK_TITLE_IDS[block.type] : undefined
+      const base = block ? siteBlockTitleBase(block) : undefined
       if (base) {
         const n = (seen.get(base) ?? 0) + 1
         seen.set(base, n)

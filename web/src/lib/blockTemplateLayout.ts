@@ -12,7 +12,9 @@ import type { SitePostItem, SitePostList, SiteRoute, SiteRoutePost } from "@/com
 import { getAdjacentPosts } from "./api"
 import { log } from "./log"
 import { listSeo, toListedPost, type PostListData } from "./postList"
-import type { SearchPageData } from "./search"
+import { resultCountLabel, type SearchPageData } from "./search"
+import { displayName, postCountLabel, safeWebsite, websiteLabel } from "./bylines"
+import { termKindLabel, termPhrase } from "./termPage"
 import { normalizeUrlStructure, postPath, type SeoMeta } from "./seo"
 import type { LinkedTerm, PublicTerm } from "./termPage"
 import type { TemplateRoute } from "./siteTemplates"
@@ -20,8 +22,23 @@ import type { ThemeTokenConfig } from "./themeTokens"
 
 export type BlockTemplateKind = TemplateRoute["kind"]
 
-/** Element ids the generic layout's own markup uses (`main#content`): no heading of a template or a post takes one. */
-export const TEMPLATE_ELEMENT_IDS: readonly string[] = ["content"]
+/**
+ * Element ids no heading of a template or a post takes: the generic layout's own (`main#content`)
+ * and (#498) the fixed ones site blocks write, as the default theme's components do (its
+ * `THEME_ELEMENT_IDS`): the phone menu, the theme popover, the footer's columns, the search page's
+ * sections and the navigation's submenus. So a post renders with the same heading ids in a block
+ * template as in the theme's code layouts.
+ */
+export const TEMPLATE_ELEMENT_IDS: readonly (string | RegExp)[] = [
+  "content",
+  "site-menu",
+  "theme-menu",
+  "footer-site",
+  /^footer-col-\d+$/,
+  "search-topics",
+  "search-recent",
+  /^nav-sub-/,
+]
 
 /** The props a route passes to the code layout of each kind (themes/README.md "Layout Props"). */
 export interface PostLayoutProps {
@@ -118,7 +135,13 @@ export function siteListOf(list: PostListData | null | undefined): SitePostList 
     page: list.page,
     totalPages: list.totalPages,
     basePath: list.basePath,
+    total: list.total,
   }
+}
+
+/** An archive's count, as the default theme words it ("1 item", "12 items"). */
+export function itemCountLabel(n: number): string {
+  return n === 1 ? "1 item" : `${n} items`
 }
 
 const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', "#39": "'", apos: "'" }
@@ -237,19 +260,59 @@ export async function templateSiteRoute(kind: BlockTemplateKind, props: Record<s
     }
     case "archive": {
       const p = props as unknown as ArchiveLayoutProps
-      return { kind, list: siteListOf(p.list), postType: { name: p.postType, label: p.heading } }
+      return { kind, list: siteListOf(p.list), postType: { name: p.postType, label: p.heading }, count: itemCountLabel(p.list.total) }
     }
     case "term": {
+      // #498: the kind ("Category"), the phrase ("in Guides") and the count, worded as the theme does.
       const p = props as unknown as TermLayoutProps
-      return { kind, list: siteListOf(p.list), term: { name: p.term.name, description: p.term.description } }
+      const phrase = termPhrase(p.term)
+      const count = p.term.hierarchical ? postCountLabel(p.postCount) : `${postCountLabel(p.postCount)} ${phrase}`
+      return {
+        kind,
+        list: siteListOf(p.list),
+        term: { name: p.term.name, description: p.term.description, label: termKindLabel(p.term), phrase, hierarchical: p.term.hierarchical },
+        count,
+      }
     }
     case "author": {
+      // #498: the author page's blocks read the avatar, bio and website; the website only as http(s).
       const p = props as unknown as AuthorLayoutProps
-      return { kind, list: siteListOf(p.list), author: { name: p.author.full_name?.trim() || p.author.username } }
+      const name = displayName(p.author)
+      const website = safeWebsite(p.author.website)
+      return {
+        kind,
+        list: siteListOf(p.list),
+        author: {
+          name,
+          username: p.author.username,
+          avatar: p.author.avatar ?? null,
+          bio: p.author.bio ?? "",
+          website,
+          ...(website ? { websiteLabel: websiteLabel(website) } : {}),
+        },
+        count: postCountLabel(p.postCount),
+      }
     }
     case "search": {
+      // #498: `search_results` renders the theme's results page from the route's own data.
       const p = props as unknown as SearchLayoutProps
-      return { kind, list: searchListOf(p), search: { query: p.query } }
+      return {
+        kind,
+        list: searchListOf(p),
+        search: {
+          query: p.query,
+          total: p.total,
+          totalLabel: resultCountLabel(p.total),
+          page: p.page,
+          totalPages: p.totalPages,
+          basePath: p.basePath,
+          pageQuery: p.pageQuery,
+          chips: p.chips.map((chip) => ({ type: chip.type, label: chip.label, count: chip.count, href: chip.href, current: chip.current })),
+          results: p.results.map((result) => ({ href: result.href, typeLabel: result.typeLabel, dateLabel: result.dateLabel, titleHtml: result.titleHtml, excerptHtml: result.excerptHtml })),
+          topics: p.topics,
+          recent: p.recent,
+        },
+      }
     }
     case "404":
       return { kind }

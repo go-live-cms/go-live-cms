@@ -7,6 +7,7 @@
  */
 import { SERVER_MEDIA_URL } from "@gl-admin/lib/server-api-url"
 import { log, requestIdHeaders } from "./log"
+import { footerColumns as footerColumnsOf } from "./menuColumns"
 
 export interface MenuLink {
   id: number
@@ -125,20 +126,8 @@ export interface FooterColumn {
 
 // The footer's link columns: each top-level link with children is a column headed by
 // its label, and the top-level links without children are collected in one column
-// (the theme titles it "Site"), in the place of the first of them.
+// (the theme titles it "Site"), in the place of the first of them. In menuColumns.ts
+// (#498), where the navigation block's footer columns read it too.
 export function footerColumns(items: MenuLink[]): FooterColumn[] {
-  const columns: FooterColumn[] = []
-  let loose: FooterColumn | null = null
-  for (const item of items) {
-    if (item.children.length > 0) {
-      columns.push({ heading: item, links: item.children })
-    } else {
-      if (!loose) {
-        loose = { heading: null, links: [] }
-        columns.push(loose)
-      }
-      loose.links.push(item)
-    }
-  }
-  return columns
+  return footerColumnsOf(items)
 }

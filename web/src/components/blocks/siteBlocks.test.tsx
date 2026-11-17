@@ -145,7 +145,9 @@ describe("site blocks in a template", () => {
     const plain = render(docOf(["search", {}]), context())
     expect(plain).toContain('class="sr-only">Search</label>')
     expect(plain).toContain(">Search</button>")
-    expect(plain).not.toContain("placeholder")
+    // #498: the theme's SearchForm placeholder when the block sets none, and an empty field off the search page.
+    expect(plain).toContain('placeholder="Search the blog"')
+    expect(plain).toContain('value=""')
     // Text, never markup.
     expect(render(docOf(["search", { button: "<b>Go</b>" }]), context())).toContain("&lt;b&gt;Go&lt;/b&gt;")
   })

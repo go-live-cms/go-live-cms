@@ -13,6 +13,21 @@ import { SITE_BLOCK_NODE_NAMES, SITE_BLOCK_TYPES } from "../blocks-spec/siteBloc
 const SITE_BLOCK_TYPES_488 = ["site_title", "site_tagline", "site_logo", "navigation", "search", "template_part"] as const
 // The site blocks of #497, as they shipped.
 const SITE_BLOCK_TYPES_497 = ["related_posts", "author_cards", "table_of_contents", "color_scheme_switch"] as const
+// The site blocks of #498, as they shipped.
+const SITE_BLOCK_TYPES_498 = ["query_total", "author_avatar", "search_results", "post_facts", "site_copyright", "golive_credit"] as const
+// The attrs #498 added to existing site blocks (node name, attr).
+const SITE_BLOCK_ATTRS_498 = [
+  ["search", "variant"],
+  ["query", "feature"],
+  ["query", "layout"],
+  ["queryTitle", "label"],
+  ["queryPagination", "end"],
+  ["postContent", "width"],
+  ["postFeaturedImage", "width"],
+  ["postByline", "date"],
+  ["postTerms", "all"],
+  ["relatedPosts", "layout"],
+] as const
 import { Group } from "../../components/editor/extensions/GroupBlock"
 import { Footnote } from "../../components/editor/extensions/FootnotesBlock"
 import { GlTable, GlTableRow, TableBlock, TableCaption } from "../../components/editor/extensions/TableBlock"
@@ -389,7 +404,7 @@ describe("schemaFingerprint (#416)", () => {
     it("site blocks II (#489) changed it: fourteen node types, the query loop named by the doc and a group", () => {
       // The schema as it was before #489: none of the fourteen, and no content expression naming them.
       const after = getCoreSchema()
-      const types = SITE_BLOCK_TYPES.filter((type) => !([...SITE_BLOCK_TYPES_488, ...SITE_BLOCK_TYPES_497] as readonly string[]).includes(type))
+      const types = SITE_BLOCK_TYPES.filter((type) => !([...SITE_BLOCK_TYPES_488, ...SITE_BLOCK_TYPES_497, ...SITE_BLOCK_TYPES_498] as readonly string[]).includes(type))
       expect(types).toHaveLength(14)
       const names = types.map((type) => SITE_BLOCK_NODE_NAMES[type])
       const unnamed = (content: string | undefined) => (content ?? "").replace(new RegExp(` \\| (${names.join("|")})\\b`, "g"), "")
@@ -466,6 +481,46 @@ describe("schemaFingerprint (#416)", () => {
         const without = new Schema({ nodes: after.spec.nodes.update(name, { ...spec, attrs: attrs as NonNullable<typeof spec.attrs> }), marks: after.spec.marks, topNode: after.spec.topNode })
         expect(schemaFingerprint(without), `${name}.${attr}`).not.toBe(core)
       }
+    })
+    it("site blocks IV (#498) changed it: six node types named by every flow holder, and new attrs on ten site blocks", () => {
+      // The schema as it was before #498: none of the six, no content expression naming them, and none of the new attrs.
+      const after = getCoreSchema()
+      const names = SITE_BLOCK_TYPES_498.map((type) => SITE_BLOCK_NODE_NAMES[type])
+      expect(names).toEqual(["queryTotal", "authorAvatar", "searchResults", "postFacts", "siteCopyright", "goliveCredit"])
+      const unnamed = (content: string | undefined) => (content ?? "").replace(new RegExp(` \\| (${names.join("|")})\\b`, "g"), "")
+      let nodes = after.spec.nodes
+      for (const name of names) nodes = nodes.remove(name)
+      nodes.forEach((name, spec) => {
+        if (spec.content && unnamed(spec.content) !== spec.content) nodes = nodes.update(name, { ...spec, content: unnamed(spec.content) })
+      })
+      for (const [name, attr] of SITE_BLOCK_ATTRS_498) {
+        const spec = nodes.get(name)!
+        const { [attr]: _dropped, ...attrs } = spec.attrs as Record<string, unknown>
+        nodes = nodes.update(name, { ...spec, attrs: attrs as NonNullable<typeof spec.attrs> })
+      }
+      const before = new Schema({ nodes, marks: after.spec.marks, topNode: after.spec.topNode })
+      for (const name of names) {
+        expect(before.nodes[name], name).toBeUndefined()
+        expect(after.nodes[name], name).toBeDefined()
+        expect(describeSchemaForFingerprint(after)).toContain(name)
+        for (const holder of ["doc", "group", "column", "details", "postTemplate", "queryNoResults"]) {
+          expect(after.nodes[holder].spec.content, `${holder} holds ${name}`).toContain(name)
+        }
+        // No parse rules (design 4.4): paste can't make one.
+        expect(after.nodes[name].spec.parseDOM ?? [], name).toEqual([])
+      }
+      expect(schemaFingerprint(before)).not.toBe(core)
+      // Each new attr on its own changes it: a tab without it would rewrite the element and lose it.
+      for (const [name, attr] of [...SITE_BLOCK_ATTRS_498, ["postFacts", "fallback"]] as const) {
+        expect(after.nodes[name].spec.attrs, `${name}.${attr}`).toHaveProperty(attr)
+        const spec = after.spec.nodes.get(name)!
+        const { [attr]: _dropped, ...attrs } = spec.attrs as Record<string, unknown>
+        const without = new Schema({ nodes: after.spec.nodes.update(name, { ...spec, attrs: attrs as NonNullable<typeof spec.attrs> }), marks: after.spec.marks, topNode: after.spec.topNode })
+        expect(schemaFingerprint(without), `${name}.${attr}`).not.toBe(core)
+      }
+      // The new values of attrs that were there already (navigation's layout and overlay, the switch's
+      // variant) are values, not schema: an older tab keeps them as it would any string.
+      expect(after.nodes.navigation.spec.attrs).toHaveProperty("overlay")
     })
     it("the video, audio and file blocks (#423) changed it: three node types, named by the doc and a group", () => {
       // The schema as it was before #423 (and #421): no media nodes, no details, and the doc and the group name

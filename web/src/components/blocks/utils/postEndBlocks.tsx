@@ -9,6 +9,7 @@ import { tableOfContents } from "./headingAnchors"
 import { SITE_BLOCK_TITLE_IDS, SiteBlockTitleIdsContext } from "./pageScope"
 import { routePostBlocks, usePostContentHeadings } from "./postBlocks"
 import { queryKey, SitePostItemContext, useSitePost, useSiteRenderContext, type SiteRoutePost } from "./siteContext"
+import { ThemeChoices } from "./themeMarkup"
 
 /**
  * Site blocks III (#497, design `docs/design/theme-builder.md` 4.1, 5.7): what converting the
@@ -46,6 +47,24 @@ export const RelatedPostsBlock: React.FC<BlockComponentProps> = ({ block, anchor
   const titleId = useTitleId(block.id, "related_posts")
   const list = site && !listed ? site.related?.[queryKey(site.partSlug, block.id)] : null
   if (!site || !list || list.items.length === 0) return null
+  // #498: the default theme sidebar's "In <term>": the term's other posts as links, and its archive.
+  if (normalizeSiteBlockAttrs("related_posts", block.attrs).layout === "list") {
+    const term = list.term
+    if (!term) return null
+    return (
+      <section id={anchorId} className="aside-list" aria-labelledby={titleId}>
+        <h2 id={titleId} className="section-title">{`In ${term.name}`}</h2>
+        <ul className="aside-links">
+          {list.items.map((item) => (
+            <li key={item.post.id}>
+              <a href={item.href}>{item.post.title}</a>
+            </li>
+          ))}
+        </ul>
+        {term.href && <a className="aside-all" href={term.href}>{`All ${term.name} →`}</a>}
+      </section>
+    )
+  }
   const dates = site.dates ?? DEFAULT_DATE_SETTINGS
   const meta = (post: (typeof list.items)[number]["post"]) => [joinNames(authorNames(post)), formatSiteDate(post.created_at, dates, "short")].filter(Boolean).join(" · ")
   return (
@@ -144,12 +163,6 @@ export const TableOfContentsBlock: React.FC<BlockComponentProps> = ({ block, anc
   )
 }
 
-const SCHEME_CHOICES = [
-  { value: "light", label: "Light" },
-  { value: "dark", label: "Dark" },
-  { value: "system", label: "System" },
-] as const
-
 /**
  * `color_scheme_switch`: Light, Dark and System, `ThemeSwitch`'s buttons (`segmented`, the phone
  * menu's control, or `menu`, the header popover's list) in a group labelled "Theme". **No script
@@ -157,20 +170,41 @@ const SCHEME_CHOICES = [
  * theme registers (#484, so it works under `script-src 'self'`), applies a click on any
  * `[data-theme-choice]` and keeps every copy's `aria-pressed` in step. Without JavaScript it is
  * hidden (the theme's `:root:not([data-js])` rule) and the page follows the system's scheme.
+ *
+ * `popover` (#498) is the theme header's control: an icon button (sun, moon or screen, as the
+ * preference) that opens the `menu` list in `div#theme-menu.theme-popover`, `SiteHeader`'s markup;
+ * the theme's script opens it (`data-theme-menu-toggle`) and its id is the theme's, so one per page.
+ * Hidden at phone width (`hide-mobile`), where the header's phone menu holds the switch.
  */
 export const ColorSchemeSwitchBlock: React.FC<BlockComponentProps> = ({ block, anchorId }) => {
   const site = useSiteRenderContext()
   if (!site) return null
-  const variant: ColorSchemeSwitchVariant = normalizeSiteBlockAttrs("color_scheme_switch", block.attrs).variant === "menu" ? "menu" : "segmented"
+  const variant = normalizeSiteBlockAttrs("color_scheme_switch", block.attrs).variant as ColorSchemeSwitchVariant | undefined
+  if (variant === "popover") {
+    return (
+      <div id={anchorId} className="theme-menu hide-mobile">
+        <button type="button" className="icon-btn" aria-label="Theme" aria-expanded="false" aria-controls="theme-menu" data-theme-menu-toggle="">
+          <svg className="icon-light" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="4"></circle>
+            <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>
+          </svg>
+          <svg className="icon-dark" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"></path>
+          </svg>
+          <svg className="icon-system" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <rect x="3" y="4" width="18" height="12" rx="2"></rect>
+            <path d="M8 20h8M12 16v4"></path>
+          </svg>
+        </button>
+        <div id="theme-menu" className="theme-popover" role="group" aria-label="Theme" hidden>
+          <ThemeChoices variant="menu" />
+        </div>
+      </div>
+    )
+  }
   return (
     <div id={anchorId} className="color-scheme-switch" role="group" aria-label="Theme">
-      <div className={`theme-choices theme-choices--${variant}`}>
-        {SCHEME_CHOICES.map((choice) => (
-          <button key={choice.value} type="button" className="theme-choice" data-theme-choice={choice.value} aria-pressed="false">
-            {choice.label}
-          </button>
-        ))}
-      </div>
+      <ThemeChoices variant={variant === "menu" ? "menu" : "segmented"} />
     </div>
   )
 }

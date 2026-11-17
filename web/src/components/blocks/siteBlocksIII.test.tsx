@@ -230,7 +230,10 @@ describe("color_scheme_switch (#497)", () => {
 describe("post_byline's reading time (#497)", () => {
   it("adds “· N min read” after the names, from the published body, only when asked", () => {
     const withTime = render(docOf(["byline-001"], b("byline-001", "post_byline", { readingTime: true })), context(singleRoute))
-    expect(withTime).toContain('<a href="/author/ana">Ana Costa</a> and <a href="/author/luan">luan</a> · 3 min read</span>')
+    // #498: the theme's PostByline on the page: the names, then the date (not asked for here) and the reading time.
+    expect(withTime).toContain('<span>By <a href="/author/ana">Ana Costa</a> and <a href="/author/luan">luan</a></span><span>3 min read</span>')
+    const withDate = render(docOf(["byline-001"], b("byline-001", "post_byline", { readingTime: true, date: true })), context(singleRoute))
+    expect(withDate).toMatch(/<span><time dateTime="[^"]+">[^<]+<\/time> · 3 min read<\/span>/)
     const without = render(docOf(["byline-001"], b("byline-001", "post_byline")), context(singleRoute))
     expect(without).not.toContain("min read")
   })

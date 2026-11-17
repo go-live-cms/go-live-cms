@@ -74,6 +74,16 @@ export interface SiteRenderContext {
   related?: Readonly<Record<string, SitePostList | null>>
   /** #489: the part being rendered, so a query in it finds its posts (`queryKey`). */
   partSlug?: string
+  /**
+   * #498: the theme's image `sizes` for a post's body in a column and wide (`config.imageSizes`),
+   * which `post_content` passes on by its `width`; absent: `BlockRenderer`'s default.
+   */
+  imageSizes?: { column?: string; wide?: string }
+  /**
+   * #498: what else the page shows, for `post_facts`' `fallback` (the theme sidebar's rule): a
+   * table of contents block, and a "In <term>" list (`related_posts` with `layout: "list"`) with posts.
+   */
+  pageShows?: { tableOfContents: boolean; categoryList: boolean }
 }
 
 /** A term with its archive's link and its taxonomy's label (`src/lib/termPage.ts` `linkTerms`). */
@@ -105,6 +115,13 @@ export interface SitePostList {
   basePath: string | null
   /** A query string every page link keeps (search's `?q=…`). */
   pageQuery?: string
+  /** #498: how many posts the whole list has (every page), for `query_total`; absent for a query's. */
+  total?: number
+  /**
+   * #498: a related posts list's term (`related_posts` with `layout: "list"`: "In <term>"), with
+   * its archive's link when its taxonomy is public.
+   */
+  term?: { name: string; href?: string } | null
 }
 
 /** The route's post (#489): the item, its published body and what its end shows. */
@@ -123,11 +140,43 @@ export interface SiteRoute {
   post?: SiteRoutePost | null
   /** The route's own list (archive, term, author, search, home), for an inheriting query. */
   list?: SitePostList | null
-  term?: { name: string; description?: string } | null
-  author?: { name: string } | null
-  search?: { query: string } | null
+  /**
+   * The term (#489), and (#498) its kind ("Category", "Tag") for `query_title`'s label, and how
+   * the theme says a post belongs to it ("in Guides", "tagged Editor") for the list's count and end.
+   */
+  term?: { name: string; description?: string; label?: string; phrase?: string; hierarchical?: boolean } | null
+  /** The author (#489), and (#498) their username, avatar, bio and website for the author page's blocks. */
+  author?: { name: string; username?: string; avatar?: string | null; bio?: string; website?: string | null; websiteLabel?: string } | null
+  /** The search (#489), and (#498) the results page's data for `search_results`. */
+  search?: ({ query: string } & Partial<SiteSearchResults>) | null
   /** The listed post type's name, for an archive's `query_title`. */
   postType?: { name: string; label: string } | null
+  /** #498: how many posts the route lists ("12 posts", "4 posts tagged Editor", "12 items"), for `query_total`. */
+  count?: string
+}
+
+/** #498: one search result as the default theme lists it; the `Html` fields are `safeHighlight`ed (only `<mark>`). */
+export interface SiteSearchResult {
+  href: string
+  typeLabel: string
+  dateLabel: string
+  titleHtml: string
+  excerptHtml: string
+}
+
+/** #498: what `search_results` renders: the summary, the type chips, the results and their pager, or what to try. */
+export interface SiteSearchResults {
+  total: number
+  /** "1 result", "4 results". */
+  totalLabel: string
+  page: number
+  totalPages: number
+  basePath: string
+  pageQuery: string
+  chips: { type: string; label: string; count: number; href: string; current: boolean }[]
+  results: SiteSearchResult[]
+  topics: { label: string; href: string }[]
+  recent: { label: string; href: string }[]
 }
 
 export const SiteContext = createContext<SiteRenderContext | null>(null)
@@ -155,7 +204,7 @@ export const TemplateScopeContext = createContext<readonly (string | RegExp)[] |
 export const SitePostItemContext = createContext<SitePostItem | null>(null)
 
 /** The query a pager, a post template or "no results" sits in (#489): its posts and whether it is the page's list. */
-export const SiteQueryContext = createContext<{ list: SitePostList; inherit: boolean } | null>(null)
+export const SiteQueryContext = createContext<{ list: SitePostList; inherit: boolean; layout?: "list" | "links" } | null>(null)
 
 /**
  * The post a post block shows (#489): the list item when it sits in a post template, else the

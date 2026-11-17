@@ -95,7 +95,8 @@ describe("site blocks III's settings (#497)", () => {
     open("post_byline")
     await show()
     const toggles = [...host.querySelectorAll('[role="switch"]')] as HTMLButtonElement[]
-    expect(toggles).toHaveLength(2)
+    // Avatars, reading time, and #498's date.
+    expect(toggles).toHaveLength(3)
     act(() => toggles[1].click())
     expect(stored().attrs).toEqual({ readingTime: true })
   })

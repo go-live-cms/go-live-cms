@@ -2,13 +2,13 @@ import React, { useContext } from "react"
 import { normalizeSiteBlockAttrs, normalizePostExcerptLength, type BlockDocV1 } from "@gl-admin/lib/blocks-spec"
 import BlockRenderer from "../../BlockRenderer"
 import type { BlockComponentProps } from "../types"
-import { bylinePeople, nameSeparator, avatarColor, initial } from "../../../lib/bylines"
-import { pageLinks, pagePath, pageWindow } from "../../../lib/pagination"
-import { firstParagraphText, metaDescription } from "../../../lib/seo"
+import { bylinePeople } from "../../../lib/bylines"
+import { firstParagraphText, metaDescription, postExcerpt } from "../../../lib/seo"
 import { DEFAULT_DATE_SETTINGS, formatSiteDate } from "../../../lib/siteDates"
 import { readingMinutes } from "../../../lib/readingTime"
 import { HeadingIdsContext, headingAnchors, type HeadingAnchor } from "./headingAnchors"
-import { PageScopeContext } from "./pageScope"
+import { PageScopeContext, SiteBlockTitleIdsContext } from "./pageScope"
+import { PagerMarkup, ThemeByline } from "./themeMarkup"
 import {
   queryKey,
   SitePostItemContext,
@@ -39,16 +39,77 @@ const NO_HEADING_IDS: ReadonlyMap<string, string> = new Map()
 
 // ── The query loop ─────────────────────────────────────────────────────────────────
 
-/** `query`: its post template, pager and "no results", for the posts the context holds for it. */
-export const QueryBlock: React.FC<BlockComponentProps> = ({ block, renderBlock, anchorId }) => {
+/**
+ * `query`: its post template, pager and "no results", for the posts the context holds for it.
+ *
+ * With `feature` (#498, the default theme's front page) the first post of the list's first page is
+ * the featured post (`article.feature`: its image, "Latest", the title, a longer excerpt and the
+ * byline), and the post template lists the rest under "More posts" ("Posts" on later pages), in a
+ * section labelled by that heading. The pager and "no results" read the whole list.
+ */
+export const QueryBlock: React.FC<BlockComponentProps> = ({ block, doc, renderBlock, anchorId }) => {
   const site = useSiteRenderContext()
+  const titleIds = useContext(SiteBlockTitleIdsContext)
   const list = site?.queries?.[queryKey(site.partSlug, block.id)]
   if (!site || !list) return null
-  const inherit = normalizeSiteBlockAttrs("query", block.attrs).inherit === true
+  const attrs = normalizeSiteBlockAttrs("query", block.attrs)
+  const value = { list, inherit: attrs.inherit === true, layout: attrs.layout === "links" ? ("links" as const) : ("list" as const) }
+  const children = block.children ?? []
+  if (attrs.feature !== true) {
+    return (
+      <div id={anchorId} className="query-loop">
+        <SiteQueryContext.Provider value={value}>{children.map((id) => renderBlock(id))}</SiteQueryContext.Provider>
+      </div>
+    )
+  }
+  const [feature, ...rest] = list.page === 1 ? list.items : [undefined, ...list.items]
+  const headingId = titleIds?.get(queryKey(site.partSlug, block.id)) ?? "more-posts"
+  const restValue = { ...value, list: { ...list, items: rest.filter((item): item is SitePostItem => !!item) } }
   return (
     <div id={anchorId} className="query-loop">
-      <SiteQueryContext.Provider value={{ list, inherit }}>{(block.children ?? []).map((id) => renderBlock(id))}</SiteQueryContext.Provider>
+      <SiteQueryContext.Provider value={value}>
+        {children.map((id) =>
+          doc.blocks[id]?.type === "post_template" ? (
+            <React.Fragment key={id}>
+              {feature && <FeaturedPost item={feature} />}
+              {restValue.list.items.length > 0 && (
+                <section aria-labelledby={headingId}>
+                  <h2 id={headingId} className="section-title list-heading">
+                    {list.page === 1 ? "More posts" : "Posts"}
+                  </h2>
+                  <SiteQueryContext.Provider value={restValue}>{renderBlock(id)}</SiteQueryContext.Provider>
+                </section>
+              )}
+            </React.Fragment>
+          ) : (
+            renderBlock(id)
+          ),
+        )}
+      </SiteQueryContext.Provider>
     </div>
+  )
+}
+
+/** The front page's featured post (#498): the default theme's `article.feature`. */
+function FeaturedPost({ item }: { item: SitePostItem }) {
+  const site = useSiteRenderContext()
+  const excerpt = postExcerpt(item.post, 260)
+  return (
+    <article className={item.image ? "feature has-media" : "feature"}>
+      {item.image && (
+        <a href={item.href} tabIndex={-1} aria-hidden="true">
+          <img className="media" src={item.image} alt="" fetchPriority="high" decoding="async" />
+        </a>
+      )}
+      <div className="feature-body">
+        <span className="eyebrow">Latest</span>
+        <h2 className="title feature-title">
+          <a href={item.href}>{item.post.title}</a>
+        </h2>
+        {excerpt && <p className="post-item-excerpt feature-excerpt">{excerpt}</p>}
+        <ThemeByline post={item.post} variant="list" minutes={readingMinutes(item.post.published_blocks)} dates={site?.dates} />
+      </div>
+    </article>
   )
 }
 
@@ -60,6 +121,18 @@ export const QueryBlock: React.FC<BlockComponentProps> = ({ block, renderBlock, 
 export const PostTemplateBlock: React.FC<BlockComponentProps> = ({ block, doc, renderBlock }) => {
   const query = useContext(SiteQueryContext)
   if (!query || query.list.items.length === 0) return null
+  // #498: titles only, the default theme's `ul.link-list` (the 404 page's recent posts).
+  if (query.layout === "links") {
+    return (
+      <ul className="link-list">
+        {query.list.items.map((item) => (
+          <li key={item.post.id}>
+            <a href={item.href}>{item.post.title}</a>
+          </li>
+        ))}
+      </ul>
+    )
+  }
   const children = block.children ?? []
   const isMedia = (id: string) => doc.blocks[id]?.type === "post_featured_image"
   const body = children.filter((id) => !isMedia(id))
@@ -92,89 +165,127 @@ export const QueryNoResultsBlock: React.FC<BlockComponentProps> = ({ block, rend
  * `query_pagination`: #349's pager, the markup and URLs of `Pagination.astro` (page 1 is the
  * list's own URL, page N `<base>/page/N/`). Only for a query that uses the page's own list: a
  * query of chosen posts has no pager, since two pagers can't share one `/page/N/` URL (4.3).
+ *
+ * With `end` (#498), a list of one page ends with the default theme's line that says it is all
+ * ("That’s every post in Guides.", "… tagged Editor.", "… by Ana Costa.") and a link back to all posts.
  */
-export const QueryPaginationBlock: React.FC<BlockComponentProps> = ({ anchorId }) => {
+export const QueryPaginationBlock: React.FC<BlockComponentProps> = ({ block, anchorId }) => {
   const query = useContext(SiteQueryContext)
+  const site = useSiteRenderContext()
   const list = query?.inherit ? query.list : null
-  if (!list || list.basePath === null || list.totalPages <= 1) return null
-  const { page, totalPages, basePath } = list
-  const withQuery = (href: string) => `${href}${list.pageQuery ?? ""}`
-  const links = pageLinks(basePath, page, totalPages)
-  return (
-    <nav id={anchorId} className="pagination" aria-label="Pages">
-      {links.newer ? (
-        <a href={withQuery(links.newer)} className="page-link" rel="prev">
-          <span aria-hidden="true">←</span> Newer
-        </a>
-      ) : (
-        <span className="page-link is-disabled" aria-hidden="true">
-          ← Newer
-        </span>
-      )}
-      {pageWindow(page, totalPages).map((slot, i) =>
-        slot === "gap" ? (
-          <span key={`gap-${i}`} className="page-link page-num" aria-hidden="true">
-            …
-          </span>
-        ) : (
-          <a key={slot} href={withQuery(pagePath(basePath, slot))} className="page-link page-num" aria-label={`Page ${slot}`} aria-current={slot === page ? "page" : undefined}>
-            {slot}
-          </a>
-        ),
-      )}
-      <span className="page-status">
-        Page {page} of {totalPages}
-      </span>
-      {links.older ? (
-        <a href={withQuery(links.older)} className="page-link" rel="next">
-          Older <span aria-hidden="true">→</span>
-        </a>
-      ) : (
-        <span className="page-link is-disabled" aria-hidden="true">
-          Older →
-        </span>
-      )}
-    </nav>
-  )
+  if (!list || list.basePath === null) return null
+  if (list.totalPages <= 1) {
+    const route = site?.route
+    const phrase = route?.kind === "term" ? route.term?.phrase : route?.kind === "author" && route.author?.name ? `by ${route.author.name}` : undefined
+    if (normalizeSiteBlockAttrs("query_pagination", block.attrs).end !== true || !phrase || list.items.length === 0) return null
+    return (
+      <p id={anchorId} className="meta list-end">
+        {`That’s every post ${phrase}. `}
+        <a href="/">Back to all posts</a>
+      </p>
+    )
+  }
+  return <PagerMarkup page={list.page} totalPages={list.totalPages} basePath={list.basePath} query={list.pageQuery ?? ""} anchorId={anchorId} />
 }
 
 // ── What the page lists ────────────────────────────────────────────────────────────
 
-/** The heading `query_title` shows for the route, or null for a route that lists nothing. */
-export function queryTitleText(route: NonNullable<ReturnType<typeof useSiteRenderContext>>["route"]): string | null {
+type SiteRouteOf = NonNullable<ReturnType<typeof useSiteRenderContext>>["route"]
+
+/** The 404 page's title and line (#498), the default theme's. */
+export const NOT_FOUND_TITLE = "This page isn’t here"
+export const NOT_FOUND_TEXT = "The link may be old, or the post may have moved. Search for it, or start again from the front page."
+
+/**
+ * The page title `query_title` shows for the route (the default theme's, #498): the term's name, the
+ * author's, "Search", the post type's, the site's title on the front page, the 404's line; null for
+ * a route that has none of its own (a post's title is `post_title`'s).
+ */
+export function queryTitleText(route: SiteRouteOf, siteTitle = ""): string | null {
   if (!route) return null
   switch (route.kind) {
     case "term":
       return route.term?.name || null
     case "author":
-      return route.author?.name ? `Posts by ${route.author.name}` : null
+      return route.author?.name || null
     case "search":
-      return route.search?.query ? `Search results for “${route.search.query}”` : "Search results"
+      return "Search"
     case "archive":
-    case "home":
       return route.postType?.label || null
+    case "home":
+      return route.postType?.label || siteTitle || null
+    case "404":
+      return NOT_FOUND_TITLE
     default:
       return null
   }
 }
 
-/** `query_title`: "Guides", "Posts by Ana Costa", "Search results for “alt text”", a type's name (`h1.title`). */
+/** The kind of page `query_title` shows as a label (#498): "Category", "Tag", "Author", "Error 404"; null elsewhere. */
+export function queryLabelText(route: SiteRouteOf): string | null {
+  switch (route?.kind) {
+    case "term":
+      return route.term?.label || null
+    case "author":
+      return "Author"
+    case "404":
+      return "Error 404"
+    default:
+      return null
+  }
+}
+
+/**
+ * `query_title`: the page's title (`h1.title`; on the search page `h1.title.search-title`), or with
+ * `label` (#498) the kind of page above it (`span.eyebrow`; the 404's in the mono face).
+ */
 export const QueryTitleBlock: React.FC<BlockComponentProps> = ({ block, anchorId }) => {
   const site = useSiteRenderContext()
-  const text = site ? queryTitleText(site.route) : null
+  const attrs = normalizeSiteBlockAttrs("query_title", block.attrs)
+  if (attrs.label === true) {
+    const label = site ? queryLabelText(site.route) : null
+    if (!label) return null
+    return (
+      <span id={anchorId} className={site?.route?.kind === "404" ? "eyebrow eyebrow--mono" : "eyebrow"}>
+        {label}
+      </span>
+    )
+  }
+  const text = site ? queryTitleText(site.route, site.site.title) : null
   if (!text) return null
-  const Heading = normalizeSiteBlockAttrs("query_title", block.attrs).level === 2 ? "h2" : "h1"
+  const Heading = attrs.level === 2 ? "h2" : "h1"
   return (
-    <Heading id={anchorId} className="title">
+    <Heading id={anchorId} className={site?.route?.kind === "search" ? "title search-title" : "title"}>
       {text}
     </Heading>
   )
 }
 
-/** `term_description`: the route's term's description (`p.dek`); nothing for a term without one. */
+/**
+ * `term_description`: the page's description (`p.dek`), as the default theme writes it (#498): the
+ * term's, the author's bio (`p.dek.author-bio`, as written), the site's tagline on the front page
+ * ("Page 2" on its later pages), the 404's line. Nothing where there is none.
+ */
 export const TermDescriptionBlock: React.FC<BlockComponentProps> = ({ anchorId }) => {
   const site = useSiteRenderContext()
-  const text = metaDescription(site?.route?.term?.description, 2000)
+  const route = site?.route
+  if (!site || !route) return null
+  if (route.kind === "author") {
+    const bio = route.author?.bio
+    return bio ? (
+      <p id={anchorId} className="dek author-bio">
+        {bio}
+      </p>
+    ) : null
+  }
+  const text =
+    route.kind === "home"
+      ? (route.list?.page ?? 1) > 1
+        ? `Page ${route.list!.page}`
+        : site.site.tagline
+      : route.kind === "404"
+        ? NOT_FOUND_TEXT
+        : metaDescription(route.term?.description, 2000)
   if (!text) return null
   return (
     <p id={anchorId} className="dek">
@@ -227,13 +338,17 @@ export function usePostContentHeadings(blocks: BlockDocV1 | null): HeadingAnchor
  * template's already use (the page scope, #484), as `usePostContentHeadings` gives them. Nothing
  * in a list (a post template can't hold it) or without a post.
  */
-export const PostContentBlock: React.FC<BlockComponentProps> = ({ anchorId }) => {
-  const blocks = routePostBlocks(useSitePost())
+export const PostContentBlock: React.FC<BlockComponentProps> = ({ block, anchorId }) => {
+  const shown = useSitePost()
+  const blocks = routePostBlocks(shown)
   const headings = usePostContentHeadings(blocks)
   if (!blocks) return null
+  // #498: the theme's image `sizes` for the column the body sits in (`width`), as its layouts give them.
+  const sizes = shown?.site.imageSizes
+  const imageSizes = normalizeSiteBlockAttrs("post_content", block.attrs).width === "wide" ? sizes?.wide : sizes?.column
   return (
     <div id={anchorId} className="prose">
-      <BlockRenderer doc={blocks} site={null} headings={headings} />
+      <BlockRenderer doc={blocks} site={null} headings={headings} {...(imageSizes ? { imageSizes } : {})} />
     </div>
   )
 }
@@ -245,11 +360,25 @@ export function excerptWords(post: SitePostItem["post"], words: number): string 
   return all.length <= words ? all.join(" ") : `${all.slice(0, words).join(" ")}…`
 }
 
-/** `post_excerpt` (`p.post-item-excerpt`). */
+/**
+ * `post_excerpt`. In a list (`p.post-item-excerpt`): `length` words when it is set, else the default
+ * theme's (#498: the excerpt or the first paragraph, cut before 220 characters, `postExcerpt`). For
+ * the page's own post (#498): its excerpt as the dek under the title (`p.dek`, up to 400
+ * characters), only when it has one, as the theme's `PostHeader`.
+ */
 export const PostExcerptBlock: React.FC<BlockComponentProps> = ({ block, anchorId }) => {
   const shown = useSitePost()
   if (!shown) return null
-  const text = excerptWords(shown.item.post, normalizePostExcerptLength(normalizeSiteBlockAttrs("post_excerpt", block.attrs).length))
+  if (!shown.inList) {
+    const dek = metaDescription(shown.item.post.description, 400)
+    return dek ? (
+      <p id={anchorId} className="dek">
+        {dek}
+      </p>
+    ) : null
+  }
+  const length = normalizeSiteBlockAttrs("post_excerpt", block.attrs).length
+  const text = typeof length === "number" ? excerptWords(shown.item.post, normalizePostExcerptLength(length)) : postExcerpt(shown.item.post, 220)
   if (!text) return null
   return (
     <p id={anchorId} className="post-item-excerpt">
@@ -281,9 +410,12 @@ export const PostFeaturedImageBlock: React.FC<BlockComponentProps> = ({ block, a
       </div>
     )
   }
-  const img = <img className={aspect.trim() || undefined} src={image} alt="" decoding="async" />
+  // #498: the page's own image as the theme's `FeaturedImage` (`post-featured--column|wide|full`),
+  // loaded first (`fetchpriority`): it is the top of the page.
+  const width = typeof attrs.width === "string" ? attrs.width : "column"
+  const img = <img className={aspect.trim() || undefined} src={image} alt="" fetchPriority="high" decoding="async" />
   return (
-    <figure id={anchorId} className="post-featured">
+    <figure id={anchorId} className={`post-featured post-featured--${width}`}>
       {attrs.link === true ? (
         <a href={href} tabIndex={-1} aria-hidden="true">
           {img}
@@ -323,43 +455,33 @@ export const PostDateBlock: React.FC<BlockComponentProps> = ({ block, anchorId }
 }
 
 /**
- * `post_byline`: `div.byline.meta`, the credited names linking to their pages, with avatars unless
- * set not to, and with `readingTime` (#497) " · 4 min read" after them, as the theme's byline (the
- * published body's words at 220 a minute; nothing for a post without text).
+ * `post_byline`: the default theme's `PostByline` (#498), `div.byline.meta.byline--post` for the page's
+ * post ("By <names>" over the date and the reading time) and `byline--list` in a list (the names,
+ * the short date and the reading time on one line). The credited names link to their pages; with
+ * avatars unless set not to; with `date` (#498) the published date; with `readingTime` (#497)
+ * " · 4 min read" (the published body's words at 220 a minute; nothing for a post without text).
+ * Nothing when there is neither a name nor a date nor a reading time to show.
  */
 export const PostBylineBlock: React.FC<BlockComponentProps> = ({ block, anchorId }) => {
   const shown = useSitePost()
   if (!shown) return null
   const credited = !shown.inList && (shown.item as SiteRoutePost).authors?.length ? (shown.item as SiteRoutePost).authors : shown.item.post.authors
-  const people = bylinePeople(credited, shown.item.post)
-  if (people.length === 0) return null
   const attrs = normalizeSiteBlockAttrs("post_byline", block.attrs)
-  const avatars = attrs.avatars !== false
   const body = (!shown.inList ? (shown.item as SiteRoutePost).blocks : null) ?? shown.item.post.published_blocks
   const minutes = attrs.readingTime === true ? readingMinutes(body) : null
-  const size = shown.inList ? 28 : 36
-  const names = people.map((p, i) => (
-    <React.Fragment key={p.key + i}>
-      {nameSeparator(i, people.length)}
-      {p.href ? <a href={p.href}>{p.name}</a> : p.name}
-    </React.Fragment>
-  ))
+  const date = attrs.date === true
+  if (bylinePeople(credited, shown.item.post).length === 0 && !date && !minutes) return null
   return (
-    <div id={anchorId} className="byline meta">
-      {avatars && (
-        <span className="avatars" aria-hidden="true">
-          {people.slice(0, 3).map((p, i) => (
-            <span key={p.key + i} className="avatar" style={{ width: size, height: size, fontSize: Math.round(size * 0.4), background: avatarColor(p.key) }}>
-              {p.avatar ? <img src={p.avatar} alt="" width={size} height={size} loading="lazy" decoding="async" /> : initial(p.name)}
-            </span>
-          ))}
-        </span>
-      )}
-      <span>
-        {avatars ? names : <>By {names}</>}
-        {minutes && <> · {minutes} min read</>}
-      </span>
-    </div>
+    <ThemeByline
+      anchorId={anchorId}
+      post={shown.item.post}
+      credited={credited}
+      variant={shown.inList ? "list" : "post"}
+      avatars={attrs.avatars !== false}
+      date={date}
+      minutes={minutes}
+      dates={shown.site.dates}
+    />
   )
 }
 
@@ -371,7 +493,27 @@ export const PostBylineBlock: React.FC<BlockComponentProps> = ({ block, anchorId
 export const PostTermsBlock: React.FC<BlockComponentProps> = ({ block, anchorId }) => {
   const shown = useSitePost()
   if (!shown) return null
-  const taxonomy = (normalizeSiteBlockAttrs("post_terms", block.attrs).taxonomy as string | undefined) ?? "category"
+  const attrs = normalizeSiteBlockAttrs("post_terms", block.attrs)
+  // #498: every taxonomy's chips, one group each in the order they come, as the theme's `PostTerms`.
+  if (attrs.all === true) {
+    const groups = new Map<string, SiteLinkedTerm[]>()
+    for (const term of shown.item.terms ?? []) {
+      const type = term.taxonomy_type_name || "terms"
+      groups.set(type, [...(groups.get(type) ?? []), term])
+    }
+    if (groups.size === 0) return null
+    return (
+      <dl id={anchorId} className="post-terms">
+        {[...groups].map(([type, list]) => (
+          <div key={type} className={`tag-row post-terms__group post-terms__group--${type}`}>
+            <dt className="section-title">{list.find((term) => term.taxonomy_label)?.taxonomy_label ?? type}</dt>
+            {list.map((term) => termChip(term))}
+          </div>
+        ))}
+      </dl>
+    )
+  }
+  const taxonomy = (attrs.taxonomy as string | undefined) ?? "category"
   const terms: SiteLinkedTerm[] = (shown.item.terms ?? []).filter((term) => term.taxonomy_type_name === taxonomy)
   if (terms.length === 0) return null
   if (taxonomy === "category") {
@@ -390,21 +532,24 @@ export const PostTermsBlock: React.FC<BlockComponentProps> = ({ block, anchorId 
     <dl id={anchorId} className="post-terms">
       <div className={`tag-row post-terms__group post-terms__group--${taxonomy}`}>
         <dt className="section-title">{terms[0].taxonomy_label ?? taxonomy}</dt>
-        {terms.map((term) =>
-          term.href ? (
-            <dd key={term.id} className="post-terms__term" data-slug={term.slug}>
-              <a className="chip" href={term.href}>
-                {term.name}
-              </a>
-            </dd>
-          ) : (
-            <dd key={term.id} className="chip post-terms__term" data-slug={term.slug}>
-              {term.name}
-            </dd>
-          ),
-        )}
+        {terms.map((term) => termChip(term))}
       </div>
     </dl>
+  )
+}
+
+/** One term as `PostTerms`' chip: a link to its archive when its taxonomy is public, else plain. */
+function termChip(term: SiteLinkedTerm) {
+  return term.href ? (
+    <dd key={term.id} className="post-terms__term" data-slug={term.slug}>
+      <a className="chip" href={term.href}>
+        {term.name}
+      </a>
+    </dd>
+  ) : (
+    <dd key={term.id} className="chip post-terms__term" data-slug={term.slug}>
+      {term.name}
+    </dd>
   )
 }
 

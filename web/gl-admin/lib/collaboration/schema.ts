@@ -24,6 +24,12 @@ import { HtmlBlock, HtmlBlockCommands } from "../../components/editor/extensions
 import {
   AuthorCards,
   ColorSchemeSwitch,
+  AuthorAvatar,
+  GoliveCredit,
+  PostFacts,
+  QueryTotal,
+  SearchResults,
+  SiteCopyright,
   RelatedPosts,
   TableOfContents,
   Navigation,
@@ -202,6 +208,15 @@ export function schemaExtensions({ collaborating }: { collaborating: boolean }) 
     authorCards: AuthorCards,
     tableOfContents: TableOfContents,
     colorSchemeSwitch: ColorSchemeSwitch,
+    // #498: the count, the author's avatar, the search results, the post's details, the
+    // copyright line and the credit, and new attrs on eleven site blocks: they change the
+    // fingerprint (#416), so open tabs reload once after the deploy.
+    queryTotal: QueryTotal,
+    authorAvatar: AuthorAvatar,
+    searchResults: SearchResults,
+    postFacts: PostFacts,
+    siteCopyright: SiteCopyright,
+    goliveCredit: GoliveCredit,
     siteBlockCommands: SiteBlockCommands,
     blockId: BlockIdExtension,
   }

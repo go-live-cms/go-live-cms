@@ -129,6 +129,13 @@ export type KnownBlockType =
   | "author_cards"
   | "table_of_contents"
   | "color_scheme_switch"
+  // #498
+  | "query_total"
+  | "author_avatar"
+  | "search_results"
+  | "post_facts"
+  | "site_copyright"
+  | "golive_credit"
   | "query_pagination"
   | "query"
   | "post_template"
@@ -1144,8 +1151,8 @@ export const zNavigation = zBase.extend({
     .object({
       location: z.string().refine(isMenuLocation, "is not a menu location").optional(),
       menuId: z.number().refine(isMenuId, "is not a menu id").optional(),
-      layout: z.literal("column").optional(),
-      overlay: z.literal("never").optional(),
+      layout: z.enum(["column", "columns"]).optional(),
+      overlay: z.enum(["never", "menu"]).optional(),
     })
     .strict()
     .refine((attrs) => attrs.location === undefined || attrs.menuId === undefined, "a location or a menu, not both"),
@@ -1158,6 +1165,7 @@ export const zSearch = zBase.extend({
       label: zSiteText(SEARCH_LABEL_MAX_LENGTH).optional(),
       placeholder: zSiteText(SEARCH_PLACEHOLDER_MAX_LENGTH).optional(),
       button: zSiteText(SEARCH_BUTTON_MAX_LENGTH).optional(),
+      variant: z.literal("icon").optional(),
     })
     .strict(),
 })
@@ -1195,6 +1203,9 @@ export const zQuery = zBase.extend({
         .refine((ids) => JSON.stringify(normalizeTermIds(ids)) === JSON.stringify(ids), "terms must be distinct ids, ascending, at most 10")
         .optional(),
       authorId: zPositiveId.optional(),
+      // #498
+      feature: z.literal(true).optional(),
+      layout: z.literal("links").optional(),
     })
     .strict()
     .refine((attrs) => (attrs.taxonomy === undefined) === (attrs.termIds === undefined), "a taxonomy and its terms, or neither"),
@@ -1203,14 +1214,17 @@ export const zQuery = zBase.extend({
 
 export const zPostTemplate = zBase.extend({ type: z.literal("post_template"), attrs: zNoAttrs, children: z.array(zBlockID) })
 export const zQueryNoResults = zBase.extend({ type: z.literal("query_no_results"), attrs: zNoAttrs, children: z.array(zBlockID) })
-export const zQueryPagination = zBase.extend({ type: z.literal("query_pagination"), attrs: zNoAttrs })
-export const zQueryTitle = zBase.extend({ type: z.literal("query_title"), attrs: z.object({ level: z.literal(2).optional() }).strict() })
+export const zQueryPagination = zBase.extend({ type: z.literal("query_pagination"), attrs: z.object({ end: z.literal(true).optional() }).strict() })
+export const zQueryTitle = zBase.extend({
+  type: z.literal("query_title"),
+  attrs: z.object({ level: z.literal(2).optional(), label: z.literal(true).optional() }).strict(),
+})
 export const zTermDescription = zBase.extend({ type: z.literal("term_description"), attrs: zNoAttrs })
 export const zPostTitle = zBase.extend({
   type: z.literal("post_title"),
   attrs: z.object({ level: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]).optional(), link: z.boolean().optional() }).strict(),
 })
-export const zPostContent = zBase.extend({ type: z.literal("post_content"), attrs: zNoAttrs })
+export const zPostContent = zBase.extend({ type: z.literal("post_content"), attrs: z.object({ width: z.literal("wide").optional() }).strict() })
 export const zPostExcerpt = zBase.extend({
   type: z.literal("post_excerpt"),
   attrs: z
@@ -1227,7 +1241,9 @@ export const zPostExcerpt = zBase.extend({
 })
 export const zPostFeaturedImage = zBase.extend({
   type: z.literal("post_featured_image"),
-  attrs: z.object({ aspect: z.enum(["16-9", "3-2", "1-1"]).optional(), link: z.literal(true).optional() }).strict(),
+  attrs: z
+    .object({ aspect: z.enum(["16-9", "3-2", "1-1"]).optional(), link: z.literal(true).optional(), width: z.enum(["wide", "full"]).optional() })
+    .strict(),
 })
 export const zPostDate = zBase.extend({
   type: z.literal("post_date"),
@@ -1235,11 +1251,17 @@ export const zPostDate = zBase.extend({
 })
 export const zPostByline = zBase.extend({
   type: z.literal("post_byline"),
-  attrs: z.object({ avatars: z.literal(false).optional(), readingTime: z.literal(true).optional() }).strict(),
+  attrs: z.object({ avatars: z.literal(false).optional(), readingTime: z.literal(true).optional(), date: z.literal(true).optional() }).strict(),
 })
 export const zPostTerms = zBase.extend({
   type: z.literal("post_terms"),
-  attrs: z.object({ taxonomy: zContentName.refine((name) => name !== POST_TERMS_DEFAULT_TAXONOMY, "the default taxonomy is left out").optional() }).strict(),
+  attrs: z
+    .object({
+      taxonomy: zContentName.refine((name) => name !== POST_TERMS_DEFAULT_TAXONOMY, "the default taxonomy is left out").optional(),
+      all: z.literal(true).optional(),
+    })
+    .strict()
+    .refine((attrs) => attrs.all === undefined || attrs.taxonomy === undefined, "every taxonomy, or one"),
 })
 export const zPostNavigation = zBase.extend({ type: z.literal("post_navigation"), attrs: zNoAttrs })
 // #497
@@ -1255,6 +1277,7 @@ export const zRelatedPosts = zBase.extend({
         .refine((n) => n !== RELATED_POSTS_DEFAULT_COUNT, "the default count is left out")
         .optional(),
       taxonomy: zContentName.optional(),
+      layout: z.literal("list").optional(),
     })
     .strict(),
 })
@@ -1262,8 +1285,15 @@ export const zAuthorCards = zBase.extend({ type: z.literal("author_cards"), attr
 export const zTableOfContents = zBase.extend({ type: z.literal("table_of_contents"), attrs: zNoAttrs })
 export const zColorSchemeSwitch = zBase.extend({
   type: z.literal("color_scheme_switch"),
-  attrs: z.object({ variant: z.literal("menu").optional() }).strict(),
+  attrs: z.object({ variant: z.enum(["menu", "popover"]).optional() }).strict(),
 })
+// #498
+export const zQueryTotal = zBase.extend({ type: z.literal("query_total"), attrs: zNoAttrs })
+export const zAuthorAvatar = zBase.extend({ type: z.literal("author_avatar"), attrs: zNoAttrs })
+export const zSearchResults = zBase.extend({ type: z.literal("search_results"), attrs: zNoAttrs })
+export const zPostFacts = zBase.extend({ type: z.literal("post_facts"), attrs: z.object({ fallback: z.literal(true).optional() }).strict() })
+export const zSiteCopyright = zBase.extend({ type: z.literal("site_copyright"), attrs: zNoAttrs })
+export const zGoliveCredit = zBase.extend({ type: z.literal("golive_credit"), attrs: zNoAttrs })
 
 /**
  * Catch-all for theme/custom block types not in the known set. Any version: a theme
@@ -1328,6 +1358,12 @@ const knownBlockSchemas: Record<KnownBlockType, z.ZodTypeAny> = {
   author_cards: zAuthorCards,
   table_of_contents: zTableOfContents,
   color_scheme_switch: zColorSchemeSwitch,
+  query_total: zQueryTotal,
+  author_avatar: zAuthorAvatar,
+  search_results: zSearchResults,
+  post_facts: zPostFacts,
+  site_copyright: zSiteCopyright,
+  golive_credit: zGoliveCredit,
   query_pagination: zQueryPagination,
   query: zQuery,
   post_template: zPostTemplate,

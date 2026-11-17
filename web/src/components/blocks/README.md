@@ -337,6 +337,30 @@ interface BlockComponentProps {
   part). The three post ones show the route's post (nothing in a post template); related posts come from the
   context's `related` (read before the render, counted with the queries), nothing when that read failed.
   `post_byline`'s `readingTime` adds " · N min read" after the names (`src/lib/readingTime.ts`).
+- **Site blocks IV (#498, `utils/siteBlocksIV.tsx` and `utils/themeMarkup.tsx`, registered by `query_total/`,
+  `author_avatar/`, `search_results/`, `post_facts/`, `site_copyright/`, `golive_credit/`):** what the default
+  theme's block templates need beyond I–III; each is the markup of the theme piece it replaces, and the
+  theme's whole pages are compared with its code layouts (`themes/default/theme.astro.test.ts`). New blocks:
+  `p.meta` (`query_total`: "12 items", "Page 2 · 14 posts", "4 posts tagged Editor", an author's website),
+  `span.avatar.author-header__avatar`, the search page's `div.search-summary`, `nav.search-chips`,
+  `ol.search-results` (the highlights `safeHighlight`ed when the route read them) and pager, or
+  `div.search-empty` with topics and recent posts (`search_results`, inside `div.search-results-block`),
+  `dl.post-facts` (`post_facts`; with `fallback`, only where the page shows no table of contents and no
+  "In <term>" list), `span.site-copyright` ("© <year> <site>") and `a.golive-credit`. Changed markup:
+  `post_byline` is the theme's `PostByline` (`div.byline.meta.byline--post|list`, with `date` the published
+  date), `post_featured_image` on the page `figure.post-featured.post-featured--column|wide|full` with
+  `fetchpriority="high"`, `post_excerpt` on the page the dek (`p.dek`, the excerpt only) and in a list the
+  theme's 220 characters unless `length` is set, `query_title` the theme's titles (the name, "Search",
+  the site's title on the front page, the 404's) or with `label` the page's kind (`span.eyebrow`),
+  `term_description` the page's description (the author's bio, the tagline or "Page N", the 404's line),
+  `search` the theme's placeholder and, on the search page, the query; with `variant: icon` the header's
+  `a.icon-btn` link. New attrs: navigation's `overlay: menu` (the header's `button.menu-btn` and
+  `dialog#site-menu.mobile-menu`) and `layout: columns` (the footer's `nav.footer-col`s and "Site" with the
+  feed), the switch's `variant: popover` (`div.theme-menu > button[data-theme-menu-toggle]` and
+  `div#theme-menu.theme-popover`), the query's `feature` (`article.feature`, then the rest under
+  `section > h2#more-posts`) and `layout: links` (`ul.link-list`), the pager's `end` ("That’s every post …"),
+  `post_terms`' `all` (every taxonomy, `PostTerms`), `related_posts`' `layout: list` (`section.aside-list`,
+  "In <term>"), `post_content`'s `width` (the theme's `imageSizes`).
 - **Cover, media & text (#427, "Published · media & embeds", `cover/`, `media_text/`):** `div.cover`
   (`alignwide` / `alignfull`, `--dim` the overlay as a fraction) with the image, then `div.cover-inner`
   holding the blocks; `div.media-text` (`is-media-right`) with `figure.media-text-media` first, so it

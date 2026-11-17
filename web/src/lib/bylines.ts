@@ -75,3 +75,32 @@ export function nameSeparator(i: number, n: number): string {
   if (i === 0) return ""
   return i === n - 1 ? " and " : ", "
 }
+
+// ── The author page (#350; core since #498, for the author page's site blocks) ─────────────
+
+/**
+ * The website as a link target, only for an absolute http(s) URL (the API checks this too; this
+ * keeps a bad stored value from becoming a javascript: link).
+ */
+export function safeWebsite(website: string | undefined | null): string | null {
+  const value = (website ?? "").trim()
+  if (!value) return null
+  try {
+    const url = new URL(value)
+    return url.protocol === "http:" || url.protocol === "https:" ? url.href : null
+  } catch {
+    return null
+  }
+}
+
+/** The website as link text: host and path, without the scheme, "www." or a trailing slash ("anacosta.example"). */
+export function websiteLabel(href: string): string {
+  const url = new URL(href)
+  const path = url.pathname === "/" ? "" : url.pathname.replace(/\/$/, "")
+  return `${url.host.replace(/^www\./, "")}${path}`
+}
+
+/** "1 post", "12 posts". */
+export function postCountLabel(n: number): string {
+  return n === 1 ? "1 post" : `${n} posts`
+}

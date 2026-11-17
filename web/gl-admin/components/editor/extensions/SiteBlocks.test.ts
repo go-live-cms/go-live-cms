@@ -206,6 +206,133 @@ describe("site blocks III in the editor (#497)", () => {
   })
 })
 
+describe("site blocks IV in the editor (#498)", () => {
+  const NEW_498 = ["query_total", "author_avatar", "search_results", "post_facts", "site_copyright", "golive_credit"] as const
+
+  it("the six new blocks and the new attrs round trip through the bridge, defaults left out", () => {
+    const doc = docOf(
+      ["navigation", { location: "primary", overlay: "menu" }],
+      ["navigation", { location: "footer", layout: "columns" }],
+      ["search", { variant: "icon", label: "Search" }],
+      ["query_title", { label: true }],
+      ["post_content", { width: "wide" }],
+      ["post_featured_image", { width: "full" }],
+      ["post_byline", { date: true, readingTime: true }],
+      ["post_terms", { all: true }],
+      ["related_posts", { layout: "list", taxonomy: "category" }],
+      ["color_scheme_switch", { variant: "popover" }],
+      ["post_facts", { fallback: true }],
+      ["query_total", {}],
+      ["author_avatar", {}],
+      ["search_results", {}],
+      ["site_copyright", {}],
+      ["golive_credit", {}],
+      ["post_featured_image", { width: "column" }],
+    )
+    const ed = open(doc, "template")
+    expect(topTypes(ed)).toEqual([
+      "navigation", "navigation", "search", "queryTitle", "postContent", "postFeaturedImage", "postByline", "postTerms", "relatedPosts", "colorSchemeSwitch",
+      "postFacts", "queryTotal", "authorAvatar", "searchResults", "siteCopyright", "goliveCredit", "postFeaturedImage", "paragraph",
+    ])
+    expect(ed.state.doc.child(0).attrs).toMatchObject({ location: "primary", overlay: "menu", layout: "row" })
+    expect(ed.state.doc.child(1).attrs).toMatchObject({ layout: "columns", overlay: "phone" })
+    expect(ed.state.doc.child(16).attrs).toMatchObject({ width: "column" })
+    const back = pmToBlockDoc(ed.state.doc)
+    for (const id of doc.blocks_order.slice(0, 16)) expect(back.blocks[id]).toEqual(doc.blocks[id])
+    // The column is the default: left out.
+    expect(back.blocks[ID(16)].attrs).toEqual({})
+  })
+
+  it("a query's featured first post, titles only, and its pager's list end round trip", () => {
+    const blocks: Record<string, unknown> = {
+      "query-000001": { id: "query-000001", type: "query", version: 1, attrs: { inherit: true, feature: true, layout: "links" }, children: ["tmpl-000001", "pager-00001"] },
+      "tmpl-000001": { id: "tmpl-000001", type: "post_template", version: 1, attrs: {}, children: ["title-00001"] },
+      "title-00001": { id: "title-00001", type: "post_title", version: 1, attrs: {} },
+      "pager-00001": { id: "pager-00001", type: "query_pagination", version: 1, attrs: { end: true } },
+    }
+    const doc = { doc_version: 1, blocks_order: ["query-000001"], blocks } as unknown as BlockDocV1
+    const ed = open(doc, "template")
+    const query = ed.state.doc.child(0)
+    expect(query.attrs).toMatchObject({ inherit: true, feature: true, layout: "links" })
+    expect(query.child(1).attrs).toMatchObject({ end: true })
+    const back = pmToBlockDoc(ed.state.doc)
+    expect(back.blocks["query-000001"]).toEqual(blocks["query-000001"])
+    expect(back.blocks["pager-00001"]).toEqual(blocks["pager-00001"])
+  })
+
+  it("a client's bad values stop at the bridge", () => {
+    const ed = open(docOf(["navigation", { location: "primary" }], ["post_terms", {}]), "template")
+    ed.view.dispatch(ed.state.tr.setNodeMarkup(0, undefined, { ...ed.state.doc.child(0).attrs, layout: "grid", overlay: "dialog" }))
+    const termsPos = ed.state.doc.child(0).nodeSize
+    // Every taxonomy wins over one: the taxonomy is left out.
+    ed.view.dispatch(ed.state.tr.setNodeMarkup(termsPos, undefined, { ...ed.state.doc.child(1).attrs, all: true, taxonomy: "post_tag" }))
+    const back = pmToBlockDoc(ed.state.doc)
+    expect(back.blocks[ID(0)].attrs).toEqual({ location: "primary" })
+    expect(back.blocks[ID(1)].attrs).toEqual({ all: true })
+  })
+
+  it("are labelled placeholders that say what they're set to", () => {
+    const ed = open(
+      docOf(
+        ["navigation", { location: "footer", layout: "columns" }],
+        ["navigation", { location: "primary", overlay: "menu" }],
+        ["search", { variant: "icon" }],
+        ["query_title", { label: true }],
+        ["post_byline", { date: true }],
+        ["post_terms", { all: true }],
+        ["related_posts", { layout: "list" }],
+        ["color_scheme_switch", { variant: "popover" }],
+        ["post_facts", { fallback: true }],
+        ["query_total", {}],
+        ["site_copyright", {}],
+        ["golive_credit", {}],
+      ),
+      "template"
+    )
+    const views = [...ed.view.dom.querySelectorAll(".editor-site-block")]
+    expect(views.map((v) => v.querySelector(".editor-site-block__name")!.textContent)).toEqual([
+      "Navigation", "Navigation", "Search", "Query title", "Post byline", "Post terms", "Related posts", "Colour scheme switch", "Post details", "Query total", "Copyright", "GoLive credit",
+    ])
+    expect(views.map((v) => v.querySelector(".editor-site-block__detail")!.textContent)).toEqual([
+      "Location: footer · Footer columns",
+      "Location: primary · row · phone menu",
+      "Icon link · “Search”",
+      "Label · the page’s kind (Category, Author …)",
+      "With avatars · date",
+      "Every taxonomy",
+      "“In <term>” · 3 links sharing the post’s category",
+      "Light · Dark · System, behind an icon button",
+      "Published · Updated · Reading time · only when nothing else is beside the post",
+      "“12 posts” · how many the page lists",
+      "© this year, the site’s title",
+      "Published with GoLive",
+    ])
+    expect(ed.view.dom.querySelector(".is-inert")).toBeNull()
+    ed.destroy()
+    const post = open(docOf(["golive_credit", {}]), "post")
+    expect(post.view.dom.querySelector(".editor-site-block.is-inert [role=note]")?.textContent).toBe("GoLive credit only works in the Site editor. In a post it shows nothing on the page. You can remove it.")
+  })
+
+  it("the query loop's summary says when it features the first post or lists titles only", () => {
+    expect(siteBlockSummary("query", { inherit: true, feature: true })).toBe("This page’s list · its pages · Featured first post")
+    expect(siteBlockSummary("query", { perPage: 3, layout: "links" })).toBe("Posts · 3, newest first · titles only")
+    // An excerpt without a length follows the theme, and is the post's dek on its page.
+    expect(siteBlockSummary("post_excerpt", {})).toBe("Theme’s length · the post’s dek on its page")
+    expect(siteBlockSummary("post_excerpt", { length: 35 })).toBe("Theme’s length · the post’s dek on its page")
+  })
+
+  it("insertSiteBlock puts each new one in with its defaults", () => {
+    const ed = open(null, "template")
+    for (const type of NEW_498) {
+      ed.commands.setTextSelection(ed.state.doc.content.size - 1)
+      expect(ed.commands.insertSiteBlock(type), type).toBe(true)
+      const at = topTypes(ed).indexOf(SITE_BLOCK_NODE_NAMES[type])
+      expect(at, type).toBeGreaterThan(-1)
+      expect(ed.state.doc.child(at).attrs, type).toMatchObject(siteBlockNodeAttrs(type, {}))
+    }
+  })
+})
+
 describe("paste can't make a site block (#488, design 4.4: no parse rules)", () => {
   const siteNodes = new Set<string>(Object.values(SITE_BLOCK_NODE_NAMES))
   const hasSiteNode = (ed: Editor) => {

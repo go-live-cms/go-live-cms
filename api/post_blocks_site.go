@@ -5,8 +5,14 @@ package api
 // query loop (query, post_template and query_no_results, rows of blockContainers, and
 // query_pagination, an atom that lives only in a query), query_title, term_description and
 // the post_* blocks. Site blocks III (#497): related_posts, author_cards, table_of_contents,
-// color_scheme_switch, and readingTime on post_byline. They hold no text of their own: what they show is the site's, read on
-// the page. In a post they are inert, never refused (refusing one would make every later
+// color_scheme_switch, and readingTime on post_byline. Site blocks IV (#498): query_total,
+// author_avatar, search_results, post_facts, site_copyright and golive_credit, and the attrs
+// that let the others render each piece of the default theme's layouts (navigation layout
+// "columns" and overlay "menu", search variant "icon", query feature and layout "links",
+// query_title label, query_pagination end, post_content and post_featured_image width,
+// post_byline date, post_terms all, related_posts layout "list", color_scheme_switch variant
+// "popover", post_facts fallback). They hold no text of their own: what they show is the
+// site's, read on the page. In a post they are inert, never refused (refusing one would make every later
 // store of that post fail).
 //
 // Their attrs are allowlists with defaults left out, the same rules as the web's
@@ -45,6 +51,9 @@ var siteBlockTypes = map[string]bool{
 	"query": true, "post_template": true, "query_no_results": true,
 	// #497
 	"related_posts": true, "author_cards": true, "table_of_contents": true, "color_scheme_switch": true,
+	// #498
+	"query_total": true, "author_avatar": true, "search_results": true, "post_facts": true,
+	"site_copyright": true, "golive_credit": true,
 }
 
 const (
@@ -128,17 +137,20 @@ func sanitizeSiteBlockAttrs(blockType string, attrs map[string]interface{}) {
 		if _, hasMenu := attrs["menuId"]; hasMenu {
 			delete(attrs, "location")
 		}
-		if attrs["layout"] != "column" {
+		if layout := attrs["layout"]; layout != "column" && layout != "columns" {
 			delete(attrs, "layout")
 		}
-		if attrs["overlay"] != "never" {
+		if overlay := attrs["overlay"]; overlay != "never" && overlay != "menu" {
 			delete(attrs, "overlay")
 		}
 	case "search":
-		keepOnlyAttrs(attrs, "label", "placeholder", "button")
+		keepOnlyAttrs(attrs, "label", "placeholder", "button", "variant")
 		sanitizePlainText(attrs, "label", searchLabelMaxRunes)
 		sanitizePlainText(attrs, "placeholder", searchPlaceholderMaxRunes)
 		sanitizePlainText(attrs, "button", searchButtonMaxRunes)
+		if attrs["variant"] != "icon" {
+			delete(attrs, "variant")
+		}
 	case "template_part":
 		keepOnlyAttrs(attrs, "slug")
 		if slug, ok := attrs["slug"].(string); !ok || !templatePartSlugPattern.MatchString(slug) {
@@ -147,9 +159,18 @@ func sanitizeSiteBlockAttrs(blockType string, attrs map[string]interface{}) {
 	case "query":
 		sanitizeQueryAttrs(attrs)
 	case "query_title":
-		keepOnlyAttrs(attrs, "level")
+		keepOnlyAttrs(attrs, "level", "label")
 		if level, ok := attrs["level"].(float64); !ok || level != 2 {
 			delete(attrs, "level")
+		}
+		keepOnlyTrue(attrs, "label")
+	case queryPaginationBlockType:
+		keepOnlyAttrs(attrs, "end")
+		keepOnlyTrue(attrs, "end")
+	case "post_content":
+		keepOnlyAttrs(attrs, "width")
+		if attrs["width"] != "wide" {
+			delete(attrs, "width")
 		}
 	case "post_title":
 		keepOnlyAttrs(attrs, "level", "link")
@@ -163,11 +184,14 @@ func sanitizeSiteBlockAttrs(blockType string, attrs map[string]interface{}) {
 		keepOnlyAttrs(attrs, "length")
 		keepClampedInt(attrs, "length", postExcerptMinWords, postExcerptMaxWords, postExcerptDefaultWords)
 	case "post_featured_image":
-		keepOnlyAttrs(attrs, "aspect", "link")
+		keepOnlyAttrs(attrs, "aspect", "link", "width")
 		if aspect := attrs["aspect"]; aspect != "16-9" && aspect != "3-2" && aspect != "1-1" {
 			delete(attrs, "aspect")
 		}
 		keepOnlyTrue(attrs, "link")
+		if width := attrs["width"]; width != "wide" && width != "full" {
+			delete(attrs, "width")
+		}
 	case "post_date":
 		keepOnlyAttrs(attrs, "which", "format")
 		if attrs["which"] != "modified" {
@@ -177,27 +201,37 @@ func sanitizeSiteBlockAttrs(blockType string, attrs map[string]interface{}) {
 			delete(attrs, "format")
 		}
 	case "post_byline":
-		keepOnlyAttrs(attrs, "avatars", "readingTime")
+		keepOnlyAttrs(attrs, "avatars", "readingTime", "date")
 		keepOnlyFalse(attrs, "avatars")
 		keepOnlyTrue(attrs, "readingTime")
+		keepOnlyTrue(attrs, "date")
 	case "related_posts":
-		keepOnlyAttrs(attrs, "count", "taxonomy")
+		keepOnlyAttrs(attrs, "count", "taxonomy", "layout")
+		if attrs["layout"] != "list" {
+			delete(attrs, "layout")
+		}
 		keepClampedInt(attrs, "count", relatedPostsMinCount, relatedPostsMaxCount, relatedPostsDefaultCount)
 		if name, ok := attrs["taxonomy"].(string); !ok || !contentNamePattern.MatchString(name) {
 			delete(attrs, "taxonomy")
 		}
 	case "color_scheme_switch":
 		keepOnlyAttrs(attrs, "variant")
-		if attrs["variant"] != "menu" {
+		if variant := attrs["variant"]; variant != "menu" && variant != "popover" {
 			delete(attrs, "variant")
 		}
 	case "post_terms":
-		keepOnlyAttrs(attrs, "taxonomy")
-		if name, ok := attrs["taxonomy"].(string); !ok || !contentNamePattern.MatchString(name) || name == postTermsDefaultTaxonomy {
+		keepOnlyAttrs(attrs, "taxonomy", "all")
+		keepOnlyTrue(attrs, "all")
+		// #498: every taxonomy leaves the one taxonomy out.
+		if name, ok := attrs["taxonomy"].(string); !ok || !contentNamePattern.MatchString(name) || name == postTermsDefaultTaxonomy || attrs["all"] == true {
 			delete(attrs, "taxonomy")
 		}
-	case "term_description", "post_content", "post_navigation", queryPaginationBlockType, "post_template", "query_no_results",
-		"author_cards", "table_of_contents":
+	case "post_facts":
+		keepOnlyAttrs(attrs, "fallback")
+		keepOnlyTrue(attrs, "fallback")
+	case "term_description", "post_navigation", "post_template", "query_no_results",
+		"author_cards", "table_of_contents",
+		"query_total", "author_avatar", "search_results", "site_copyright", "golive_credit":
 		keepOnlyAttrs(attrs)
 	}
 }
@@ -208,8 +242,13 @@ func sanitizeSiteBlockAttrs(blockType string, attrs map[string]interface{}) {
 // order "asc"; taxonomy and termIds both or neither (termIds: ids, distinct, ascending, at
 // most 10; the editor node's comma list is read too); authorId a user id.
 func sanitizeQueryAttrs(attrs map[string]interface{}) {
-	keepOnlyAttrs(attrs, "inherit", "postType", "perPage", "orderBy", "order", "taxonomy", "termIds", "authorId")
+	keepOnlyAttrs(attrs, "inherit", "postType", "perPage", "orderBy", "order", "taxonomy", "termIds", "authorId", "feature", "layout")
 	keepOnlyTrue(attrs, "inherit")
+	// #498: the home page's featured first post; titles only.
+	keepOnlyTrue(attrs, "feature")
+	if attrs["layout"] != "links" {
+		delete(attrs, "layout")
+	}
 	if name, ok := attrs["postType"].(string); !ok || !contentNamePattern.MatchString(name) || name == queryDefaultType {
 		delete(attrs, "postType")
 	}

@@ -680,6 +680,20 @@ kept so references in code stay valid.
     `src/components/blocks/siteBlocksIII.test.tsx`, `themes/default/siteBlocksMarkup.astro.test.ts` (the theme's
     components' markup), `themes/default/themeInit.test.ts` (the switch without a script of its own),
     `src/lib/siteRenderContext.test.ts`, the vectors, Go `post_blocks_site_test.go`.
+- **Site blocks IV (#498, the same files).** Six more flow atoms, `queryTotal`, `authorAvatar`, `searchResults`,
+  `postFacts`, `siteCopyright`, `goliveCredit` (Block Spec `query_total`, …, `golive_credit`), and new attrs, all
+  from `siteBlockNodeAttrs`: `search.variant`, `query.feature`/`layout`, `queryTitle.label`, `queryPagination.end`,
+  `postContent.width`, `postFeaturedImage.width`, `postByline.date`, `postTerms.all` (which drops `taxonomy`),
+  `relatedPosts.layout`, `postFacts.fallback`, and new values of navigation's `layout` (`columns`) and `overlay`
+  (`menu`) and the switch's `variant` (`popover`). Everything else is #488's (node attrs, last writer wins,
+  canonical with defaults left out, no parse rules, inert in a post, offered in templates and parts).
+  `post_excerpt`'s absent `length` now means the theme's own rule (220 characters in a list), not 35 words.
+  - **Stale clients:** the six nodes and the new attrs change the fingerprint (`schemaFingerprint.test.ts` pins
+    each), so open tabs reload once after the deploy. New *values* of an existing attr don't change the schema; an
+    old bundle keeps them (y-tiptap compares by value) and shows a generic label.
+  - Tests: `extensions/SiteBlocks.test.ts`, `SiteBlocks.collab.test.tsx` (the six written into a post's doc on the
+    relay; two people on navigation's overlay and layout, then a restart), `ui/SiteBlocksIVSettings.test.tsx`,
+    `src/components/blocks/siteBlocksIV.test.tsx`, the parity check in `themes/default/theme.astro.test.ts`.
 - **Inline nodes (#320, `components/editor/extensions/InlineNodes.ts`, rules in
   `blocks-spec/inlineNodes.ts`): `mention` {userId, label}, `contentLink` {postId, label},
   `dateChip` {date, time, reminder}.** Inline **atoms** in the `inline` group, so they live in a
