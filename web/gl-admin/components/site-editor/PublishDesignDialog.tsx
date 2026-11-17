@@ -62,6 +62,8 @@ export default function PublishDesignDialog({
   vocabulary,
 }: Props) {
   const [overview, setOverview] = useState<SiteDesignOverview | null>(null)
+  // The overview couldn't be read: the list may be short, never "nothing to publish".
+  const [readFailed, setReadFailed] = useState(false)
   const [stylesNow, setStylesNow] = useState<GlobalStylesResponse | null>(styles)
   const [loading, setLoading] = useState(false)
   const [pairs, setPairs] = useState<ContrastFailure[]>(styles?.contrast ?? [])
@@ -88,6 +90,7 @@ export default function PublishDesignDialog({
       if (!current && read?.global_styles_changed) current = await getGlobalStyles().catch(() => null)
       if (!live) return
       setOverview(read)
+      setReadFailed(read === null)
       if (current) {
         setStylesNow(current)
         setPairs(current.contrast ?? [])
@@ -120,7 +123,7 @@ export default function PublishDesignDialog({
         ]
       : []),
   ]
-  const nothing = !loading && changes.length === 0 && problems.length === 0
+  const nothing = !loading && !readFailed && changes.length === 0 && problems.length === 0
 
   const publish = async () => {
     setPublishing(true)
@@ -210,6 +213,11 @@ export default function PublishDesignDialog({
         ) : (
           <>
             <p>These go live on {window.location.host} together. Each keeps a version in History.</p>
+            {readFailed && (
+              <Notice tone="warning" title="Couldn’t read every change">
+                The list below may be incomplete. Publishing still puts every change of the active theme live.
+              </Notice>
+            )}
             {unsavedNote && (
               <Notice tone="warning" title="Your latest change isn't saved">
                 {unsavedNote} This publishes the styles as they were last saved.

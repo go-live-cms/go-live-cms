@@ -16,6 +16,7 @@ import {
   type SiteBlockType,
 } from "@gl-admin/lib/blocks-spec"
 import { editorDocKind, editorSiteBridge } from "./SiteBlocks"
+import { humanize } from "@gl-admin/lib/siteDesign"
 
 /**
  * The site blocks' views (#488, the blocks canvas's "Site blocks in the editor" board): a
@@ -35,11 +36,8 @@ const PART_LOCK = "M6 11h12v10H6zM8 11V7a4 4 0 0 1 8 0v4"
 
 const ICON_OF: Readonly<Record<SiteBlockType, string>> = { ...SITE_BLOCK_ICONS, template_part: PART_LOCK }
 
-/** "header" → "Header", "promo_bar" → "Promo bar". */
-export function partName(slug: string): string {
-  const words = slug.replace(/[-_]+/g, " ").trim()
-  return words.charAt(0).toUpperCase() + words.slice(1)
-}
+/** "header" → "Header", "promo_bar" → "Promo bar": the Site editor's one rule for a slug's label. */
+export const partName = humanize
 
 /**
  * The placeholder's second line: what the block is set to show, from its attrs only (the

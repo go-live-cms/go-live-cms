@@ -20,6 +20,7 @@ import {
   rowPill,
   savedTemplateName,
   siteTemplateName,
+  takenSlugs,
   templateGroups,
   templatesUsingPart,
   usedInLabel,
@@ -87,6 +88,13 @@ describe("names of new templates and parts (13.1)", () => {
     // A part's slug is its name.
     expect(checkNewName("Promo bar", "part", new Set(["header"]), "Paper")).toEqual({ ok: true, name: "promo-bar", slug: "promo-bar" })
     expect(checkNewName("Header", "part", new Set(["header"]), "Paper")).toMatchObject({ ok: false, error: "There’s already a part called Header in Paper." })
+  })
+
+  it("a new part can't take a part pages already render (a starter or the theme's)", () => {
+    const rows = [row({ kind: "part", slug: "promo" }), row({ kind: "template", slug: "custom-landing" })]
+    expect([...takenSlugs("part", rows, { sidebar: {} })].sort()).toEqual(["footer", "header", "promo", "sidebar"])
+    expect([...takenSlugs("template", rows)]).toEqual(["custom-landing"])
+    expect(checkNewName("Header", "part", takenSlugs("part", []), "Paper")).toMatchObject({ ok: false, error: "There’s already a part called Header in Paper." })
   })
 
   it("fits block:[a-z0-9-]{1,64} and the slug CHECK", () => {

@@ -35,6 +35,7 @@ import {
   publishButtonLabel,
   resetConsequence,
   rowActions,
+  takenSlugs,
   templateGroups,
   type OverviewInput,
   type OverviewRow,
@@ -161,7 +162,7 @@ export default function SiteEditorPage() {
     }
   }
 
-  const takenSlugs = (kind: "template" | "part") => new Set(overview.templates.filter((t) => t.kind === kind).map((t) => t.slug))
+  const taken = (kind: "template" | "part") => takenSlugs(kind, overview.templates, context.shippedParts)
   const stylesChanged = overview.global_styles_changed
   const stylesSupported = styles?.supported ?? true
   const contrastCount = styles?.contrast.length ?? 0
@@ -298,7 +299,7 @@ export default function SiteEditorPage() {
         onClose={() => setNewKind(null)}
         kind={newKind ?? "template"}
         themeName={context.themeName}
-        taken={takenSlugs(newKind ?? "template")}
+        taken={taken(newKind ?? "template")}
         onCreate={async ({ slug, title, from }) => {
           try {
             const created = await createSiteTemplate({ kind: newKind ?? "template", slug, title, from })

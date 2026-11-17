@@ -189,6 +189,13 @@ describe("Publish site design", () => {
     expect(button("Try again")).toBeTruthy()
   })
 
+  it("a failed read never says there's nothing to publish", async () => {
+    api.getSiteDesignOverview.mockRejectedValue(new Error("boom"))
+    await open()
+    expect(dialog().textContent).toContain("Couldn’t read every change")
+    expect(button("Publish").disabled).toBe(false)
+  })
+
   it("nothing to publish", async () => {
     api.getSiteDesignOverview.mockResolvedValue({ ...overview, templates: [], global_styles_changed: false, unpublished_changes: 0 })
     await open()

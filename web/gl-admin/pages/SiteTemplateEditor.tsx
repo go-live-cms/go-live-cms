@@ -424,10 +424,18 @@ function LoadedEditor({
 
   const beforePublish = async () => {
     // The publish flushes the server, which needs every edit typed here first.
-    await Promise.race([
-      editorRef.current?.whenAcknowledged() ?? Promise.resolve(),
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Your latest edits aren’t on the server yet. Check the connection and try again.")), ACK_TIMEOUT_MS)),
-    ])
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+      await Promise.race([
+        editorRef.current?.whenAcknowledged() ?? Promise.resolve(),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error("Your latest edits aren’t on the server yet. Check the connection and try again.")), ACK_TIMEOUT_MS)
+        }),
+      ])
+    } finally {
+      // Cleared either way, so the losing timeout never rejects later with no one listening.
+      clearTimeout(timer)
+    }
   }
 
   // ── Preview pages ─────────────────────────────────────────────────────────────────────

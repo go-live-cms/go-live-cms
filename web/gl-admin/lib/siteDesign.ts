@@ -533,3 +533,15 @@ export function releaseTime(iso: string, now: Date = new Date()): string {
   const time = date.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })
   return `${day}, ${time}`
 }
+
+/**
+ * The slugs a new template or part can't take (13.1: "one already taken in the theme"): the
+ * theme's rows of that kind and, for a part, every part a page may already render, the core
+ * starters and the theme's shipped ones. A new part named "Header" would otherwise create a blank
+ * override of the site's header.
+ */
+export function takenSlugs(kind: SiteTemplateKind, rows: readonly Pick<SiteTemplate, "kind" | "slug">[], shippedParts: Readonly<Record<string, unknown>> = {}): Set<string> {
+  const taken = new Set(rows.filter((row) => row.kind === kind).map((row) => row.slug))
+  if (kind === "part") for (const slug of [...STARTER_PARTS, ...Object.keys(shippedParts)]) taken.add(slug)
+  return taken
+}
