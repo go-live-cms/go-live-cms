@@ -26,6 +26,8 @@ type UpdateSettingsRequest struct {
 	// The site logo (#488, site_logo.go): an image's media id, null for none, absent to
 	// keep it.
 	SiteLogoMediaID json.RawMessage `json:"site_logo_media_id"`
+	// Settings › Discussion (#522, discussion_settings.go).
+	discussionSettingsRequest
 }
 
 // setFields lists the JSON names of the settings the request sets, in field
@@ -49,6 +51,7 @@ func (req UpdateSettingsRequest) setFields() []string {
 	add(req.AllowSignup != nil, "allow_signup")
 	add(len(req.FrontPageID) > 0, "front_page_id")
 	add(len(req.SiteLogoMediaID) > 0, "site_logo_media_id")
+	req.discussionSettingsRequest.setFields(add)
 	return fields
 }
 
@@ -77,8 +80,10 @@ type SettingsResponse struct {
 	// The public origin (PUBLIC_BASE_URL), read-only: the domain is deploy config
 	// (docs/operations/deploy.md, "Change domain"). "" when it isn't configured.
 	SiteAddress string `json:"site_address"`
-	CreatedAt   string `json:"created_at"`
-	ChangedAt   string `json:"changed_at"`
+	// Settings › Discussion (#522); the word lists for admins only.
+	discussionSettingsResponse
+	CreatedAt string `json:"created_at"`
+	ChangedAt string `json:"changed_at"`
 }
 
 // extensionTypeTheme is the only extension_type the /extension-settings routes

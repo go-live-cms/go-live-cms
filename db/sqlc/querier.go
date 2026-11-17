@@ -7,6 +7,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -75,6 +76,8 @@ type Querier interface {
 	ClaimUserInvitation(ctx context.Context, tokenHash []byte) (UserInvitation, error)
 	// Frees a location for another menu (assigning a location moves it).
 	ClearMenuLocation(ctx context.Context, arg ClearMenuLocationParams) error
+	// 7.2: the network hash answers "other comments from this network lately", for 30 days.
+	ClearOldReaderCommentNetworkHashes(ctx context.Context, before time.Time) (int64, error)
 	// After a publish: rows the published body doesn't use aren't on the site.
 	ClearPublishedHTMLSnippetsExcept(ctx context.Context, arg ClearPublishedHTMLSnippetsExceptParams) error
 	// The source's category terms (taxonomy "category"), the template's saved
@@ -135,6 +138,8 @@ type Querier interface {
 	// The collab store runs it under the post's row lock, so concurrent stores of one
 	// post can't both insert; elsewhere a race costs at most a duplicate.
 	CreateActivityThrottled(ctx context.Context, arg CreateActivityThrottledParams) (int64, error)
+	// A browser key (3.3): the SHA-256 of the cookie's value, never the value.
+	CreateCommenterKey(ctx context.Context, arg CreateCommenterKeyParams) (CommenterKey, error)
 	// Email change (#334): the confirmation link goes to the new address; the change
 	// happens only when it is redeemed (ConfirmEmailChangeTx).
 	CreateEmailChangeToken(ctx context.Context, arg CreateEmailChangeTokenParams) (EmailChangeToken, error)
@@ -161,6 +166,7 @@ type Querier interface {
 	CreatePostTemplate(ctx context.Context, arg CreatePostTemplateParams) (PostTemplate, error)
 	CreatePostType(ctx context.Context, arg CreatePostTypeParams) (PostType, error)
 	CreatePosts(ctx context.Context, arg CreatePostsParams) (Post, error)
+	CreateReaderComment(ctx context.Context, arg CreateReaderCommentParams) (ReaderComment, error)
 	// Review requests (#323, 000044). Publishing resolves the open one in a trigger
 	// (golive_resolve_review_on_publish); the API writes the rest here.
 	// A new open request. Nothing is inserted (sql.ErrNoRows) when the post already
@@ -201,6 +207,10 @@ type Querier interface {
 	DeleteActivityBefore(ctx context.Context, arg DeleteActivityBeforeParams) (int64, error)
 	DeleteAllPostMeta(ctx context.Context, postID int64) error
 	DeleteAllThemeSettings(ctx context.Context, themeID int64) error
+	DeleteExpiredCommenterKeys(ctx context.Context, now time.Time) (int64, error)
+	// Unconfirmed after 48 hours, pending after 90 days, spam and trash 30 days after they
+	// got there (moderated_at; created_at for a comment the rules routed to spam).
+	DeleteExpiredReaderComments(ctx context.Context, arg DeleteExpiredReaderCommentsParams) (int64, error)
 	DeleteExtensionSettingsByExtension(ctx context.Context, arg DeleteExtensionSettingsByExtensionParams) error
 	// Retention: up to batch_size runs with this status that finished before cutoff.
 	DeleteFinishedPluginHookRuns(ctx context.Context, arg DeleteFinishedPluginHookRunsParams) (int64, error)
@@ -209,6 +219,10 @@ type Querier interface {
 	DeleteMediaPosts(ctx context.Context, mediaID int64) error
 	DeleteMenu(ctx context.Context, id int64) (int64, error)
 	DeleteMenuItems(ctx context.Context, menuID int64) error
+	// A tombstone exists for its replies; once no row answers it or sits in its thread, it
+	// goes. A reply's tombstone going can orphan its root's, so the job runs this until it
+	// deletes nothing.
+	DeleteOrphanReaderCommentTombstones(ctx context.Context) (int64, error)
 	// Plugin settings (#457, docs/design/plugin-system.md section 6): rows keyed
 	// plugin:<slug>:<name>, written only through the admin-only
 	// /plugins/:slug/settings routes. Read with ListPluginExtensionSettings
@@ -229,6 +243,10 @@ type Querier interface {
 	DeletePostMeta(ctx context.Context, arg DeletePostMetaParams) error
 	DeletePostTemplate(ctx context.Context, id int64) (int64, error)
 	DeletePostType(ctx context.Context, name string) error
+	// The row itself; its replies go with it only when it roots their thread (root_id's
+	// cascade), which DeleteReaderCommentTx allows only when none of them is approved.
+	DeleteReaderCommentRow(ctx context.Context, id int64) (int64, error)
+	DeleteReaderCommentUnsubscribeTokens(ctx context.Context, commentID int64) error
 	DeleteRedirect(ctx context.Context, id int64) (Redirect, error)
 	DeleteRedirectFromPath(ctx context.Context, fromPath string) (int64, error)
 	// A newer signup for the address, or its account being created, ends every
@@ -236,6 +254,11 @@ type Querier interface {
 	DeleteSignupRequestsByEmail(ctx context.Context, email string) error
 	// Retention: up to batch_size fanned-out events with no runs left.
 	DeleteSpentPluginEvents(ctx context.Context, batchSize int32) (int64, error)
+	// A commenter with no comments and no browser keys, unseen since stale_before, goes,
+	// unless blocked or marked spam since spam_since: those rows are what the block and
+	// previous_spam rules remember (4.2, 5.5), and they hold no text. Their outbox rows go
+	// with them (ON DELETE CASCADE).
+	DeleteStaleCommenters(ctx context.Context, arg DeleteStaleCommentersParams) (int64, error)
 	// A store's reminders replace the post's pending ones: a pending row whose chip is gone
 	// (removed, or moved to another day or time: keys are "<block_id> <YYYY-MM-DD> <HH:MM>") is
 	// deleted. Sent, skipped and failed rows stay, so a chip never fires twice. Runs inside
@@ -284,6 +307,7 @@ type Querier interface {
 	// route is public, so it never reads global_styles.draft.
 	GetActiveThemeWithSettings(ctx context.Context) (GetActiveThemeWithSettingsRow, error)
 	GetAnySessionByRefreshTokenHash(ctx context.Context, refreshTokenHash []byte) (Session, error)
+	GetCommenter(ctx context.Context, id int64) (Commenter, error)
 	// The editor's review notice: the post's latest request when it is open, or when a
 	// reviewer asked for changes and nothing was published since (the note still
 	// applies). Names are joined now; NULL for a member removed since.
@@ -396,6 +420,7 @@ type Querier interface {
 	// The terms a published post shows on the site (#358): its published set, in the
 	// shape of GetPostTaxonomyTerms.
 	GetPublishedPostTaxonomyTerms(ctx context.Context, postID int64) ([]GetPublishedPostTaxonomyTermsRow, error)
+	GetReaderComment(ctx context.Context, id int64) (ReaderComment, error)
 	GetRedirect(ctx context.Context, id int64) (Redirect, error)
 	GetRedirectByFromPath(ctx context.Context, fromPath string) (Redirect, error)
 	GetReviewRequest(ctx context.Context, id int64) (ReviewRequest, error)
@@ -760,6 +785,13 @@ type Querier interface {
 	// ScheduleUpdateTx's first step: lock the post (as LockPostForPublish) and read
 	// its status under the lock.
 	LockPostStatusForUpdate(ctx context.Context, id int64) (string, error)
+	LockReaderComment(ctx context.Context, id int64) (ReaderComment, error)
+	// The statuses of the rows that answer the comment or sit in the thread it roots, locked:
+	// whether deleting it would take approved replies with it (6.4). The lock makes a
+	// moderator's approval of one of them wait (or be waited on) instead of racing the
+	// delete's cascade; a reply inserted meanwhile waits on the comment's own row lock (its
+	// foreign key check).
+	LockReaderCommentReplyStatuses(ctx context.Context, id int64) ([]string, error)
 	// Redirects (#331, 000047). One row per old site path; see redirects_tx.go for how
 	// chains are kept collapsed and loops refused.
 	// Serializes redirect writes (rare), so two can't build a chain or loop between them.
@@ -886,6 +918,7 @@ type Querier interface {
 	// Restoring a version's settings (#358): the working title and excerpt. Only the
 	// working copy changes; the published settings stay until Update.
 	RestorePostTitleAndDescription(ctx context.Context, arg RestorePostTitleAndDescriptionParams) (Post, error)
+	RestoreReaderComment(ctx context.Context, arg RestoreReaderCommentParams) (ReaderComment, error)
 	// Chain collapse: what pointed at old_to now points at new_to (A→B, then B→C: A→C).
 	RetargetRedirects(ctx context.Context, arg RetargetRedirectsParams) (int64, error)
 	// Pending reminders whose instant changed while the chip didn't (the site's time zone
@@ -947,12 +980,17 @@ type Querier interface {
 	// Taxonomies page lists show_ui types only) whose name or slug matches @pattern (an ILIKE
 	// pattern the API escapes), by name.
 	SearchTermsAcrossTaxonomies(ctx context.Context, arg SearchTermsAcrossTaxonomiesParams) ([]SearchTermsAcrossTaxonomiesRow, error)
+	// 5.5: blocking is a flag, undoable.
+	SetCommenterBlocked(ctx context.Context, arg SetCommenterBlockedParams) (Commenter, error)
 	// Used by the variant backfill. changed_at is left alone: nothing the user
 	// edited changed.
 	SetMediaVariants(ctx context.Context, arg SetMediaVariantsParams) (Medium, error)
 	SetPostHTMLSnippetPublished(ctx context.Context, arg SetPostHTMLSnippetPublishedParams) error
 	SetPostTypeActive(ctx context.Context, arg SetPostTypeActiveParams) error
 	SetPostTypeActiveByRegisteredBy(ctx context.Context, arg SetPostTypeActiveByRegisteredByParams) error
+	// 12.2: the one field of a built-in type's supports PUT /post-types/:name may change.
+	// Adds or removes "comments", keeping the other entries and their order.
+	SetPostTypeComments(ctx context.Context, arg SetPostTypeCommentsParams) (PostType, error)
 	// Inside a publish, before the version is used: the working copy with its markup.
 	SetPostVersionBlockDoc(ctx context.Context, arg SetPostVersionBlockDocParams) error
 	SetPublishedGlobalStyles(ctx context.Context, arg SetPublishedGlobalStylesParams) (GlobalStyle, error)
@@ -999,6 +1037,17 @@ type Querier interface {
 	// the content (#389); only its blocks follow the doc.
 	// Unchanged rows are left alone: the collab store runs this every few seconds.
 	SyncPostContentMedia(ctx context.Context, arg SyncPostContentMediaParams) error
+	// ---------------------------------------------------------------------------------
+	// RunDiscussionMaintenance (api/discussion_maintenance.go, design 6.6). Each statement
+	// takes the rows it changes FOR UPDATE SKIP LOCKED, so replicas running it at the same
+	// time (and a moderator's transaction) never wait on each other or touch a row twice.
+	// The cut-off times come from Go, so the tests can pin them.
+	// Expired comments that approved replies still hang from become tombstones instead of
+	// being deleted: the root's ON DELETE CASCADE would take the replies (6.4).
+	TombstoneExpiredReaderComments(ctx context.Context, arg TombstoneExpiredReaderCommentsParams) (int64, error)
+	// 6.4: a removed comment that still has approved replies keeps its row, emptied: no
+	// name, text, commenter, member, network hash or subscription.
+	TombstoneReaderComment(ctx context.Context, id int64) (ReaderComment, error)
 	TouchMenu(ctx context.Context, id int64) error
 	// A post setting changed outside UPDATE posts (the byline, #319): "last edited".
 	TouchPost(ctx context.Context, id int64) (Post, error)
@@ -1018,6 +1067,10 @@ type Querier interface {
 	// (LockScheduledPostClaim wants post_status 'scheduled' anyway). changed_at stays:
 	// trashing isn't an edit.
 	TrashPost(ctx context.Context, id int64) (Post, error)
+	// Moves a comment to the trash, keeping the status a restore puts back. Its replies are
+	// untouched: the thread read renders a trashed root that has approved replies as "This
+	// comment was removed" (6.4).
+	TrashReaderComment(ctx context.Context, arg TrashReaderCommentParams) (ReaderComment, error)
 	// Removes the post's featured image link (order 0). An image that is also in
 	// the content (blocks, #176) keeps its row as a content link, placed after
 	// the others until the next sync puts it at its document position; deleting
@@ -1050,6 +1103,13 @@ type Querier interface {
 	UpdatePostBlockDocFromCollab(ctx context.Context, arg UpdatePostBlockDocFromCollabParams) (int64, error)
 	// An edit by the author. sql.ErrNoRows when it was deleted meanwhile.
 	UpdatePostCommentBody(ctx context.Context, arg UpdatePostCommentBodyParams) (PostComment, error)
+	// Reader comments (#499; storage #522, 000061). docs/design/reader-comments.md 6, 12.
+	// Never #192's post_comments: every name here says reader comment, commenter or
+	// discussion.
+	// 12.3: the post's Discussion choice. Outside the publish snapshot: it isn't in
+	// golive_post_settings(), and changed_at stays (a discussion change isn't an edit, so it
+	// fires no post.saved plugin event and doesn't reorder "recently edited").
+	UpdatePostDiscussion(ctx context.Context, arg UpdatePostDiscussionParams) (Post, error)
 	UpdatePostHTMLSnippet(ctx context.Context, arg UpdatePostHTMLSnippetParams) (PostHtmlSnippet, error)
 	UpdatePostMeta(ctx context.Context, arg UpdatePostMetaParams) (PostMetum, error)
 	// PUT /posts/:id/template (#336): the page's working template ('' = the theme's
@@ -1074,6 +1134,9 @@ type Querier interface {
 	UpdateTaxonomyType(ctx context.Context, arg UpdateTaxonomyTypeParams) (TaxonomyType, error)
 	UpdateTheme(ctx context.Context, arg UpdateThemeParams) (Theme, error)
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error)
+	// One row per address (3.2): matched on email_lower; the latest name and address as
+	// typed win, and last_seen_at moves (which keeps the maintenance job off it).
+	UpsertCommenter(ctx context.Context, arg UpsertCommenterParams) (Commenter, error)
 	UpsertExtensionSetting(ctx context.Context, arg UpsertExtensionSettingParams) (ExtensionSetting, error)
 	// Per-block "Last edited by" (#328, 000049). Written only inside StorePostCollabTx,
 	// with a block_doc write; read by GET /posts/:id/block-edits.

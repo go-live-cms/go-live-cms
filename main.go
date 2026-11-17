@@ -83,6 +83,10 @@ func main() {
 	// Open signup (#191): expired pending signups are deleted hourly.
 	go server.RunSignupRequestPrune(ctx, 0)
 
+	// Reader comments (#522): retention (unconfirmed, spam, trash, network hashes, ...),
+	// hourly in every replica; its statements skip rows another replica holds.
+	go server.RunDiscussionMaintenance(ctx, config.DiscussionMaintenanceInterval)
+
 	// Server-to-server routes (collab WS role lookup, metrics) run on their own
 	// listener, which must not be published to the internet.
 	go func() {

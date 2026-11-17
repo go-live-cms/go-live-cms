@@ -266,6 +266,12 @@ type Config struct {
 	// 2160h (90 days); 0 keeps every event (a zero Config: tests).
 	ActivityRetention time.Duration `mapstructure:"ACTIVITY_RETENTION"`
 
+	// DiscussionMaintenanceInterval is how often the API applies reader comments' retention
+	// rules (#522, api/discussion_maintenance.go): unconfirmed, spam, trash and pending
+	// comments, network hashes, browser keys, commenters. LoadConfig defaults it to 1h; 0
+	// turns the job off in this process (a zero Config: tests).
+	DiscussionMaintenanceInterval time.Duration `mapstructure:"DISCUSSION_MAINTENANCE_INTERVAL"`
+
 	// RedisURL is the Valkey/Redis cache (#185, cache/), e.g. redis://valkey:6379/0
 	// (rediss:// for TLS; a password goes in the URL, or use REDIS_URL_FILE). Optional:
 	// empty means no cache, every public read goes to Postgres as before. The cache only
@@ -361,6 +367,7 @@ func LoadConfig(path string) (config Config, err error) {
 
 	// Activity log (#324): Home reads the last few weeks; keep 90 days of history.
 	viper.SetDefault("ACTIVITY_RETENTION", "2160h")
+	viper.SetDefault("DISCUSSION_MAINTENANCE_INTERVAL", "1h")
 
 	// Email (#148). No SMTP defaults: release mode must be configured.
 	viper.SetDefault("MAIL_DRIVER", "")
@@ -469,6 +476,10 @@ func LoadConfig(path string) (config Config, err error) {
 
 	if config.ActivityRetention < 0 {
 		return config, fmt.Errorf("ACTIVITY_RETENTION must be 0 (keep everything) or a positive duration")
+	}
+
+	if config.DiscussionMaintenanceInterval < 0 {
+		return config, fmt.Errorf("DISCUSSION_MAINTENANCE_INTERVAL must be 0 (off) or a positive duration")
 	}
 
 	if _, err = config.PasetoPreviousPublicKeys(); err != nil {

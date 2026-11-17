@@ -5,11 +5,12 @@
 // Shapes DB rows into a clean PostTypeResponse.
 //
 // # Endpoints (v1)
-// - GET    /api/v1/post-types            (list active post types; ?all=true for all)
-// - GET    /api/v1/post-types/:name      (fetch single post type by machine name)
-// - POST   /api/v1/post-types            (create or upsert a post type — auth required)
-// - PUT    /api/v1/post-types/:name      (update a post type — auth required)
-// - GET    /api/v1/posts/:id/with-meta   (fetch post plus meta blob helper)
+//   - GET    /api/v1/post-types            (list active post types; ?all=true for all)
+//   - GET    /api/v1/post-types/:name      (fetch single post type by machine name)
+//   - POST   /api/v1/post-types            (create or upsert a post type — auth required)
+//   - PUT    /api/v1/post-types/:name      (update a post type — admins; for the built-in
+//     post and page only the "comments" entry of supports, #522)
+//   - GET    /api/v1/posts/:id/with-meta   (fetch post plus meta blob helper)
 //
 // # Auth
 // GET endpoints are public. POST/PUT require a valid access token.
@@ -48,7 +49,9 @@ package api
 import (
 	"database/sql"
 	"encoding/json"
+	"maps"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -238,9 +241,9 @@ type updatePostTypeRequest struct {
 func (server *Server) updatePostType(c *gin.Context) {
 	name := c.Param("name")
 
-	// Prevent modifying system types
+	// System types change only their Comments field (#522, design 12.2).
 	if name == "post" || name == "page" {
-		c.JSON(http.StatusConflict, gin.H{"error": "cannot modify system post types"})
+		server.updateBuiltInPostTypeComments(c, name)
 		return
 	}
 
@@ -293,6 +296,61 @@ func (server *Server) updatePostType(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"post_type": toPostTypeResponse(postType),
 	})
+}
+
+// updateBuiltInPostTypeComments is PUT /post-types/:name for Posts and Pages: they are
+// read-only but for one field, Comments (#522, design 12.2, problem 4). The request
+// must send `supports` and nothing else, and that list may differ from the stored one
+// only by "comments" (order aside); anything else is 409, as every change to a system
+// type was before.
+func (server *Server) updateBuiltInPostTypeComments(c *gin.Context, name string) {
+	var req updatePostTypeRequest
+	if !bindJSON(c, &req) {
+		return
+	}
+	refuse := func() {
+		c.JSON(http.StatusConflict, gin.H{
+			"error": "cannot modify system post types: only the comments entry of supports may change",
+			"code":  "system_post_type",
+		})
+	}
+	if req.Supports == nil || req.Label != "" || req.Description != "" || req.Public != nil ||
+		req.Hierarchical != nil || req.HasArchive != nil || req.MenuPosition != nil {
+		refuse()
+		return
+	}
+	ctx := c.Request.Context()
+	current, err := server.store.GetPostType(ctx, name)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "post type not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get post type"})
+		return
+	}
+	others := func(supports []string) map[string]bool {
+		set := map[string]bool{}
+		for _, s := range supports {
+			if s != postTypeSupportsComments {
+				set[s] = true
+			}
+		}
+		return set
+	}
+	if !maps.Equal(others(toPostTypeResponse(current).Supports), others(req.Supports)) {
+		refuse()
+		return
+	}
+	updated, err := server.store.SetPostTypeComments(ctx, db.SetPostTypeCommentsParams{
+		Name:    name,
+		Enabled: slices.Contains(req.Supports, postTypeSupportsComments),
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update post type"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"post_type": toPostTypeResponse(updated)})
 }
 
 func (server *Server) getPostType(c *gin.Context) {

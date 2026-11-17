@@ -371,6 +371,14 @@ are the most fragile part of the codebase. **Before editing anything under
   `<figcaption>`, and `<cite>` as the last child of `<blockquote>`. The image toolbar is
   `components/editor/ui/ImageToolbar.tsx` (shown on a selected image; the text bubble
   menu hides then, and in a caption shows only bold/italic/link).
+- **Reader comments' rules (#522, `src/lib/discussion.ts`, design
+  `docs/design/reader-comments.md` 6.3, 12.4):** import-free twins of `api/discussion.go` and
+  `api/discussion_text.go`: `discussionSetting` (clock-free `{state, closes_at}`) and
+  `discussionState(setting, now)` for the editor's Discussion section and the renderer, and the
+  text rules (`normalizeReaderCommentBody`, `readerCommentLength` in code points, as the API
+  counts) for the form's counter. Pinned by `src/lib/discussionStateVectors.json` and
+  `src/lib/discussionTextVectors.json` (both suites; `JSON.parse`). Nothing renders comments yet
+  (C5 #525), and `comments_enabled` stays off with no switch until #527.
 - **Global styles (#485, `src/lib/globalStyles.ts`, design `docs/design/theme-builder.md`
   section 6):** the override grammar, validator, contrast (`CONTRAST_PAIRS`, which the
   default theme's `tokens.test.ts` checks) and groups, the same rules as the API's

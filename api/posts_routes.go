@@ -99,6 +99,9 @@ func (server *Server) RegisterPostRoutes(rg *gin.RouterGroup) {
 		// A page's template (#336, page_templates.go): canEditPostDetails, like its
 		// featured image
 		posts.PUT("/:id/template", auth, author, server.updatePostPageTemplate)
+		// Discussion (#522, posts_discussion.go): canEditPostDetails; live at once,
+		// outside the publish snapshot
+		posts.PUT("/:id/discussion", auth, author, server.updatePostDiscussion)
 
 		// Byline authors (#319): read with canReadPost, set with canEditPostDetails
 		posts.GET("/:id/authors", auth, author, server.getPostAuthors)

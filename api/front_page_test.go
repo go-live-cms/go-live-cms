@@ -176,7 +176,7 @@ func TestGetSettingsFrontPage(t *testing.T) {
 	require.Equal(t, http.StatusOK, recorder.Code)
 	require.Contains(t, recorder.Body.String(), `"front_page_id":12`)
 
-	require.Nil(t, toSettingsResponse(randomSetting(), "").FrontPageID, "none set: the latest posts")
+	require.Nil(t, toSettingsResponse(randomSetting(), "", false).FrontPageID, "none set: the latest posts")
 }
 
 func TestGetPublicFrontPage(t *testing.T) {

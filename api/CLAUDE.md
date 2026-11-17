@@ -1267,6 +1267,65 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
 - Tests: `post_comments_test.go` (real DB: every role, CRUD, resolve, trash, nudges, activity, not
   public, the delete race) and `auth_comments_test.go`.
 
+## Reader comments: storage, settings, the state rule, retention (#522, `000061`, `discussion*.go`)
+
+- Design: `docs/design/reader-comments.md` (#499; decisions in its section 18). Phase 1 only:
+  **nothing under `/public` reads or writes comments yet** (C3 #523 reads, C4 #524 writes), and
+  `settings.comments_enabled` starts off with its switch hidden until #526/#527. Never #192's
+  names: `reader_comment*`, `commenter*`, `discussion*`.
+- **Tables (6.1):** `commenters` (one per address, `email_lower` UNIQUE; never public, never
+  logged), `commenter_keys` (browser keys as SHA-256), `reader_comments`,
+  `reader_comment_unsubscribe_tokens`, `discussion_mail` (the outbox; recipients by id). Post FK
+  CASCADE: a post deleted for good takes its thread, its commenters stay; trash and restore
+  don't touch comments. `root_id` CASCADE / `parent_id` SET NULL; CHECKs pin one author, trash ⇔
+  `trashed_from`, the tombstone's empty fields, a confirm token only while unconfirmed. **lib/pq
+  sends a nil `[]byte` as an empty bytea, not NULL**: `CreateReaderComment` wraps the hashes in
+  `NULLIF(…, '')`; any new bytea insert needs the same.
+- **Deleting (6.4):** always `db.DeleteReaderCommentTx` (never `DeleteReaderCommentRow` alone): it
+  locks the comment and the rows answering it or in its thread, and makes a **tombstone**
+  (`TombstoneReaderComment`: `removed_at`, empty body and name, no commenter/member/hash, status
+  approved) when one of them is approved, else deletes (the cascade then takes only unapproved
+  rows). Trash is a status (`TrashReaderComment`/`RestoreReaderComment`), replies untouched.
+  **C6's approval of a reply should lock its root and parent (`FOR SHARE`) first**, so the
+  retention job (`SKIP LOCKED`) can't cascade a reply being approved.
+- **`posts.discussion`** (`default|open|closed|off`) is **not in `golive_post_settings()`**: it
+  applies at once and never shows "changes not published"; `UpdatePostDiscussion` doesn't touch
+  `changed_at` (no `post.saved` event). `PUT /posts/:id/discussion` (`posts_discussion.go`):
+  `canEditPostDetails` (409 trashed), activity `post_discussion_changed {from, to}`, purges when
+  published (`publicCachePostDetailRoutes`), answers `{post_id, discussion, state, closes_at}`.
+- **`posts.first_published_at`**: the `posts_first_published` trigger sets it when `post_status`
+  first becomes published (insert or update) and keeps it forever after (unpublish, Update, trash,
+  restore, even a direct write). Backfilled from the earliest `post_versions` row.
+- **The state rule (12.4, `discussion.go`):** `discussionSetting(site, type, post)` (clock-free:
+  `{state, closes_at}`, what a cached `/public` answer may carry) and `discussionState(setting,
+  now)`. An explicit Open ignores the timer; an explicit Open/Closed applies even on a type without
+  the Comments field (12.4 reads `supports` only for the default); a type not public or inactive is
+  off. Twin: `web/src/lib/discussion.ts`, both suites run `web/src/lib/discussionStateVectors.json`.
+  `server.postDiscussionSetting(ctx, post)` reads settings and the type.
+- **Text (6.3, `discussion_text.go`):** `normalizeReaderCommentBody` (CR LF → LF, controls but LF
+  and tab and bidi controls refused `body_invalid`, line-end spaces dropped, ≥3 blank lines cut
+  to 2, trimmed, 2–4000 code points: `body_too_short`/`body_too_long`) and
+  `normalizeReaderCommentName` (1–60, one line). Vectors: `web/src/lib/discussionTextVectors.json`.
+- **Network hash (7.2):** `discussionNetworkHash(PASETO local key hex, ip)` = HMAC-SHA256 of
+  `clientKey(ip)` under HKDF(local key, `golive.discussion-network`). No IP is ever stored.
+- **Settings (12.1, `discussion_settings.go`)** are `GET/PUT /settings` fields (`comments_*`;
+  ranges checked in Go since 0 is a value; word lists trimmed, deduped ignoring case, ≤500 × ≤64;
+  `comments_privacy_page_id` a published page, `checkPublishedPageSetting` shared with the front
+  page). **The hold/spam word lists are admin-only**: GET `/settings` adds them only for a valid
+  admin bearer (`optionalCallerIsAdmin`, never answers 401), which the public cache never stores.
+- **Post types (12.2):** 000061 adds `"comments"` to `post`'s `supports`. `PUT /post-types/post|page`
+  accepts `supports` alone, differing from the stored list only by `"comments"`
+  (`SetPostTypeComments`); anything else is still 409 (`code: system_post_type`).
+- **Retention (6.6, decision 13; `discussion_maintenance.go`):** `RunDiscussionMaintenance` from
+  `main.go`, `DISCUSSION_MAINTENANCE_INTERVAL` (1h, 0 = off), every replica, every statement `FOR
+  UPDATE SKIP LOCKED`, counts-only logs. Unconfirmed > 48h, pending > 90d, spam/trash > 30d (trash
+  from `moderated_at`) are deleted, or tombstoned when approved replies hang from them; orphan
+  tombstones go (up to 3 passes); network hashes > 30d NULLed; expired keys; commenters with no
+  comments and no keys unseen 30d, unless blocked or spammed in the last 90d.
+- Tests: `discussion_db_test.go` (real DB: lifecycle, tombstones, constraints, first publish, the
+  snapshot rule, every retention rule, the routes, settings, post types) and `discussion_test.go`
+  (vectors, network hash, word lists).
+
 ## Per-block "Last edited by" (#328, `000049`, `post_block_edits.go`)
 
 - Design: `docs/design/block-map-yjs-schema.md` ("#328", #315 Option C). `post_block_edits`
