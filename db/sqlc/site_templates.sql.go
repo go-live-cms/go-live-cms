@@ -256,6 +256,30 @@ func (q *Queries) GetSiteTemplateVersionByID(ctx context.Context, id int64) (Sit
 	return i, err
 }
 
+const hasPublishedSiteTemplate = `-- name: HasPublishedSiteTemplate :one
+SELECT EXISTS (
+    SELECT 1 FROM site_templates
+    WHERE theme_slug = $1
+      AND kind = 'template'
+      AND slug = $2
+      AND published_block_doc IS NOT NULL
+)::bool AS published
+`
+
+type HasPublishedSiteTemplateParams struct {
+	ThemeSlug string `json:"theme_slug"`
+	Slug      string `json:"slug"`
+}
+
+// Whether the theme has a published copy of this template (#494: PUT /posts/:id/template
+// accepts block:<name> for a published custom-<name>), without reading its docs.
+func (q *Queries) HasPublishedSiteTemplate(ctx context.Context, arg HasPublishedSiteTemplateParams) (bool, error) {
+	row := q.db.QueryRowContext(ctx, hasPublishedSiteTemplate, arg.ThemeSlug, arg.Slug)
+	var published bool
+	err := row.Scan(&published)
+	return published, err
+}
+
 const listPublishedCustomPageTemplates = `-- name: ListPublishedCustomPageTemplates :many
 SELECT slug, title
 FROM site_templates

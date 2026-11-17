@@ -651,11 +651,13 @@ are the most fragile part of the codebase. **Before editing anything under
   editor's Publish menu). The page's **Template** field is `components/editor/ui/PageTemplateField.tsx`
   (saved at once, `PUT /posts/:id/template`; "Settings changed" until Update). Templates come from
   `GET /posts/page-templates` (`usePageTemplates`: the theme scan's layouts plus the published Site editor
-  page templates; one request shared by what mounts together, asked again on every mount). Rules and wording:
+  page templates; one request shared by what mounts together, asked again on every mount, never caching an
+  answer that started before `resetPageTemplates`; `usePageTemplates.test.tsx`). Rules and wording:
   `lib/frontPage.ts`, `lib/pageTemplates.ts` (tested).
 - **Builder page templates (#494, design `docs/design/theme-builder.md` 10, the canvas's "Template field with
   builder templates" board):** the Template field lists the theme's layouts under "<Theme>’s layouts", then
-  the published `custom-<name>` templates under "Made in the Site editor", each tagged "Site editor" (headings
+  the `custom-<name>` templates the site would render (published overrides, and any the theme ships) under
+  "Made in the Site editor", each tagged "Site editor" (headings
   only when there are builder templates: `Select` options take `group` and `tag`, rendered as `role="group"`
   runs and a `Pill`). A page stores `block:<name>`. One that isn't published any more stays listed and shown,
   with "Pricing isn’t published in Paper, so this page shows with Default. …" (`templateNote`); the Pages

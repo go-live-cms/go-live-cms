@@ -3564,6 +3564,21 @@ func (mr *MockStoreMockRecorder) GrantPostCollaborator(arg0, arg1 interface{}) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GrantPostCollaborator", reflect.TypeOf((*MockStore)(nil).GrantPostCollaborator), arg0, arg1)
 }
 
+// HasPublishedSiteTemplate mocks base method.
+func (m *MockStore) HasPublishedSiteTemplate(arg0 context.Context, arg1 db.HasPublishedSiteTemplateParams) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HasPublishedSiteTemplate", arg0, arg1)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HasPublishedSiteTemplate indicates an expected call of HasPublishedSiteTemplate.
+func (mr *MockStoreMockRecorder) HasPublishedSiteTemplate(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasPublishedSiteTemplate", reflect.TypeOf((*MockStore)(nil).HasPublishedSiteTemplate), arg0, arg1)
+}
+
 // InsertDiscoveredPlugin mocks base method.
 func (m *MockStore) InsertDiscoveredPlugin(arg0 context.Context, arg1 db.InsertDiscoveredPluginParams) (db.Plugin, error) {
 	m.ctrl.T.Helper()

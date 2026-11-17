@@ -444,6 +444,9 @@ type Querier interface {
 	GetValidUserInvitationByTokenHash(ctx context.Context, tokenHash []byte) (UserInvitation, error)
 	// Idempotent: a grant that already exists keeps its first date and granter.
 	GrantPostCollaborator(ctx context.Context, arg GrantPostCollaboratorParams) error
+	// Whether the theme has a published copy of this template (#494: PUT /posts/:id/template
+	// accepts block:<name> for a published custom-<name>), without reading its docs.
+	HasPublishedSiteTemplate(ctx context.Context, arg HasPublishedSiteTemplateParams) (bool, error)
 	// A plugin seen for the first time. It starts disabled. No row when another replica
 	// inserted it first.
 	InsertDiscoveredPlugin(ctx context.Context, arg InsertDiscoveredPluginParams) (Plugin, error)

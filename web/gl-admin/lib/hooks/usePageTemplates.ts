@@ -10,21 +10,31 @@ import { pageTemplateChoicesOf, type PageTemplateChoices } from "@gl-admin/lib/p
 // `failed` (callers show stored names as they are); `retry` asks again.
 let inflight: Promise<PageTemplateChoices | null> | null = null
 let loaded: PageTemplateChoices | null = null
+// Bumped by resetPageTemplates: a load started before a reset (another theme's list) is
+// never cached, and never clears a newer load's slot.
+let generation = 0
 
 function loadChoices(): Promise<PageTemplateChoices | null> {
   if (!inflight) {
-    inflight = getPageTemplates()
-      .then((body) => (loaded = pageTemplateChoicesOf(body)))
+    const started = generation
+    const load: Promise<PageTemplateChoices | null> = getPageTemplates()
+      .then((body) => {
+        // Reset meanwhile: this answer may be the old theme's, so ask again.
+        if (started !== generation) return loadChoices()
+        return (loaded = pageTemplateChoicesOf(body))
+      })
       .catch(() => null)
       .finally(() => {
-        inflight = null
+        if (inflight === load) inflight = null
       })
+    inflight = load
   }
   return inflight
 }
 
 // Forget the cached list: after activating another theme.
 export function resetPageTemplates(): void {
+  generation++
   inflight = null
   loaded = null
 }

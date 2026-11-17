@@ -21,8 +21,9 @@
 // the CHECK; a layout file's name can't hold a ':'), a reference by name only: a
 // template reset, deleted or of another theme leaves the name in place, the page renders
 // with the default and picks it up again once it's published, as after a theme switch.
-// PUT /posts/:id/template accepts one only while it is published; GET
-// /posts/page-templates lists both kinds for the Template field.
+// PUT /posts/:id/template accepts one only while the site would render it: a published
+// override, or a custom-<name> block template the theme ships (what the public resolve
+// falls back to, #491). GET /posts/page-templates lists both kinds for the Template field.
 package api
 
 import (
@@ -78,21 +79,39 @@ type BuilderPageTemplate struct {
 	Label string `json:"label"`
 }
 
-// builderPageTemplates are the rows of ListPublishedCustomPageTemplates a page can
-// store: every custom-<name> whose <name> fits block:<name>, labelled by its title.
-func builderPageTemplates(rows []db.ListPublishedCustomPageTemplatesRow) []BuilderPageTemplate {
+// builderPageTemplates are the builder page templates a page can store, as the public
+// resolve renders them (#491): every published custom-<name> override (rows, from
+// ListPublishedCustomPageTemplates), then every custom-<name> block template the theme
+// ships (config.block_templates) without one, each labelled by its title and only when
+// <name> fits block:<name>. Sorted by label, then name.
+func builderPageTemplates(rows []db.ListPublishedCustomPageTemplatesRow, shipped map[string]ThemeBlockTemplate) []BuilderPageTemplate {
 	templates := []BuilderPageTemplate{}
-	for _, row := range rows {
-		name, ok := strings.CutPrefix(row.Slug, customPageTemplateSlug)
-		if !ok || !builderPageTemplateNameRe.MatchString(name) {
-			continue
+	seen := map[string]bool{}
+	add := func(slug, title string) {
+		name, ok := strings.CutPrefix(slug, customPageTemplateSlug)
+		if !ok || !builderPageTemplateNameRe.MatchString(name) || seen[name] {
+			return
 		}
-		label := strings.TrimSpace(row.Title)
+		seen[name] = true
+		label := strings.TrimSpace(title)
 		if label == "" {
 			label = humanizeTemplateName(name)
 		}
 		templates = append(templates, BuilderPageTemplate{Name: builderPageTemplatePrefix + name, Label: label})
 	}
+	for _, row := range rows {
+		add(row.Slug, row.Title)
+	}
+	for slug, template := range shipped {
+		add(slug, template.Title)
+	}
+	sort.SliceStable(templates, func(i, j int) bool {
+		a, b := strings.ToLower(templates[i].Label), strings.ToLower(templates[j].Label)
+		if a != b {
+			return a < b
+		}
+		return templates[i].Name < templates[j].Name
+	})
 	return templates
 }
 
@@ -320,7 +339,7 @@ func (server *Server) updatePostPageTemplate(c *gin.Context) {
 		known := false
 		if err == nil {
 			if builder != "" {
-				known, err = server.hasPublishedBuilderPageTemplate(c, theme.Slug, builder)
+				known, err = server.hasBuilderPageTemplate(c, theme, builder)
 				if err != nil {
 					c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get the template"})
 					return
@@ -352,22 +371,15 @@ func (server *Server) updatePostPageTemplate(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"post": toPostResponse(updated)})
 }
 
-// hasPublishedBuilderPageTemplate reports whether the theme has a published site
-// template custom-<name> (#494): a working copy, a reset one (published as NULL) or a
-// deleted one can't be picked.
-func (server *Server) hasPublishedBuilderPageTemplate(c *gin.Context, themeSlug, name string) (bool, error) {
-	row, err := server.store.GetSiteTemplateBySlug(c.Request.Context(), db.GetSiteTemplateBySlugParams{
-		ThemeSlug: themeSlug,
-		Kind:      "template",
-		Slug:      customPageTemplateSlug + name,
-	})
-	if errors.Is(err, sql.ErrNoRows) {
-		return false, nil
+// hasBuilderPageTemplate reports whether the active theme renders custom-<name> (#494), as
+// the public resolve would: it ships it as a block template, or has a published override.
+// A working copy, a reset row (published as NULL) and a deleted one don't count.
+func (server *Server) hasBuilderPageTemplate(c *gin.Context, theme db.Theme, name string) (bool, error) {
+	slug := customPageTemplateSlug + name
+	if _, ok := shippedBlockTemplates(theme.Config, "block_templates")[slug]; ok {
+		return true, nil
 	}
-	if err != nil {
-		return false, err
-	}
-	return row.PublishedBlockDoc.Valid, nil
+	return server.store.HasPublishedSiteTemplate(c.Request.Context(), db.HasPublishedSiteTemplateParams{ThemeSlug: theme.Slug, Slug: slug})
 }
 
 // PageTemplatesResponse is GET /posts/page-templates (#336, #494): what a page's
@@ -414,6 +426,6 @@ func (server *Server) listPageTemplates(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list the Site editor's page templates"})
 		return
 	}
-	resp.BuilderTemplates = builderPageTemplates(rows)
+	resp.BuilderTemplates = builderPageTemplates(rows, shippedBlockTemplates(theme.Config, "block_templates"))
 	c.JSON(http.StatusOK, resp)
 }
