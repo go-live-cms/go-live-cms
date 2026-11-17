@@ -358,3 +358,72 @@ describe("<TemplatePart> in a code layout", () => {
     expect(html).not.toContain("template-part--footer")
   })
 })
+
+// Builder page templates (#494, design 10): a page storing block:<name> ranks custom-<name>
+// first. While that template is published it renders; reset, deleted or another theme's,
+// the resolve has no template for it and the page renders with the default layout, the
+// stored name untouched (pageLayoutVariant leaves a block: name to the default).
+describe("builder page templates (#494)", { timeout: 20_000 }, () => {
+  const builder = { published: true }
+  const landing = (id: number) => post(id, "Landing page", "page", { page_template: "block:landing" })
+
+  function stubBuilderApi() {
+    const fetchMock = stubApi()
+    const original = fetchMock.getMockImplementation()!
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input))
+      if (url.pathname === "/public/posts/9") return json(200, { post: landing(9), featured_image: null, taxonomy_terms: [] })
+      if (String(input) === `${SERVER_MEDIA_URL}/public/front-page`) return json(200, { post: landing(12), taxonomy_terms: [] })
+      if (url.pathname.endsWith("/public/site-templates/resolve")) {
+        api.slugs = (url.searchParams.get("slugs") ?? "").split(",")
+        const rank = api.slugs.indexOf("custom-landing")
+        return json(
+          200,
+          builder.published
+            ? {
+                theme: "default",
+                template: { slug: "custom-landing", rank, source: "override", title: "Landing", doc: templateDoc("page") },
+                parts: { header: { source: "starter", title: "Header", doc: starterHeader }, footer: { source: "starter", title: "Footer", doc: starterFooter } },
+                menus: {},
+              }
+            : { theme: "default", template: null, parts: {}, menus: {} },
+        )
+      }
+      return original(input)
+    })
+  }
+
+  beforeEach(() => {
+    builder.published = true
+    stubBuilderApi()
+  })
+
+  it("a page renders its published builder template, and the default layout once it isn't published", async () => {
+    const render = () => container.renderToResponse(PostRoute, { params: { post_type: "page", id: "9" }, request: new Request("http://web:4321/page/9"), locals: locals() })
+    let html = clean(await (await render()).text())
+    expect(api.slugs).toEqual(["custom-landing", "page"])
+    expect(html).toContain("BUILDER-PAGE")
+    expect(html).toContain("Landing page")
+    expect(html).not.toContain("page--default")
+
+    builder.published = false
+    html = clean(await (await render()).text())
+    expect(api.slugs).toEqual(["custom-landing", "page"])
+    expect(html).not.toContain("BUILDER-")
+    expect(html).toContain("page--default")
+    expect(html).toContain("Landing page")
+  })
+
+  it("the front page asks front-page, then the page's builder template, then page", async () => {
+    site.frontPageId = 12
+    const render = () => container.renderToResponse(HomeRoute, { request: new Request("http://web:4321/"), locals: locals() })
+    let html = clean(await (await render()).text())
+    expect(api.slugs).toEqual(["front-page", "custom-landing", "page"])
+    expect(html).toContain("BUILDER-PAGE")
+
+    builder.published = false
+    html = clean(await (await render()).text())
+    expect(html).toContain("page--default")
+    expect(html).toContain("Landing page")
+  })
+})

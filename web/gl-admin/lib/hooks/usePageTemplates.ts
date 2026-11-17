@@ -1,52 +1,50 @@
 import { useCallback, useEffect, useState } from "react"
-import { getActiveTheme, type PageTemplate } from "@gl-admin/lib/api/themes"
-import { pageTemplatesOf } from "@gl-admin/lib/pageTemplates"
+import { getPageTemplates } from "@gl-admin/lib/api/posts"
+import { pageTemplateChoicesOf, type PageTemplateChoices } from "@gl-admin/lib/pageTemplates"
 
-// The active theme's page templates (#336): null until they load. One request per page
-// load for every row and field that shows them. A failed load sets `failed` (callers
-// show stored names as they are) and is forgotten, so `retry` (or the next mount)
-// asks again.
-let load: Promise<PageTemplate[] | null> | null = null
-let loaded: PageTemplate[] | null = null
+// What a page's Template field offers (#336, #494): the active theme's page layouts and
+// its published Site editor page templates, from GET /posts/page-templates; null until
+// they load. Rows and fields mounted together share one request. Every mount asks again
+// (showing the last answer meanwhile), so a template published in the Site editor, or
+// one reset there, shows up without a reload. A failed load with nothing to show sets
+// `failed` (callers show stored names as they are); `retry` asks again.
+let inflight: Promise<PageTemplateChoices | null> | null = null
+let loaded: PageTemplateChoices | null = null
 
-function loadTemplates(): Promise<PageTemplate[] | null> {
-  if (!load) {
-    load = getActiveTheme()
-      .then((theme) => (loaded = pageTemplatesOf(theme?.config)))
-      .catch(() => {
-        load = null
-        return null
+function loadChoices(): Promise<PageTemplateChoices | null> {
+  if (!inflight) {
+    inflight = getPageTemplates()
+      .then((body) => (loaded = pageTemplateChoicesOf(body)))
+      .catch(() => null)
+      .finally(() => {
+        inflight = null
       })
   }
-  return load
+  return inflight
 }
 
 // Forget the cached list: after activating another theme.
 export function resetPageTemplates(): void {
-  load = null
+  inflight = null
   loaded = null
 }
 
-export function usePageTemplates(): { templates: PageTemplate[] | null; failed: boolean; retry: () => void } {
-  const [templates, setTemplates] = useState<PageTemplate[] | null>(loaded)
+export function usePageTemplates(): { choices: PageTemplateChoices | null; failed: boolean; retry: () => void } {
+  const [choices, setChoices] = useState<PageTemplateChoices | null>(loaded)
   const [failed, setFailed] = useState(false)
   const [attempt, setAttempt] = useState(0)
   useEffect(() => {
-    if (loaded) {
-      setTemplates(loaded)
-      return
-    }
     let live = true
     setFailed(false)
-    loadTemplates().then((t) => {
+    loadChoices().then((next) => {
       if (!live) return
-      if (t) setTemplates(t)
-      else setFailed(true)
+      if (next) setChoices(next)
+      else if (!loaded) setFailed(true)
     })
     return () => {
       live = false
     }
   }, [attempt])
   const retry = useCallback(() => setAttempt((n) => n + 1), [])
-  return { templates, failed, retry }
+  return { choices, failed, retry }
 }

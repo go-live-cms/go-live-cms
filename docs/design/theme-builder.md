@@ -1042,6 +1042,13 @@ over**. Nothing changes on its own.
 - **Front page.** `front-page` is the most specific slug for `/` in both modes (3.2).
   Settings › Front page is unchanged. With a page chosen and no `front-page` template, the
   page renders through its own chain, as today. `/page/N/` stays a 404 then.
+- **As built (T12, #494).** The migration is `000062_builder_page_templates`. The Template
+  field reads `GET /posts/page-templates` (every content role, since contributors pick their
+  own pages' templates): the theme's layouts and its published `custom-<name>` templates by
+  title, nothing more of a template. A `custom-` slug with `_` (the site template slug allows
+  it, `block:<name>` doesn't) is never offered. The field groups the two kinds only when
+  there are builder templates. A stored one that isn't published stays shown in its group,
+  with the board's sentence, and the Pages list shows the default with the same note.
 
 ---
 

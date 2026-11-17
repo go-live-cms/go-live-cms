@@ -649,9 +649,20 @@ are the most fragile part of the codebase. **Before editing anything under
   don't carry it) and row menu **Set as front page** (admins, published pages); unpublishing,
   archiving or trashing the front page asks first (`FrontPageConfirm`, in `PostActions` and the
   editor's Publish menu). The page's **Template** field is `components/editor/ui/PageTemplateField.tsx`
-  (saved at once, `PUT /posts/:id/template`; "Settings changed" until Update). Templates come from the
-  API's theme scan (`usePageTemplates`, the active theme's `config.page_templates`). Rules and wording:
+  (saved at once, `PUT /posts/:id/template`; "Settings changed" until Update). Templates come from
+  `GET /posts/page-templates` (`usePageTemplates`: the theme scan's layouts plus the published Site editor
+  page templates; one request shared by what mounts together, asked again on every mount). Rules and wording:
   `lib/frontPage.ts`, `lib/pageTemplates.ts` (tested).
+- **Builder page templates (#494, design `docs/design/theme-builder.md` 10, the canvas's "Template field with
+  builder templates" board):** the Template field lists the theme's layouts under "<Theme>’s layouts", then
+  the published `custom-<name>` templates under "Made in the Site editor", each tagged "Site editor" (headings
+  only when there are builder templates: `Select` options take `group` and `tag`, rendered as `role="group"`
+  runs and a `Pill`). A page stores `block:<name>`. One that isn't published any more stays listed and shown,
+  with "Pricing isn’t published in Paper, so this page shows with Default. …" (`templateNote`); the Pages
+  list's Template column shows the title with the tag, or the default with that note. On the site,
+  `templateRanks` ranks `custom-<name>` then `page`, and `pageLayoutVariant` never matches a `block:` name, so
+  an unpublished one renders the default and keeps the name (`BlockTemplateLayout.astro.test.ts`, "builder page
+  templates (#494)").
 - **Edit access requests (#321):** the editor's view-only notice (`components/editor/ui/
   PostEditAccess.tsx` `ViewOnlyNotice`) has **Request access** (a dialog, optional message ≤500)
   for a contributor watching someone else's published post, then "Request sent", or "declined,

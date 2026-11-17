@@ -12,7 +12,9 @@
  * The site design (#491): a published builder template for the route's slugs (single-{type},
  * single; page-{template}, page; front-page first for the front page) renders through
  * layouts/BlockTemplateLayout.astro with the same props, when it outranks the active theme's
- * code layout (lib/siteTemplates.ts resolveTemplate).
+ * code layout (lib/siteTemplates.ts resolveTemplate). A page on a Site editor page template
+ * (#494, page_template `block:<name>`) ranks custom-<name> first; when that template isn't
+ * published it renders with the default, and keeps the name.
  */
 import { getPostLayoutVariant } from '../lib/theme-loader'
 import { getActiveTheme } from '../lib/api'
