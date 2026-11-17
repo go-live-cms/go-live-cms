@@ -47,7 +47,7 @@ func groupSiteTemplateUses(rows []siteTemplateMediaRow, seesDesign bool, usage s
 	index := map[int64]int{}
 	seen := map[int64]map[string]bool{}
 	for _, row := range rows {
-		if !seesDesign && !(row.Published && row.ThemeActive) {
+		if !seesDesign && (!row.Published || !row.ThemeActive) {
 			continue
 		}
 		at, ok := index[row.ID]
