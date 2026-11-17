@@ -143,8 +143,9 @@ export interface ComparablePage {
 /** A page as the parity check compares it (`BLOCK_TEMPLATE_DIFFERENCES` applied), from the code layout's side or the template's. */
 export function comparablePage(html: string, side: "code" | "template", name: string): ComparablePage {
   const dom = new JSDOM(html)
-  const { document } = dom.window
-  const root = document.documentElement
+  // jsdom ships no types here; its document is the DOM's.
+  const document: Document = dom.window.document
+  const root: Element = document.documentElement
   // React's text separators (`<!-- -->`) go, and the text they split is one text again.
   const walker = document.createTreeWalker(root, dom.window.NodeFilter.SHOW_COMMENT)
   const comments: Node[] = []
