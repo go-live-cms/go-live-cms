@@ -107,6 +107,9 @@ func (server *Server) runDiscussionMaintenance(ctx context.Context, now time.Tim
 	if result.Tombstoned, err = server.store.TombstoneExpiredReaderComments(ctx, db.TombstoneExpiredReaderCommentsParams{UnconfirmedBefore: unconfirmedBefore, PendingBefore: pendingBefore, RemovedBefore: removedBefore}); err != nil {
 		return result, err
 	}
+	if _, err = server.store.DeleteTombstoneUnsubscribeTokens(ctx); err != nil {
+		return result, err
+	}
 	if result.CommentsDeleted, err = server.store.DeleteExpiredReaderComments(ctx, db.DeleteExpiredReaderCommentsParams{UnconfirmedBefore: unconfirmedBefore, PendingBefore: pendingBefore, RemovedBefore: removedBefore}); err != nil {
 		return result, err
 	}

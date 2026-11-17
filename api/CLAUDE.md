@@ -1285,7 +1285,10 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   locks the comment and the rows answering it or in its thread, and makes a **tombstone**
   (`TombstoneReaderComment`: `removed_at`, empty body and name, no commenter/member/hash, status
   approved) when one of them is approved, else deletes (the cascade then takes only unapproved
-  rows). Trash is a status (`TrashReaderComment`/`RestoreReaderComment`), replies untouched.
+  rows). Trash is a status (`TrashReaderComment`/`RestoreReaderComment`), replies untouched;
+  an unconfirmed comment can't be trashed (no row: it expires, and keeps its confirm token).
+  A tombstone has no unsubscribe token (the Tx deletes it; the job's
+  `DeleteTombstoneUnsubscribeTokens` for the ones it makes).
   **C6's approval of a reply should lock its root and parent (`FOR SHARE`) first**, so the
   retention job (`SKIP LOCKED`) can't cascade a reply being approved.
 - **`posts.discussion`** (`default|open|closed|off`) is **not in `golive_post_settings()`**: it

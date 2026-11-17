@@ -72,8 +72,8 @@ CREATE TABLE reader_comments (
   -- Plain text (6.3), validated in Go (api/discussion_text.go); '' only on a tombstone.
   body           text NOT NULL CHECK (char_length(body) <= 4000),
   status         varchar NOT NULL CHECK (status IN ('unconfirmed', 'pending', 'approved', 'spam', 'trash')),
-  -- The status a restore puts back.
-  trashed_from   varchar CHECK (trashed_from IN ('unconfirmed', 'pending', 'approved', 'spam')),
+  -- The status a restore puts back. Never unconfirmed: those aren't moderated, they expire.
+  trashed_from   varchar CHECK (trashed_from IN ('pending', 'approved', 'spam')),
   -- Why the rules held (or spammed) it (4.2), NULL when nothing did; held_detail is a
   -- guard's reason or the matched word.
   held_reason    varchar(40) CHECK (held_reason ~ '^[a-z][a-z_]{0,39}$'),

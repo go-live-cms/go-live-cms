@@ -271,6 +271,9 @@ type Querier interface {
 	DeleteTheme(ctx context.Context, id int64) error
 	DeleteThemeExtensionSetting(ctx context.Context, key string) (int64, error)
 	DeleteThemeSetting(ctx context.Context, arg DeleteThemeSettingParams) error
+	// A tombstone's subscription ends with its text, as DeleteReaderCommentTx does for the
+	// ones it makes.
+	DeleteTombstoneUnsubscribeTokens(ctx context.Context) (int64, error)
 	// Delete (section 9) removes only a row with no published override; its versions and Yjs
 	// state cascade. 0 rows: gone, or published (by a publish that got there first).
 	DeleteUnpublishedSiteTemplate(ctx context.Context, id int64) (int64, error)
@@ -1069,7 +1072,9 @@ type Querier interface {
 	TrashPost(ctx context.Context, id int64) (Post, error)
 	// Moves a comment to the trash, keeping the status a restore puts back. Its replies are
 	// untouched: the thread read renders a trashed root that has approved replies as "This
-	// comment was removed" (6.4).
+	// comment was removed" (6.4). An unconfirmed comment isn't moderated (it isn't in the
+	// queue yet, 4.1) and expires on its own: no row (it keeps its confirm token, which only
+	// an unconfirmed row may hold).
 	TrashReaderComment(ctx context.Context, arg TrashReaderCommentParams) (ReaderComment, error)
 	// Removes the post's featured image link (order 0). An image that is also in
 	// the content (blocks, #176) keeps its row as a content link, placed after

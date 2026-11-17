@@ -204,6 +204,12 @@ func TestReaderCommentRootWithRepliesKeepsThem(t *testing.T) {
 		require.Equal(t, db.ReaderCommentApproved, back.Status)
 		require.Equal(t, root.Body, back.Body, "restoring brings the text back")
 		require.False(t, back.TrashedFrom.Valid)
+
+		// Unconfirmed comments aren't moderated: they expire.
+		unconfirmed := f.comment(t, post, commenter, nil, db.ReaderCommentUnconfirmed)
+		_, err = f.store.TrashReaderComment(ctx, db.TrashReaderCommentParams{ID: unconfirmed.ID})
+		require.ErrorIs(t, err, sql.ErrNoRows)
+		require.Equal(t, unconfirmed, f.reload(t, unconfirmed.ID))
 	})
 
 	t.Run("delete a root with approved replies: tombstone", func(t *testing.T) {
@@ -407,10 +413,16 @@ func TestDiscussionMaintenanceRetention(t *testing.T) {
 	t.Run("an expired root with approved replies becomes a tombstone", func(t *testing.T) {
 		root := f.comment(t, post, commenter, nil, db.ReaderCommentSpam)
 		reply := f.comment(t, post, commenter, &root, db.ReaderCommentApproved)
+		token := discussionTestHash()
+		_, err := f.conn.Exec(`INSERT INTO reader_comment_unsubscribe_tokens (token_hash, comment_id) VALUES ($1, $2)`, token, root.ID)
+		require.NoError(t, err)
 		f.age(t, root.ID, 31*24*time.Hour)
 		f.maintain(t)
 		requireTombstone(t, f.reload(t, root.ID))
 		require.Equal(t, reply, f.reload(t, reply.ID), "the reply is untouched")
+		var n int
+		require.NoError(t, f.conn.QueryRow(`SELECT count(*) FROM reader_comment_unsubscribe_tokens WHERE token_hash = $1`, token).Scan(&n))
+		require.Zero(t, n, "its subscription ends with its text")
 	})
 
 	t.Run("a tombstone losing its last reply", func(t *testing.T) {
@@ -524,7 +536,11 @@ func TestDiscussionMaintenanceRetention(t *testing.T) {
 			defer close(done)
 			f.server.RunDiscussionMaintenance(loopCtx, time.Hour)
 		}()
-		require.Eventually(t, func() bool { return !f.exists(t, old.ID) }, 10*time.Second, 50*time.Millisecond)
+		// No require in the condition: Eventually runs it on its own goroutine.
+		require.Eventually(t, func() bool {
+			var n int
+			return f.conn.QueryRow(`SELECT count(*) FROM reader_comments WHERE id = $1`, old.ID).Scan(&n) == nil && n == 0
+		}, 10*time.Second, 50*time.Millisecond)
 		cancel()
 		select {
 		case <-done:

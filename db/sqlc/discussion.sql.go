@@ -260,6 +260,22 @@ func (q *Queries) DeleteStaleCommenters(ctx context.Context, arg DeleteStaleComm
 	return result.RowsAffected()
 }
 
+const deleteTombstoneUnsubscribeTokens = `-- name: DeleteTombstoneUnsubscribeTokens :execrows
+DELETE FROM reader_comment_unsubscribe_tokens t
+USING reader_comments c
+WHERE t.comment_id = c.id AND c.removed_at IS NOT NULL
+`
+
+// A tombstone's subscription ends with its text, as DeleteReaderCommentTx does for the
+// ones it makes.
+func (q *Queries) DeleteTombstoneUnsubscribeTokens(ctx context.Context) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteTombstoneUnsubscribeTokens)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const getCommenter = `-- name: GetCommenter :one
 SELECT id, email, email_lower, display_name, verified_at, blocked_at, last_spam_at, user_id, created_at, last_seen_at FROM commenters WHERE id = $1
 `
@@ -607,7 +623,7 @@ SET trashed_from = status,
     status = 'trash',
     moderated_by = $1,
     moderated_at = now()
-WHERE id = $2 AND status <> 'trash' AND removed_at IS NULL
+WHERE id = $2 AND status NOT IN ('trash', 'unconfirmed') AND removed_at IS NULL
 RETURNING id, post_id, parent_id, root_id, commenter_id, author_user_id, display_name, body, status, trashed_from, held_reason, held_detail, notify_replies, network_hash, removed_at, confirm_token_hash, created_at, approved_at, moderated_by, moderated_at, edited_at
 `
 
@@ -618,7 +634,9 @@ type TrashReaderCommentParams struct {
 
 // Moves a comment to the trash, keeping the status a restore puts back. Its replies are
 // untouched: the thread read renders a trashed root that has approved replies as "This
-// comment was removed" (6.4).
+// comment was removed" (6.4). An unconfirmed comment isn't moderated (it isn't in the
+// queue yet, 4.1) and expires on its own: no row (it keeps its confirm token, which only
+// an unconfirmed row may hold).
 func (q *Queries) TrashReaderComment(ctx context.Context, arg TrashReaderCommentParams) (ReaderComment, error) {
 	row := q.db.QueryRowContext(ctx, trashReaderComment, arg.ModeratedBy, arg.ID)
 	var i ReaderComment

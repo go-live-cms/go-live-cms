@@ -74,13 +74,15 @@ SELECT * FROM reader_comments WHERE id = $1 FOR UPDATE;
 -- name: TrashReaderComment :one
 -- Moves a comment to the trash, keeping the status a restore puts back. Its replies are
 -- untouched: the thread read renders a trashed root that has approved replies as "This
--- comment was removed" (6.4).
+-- comment was removed" (6.4). An unconfirmed comment isn't moderated (it isn't in the
+-- queue yet, 4.1) and expires on its own: no row (it keeps its confirm token, which only
+-- an unconfirmed row may hold).
 UPDATE reader_comments
 SET trashed_from = status,
     status = 'trash',
     moderated_by = sqlc.narg('moderated_by'),
     moderated_at = now()
-WHERE id = sqlc.arg('id') AND status <> 'trash' AND removed_at IS NULL
+WHERE id = sqlc.arg('id') AND status NOT IN ('trash', 'unconfirmed') AND removed_at IS NULL
 RETURNING *;
 
 -- name: RestoreReaderComment :one
@@ -170,6 +172,13 @@ WHERE c.id IN (
     )
   FOR UPDATE OF x SKIP LOCKED
 );
+
+-- name: DeleteTombstoneUnsubscribeTokens :execrows
+-- A tombstone's subscription ends with its text, as DeleteReaderCommentTx does for the
+-- ones it makes.
+DELETE FROM reader_comment_unsubscribe_tokens t
+USING reader_comments c
+WHERE t.comment_id = c.id AND c.removed_at IS NOT NULL;
 
 -- name: DeleteExpiredReaderComments :execrows
 -- Unconfirmed after 48 hours, pending after 90 days, spam and trash 30 days after they
