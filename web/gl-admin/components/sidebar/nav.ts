@@ -5,7 +5,7 @@ import type { PostType, TaxonomyType } from "@gl-admin/lib/api/types"
 // what is a UI hint only (lib/roles.ts): the API enforces the real checks, and the
 // router guards the admin-only pages (RequireRole in app.tsx).
 
-export type NavIcon = "home" | "new" | "post" | "page" | "content" | "media" | "users" | "types" | "themes" | "menus" | "plugins" | "settings" | "tag"
+export type NavIcon = "home" | "new" | "post" | "page" | "content" | "media" | "users" | "types" | "themes" | "siteeditor" | "menus" | "plugins" | "settings" | "tag"
 
 export type NavItem = {
   key: string
@@ -116,6 +116,8 @@ export function buildNavigation({ role, postTypes = DEFAULT_POST_TYPES, taxonomy
       label: "Appearance",
       items: [
         { key: "themes", label: "Themes", to: "/themes", icon: "themes", access: isSiteAdmin },
+        // #493: templates, parts and the global styles, admins only (requireSiteAdmin; the route's guard).
+        { key: "site-editor", label: "Site editor", to: "/site-editor", icon: "siteeditor", access: isSiteAdmin },
         { key: "menus", label: "Menus", to: "/menus", icon: "menus", access: isContentModerator },
       ],
     },

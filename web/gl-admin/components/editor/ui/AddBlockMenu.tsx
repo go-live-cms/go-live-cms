@@ -4,7 +4,7 @@ import type { Editor as TiptapEditor } from "@tiptap/core"
 import { useClickOutside, useFloating, useStableId } from "@gl-admin/components/ui/a11y"
 import { toast } from "@gl-admin/components/ui/Toast"
 import { authManager } from "@gl-admin/lib/auth"
-import { getActiveTheme, menuEntries, type CatalogEntry } from "../blocks/catalog"
+import { getActiveTheme, menuEntries, offeredOnce, type CatalogEntry } from "../blocks/catalog"
 import { editorDocKind } from "../extensions/SiteBlocks"
 import { gutterAccepts, insertFromGutter } from "../utils/blockGutter"
 import type { BlockRef } from "../utils/blockActions"
@@ -36,7 +36,7 @@ export default function AddBlockMenu({ editor, target, anchor, onClose, entries:
   const entries = useMemo(
     () =>
       given ??
-      menuEntries({ role: authManager.getState().user?.role, theme: getActiveTheme(), context: editorDocKind(editor), accepts: gutterAccepts(editor, target) }),
+      menuEntries({ role: authManager.getState().user?.role, theme: getActiveTheme(), context: editorDocKind(editor), accepts: gutterAccepts(editor, target) }).filter(offeredOnce(editor)),
     [given]
   )
   const menu = useInsertMenu(entries, query)

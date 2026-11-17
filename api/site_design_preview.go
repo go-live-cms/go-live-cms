@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	db "github.com/go-live-cms/go-live-cms/db/sqlc"
 	"github.com/go-live-cms/go-live-cms/token"
 )
 
@@ -51,6 +52,13 @@ type DesignDraftResponse struct {
 	GlobalStyles json.RawMessage `json:"global_styles"`
 	// ExpiresAt is the token's expiry, after which the preview shows the published site.
 	ExpiresAt time.Time `json:"expires_at"`
+	// Template, Parts and Menus answer `?slugs=` (#493, design 8.3) as the public resolve
+	// does, from the **working copies**: a customized template or part renders as it is being
+	// edited, a reset one as the theme's default (what the next publish puts live). Absent
+	// without `slugs`.
+	Template *ResolvedSiteTemplate         `json:"template,omitempty"`
+	Parts    map[string]ResolvedSitePart   `json:"parts,omitempty"`
+	Menus    map[string]PublicMenuResponse `json:"menus,omitempty"`
 }
 
 // createDesignPreview handles POST /site-design/preview (admin): a preview token for the
@@ -133,11 +141,41 @@ func (server *Server) getDesignDraft(c *gin.Context) {
 		c.JSON(http.StatusConflict, gin.H{"code": "preview_theme_inactive", "error": "the previewed theme is no longer active"})
 		return
 	}
-	c.JSON(http.StatusOK, DesignDraftResponse{
+	resp := DesignDraftResponse{
 		Theme:        state.theme.Slug,
 		GlobalStyles: emptyObjectIfBlank(state.row.Draft),
 		ExpiresAt:    payload.ExpiredAt,
-	})
+	}
+	if raw := c.Query("slugs"); raw != "" {
+		slugs, ok := parseResolveSlugs(raw)
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"code": "invalid_slugs", "error": "slugs must be 1 to 8 distinct template slugs"})
+			return
+		}
+		rows, err := server.store.ListSiteTemplatesByTheme(c, state.theme.Slug)
+		if err != nil {
+			server.requestLog(c).Error("design_preview_templates_failed", "error", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read the templates"})
+			return
+		}
+		design := server.resolveSiteDesign(c, state.theme, workingSiteDesignOverrides(rows), slugs)
+		resp.Template, resp.Parts, resp.Menus = design.Template, design.Parts, design.Menus
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+// workingSiteDesignOverrides are the rows a preview renders in place of the theme's own: each
+// customized row's working copy. A reset row is left out, so the theme's default renders, as
+// it will after the next publish (design 9).
+func workingSiteDesignOverrides(rows []db.SiteTemplate) []siteDesignOverride {
+	overrides := make([]siteDesignOverride, 0, len(rows))
+	for _, row := range rows {
+		if row.WorkingState != siteTemplateCustom {
+			continue
+		}
+		overrides = append(overrides, siteDesignOverride{Kind: row.Kind, Slug: row.Slug, Title: row.Title, Doc: row.BlockDoc})
+	}
+	return overrides
 }
 
 // designPreviewPayload reads and verifies the request's bearer as a design preview

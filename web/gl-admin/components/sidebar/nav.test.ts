@@ -29,7 +29,7 @@ describe("buildNavigation", () => {
   it("gives admins every section, with the workspace pages", () => {
     const nav = build("admin")
     expect(nav.map((s) => s.key)).toEqual(["top", "content", "appearance", "workspace"])
-    expect(nav.find((s) => s.key === "appearance")!.items.map((i) => i.label)).toEqual(["Themes", "Menus"])
+    expect(nav.find((s) => s.key === "appearance")!.items.map((i) => i.label)).toEqual(["Themes", "Site editor", "Menus"])
     expect(nav.find((s) => s.key === "workspace")!.items.map((i) => i.label)).toEqual(["Users", "Post types", "Plugins", "Settings"])
   })
 
@@ -42,7 +42,7 @@ describe("buildNavigation", () => {
 
   it("hides Users, Settings, Themes and Post types from contributors", () => {
     const visible = keys(build("contributor"))
-    for (const key of ["users", "settings", "themes", "menus", "post-types", "plugins"]) expect(visible).not.toContain(key)
+    for (const key of ["users", "settings", "themes", "site-editor", "menus", "post-types", "plugins"]) expect(visible).not.toContain(key)
     expect(build("contributor").map((s) => s.label)).not.toContain("Workspace")
     // What they can use stays.
     expect(visible).toEqual(expect.arrayContaining(["home", "new-post", "type-post", "type-page", "media"]))

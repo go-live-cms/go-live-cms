@@ -150,7 +150,21 @@ func (server *Server) resolvePublicSiteTemplate(c *gin.Context) {
 		return
 	}
 
-	resolver := server.newSiteDesignResolver(c, theme, rows)
+	overrides := make([]siteDesignOverride, 0, len(rows))
+	for _, row := range rows {
+		if row.PublishedBlockDoc.Valid {
+			overrides = append(overrides, siteDesignOverride{Kind: row.Kind, Slug: row.Slug, Title: row.Title, Doc: row.PublishedBlockDoc.RawMessage})
+		}
+	}
+	c.JSON(http.StatusOK, server.resolveSiteDesign(c, theme, overrides, slugs))
+}
+
+// resolveSiteDesign answers slugs against overrides (the published copies for the public
+// resolve, the working copies for a design preview's draft read, #493), then the theme's
+// shipped templates and parts, then core's starter parts, with the menus they name by id.
+func (server *Server) resolveSiteDesign(c *gin.Context, theme db.Theme, overrides []siteDesignOverride, slugs []string) SiteTemplateResolveResponse {
+	ctx := c.Request.Context()
+	resolver := server.newSiteDesignResolver(c, theme, overrides)
 	resp := SiteTemplateResolveResponse{Theme: theme.Slug, Parts: map[string]ResolvedSitePart{}, Menus: map[string]PublicMenuResponse{}}
 	resp.Template = resolver.template(slugs)
 
@@ -177,7 +191,7 @@ func (server *Server) resolvePublicSiteTemplate(c *gin.Context) {
 	server.attachBlockMedia(ctx, docs...)
 	server.publicizeBlockDocs(ctx, docs...)
 	resp.Menus = server.menusNamedByID(c, docs)
-	c.JSON(http.StatusOK, resp)
+	return resp
 }
 
 // siteDesignResolver resolves slugs against the published overrides of one theme, then the
@@ -193,7 +207,16 @@ type siteDesignResolver struct {
 	shippedParts      map[string]ThemeBlockTemplate
 }
 
-func (server *Server) newSiteDesignResolver(c *gin.Context, theme db.Theme, rows []db.ListPublishedSiteTemplatesForResolveRow) *siteDesignResolver {
+// siteDesignOverride is a row the resolver puts before the theme's own: a published copy
+// (the public resolve) or a working copy (a design preview, #493).
+type siteDesignOverride struct {
+	Kind  string
+	Slug  string
+	Title string
+	Doc   json.RawMessage
+}
+
+func (server *Server) newSiteDesignResolver(c *gin.Context, theme db.Theme, rows []siteDesignOverride) *siteDesignResolver {
 	r := &siteDesignResolver{
 		server:            server,
 		c:                 c,
@@ -204,10 +227,7 @@ func (server *Server) newSiteDesignResolver(c *gin.Context, theme db.Theme, rows
 		shippedParts:      shippedBlockTemplates(theme.Config, "block_parts"),
 	}
 	for _, row := range rows {
-		if !row.PublishedBlockDoc.Valid {
-			continue
-		}
-		doc, ok := r.docMap(row.PublishedBlockDoc.RawMessage, row.Kind, row.Slug)
+		doc, ok := r.docMap(row.Doc, row.Kind, row.Slug)
 		if !ok {
 			continue
 		}

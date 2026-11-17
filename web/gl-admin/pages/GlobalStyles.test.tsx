@@ -15,6 +15,8 @@ const api = vi.hoisted(() => ({
   getGlobalStyles: vi.fn(),
   saveGlobalStyles: vi.fn(),
   publishSiteDesign: vi.fn(),
+  // The publish dialog and the Publish count read what else the release holds (#493).
+  getSiteDesignOverview: vi.fn(),
 }))
 const preview = vi.hoisted(() => ({ openDesignPreview: vi.fn(), createDesignPreview: vi.fn() }))
 const media = vi.hoisted(() => ({ phone: false }))
@@ -67,6 +69,7 @@ beforeEach(() => {
       response({ draft: styles, draft_revision: base + 1 })
     )
   api.publishSiteDesign.mockReset()
+  api.getSiteDesignOverview.mockReset().mockResolvedValue({ theme: { id: 1, slug: "default", name: "Paper" }, templates: [], global_styles_changed: false, global_styles_groups: [], unpublished_changes: 0 })
   preview.openDesignPreview.mockReset().mockResolvedValue({ token: "t", theme: "default", expires_at: "" })
   container = document.createElement("div")
   document.body.appendChild(container)

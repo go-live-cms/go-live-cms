@@ -219,6 +219,37 @@ export async function getSiteTemplate(id: number): Promise<SiteTemplate> {
   return apiCall(`/site-design/templates/${id}`)
 }
 
+/**
+ * "Customize" or "New template" / "New part" (#490, design 5.7, 13.1): a row for the active
+ * theme, its working copy from the theme's shipped default (`theme`), core's starter or
+ * nothing. The collab server seeds the editor's doc from it on first open (rule 11). Throws
+ * `TemplateExistsError` with the existing row's id when the theme already has that kind and slug.
+ */
+export async function createSiteTemplate(input: {
+  kind: SiteTemplateKind
+  slug: string
+  from: "theme" | "starter" | "blank"
+  title?: string
+}): Promise<SiteTemplate> {
+  const response = await designFetch("/api/v1/site-design/templates", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  })
+  const conflict = await conflictBody(response)
+  if (conflict?.code === "template_exists" && typeof conflict.id === "number") throw new TemplateExistsError(conflict.id)
+  if (!response.ok) throw await apiErrorFromResponse(response, { fallback: "Creating the template failed" })
+  return response.json()
+}
+
+/** The theme already has a row of that kind and slug (409 template_exists): open it instead. */
+export class TemplateExistsError extends Error {
+  constructor(readonly id: number) {
+    super("This theme already has it customized")
+    this.name = "TemplateExistsError"
+  }
+}
+
 /** Reset to theme default (section 9): the editor turns read-only; the next publish puts the default back. */
 export async function resetSiteTemplate(id: number): Promise<SiteTemplate> {
   return apiCall(`/site-design/templates/${id}/reset`, { method: "POST" })
