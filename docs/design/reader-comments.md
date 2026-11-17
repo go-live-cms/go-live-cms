@@ -467,7 +467,8 @@ CREATE TABLE reader_comments (
   status          varchar NOT NULL CHECK (status IN ('unconfirmed', 'pending', 'approved', 'spam', 'trash')),
   trashed_from    varchar,                        -- the status a restore puts back
   held_reason     varchar,                        -- 4.2, or the spam route (spam_word, honeypot,
-                                                  -- plugin; 16.1); NULL otherwise
+                                                  -- plugin, moderator; 16.1); Not spam sets
+                                                  -- previous_spam; NULL otherwise
   held_detail     varchar(200),                   -- a guard's reason, a matched word
   notify_replies  boolean NOT NULL DEFAULT false, -- 8.2, the reader's consent
   network_hash    bytea,                          -- 7.2, NULLed after 30 days
@@ -1197,8 +1198,10 @@ drawn; C5 to C10 and #500 build them as drawn.
   scripts (11.6).
 - **Spam says why.** The Spam tab shows why each comment is there: the spam word, the
   honeypot, a plugin's guard, or the moderator who marked it. `held_reason` and
-  `held_detail` therefore also record a spam route (`spam_word`, `honeypot`, `plugin`), and
-  a moderator's mark is `moderated_by` (6.1). Trash rows show who trashed them and the date
+  `held_detail` therefore also record a spam route (`spam_word`, `honeypot`, `plugin`,
+  `moderator`), and
+  a moderator's mark is `moderator` with `moderated_by` naming them (6.1). Not spam sends a
+  comment back to Pending with `previous_spam` as its reason, never with its old spam route. Trash rows show who trashed them and the date
   they go (30 days, 6.4).
 - **The queue's rows** carry Approve, Spam, Trash and Reply (Pending); Unapprove first on
   Approved; Not spam and Delete permanently on Spam; Restore and Delete permanently on Trash.
