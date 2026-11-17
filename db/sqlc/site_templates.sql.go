@@ -256,6 +256,47 @@ func (q *Queries) GetSiteTemplateVersionByID(ctx context.Context, id int64) (Sit
 	return i, err
 }
 
+const listPublishedCustomPageTemplates = `-- name: ListPublishedCustomPageTemplates :many
+SELECT slug, title
+FROM site_templates
+WHERE theme_slug = $1
+  AND kind = 'template'
+  AND slug LIKE 'custom-%'
+  AND published_block_doc IS NOT NULL
+ORDER BY lower(title), slug
+`
+
+type ListPublishedCustomPageTemplatesRow struct {
+	Slug  string `json:"slug"`
+	Title string `json:"title"`
+}
+
+// The builder page templates a page may pick (#494, design 10): the theme's published
+// custom-<name> templates. A reset or never-published one has no published copy, so it
+// isn't offered (a page that already stores it keeps the name and renders the default).
+func (q *Queries) ListPublishedCustomPageTemplates(ctx context.Context, themeSlug string) ([]ListPublishedCustomPageTemplatesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPublishedCustomPageTemplates, themeSlug)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPublishedCustomPageTemplatesRow{}
+	for rows.Next() {
+		var i ListPublishedCustomPageTemplatesRow
+		if err := rows.Scan(&i.Slug, &i.Title); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPublishedSiteTemplateVersionNos = `-- name: ListPublishedSiteTemplateVersionNos :many
 SELECT t.id, v.version_no
 FROM site_templates t

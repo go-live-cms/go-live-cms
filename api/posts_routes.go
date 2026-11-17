@@ -38,6 +38,9 @@ func (server *Server) RegisterPostRoutes(rg *gin.RouterGroup) {
 		posts.GET("/user/:id", auth, author, server.getPostsByUser)
 		// Who can be credited in a byline (#319, posts_authors.go)
 		posts.GET("/author-candidates", auth, author, server.listAuthorCandidates)
+		// What a page's Template field offers (#336, #494, page_templates.go): the
+		// active theme's page layouts and its published Site editor page templates
+		posts.GET("/page-templates", auth, author, server.listPageTemplates)
 		// The caller's edit access grants (#321, posts_access.go), for the lists
 		posts.GET("/collaborations", auth, author, server.listCollaborations)
 		// Who can be asked for a review (#323, review_requests.go)

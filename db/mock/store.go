@@ -4475,6 +4475,21 @@ func (mr *MockStoreMockRecorder) ListPublicTerms(arg0, arg1 interface{}) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPublicTerms", reflect.TypeOf((*MockStore)(nil).ListPublicTerms), arg0, arg1)
 }
 
+// ListPublishedCustomPageTemplates mocks base method.
+func (m *MockStore) ListPublishedCustomPageTemplates(arg0 context.Context, arg1 string) ([]db.ListPublishedCustomPageTemplatesRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListPublishedCustomPageTemplates", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListPublishedCustomPageTemplatesRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListPublishedCustomPageTemplates indicates an expected call of ListPublishedCustomPageTemplates.
+func (mr *MockStoreMockRecorder) ListPublishedCustomPageTemplates(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPublishedCustomPageTemplates", reflect.TypeOf((*MockStore)(nil).ListPublishedCustomPageTemplates), arg0, arg1)
+}
+
 // ListPublishedPostsByAuthor mocks base method.
 func (m *MockStore) ListPublishedPostsByAuthor(arg0 context.Context, arg1 db.ListPublishedPostsByAuthorParams) ([]db.ListPublishedPostsByAuthorRow, error) {
 	m.ctrl.T.Helper()

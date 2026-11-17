@@ -7,9 +7,11 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/sqlc-dev/pqtype"
 	"github.com/stretchr/testify/require"
 
 	mockdb "github.com/go-live-cms/go-live-cms/db/mock"
@@ -118,6 +120,15 @@ func TestNormalizePageTemplate(t *testing.T) {
 		{"page/default", "page/default", false},
 		{"two words", "two words", false},
 		{"fullwidth.astro", "fullwidth.astro", false},
+		// Builder page templates (#494): block:<name> in the builder's alphabet.
+		{" block:landing ", "block:landing", true},
+		{"block:spring-2", "block:spring-2", true},
+		{"block:Landing", "", false},
+		{"block:", "", false},
+		{"block:a_b", "", false},
+		{"block:../x", "", false},
+		{"block:" + strings.Repeat("a", 65), "", false},
+		{"custom-landing:x", "", false},
 	} {
 		got, ok := normalizePageTemplate(tc.in)
 		require.Equal(t, tc.ok, ok, tc.in)
@@ -136,8 +147,89 @@ func TestThemePageTemplates(t *testing.T) {
 	require.False(t, hasPageTemplate(templates, "sidebar"))
 }
 
-var templateTheme = db.Theme{ID: 1, Slug: "default", Active: true,
+var templateTheme = db.Theme{ID: 1, Name: "Paper", Slug: "default", Active: true,
 	Config: json.RawMessage(`{"page_templates": [{"name": "default", "label": "Default"}, {"name": "fullwidth", "label": "Full width"}]}`)}
+
+// publishedBuilderRow is the active theme's published custom-landing (#494).
+var publishedBuilderRow = db.SiteTemplate{ID: 3, ThemeSlug: "default", Kind: "template", Slug: "custom-landing", Title: "Landing",
+	PublishedBlockDoc: pqtype.NullRawMessage{RawMessage: json.RawMessage(`{"doc_version":1,"blocks_order":[],"blocks":{}}`), Valid: true}}
+
+func builderRow(store *mockdb.MockStore, row db.SiteTemplate, err error) {
+	store.EXPECT().GetSiteTemplateBySlug(gomock.Any(), db.GetSiteTemplateBySlugParams{ThemeSlug: "default", Kind: "template", Slug: "custom-landing"}).Times(1).Return(row, err)
+}
+
+func TestBuilderPageTemplateName(t *testing.T) {
+	require.Equal(t, "landing", builderPageTemplateName("block:landing"))
+	require.Equal(t, "", builderPageTemplateName("landing"))
+	require.Equal(t, "", builderPageTemplateName("block:Landing"))
+	require.Equal(t, "", builderPageTemplateName("block:"))
+}
+
+func TestBuilderPageTemplatesList(t *testing.T) {
+	require.Equal(t, []BuilderPageTemplate{}, builderPageTemplates(nil))
+	require.Equal(t, []BuilderPageTemplate{
+		{Name: "block:docs", Label: "Docs"},
+		// No title: from its name.
+		{Name: "block:spring-launch", Label: "Spring launch"},
+	}, builderPageTemplates([]db.ListPublishedCustomPageTemplatesRow{
+		{Slug: "custom-docs", Title: " Docs "},
+		{Slug: "custom-spring-launch", Title: ""},
+		// A slug the site template CHECK allows but block:<name> doesn't, and a non-custom one.
+		{Slug: "custom-a_b", Title: "Underscore"},
+		{Slug: "custom-", Title: "Empty"},
+		{Slug: "page", Title: "Page"},
+	}))
+}
+
+func TestListPageTemplates(t *testing.T) {
+	contributor := db.User{ID: 31, Username: "list_contributor", Role: RoleContributor}
+	const url = "/api/v1/posts/page-templates"
+	for _, tc := range []struct {
+		name  string
+		user  db.User
+		stubs func(store *mockdb.MockStore)
+		want  int
+		body  string
+	}{
+		{"Both kinds", contributor, func(store *mockdb.MockStore) {
+			store.EXPECT().GetActiveTheme(gomock.Any()).Return(templateTheme, nil)
+			store.EXPECT().ListPublishedCustomPageTemplates(gomock.Any(), "default").Return([]db.ListPublishedCustomPageTemplatesRow{{Slug: "custom-landing", Title: "Landing"}}, nil)
+		}, http.StatusOK, `{"theme":{"slug":"default","name":"Paper"},
+			"templates":[{"name":"default","label":"Default"},{"name":"fullwidth","label":"Full width"}],
+			"builder_templates":[{"name":"block:landing","label":"Landing"}]}`},
+		{"No scan yet", contributor, func(store *mockdb.MockStore) {
+			store.EXPECT().GetActiveTheme(gomock.Any()).Return(db.Theme{Name: "Bare", Slug: "bare", Config: json.RawMessage(`{}`)}, nil)
+			store.EXPECT().ListPublishedCustomPageTemplates(gomock.Any(), "bare").Return(nil, nil)
+		}, http.StatusOK, `{"theme":{"slug":"bare","name":"Bare"},"templates":[{"name":"default","label":"Default"}],"builder_templates":[]}`},
+		{"No active theme", contributor, func(store *mockdb.MockStore) {
+			store.EXPECT().GetActiveTheme(gomock.Any()).Return(db.Theme{}, sql.ErrNoRows)
+			store.EXPECT().ListPublishedCustomPageTemplates(gomock.Any(), gomock.Any()).Times(0)
+		}, http.StatusOK, `{"theme":null,"templates":[{"name":"default","label":"Default"}],"builder_templates":[]}`},
+		{"Theme error", contributor, func(store *mockdb.MockStore) {
+			store.EXPECT().GetActiveTheme(gomock.Any()).Return(db.Theme{}, fmt.Errorf("db down"))
+		}, http.StatusInternalServerError, ""},
+		{"List error", contributor, func(store *mockdb.MockStore) {
+			store.EXPECT().GetActiveTheme(gomock.Any()).Return(templateTheme, nil)
+			store.EXPECT().ListPublishedCustomPageTemplates(gomock.Any(), "default").Return(nil, fmt.Errorf("db down"))
+		}, http.StatusInternalServerError, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store := mockdb.NewMockStore(gomock.NewController(t))
+			tc.stubs(store)
+			stubRoleLookup(store, tc.user)
+			recorder := seoRequest(t, newTestServer(t, store), http.MethodGet, url, "", tc.user)
+			require.Equal(t, tc.want, recorder.Code, recorder.Body.String())
+			if tc.body != "" {
+				require.JSONEq(t, tc.body, recorder.Body.String())
+			}
+		})
+	}
+
+	t.Run("SignedOut", func(t *testing.T) {
+		recorder := serveJSON(t, newTestServer(t, mockdb.NewMockStore(gomock.NewController(t))), http.MethodGet, url, "")
+		require.Equal(t, http.StatusUnauthorized, recorder.Code)
+	})
+}
 
 func TestUpdatePostPageTemplate(t *testing.T) {
 	owner := db.User{ID: 21, Username: "pages_owner", Role: RoleContributor}
@@ -206,6 +298,40 @@ func TestUpdatePostPageTemplate(t *testing.T) {
 		}, http.StatusInternalServerError, ""},
 		{"PathName", admin, url, `{"page_template": "../post/default"}`, page("draft", owner.ID), none, http.StatusBadRequest, "invalid_template"},
 		{"TooLong", admin, url, fmt.Sprintf(`{"page_template": "%065d"}`, 0), page("draft", owner.ID), none, http.StatusBadRequest, ""},
+		{"TooLongForBinding", admin, url, fmt.Sprintf(`{"page_template": "block:%065d"}`, 0), page("draft", owner.ID), none, http.StatusBadRequest, ""},
+		// Builder page templates (#494): a published custom-<name> of the active theme only.
+		{"BuilderPublished", owner, url, `{"page_template": "block:landing"}`, page("draft", owner.ID), func(store *mockdb.MockStore) {
+			store.EXPECT().GetActiveTheme(gomock.Any()).Return(templateTheme, nil)
+			builderRow(store, publishedBuilderRow, nil)
+			saves("block:landing")(store)
+		}, http.StatusOK, ""},
+		{"BuilderUnpublished", admin, url, `{"page_template": "block:landing"}`, page("draft", owner.ID), func(store *mockdb.MockStore) {
+			store.EXPECT().GetActiveTheme(gomock.Any()).Return(templateTheme, nil)
+			builderRow(store, db.SiteTemplate{ID: 3, ThemeSlug: "default", Kind: "template", Slug: "custom-landing"}, nil)
+			none(store)
+		}, http.StatusBadRequest, "unknown_template"},
+		{"BuilderMissing", admin, url, `{"page_template": "block:landing"}`, page("draft", owner.ID), func(store *mockdb.MockStore) {
+			store.EXPECT().GetActiveTheme(gomock.Any()).Return(templateTheme, nil)
+			builderRow(store, db.SiteTemplate{}, sql.ErrNoRows)
+			none(store)
+		}, http.StatusBadRequest, "unknown_template"},
+		{"BuilderLookupError", admin, url, `{"page_template": "block:landing"}`, page("draft", owner.ID), func(store *mockdb.MockStore) {
+			store.EXPECT().GetActiveTheme(gomock.Any()).Return(templateTheme, nil)
+			builderRow(store, db.SiteTemplate{}, fmt.Errorf("db down"))
+			none(store)
+		}, http.StatusInternalServerError, ""},
+		{"BuilderNoActiveTheme", admin, url, `{"page_template": "block:landing"}`, page("draft", owner.ID), func(store *mockdb.MockStore) {
+			store.EXPECT().GetActiveTheme(gomock.Any()).Return(db.Theme{}, sql.ErrNoRows)
+			store.EXPECT().GetSiteTemplateBySlug(gomock.Any(), gomock.Any()).Times(0)
+			none(store)
+		}, http.StatusBadRequest, "unknown_template"},
+		// A layout name never asks the Site editor, a builder name never the theme's layouts.
+		{"BuilderNameNotALayout", admin, url, `{"page_template": "block:fullwidth"}`, page("draft", owner.ID), func(store *mockdb.MockStore) {
+			store.EXPECT().GetActiveTheme(gomock.Any()).Return(templateTheme, nil)
+			store.EXPECT().GetSiteTemplateBySlug(gomock.Any(), db.GetSiteTemplateBySlugParams{ThemeSlug: "default", Kind: "template", Slug: "custom-fullwidth"}).Return(db.SiteTemplate{}, sql.ErrNoRows)
+			none(store)
+		}, http.StatusBadRequest, "unknown_template"},
+		{"BuilderBadName", admin, url, `{"page_template": "block:Landing"}`, page("draft", owner.ID), none, http.StatusBadRequest, "invalid_template"},
 		{"UnknownField", admin, url, `{"template": "fullwidth"}`, page("draft", owner.ID), none, http.StatusBadRequest, ""},
 		{"BadID", admin, "/api/v1/posts/x/template", `{}`, page("draft", owner.ID), none, http.StatusBadRequest, ""},
 		{"UpdateMissing", admin, url, `{}`, page("draft", owner.ID), func(store *mockdb.MockStore) {
