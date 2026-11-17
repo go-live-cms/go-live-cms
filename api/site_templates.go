@@ -226,7 +226,7 @@ func (server *Server) createSiteTemplate(c *gin.Context) {
 	}
 	// "Used in" (#496): a copied default that shows media lists them from the start. The
 	// collab server's first store syncs them again, so a failure here is only logged.
-	if uses := publishedContentMedia(row.BlockDoc); len(uses) > 0 {
+	if uses := storedDocMediaUses(row.BlockDoc); len(uses) > 0 {
 		if err := server.store.SyncSiteTemplateMedia(c, db.SiteTemplateMediaParams(row.ID, false, uses)); err != nil {
 			server.requestLog(c).Warn("site_template_media_sync_failed", "template_id", row.ID, "error", err)
 		}

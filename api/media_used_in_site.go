@@ -17,13 +17,16 @@ import (
 type MediaSiteTemplateUse struct {
 	ID    int64  `json:"id"`
 	Theme string `json:"theme"`
+	// ThemeActive: Theme is the active theme. Another theme's design (kept for when it is
+	// switched back, decision 16.6) isn't on the site, published or not.
+	ThemeActive bool `json:"theme_active"`
 	// Kind is template or part; Slug and Title name it ("Header", part).
 	Kind  string `json:"kind"`
 	Slug  string `json:"slug"`
 	Title string `json:"title"`
-	// Published: its published copy shows the media, so the site does. Working: its working
-	// copy does, so the next publish keeps it (admins only see this side: the working copy
-	// is the Site editor's, which only admins open).
+	// Published: its published copy shows the media (on the site when ThemeActive).
+	// Working: its working copy does, so the next publish keeps it. Only admins see working
+	// copies and other themes' designs: both are the Site editor's, which only admins open.
 	Published bool `json:"published"`
 	Working   bool `json:"working"`
 	// Usages are the blocks showing it, each once (block_id, block_type), or captions of a
@@ -31,27 +34,20 @@ type MediaSiteTemplateUse struct {
 	Usages []MediaUsage `json:"usages"`
 }
 
-// siteTemplateMediaRow is either list query's row.
-type siteTemplateMediaRow struct {
-	ID        int64
-	Theme     string
-	Kind      string
-	Slug      string
-	Title     string
-	BlockID   string
-	BlockType string
-	Published bool
-}
+// siteTemplateMediaRow is either list query's row (the two have the same columns, so a
+// captions row converts to it).
+type siteTemplateMediaRow = db.ListSiteTemplatesByMediaRow
 
 // groupSiteTemplateUses folds the rows (ordered by template, then copy) into one entry per
-// template. Without seesWorking (a caller who isn't an admin) only the published copies
-// count: what readers can see on the site anyway. usage is the usage type of each block.
-func groupSiteTemplateUses(rows []siteTemplateMediaRow, seesWorking bool, usage string) []MediaSiteTemplateUse {
+// template. Without seesDesign (a caller who isn't an admin) only the active theme's
+// published copies count: what readers can see on the site anyway. usage is the usage type
+// of each block.
+func groupSiteTemplateUses(rows []siteTemplateMediaRow, seesDesign bool, usage string) []MediaSiteTemplateUse {
 	out := []MediaSiteTemplateUse{}
 	index := map[int64]int{}
 	seen := map[int64]map[string]bool{}
 	for _, row := range rows {
-		if !row.Published && !seesWorking {
+		if !seesDesign && !(row.Published && row.ThemeActive) {
 			continue
 		}
 		at, ok := index[row.ID]
@@ -59,7 +55,7 @@ func groupSiteTemplateUses(rows []siteTemplateMediaRow, seesWorking bool, usage 
 			at = len(out)
 			index[row.ID] = at
 			seen[row.ID] = map[string]bool{}
-			out = append(out, MediaSiteTemplateUse{ID: row.ID, Theme: row.Theme, Kind: row.Kind, Slug: row.Slug, Title: row.Title, Usages: []MediaUsage{}})
+			out = append(out, MediaSiteTemplateUse{ID: row.ID, Theme: row.ThemeSlug, ThemeActive: row.ThemeActive, Kind: row.Kind, Slug: row.Slug, Title: row.Title, Usages: []MediaUsage{}})
 		}
 		if row.Published {
 			out[at].Published = true
@@ -87,15 +83,12 @@ func (server *Server) mediaSiteDesignUses(ctx context.Context, media db.Medium, 
 			return nil, false, err
 		}
 		for _, r := range found {
-			rows = append(rows, siteTemplateMediaRow{r.ID, r.ThemeSlug, r.Kind, r.Slug, r.Title, r.BlockID, r.BlockType, r.Published})
+			rows = append(rows, siteTemplateMediaRow(r))
 		}
 	} else {
-		found, err := server.store.ListSiteTemplatesByMedia(ctx, media.ID)
-		if err != nil {
+		var err error
+		if rows, err = server.store.ListSiteTemplatesByMedia(ctx, media.ID); err != nil {
 			return nil, false, err
-		}
-		for _, r := range found {
-			rows = append(rows, siteTemplateMediaRow{r.ID, r.ThemeSlug, r.Kind, r.Slug, r.Title, r.BlockID, r.BlockType, r.Published})
 		}
 	}
 	settings, err := server.store.GetSettings(ctx)

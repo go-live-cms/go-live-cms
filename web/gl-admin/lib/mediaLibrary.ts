@@ -175,6 +175,9 @@ export interface MediaPostLink {
 export interface MediaSiteTemplateUse {
   id: number
   theme: string
+  // Whether `theme` is the active theme: another theme's design isn't on the site (admins
+  // only see those). Missing from an API before it: taken as active.
+  theme_active?: boolean
   kind: "template" | "part"
   slug: string
   title: string
@@ -252,9 +255,11 @@ export function usedInRows(links: MediaPostLink[]): UsedInRow[] {
   })
 }
 
-// What the site design calls a template or part: "Header part", "Single post template".
-export function siteTemplateName(use: Pick<MediaSiteTemplateUse, "kind" | "slug" | "title">): string {
-  return `${use.title.trim() || use.slug} ${use.kind === "part" ? "part" : "template"}`
+// What the site design calls a template or part: "Header part", "Single post template", and
+// for a theme that isn't active, which: "Header part (classic theme)".
+export function siteTemplateName(use: Pick<MediaSiteTemplateUse, "kind" | "slug" | "title" | "theme" | "theme_active">): string {
+  const name = `${use.title.trim() || use.slug} ${use.kind === "part" ? "part" : "template"}`
+  return use.theme_active === false ? `${name} (${use.theme} theme)` : name
 }
 
 // The names of a file's site design uses, the site logo first: what the delete
@@ -280,7 +285,7 @@ export function siteDesignUsedInRows(usedIn: Pick<MediaUsedIn, "siteTemplates" |
     rows.push({
       key: `site-template-${use.id}`,
       title: siteTemplateName(use),
-      how: use.published ? how : `${how} · Not published yet`,
+      how: use.theme_active === false ? `${how} · Theme not active` : use.published ? how : `${how} · Not published yet`,
       status: "",
     })
   }
@@ -292,12 +297,59 @@ export function allUsedInRows(usedIn: MediaUsedIn): UsedInRow[] {
   return [...siteDesignUsedInRows(usedIn), ...usedInRows(usedIn.posts)]
 }
 
+// The delete confirmation's lookup (#496): the site design's uses of `ids`, at most
+// `concurrency` lookups at a time (a selection of a hundred files doesn't send a hundred
+// requests at once), each given up after `timeoutMs` so a hung request can't hold Delete.
+// `failed` when any lookup failed or timed out: the confirmation then says it couldn't check.
+export async function lookUpSiteDesignNames(
+  ids: readonly number[],
+  lookup: (id: number) => Promise<MediaUsedIn>,
+  { concurrency = 4, timeoutMs = 8000 }: { concurrency?: number; timeoutMs?: number } = {}
+): Promise<{ names: string[]; failed: boolean }> {
+  const results: (MediaUsedIn | null)[] = ids.map(() => null)
+  let next = 0
+  let failed = false
+  const one = async (id: number): Promise<MediaUsedIn> => {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error("timed out")), timeoutMs)
+    })
+    try {
+      return await Promise.race([Promise.resolve().then(() => lookup(id)), timeout])
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+  const worker = async () => {
+    while (next < ids.length) {
+      const at = next++
+      try {
+        results[at] = await one(ids[at])
+      } catch {
+        failed = true
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(Math.max(concurrency, 1), ids.length) }, worker))
+  const names: string[] = []
+  for (const usedIn of results) {
+    if (!usedIn) continue
+    for (const name of siteDesignNames(usedIn)) if (!names.includes(name)) names.push(name)
+  }
+  return { names, failed }
+}
+
+// What the delete confirmation says when the lookup of the site design's uses failed: it
+// can't promise there are none.
+export const SITE_DESIGN_CHECK_FAILED = "Couldn't check whether the site design uses it."
+
 // What the delete confirmation adds when the site design uses the files (#496): it names
-// them, since a part or the logo shows on every page.
-export function deleteSiteDesignNotice(names: string[]): string | null {
-  if (names.length === 0) return null
+// them, since a part or the logo shows on every page. `failed`: a lookup failed, so it says so.
+export function deleteSiteDesignNotice(names: string[], failed = false): string | null {
+  if (names.length === 0) return failed ? SITE_DESIGN_CHECK_FAILED : null
   const list = names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`
-  return `Also used in the site design: ${list}. ${names.length === 1 ? "It shows" : "They show"} nothing in its place once it's deleted.`
+  const notice = `Also used in the site design: ${list}. ${names.length === 1 ? "It shows" : "They show"} nothing in its place once it's deleted.`
+  return failed ? `${notice} Couldn't check the other files.` : notice
 }
 
 export function usedInHeading(count: number): string {

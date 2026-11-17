@@ -78,7 +78,7 @@ func TestSiteTemplateMediaUsedIn(t *testing.T) {
 	// The admin sees the part (working copy only); an editor doesn't (it isn't on the site).
 	body := usedIn(&d.admin, logo.ID)
 	require.Len(t, body.SiteTemplates, 1)
-	require.Equal(t, MediaSiteTemplateUse{ID: header.ID, Theme: d.theme.Slug, Kind: "part", Slug: "header", Title: header.Title, Working: true,
+	require.Equal(t, MediaSiteTemplateUse{ID: header.ID, Theme: d.theme.Slug, ThemeActive: true, Kind: "part", Slug: "header", Title: header.Title, Working: true,
 		Usages: []MediaUsage{{Type: MediaUsageBlock, BlockID: "blk-image-000000", BlockType: "image"}}}, body.SiteTemplates[0])
 	require.Empty(t, usedIn(&editor, logo.ID).SiteTemplates)
 

@@ -352,7 +352,7 @@ func (server *Server) publishedSiteTemplateHook() func(ctx context.Context, q *d
 	return func(ctx context.Context, q *db.Queries, row db.SiteTemplate) error {
 		var uses []db.ContentMediaUse
 		if row.PublishedBlockDoc.Valid {
-			uses = publishedContentMedia(row.PublishedBlockDoc.RawMessage)
+			uses = storedDocMediaUses(row.PublishedBlockDoc.RawMessage)
 		}
 		return db.SyncSiteTemplateContentMedia(ctx, q, row.ID, true, uses)
 	}

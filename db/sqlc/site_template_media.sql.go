@@ -49,24 +49,26 @@ func (q *Queries) ListSiteTemplateMedia(ctx context.Context, templateID int64) (
 
 const listSiteTemplatesByCaptionsMedia = `-- name: ListSiteTemplatesByCaptionsMedia :many
 SELECT t.id, t.theme_slug, t.kind, t.slug, t.title,
-       stm.block_id, stm.block_type, stm.published
+       stm.block_id, stm.block_type, stm.published,
+       EXISTS (SELECT 1 FROM themes th WHERE th.slug = t.theme_slug AND th.active) AS theme_active
 FROM media v
 JOIN site_template_media stm ON stm.media_id = v.id
 JOIN site_templates t ON t.id = stm.template_id
 WHERE v.captions_media_id = $1::bigint
   AND stm.block_type = 'video'
-ORDER BY t.theme_slug, t.kind DESC, t.slug, t.id, stm.published DESC, stm.block_id
+ORDER BY theme_active DESC, t.theme_slug, t.kind DESC, t.slug, t.id, stm.published DESC, stm.block_id
 `
 
 type ListSiteTemplatesByCaptionsMediaRow struct {
-	ID        int64  `json:"id"`
-	ThemeSlug string `json:"theme_slug"`
-	Kind      string `json:"kind"`
-	Slug      string `json:"slug"`
-	Title     string `json:"title"`
-	BlockID   string `json:"block_id"`
-	BlockType string `json:"block_type"`
-	Published bool   `json:"published"`
+	ID          int64  `json:"id"`
+	ThemeSlug   string `json:"theme_slug"`
+	Kind        string `json:"kind"`
+	Slug        string `json:"slug"`
+	Title       string `json:"title"`
+	BlockID     string `json:"block_id"`
+	BlockType   string `json:"block_type"`
+	Published   bool   `json:"published"`
+	ThemeActive bool   `json:"theme_active"`
 }
 
 // The same for a captions file (#507): it is in no block itself, so these are the templates
@@ -89,6 +91,7 @@ func (q *Queries) ListSiteTemplatesByCaptionsMedia(ctx context.Context, captions
 			&i.BlockID,
 			&i.BlockType,
 			&i.Published,
+			&i.ThemeActive,
 		); err != nil {
 			return nil, err
 		}
@@ -105,26 +108,29 @@ func (q *Queries) ListSiteTemplatesByCaptionsMedia(ctx context.Context, captions
 
 const listSiteTemplatesByMedia = `-- name: ListSiteTemplatesByMedia :many
 SELECT t.id, t.theme_slug, t.kind, t.slug, t.title,
-       stm.block_id, stm.block_type, stm.published
+       stm.block_id, stm.block_type, stm.published,
+       EXISTS (SELECT 1 FROM themes th WHERE th.slug = t.theme_slug AND th.active) AS theme_active
 FROM site_template_media stm
 JOIN site_templates t ON t.id = stm.template_id
 WHERE stm.media_id = $1::bigint
-ORDER BY t.theme_slug, t.kind DESC, t.slug, t.id, stm.published DESC, stm.block_id
+ORDER BY theme_active DESC, t.theme_slug, t.kind DESC, t.slug, t.id, stm.published DESC, stm.block_id
 `
 
 type ListSiteTemplatesByMediaRow struct {
-	ID        int64  `json:"id"`
-	ThemeSlug string `json:"theme_slug"`
-	Kind      string `json:"kind"`
-	Slug      string `json:"slug"`
-	Title     string `json:"title"`
-	BlockID   string `json:"block_id"`
-	BlockType string `json:"block_type"`
-	Published bool   `json:"published"`
+	ID          int64  `json:"id"`
+	ThemeSlug   string `json:"theme_slug"`
+	Kind        string `json:"kind"`
+	Slug        string `json:"slug"`
+	Title       string `json:"title"`
+	BlockID     string `json:"block_id"`
+	BlockType   string `json:"block_type"`
+	Published   bool   `json:"published"`
+	ThemeActive bool   `json:"theme_active"`
 }
 
 // GET /media/:id/posts' site_templates: every template or part of any theme whose working
 // or published copy shows the media, one row per block and copy (the handler groups them).
+// theme_active: the row's theme is the active one, so its published copy is on the site.
 func (q *Queries) ListSiteTemplatesByMedia(ctx context.Context, mediaID int64) ([]ListSiteTemplatesByMediaRow, error) {
 	rows, err := q.db.QueryContext(ctx, listSiteTemplatesByMedia, mediaID)
 	if err != nil {
@@ -143,6 +149,7 @@ func (q *Queries) ListSiteTemplatesByMedia(ctx context.Context, mediaID int64) (
 			&i.BlockID,
 			&i.BlockType,
 			&i.Published,
+			&i.ThemeActive,
 		); err != nil {
 			return nil, err
 		}

@@ -322,10 +322,12 @@ are the most fragile part of the codebase. **Before editing anything under
   or `attached`), labelled by `usageLabels` ("Featured image and 2 image blocks"). Write
   access is `canWriteMedia` (`lib/roles.ts`). **The site design (#496):** the same call
   (`getMediaUsedIn`) answers `site_templates` and `site_logo`; "Used in" lists "Site logo" and each
-  template or part ("Header part", "… · Not published yet") first, named but not linked
-  (`siteDesignUsedInRows`), and the delete confirmation (`DeleteMediaDialog`) looks the files up
-  when it opens and names them in a status line (`deleteSiteDesignNotice`; Delete waits for the
-  lookup, a failed one names none). **Paste to upload (#28):** Ctrl/Cmd+V on the
+  template or part ("Header part", "… · Not published yet", another theme's as "Header part
+  (classic theme)") first, named but not linked (`siteDesignUsedInRows`), and the delete
+  confirmation (`DeleteMediaDialog`) looks the files up each time it opens
+  (`lookUpSiteDesignNames`: four at a time, 8 s each) and names them in a status line
+  (`deleteSiteDesignNotice`). Delete waits for the lookup; a failed or timed-out one says
+  "Couldn't check whether the site design uses it." **Paste to upload (#28):** Ctrl/Cmd+V on the
   library uploads the clipboard's images through the same `upload` as the button and drop
   (`lib/mediaPaste.ts`, tested): ignored in text fields and dialogs, other clipboard
   content ignored. Copied files keep their names; the clipboard's unnamed picture (or

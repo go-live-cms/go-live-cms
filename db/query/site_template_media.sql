@@ -35,24 +35,27 @@ WHERE site_template_media.block_type IS DISTINCT FROM EXCLUDED.block_type;
 -- name: ListSiteTemplatesByMedia :many
 -- GET /media/:id/posts' site_templates: every template or part of any theme whose working
 -- or published copy shows the media, one row per block and copy (the handler groups them).
+-- theme_active: the row's theme is the active one, so its published copy is on the site.
 SELECT t.id, t.theme_slug, t.kind, t.slug, t.title,
-       stm.block_id, stm.block_type, stm.published
+       stm.block_id, stm.block_type, stm.published,
+       EXISTS (SELECT 1 FROM themes th WHERE th.slug = t.theme_slug AND th.active) AS theme_active
 FROM site_template_media stm
 JOIN site_templates t ON t.id = stm.template_id
 WHERE stm.media_id = sqlc.arg('media_id')::bigint
-ORDER BY t.theme_slug, t.kind DESC, t.slug, t.id, stm.published DESC, stm.block_id;
+ORDER BY theme_active DESC, t.theme_slug, t.kind DESC, t.slug, t.id, stm.published DESC, stm.block_id;
 
 -- name: ListSiteTemplatesByCaptionsMedia :many
 -- The same for a captions file (#507): it is in no block itself, so these are the templates
 -- and parts showing a video it captions, with that video's video blocks.
 SELECT t.id, t.theme_slug, t.kind, t.slug, t.title,
-       stm.block_id, stm.block_type, stm.published
+       stm.block_id, stm.block_type, stm.published,
+       EXISTS (SELECT 1 FROM themes th WHERE th.slug = t.theme_slug AND th.active) AS theme_active
 FROM media v
 JOIN site_template_media stm ON stm.media_id = v.id
 JOIN site_templates t ON t.id = stm.template_id
 WHERE v.captions_media_id = sqlc.arg('captions_media_id')::bigint
   AND stm.block_type = 'video'
-ORDER BY t.theme_slug, t.kind DESC, t.slug, t.id, stm.published DESC, stm.block_id;
+ORDER BY theme_active DESC, t.theme_slug, t.kind DESC, t.slug, t.id, stm.published DESC, stm.block_id;
 
 -- name: ListSiteTemplateMedia :many
 -- One template's rows (tests and the publish's checks).

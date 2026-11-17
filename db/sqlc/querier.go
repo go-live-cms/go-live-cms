@@ -729,6 +729,7 @@ type Querier interface {
 	ListSiteTemplatesByCaptionsMedia(ctx context.Context, captionsMediaID int64) ([]ListSiteTemplatesByCaptionsMediaRow, error)
 	// GET /media/:id/posts' site_templates: every template or part of any theme whose working
 	// or published copy shows the media, one row per block and copy (the handler groups them).
+	// theme_active: the row's theme is the active one, so its published copy is on the site.
 	ListSiteTemplatesByMedia(ctx context.Context, mediaID int64) ([]ListSiteTemplatesByMediaRow, error)
 	// Publish, history, reset and restore (#492, docs/design/theme-builder.md 5.3, 8, 9).
 	ListSiteTemplatesByTheme(ctx context.Context, themeSlug string) ([]SiteTemplate, error)

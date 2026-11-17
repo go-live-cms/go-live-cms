@@ -5,7 +5,7 @@ import { toast } from "@gl-admin/components/ui/Toast"
 import { getMediaURL } from "@gl-admin/lib/api"
 import { deleteMedia, getMediaUsedIn } from "@gl-admin/lib/api/media"
 import { errorMessage } from "@gl-admin/lib/api/errors"
-import { deleteSiteDesignNotice, isCaptionsFile, siteDesignNames } from "@gl-admin/lib/mediaLibrary"
+import { deleteSiteDesignNotice, isCaptionsFile, lookUpSiteDesignNames } from "@gl-admin/lib/mediaLibrary"
 import type { Media } from "@gl-admin/lib/types"
 
 // The actions the side panel and the detail page share: copy the URL, download, delete.
@@ -49,32 +49,31 @@ type DeleteMediaDialogProps = {
   onDeleted: (ids: number[]) => void
 }
 
-// The site design's uses of the files being deleted (#496), looked up when the dialog
+// The site design's uses of the files being deleted (#496), looked up each time the dialog
 // opens: the site logo, templates and parts, by name. `checking` while it loads (Delete
-// waits for it, so the question names them); a failed lookup names none.
-function useSiteDesignNames(media: Media[]): { names: string[]; checking: boolean } {
-  const [state, setState] = useState<{ key: string; names: string[] }>({ key: "", names: [] })
+// waits for it, so the question names them; each lookup gives up after a few seconds);
+// `failed` when one couldn't be checked, which the dialog says.
+function useSiteDesignNames(media: Media[]): { names: string[]; failed: boolean; checking: boolean } {
+  const [state, setState] = useState<{ key: string; names: string[]; failed: boolean }>({ key: "", names: [], failed: false })
   const key = media.map((m) => m.id).join(",")
 
   useEffect(() => {
-    if (!key) return
+    // Closed: forget the answer, so the next open asks again.
+    if (!key) {
+      setState((s) => (s.key ? { key: "", names: [], failed: false } : s))
+      return
+    }
     let live = true
-    const ids = key.split(",").map(Number)
-    Promise.all(ids.map((id) => Promise.resolve().then(() => getMediaUsedIn(id)).catch(() => null))).then((results) => {
-      if (!live) return
-      const names: string[] = []
-      for (const usedIn of results) {
-        if (!usedIn) continue
-        for (const name of siteDesignNames(usedIn)) if (!names.includes(name)) names.push(name)
-      }
-      setState({ key, names })
+    lookUpSiteDesignNames(key.split(",").map(Number), getMediaUsedIn).then(({ names, failed }) => {
+      if (live) setState({ key, names, failed })
     })
     return () => {
       live = false
     }
   }, [key])
 
-  return { names: state.key === key ? state.names : [], checking: !!key && state.key !== key }
+  const current = state.key === key
+  return { names: current ? state.names : [], failed: current && state.failed, checking: !!key && !current }
 }
 
 // Confirms and runs a delete of one file or a selection. Files a post still uses are
@@ -85,7 +84,7 @@ export function DeleteMediaDialog({ media, onClose, onDeleted }: DeleteMediaDial
   const count = media.length
   const title = count === 1 ? `Delete “${media[0].name}”?` : `Delete ${count} files?`
   const siteDesign = useSiteDesignNames(media)
-  const notice = deleteSiteDesignNotice(siteDesign.names)
+  const notice = deleteSiteDesignNotice(siteDesign.names, siteDesign.failed)
 
   const run = async () => {
     setBusy(true)

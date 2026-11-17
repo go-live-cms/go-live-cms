@@ -1770,8 +1770,9 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   from both copies.
 - **`GET /media/:id/posts` gains `site_templates`** (`MediaSiteTemplateUse`: id, theme, kind, slug, title,
   `published`, `working`, `usages` as for posts; a captions file through the video blocks showing a video it captions)
-  **and `site_logo`** (it is `settings.site_logo_media_id`). Only admins see working copies (the Site editor is
-  theirs); other roles see templates whose published copy shows the file, which is on the site anyway. A deleted media
+  **and `site_logo`** (it is `settings.site_logo_media_id`). Each entry says `theme_active`. Only admins see working
+  copies and other themes' designs (the Site editor is theirs); other roles see the active theme's templates whose
+  published copy shows the file, which is on the site anyway. A deleted media
   renders nothing in the part: the resolve lists it in the doc's `media_missing`, as for posts. Tests:
   `media_used_in_site_test.go` (mock), `site_template_media_db_test.go` (real DB).
 

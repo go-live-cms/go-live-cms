@@ -50,11 +50,13 @@ func TestGetMediaPostsSiteDesign(t *testing.T) {
 	editor := db.User{ID: 9602, Username: "editor", Role: RoleEditor}
 	rows := []db.ListSiteTemplatesByMediaRow{
 		// The header part shows it, published and in its working copy, by the same block.
-		{ID: 5, ThemeSlug: "default", Kind: "part", Slug: "header", Title: "Header", BlockID: "logo-img-01", BlockType: "image", Published: true},
-		{ID: 5, ThemeSlug: "default", Kind: "part", Slug: "header", Title: "Header", BlockID: "logo-img-01", BlockType: "image", Published: false},
-		{ID: 5, ThemeSlug: "default", Kind: "part", Slug: "header", Title: "Header", BlockID: "cover-0001", BlockType: "cover", Published: false},
+		{ID: 5, ThemeSlug: "default", ThemeActive: true, Kind: "part", Slug: "header", Title: "Header", BlockID: "logo-img-01", BlockType: "image", Published: true},
+		{ID: 5, ThemeSlug: "default", ThemeActive: true, Kind: "part", Slug: "header", Title: "Header", BlockID: "logo-img-01", BlockType: "image", Published: false},
+		{ID: 5, ThemeSlug: "default", ThemeActive: true, Kind: "part", Slug: "header", Title: "Header", BlockID: "cover-0001", BlockType: "cover", Published: false},
+		// Another theme's published footer: not on the site, so only admins see it.
+		{ID: 9, ThemeSlug: "classic", ThemeActive: false, Kind: "part", Slug: "footer", Title: "Footer", BlockID: "img-000009", BlockType: "image", Published: true},
 		// A template not published yet: only its working copy shows it.
-		{ID: 8, ThemeSlug: "default", Kind: "template", Slug: "single", Title: "Single post", BlockID: "img-000001", BlockType: "image", Published: false},
+		{ID: 8, ThemeSlug: "default", ThemeActive: true, Kind: "template", Slug: "single", Title: "Single post", BlockID: "img-000001", BlockType: "image", Published: false},
 	}
 
 	for _, tc := range []struct {
@@ -62,17 +64,20 @@ func TestGetMediaPostsSiteDesign(t *testing.T) {
 		want []MediaSiteTemplateUse
 	}{
 		{admin, []MediaSiteTemplateUse{
-			{ID: 5, Theme: "default", Kind: "part", Slug: "header", Title: "Header", Published: true, Working: true, Usages: []MediaUsage{
+			{ID: 5, Theme: "default", ThemeActive: true, Kind: "part", Slug: "header", Title: "Header", Published: true, Working: true, Usages: []MediaUsage{
 				{Type: MediaUsageBlock, BlockID: "logo-img-01", BlockType: "image"},
 				{Type: MediaUsageBlock, BlockID: "cover-0001", BlockType: "cover"},
 			}},
-			{ID: 8, Theme: "default", Kind: "template", Slug: "single", Title: "Single post", Working: true, Usages: []MediaUsage{
+			{ID: 9, Theme: "classic", Kind: "part", Slug: "footer", Title: "Footer", Published: true, Usages: []MediaUsage{
+				{Type: MediaUsageBlock, BlockID: "img-000009", BlockType: "image"},
+			}},
+			{ID: 8, Theme: "default", ThemeActive: true, Kind: "template", Slug: "single", Title: "Single post", Working: true, Usages: []MediaUsage{
 				{Type: MediaUsageBlock, BlockID: "img-000001", BlockType: "image"},
 			}},
 		}},
 		// Not an admin: what the site shows only, never a working copy.
 		{editor, []MediaSiteTemplateUse{
-			{ID: 5, Theme: "default", Kind: "part", Slug: "header", Title: "Header", Published: true, Usages: []MediaUsage{
+			{ID: 5, Theme: "default", ThemeActive: true, Kind: "part", Slug: "header", Title: "Header", Published: true, Usages: []MediaUsage{
 				{Type: MediaUsageBlock, BlockID: "logo-img-01", BlockType: "image"},
 			}},
 		}},
@@ -106,14 +111,14 @@ func TestGetMediaPostsSiteDesignCaptions(t *testing.T) {
 	store.EXPECT().GetPostsByCaptionsMedia(gomock.Any(), int64(31)).Return(nil, nil)
 	store.EXPECT().ListSiteTemplatesByMedia(gomock.Any(), gomock.Any()).Times(0)
 	store.EXPECT().ListSiteTemplatesByCaptionsMedia(gomock.Any(), int64(31)).Return([]db.ListSiteTemplatesByCaptionsMediaRow{
-		{ID: 6, ThemeSlug: "default", Kind: "part", Slug: "footer", Title: "Footer", BlockID: "video-0001", BlockType: "video", Published: true},
+		{ID: 6, ThemeSlug: "default", ThemeActive: true, Kind: "part", Slug: "footer", Title: "Footer", BlockID: "video-0001", BlockType: "video", Published: true},
 	}, nil)
 	store.EXPECT().GetSettings(gomock.Any()).Return(db.Setting{SiteLogoMediaID: sql.NullInt64{Int64: 99, Valid: true}}, nil)
 	server := newTestServer(t, store)
 
 	recorder, body := getMediaUsedIn(t, server, admin, "31")
 	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
-	require.Equal(t, []MediaSiteTemplateUse{{ID: 6, Theme: "default", Kind: "part", Slug: "footer", Title: "Footer", Published: true, Usages: []MediaUsage{
+	require.Equal(t, []MediaSiteTemplateUse{{ID: 6, Theme: "default", ThemeActive: true, Kind: "part", Slug: "footer", Title: "Footer", Published: true, Usages: []MediaUsage{
 		{Type: MediaUsageCaptions, BlockID: "video-0001", BlockType: "video"},
 	}}}, body.SiteTemplates)
 	require.False(t, body.SiteLogo)
@@ -158,7 +163,7 @@ func TestGetMediaPostsSiteDesignEmptyAndFailures(t *testing.T) {
 // The publish hook syncs the published copy's media; a reset (NULL) syncs none.
 func TestPublishedSiteTemplateHookUses(t *testing.T) {
 	require.Equal(t, []db.ContentMediaUse{{MediaID: 7, BlockID: "img-000001", BlockType: "image"}},
-		publishedContentMedia(json.RawMessage(`{"doc_version":1,"blocks_order":["img-000001"],"blocks":{"img-000001":{"id":"img-000001","type":"image","version":2,"attrs":{"mediaId":7,"src":"/uploads/a.png"}}}}`)))
+		storedDocMediaUses(json.RawMessage(`{"doc_version":1,"blocks_order":["img-000001"],"blocks":{"img-000001":{"id":"img-000001","type":"image","version":2,"attrs":{"mediaId":7,"src":"/uploads/a.png"}}}}`)))
 	params := db.SiteTemplateMediaParams(3, true, nil)
 	require.Equal(t, int64(3), params.TemplateID)
 	require.True(t, params.Published)
