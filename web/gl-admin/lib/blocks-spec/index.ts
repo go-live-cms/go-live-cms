@@ -24,7 +24,6 @@ import {
   isTemplatePartSlug,
   normalizeSiteText,
   normalizeTermIds,
-  POST_EXCERPT_DEFAULT_WORDS,
   POST_EXCERPT_MAX_WORDS,
   POST_EXCERPT_MIN_WORDS,
   POST_TERMS_DEFAULT_TAXONOMY,
@@ -1234,7 +1233,6 @@ export const zPostExcerpt = zBase.extend({
         .int()
         .min(POST_EXCERPT_MIN_WORDS)
         .max(POST_EXCERPT_MAX_WORDS)
-        .refine((n) => n !== POST_EXCERPT_DEFAULT_WORDS, "the default length is left out")
         .optional(),
     })
     .strict(),

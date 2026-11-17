@@ -708,8 +708,8 @@ tokens (item 1), your registered styles and scripts (item 2), and the props your
 have had. The 500 page always renders your error layout, and so does any route whose template
 can't be read (the API is down): keep your code layouts, they are the fallback.
 
-**What `BlockTemplateLayout` adds and reads (#498).** It puts a skip link first in the body
-(`a.skip-link` to `#content`: style it), preloads `config.assets.fonts` (`{ href, type }`, paths on
+**What `BlockTemplateLayout` adds and reads (#498).** With `supports.skipLink: true` (say so once
+your CSS styles `.skip-link`) it puts a skip link first in the body (`a.skip-link` to `#content`), preloads `config.assets.fonts` (`{ href, type }`, paths on
 this site, as your base layout's `<link rel="preload" as="font">`), and gives a post's body
 (`post_content`) your `config.imageSizes` (`{ column, wide }`, the `sizes` your layouts give
 `BlockRenderer`) by the block's `width`. The default theme declares all three.

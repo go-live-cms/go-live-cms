@@ -69,6 +69,9 @@ try {
 }
 const themeAssets = Astro.locals.themeAssets || {}
 const legacyCssPath = Astro.locals.themeCssPath
+// #498: a skip link to main#content, for a theme that styles `.skip-link` (`supports.skipLink`); on
+// one that doesn't it would be a bare link above the header.
+const skipLink = (themeConfig as { supports?: { skipLink?: boolean } } | null)?.supports?.skipLink === true
 ---
 
 <!doctype html>
@@ -93,7 +96,7 @@ const legacyCssPath = Astro.locals.themeCssPath
   </head>
   <body>
     <div class="site site--block-template" data-template={template.slug}>
-      <a href="#content" class="skip-link">Skip to content</a>
+      {skipLink && <a href="#content" class="skip-link">Skip to content</a>}
       <BlockRenderer doc={template.doc} site={context} anchors={false} frame="template" reservedIds={TEMPLATE_ELEMENT_IDS} />
     </div>
     <ThemeScripts scripts={themeAssets.scripts} placement="body" />

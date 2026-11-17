@@ -128,6 +128,8 @@ export interface ThemeConfig {
     childThemes: boolean
     // base.astro merges the site's global styles into the tokens (resolveThemeTokens, #484).
     globalStyles?: boolean
+    // Its CSS styles `.skip-link`, so core's block template layout adds one (#498).
+    skipLink?: boolean
   }
 
   colors: {
@@ -219,6 +221,7 @@ export const themeConfig: ThemeConfig = {
     darkMode: true,
     childThemes: true,
     globalStyles: true,
+    skipLink: true,
   },
 
   // Primary is a step between Radix Jade 11 and 12 so links pass 4.5:1 on background and

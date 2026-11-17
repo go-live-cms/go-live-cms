@@ -143,19 +143,17 @@ func Starter(kind, slug string) (File, bool) {
 	return File{}, false
 }
 
-// starterAliases names the starter a slug (or slug prefix) without its own file starts
-// from: an author page and a term archive are lists like an archive, a builder page
-// template (custom-<name>, design 10) is a page, and the front page lists the latest posts
-// like home (as a page, it customizes `page` or `page-<template>` instead).
 // fallbackStarter is the template a slug that matches nothing closer starts from: a list of
 // the site's posts, with the header and footer.
 const fallbackStarter = "archive"
 
+// starterAliases names the starter a slug (or slug prefix) without its own file starts
+// from: a builder page template (custom-<name>, design 10) is a page, and the front page
+// lists the latest posts like home (as a page, it customizes `page` or `page-<template>`
+// instead). The default theme ships `author` and `taxonomy` (#498), so those need none.
 var starterAliases = map[string]string{
-	"author":   "archive",
-	"taxonomy": "archive",
-	"custom":   "page",
-	"front":    "home",
+	"custom": "page",
+	"front":  "home",
 }
 
 func readStarter(name string) (File, bool) {

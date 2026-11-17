@@ -15,7 +15,6 @@ import {
   normalizeQueryPerPage,
   POST_DATE_FORMATS,
   POST_DATE_WHICH,
-  POST_EXCERPT_DEFAULT_WORDS,
   POST_EXCERPT_MAX_WORDS,
   POST_EXCERPT_MIN_WORDS,
   POST_FEATURED_IMAGE_ASPECTS,
@@ -583,7 +582,7 @@ export const POST_EXCERPT_HELP = "On the page’s own post: its excerpt, under t
  * loses focus: empty clears it (the node's default, which the store leaves out), a number is clamped.
  */
 export function ExcerptLengthField({ id, length, onCommit }: { id: string; length: unknown; onCommit: (length: number | null) => void }) {
-  const set = typeof length === "number" && Number.isFinite(length) && length !== POST_EXCERPT_DEFAULT_WORDS ? length : null
+  const set = typeof length === "number" && Number.isFinite(length) ? length : null
   const [text, setText] = useState(set === null ? "" : String(set))
   useEffect(() => setText(set === null ? "" : String(set)), [set])
   const commit = () => {

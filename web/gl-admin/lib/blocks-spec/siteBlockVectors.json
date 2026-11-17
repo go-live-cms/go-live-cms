@@ -59,7 +59,7 @@
     { "name": "post_title: a level it doesn't have, a string link", "type": "post_title", "input": { "level": 5, "link": "yes" }, "expected": {} },
     { "name": "post_content: no attrs, never a body", "type": "post_content", "input": { "pm": { "type": "doc" }, "html": "<p>x</p>", "postId": 3 }, "expected": {} },
     { "name": "post_excerpt: a length", "type": "post_excerpt", "input": { "length": 25 }, "expected": { "length": 25 } },
-    { "name": "post_excerpt: the default length is left out", "type": "post_excerpt", "input": { "length": 35 }, "expected": {} },
+    { "name": "post_excerpt: 35 words is a length like any (#498: absent is the theme's own)", "type": "post_excerpt", "input": { "length": 35 }, "expected": { "length": 35 } },
     { "name": "post_excerpt: clamped to 5-100", "type": "post_excerpt", "input": { "length": 500 }, "expected": { "length": 100 } },
     { "name": "post_excerpt: a short one is five words", "type": "post_excerpt", "input": { "length": 1 }, "expected": { "length": 5 } },
     { "name": "post_featured_image: a shape and a link", "type": "post_featured_image", "input": { "aspect": "16-9", "link": true }, "expected": { "aspect": "16-9", "link": true } },

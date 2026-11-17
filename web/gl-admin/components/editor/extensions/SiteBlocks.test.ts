@@ -318,7 +318,8 @@ describe("site blocks IV in the editor (#498)", () => {
     expect(siteBlockSummary("query", { perPage: 3, layout: "links" })).toBe("Posts · 3, newest first · titles only")
     // An excerpt without a length follows the theme, and is the post's dek on its page.
     expect(siteBlockSummary("post_excerpt", {})).toBe("Theme’s length · the post’s dek on its page")
-    expect(siteBlockSummary("post_excerpt", { length: 35 })).toBe("Theme’s length · the post’s dek on its page")
+    // 35 words is a length like any other: only an absent one is the theme's.
+    expect(siteBlockSummary("post_excerpt", { length: 35 })).toBe("35 words")
   })
 
   it("insertSiteBlock puts each new one in with its defaults", () => {

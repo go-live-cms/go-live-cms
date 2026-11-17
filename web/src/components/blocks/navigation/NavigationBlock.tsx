@@ -22,7 +22,7 @@ import { SearchFormMarkup, ThemeChoices } from "../utils/themeMarkup"
  *   with no menu too (Home, search and the switch), as the theme's header does.
  * - `layout: columns`: the footer's link columns (`menuColumns.ts`): a column per top-level link
  *   with children, headed by it, and the "Site" column with the other links and the RSS feed,
- *   which is there with no menu too.
+ *   which is there when the location has no menu too (a deleted menu chosen by id renders nothing).
  *
  * Otherwise no menu assigned to the location, a deleted menu, a failed read or no links: nothing
  * (failures fail soft, design 4.3). Nothing outside a template either.
@@ -38,6 +38,8 @@ const NavigationBlock: React.FC<BlockComponentProps> = ({ block, anchorId }) => 
         ? site.menusByLocation[attrs.location as string]
         : null
   const items = menu?.items ?? []
+  // A menu chosen by id that was deleted renders nothing, in every layout (design 4.1).
+  if (attrs.menuId !== undefined && !menu) return null
   if (attrs.layout === "columns") return <FooterColumns anchorId={anchorId} items={items} />
   const label = menu?.name || "Menu"
   const subId = (link: SiteMenuLink) => `nav-sub-${block.id}-${link.id}`
@@ -77,7 +79,7 @@ const NavigationBlock: React.FC<BlockComponentProps> = ({ block, anchorId }) => 
     return (
       <div id={anchorId} className="nav-block has-menu">
         {row}
-        <PhoneMenu site={site} items={items} label={menu?.name || "Main"} />
+        <PhoneMenu site={site} items={items} label={label} />
       </div>
     )
   }

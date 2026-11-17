@@ -635,7 +635,7 @@ export interface PostFactsAttrs {
  *   `perPage` rounded, clamped to 1–24 (10 is the default); `orderBy: "title"`; `order: "asc"`;
  *   `taxonomy` and `termIds` both or neither (`normalizeTermIds`); `authorId` a user id.
  * - `query_title`: `level: 2`. `post_title`: `level` 1–4, `link` a boolean.
- * - `post_excerpt`: `length` in words, rounded, clamped to 5–100 (35 is the default).
+ * - `post_excerpt`: `length` in words, rounded, clamped to 5–100, every one kept (#498: absent is the theme's own).
  * - `post_featured_image`: `aspect` "16-9", "3-2" or "1-1"; `link: true`.
  * - `post_date`: `which: "modified"`, `format: "short"`. `post_byline`: `avatars: false`,
  *   `readingTime: true` (#497).
@@ -728,7 +728,8 @@ export function normalizeSiteBlockAttrs(type: SiteBlockType, attrs: unknown): Re
     case "post_excerpt":
       if (typeof a.length === "number" && Number.isFinite(a.length)) {
         const length = normalizePostExcerptLength(a.length)
-        if (length !== POST_EXCERPT_DEFAULT_WORDS) out.length = length
+        // #498: every length is kept; absent is the theme's own (220 characters in a list).
+        out.length = length
       }
       break
     case "post_featured_image":
@@ -827,7 +828,7 @@ export function siteBlockNodeAttrs(type: SiteBlockType, attrs: unknown): Record<
     case "post_title":
       return { level: stored.level ?? null, link: stored.link ?? null }
     case "post_excerpt":
-      return { length: stored.length ?? POST_EXCERPT_DEFAULT_WORDS }
+      return { length: stored.length ?? null }
     case "post_featured_image":
       return { aspect: stored.aspect ?? "auto", link: stored.link === true, width: stored.width ?? "column" }
     case "post_date":

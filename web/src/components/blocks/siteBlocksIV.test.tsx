@@ -106,6 +106,10 @@ describe("search_results", () => {
     expect(html).toContain('<a href="/search/page/3/?q=alt" class="page-link" rel="next">Next <span aria-hidden="true">→</span></a>')
     expect(html).toContain(" · Page 2")
     expect(html).not.toContain("search-result-excerpt")
+    // Only <mark> survives, whatever reaches the block.
+    const unsafe = render(docOf(["results-001"], b("results-001", "search_results")), context(search({ total: 1, totalLabel: "1 result", totalPages: 1, results: [{ ...results[0], titleHtml: '<img src=x onerror=alert(1)><mark>alt</mark>' }] })))
+    expect(unsafe).toContain("&lt;img src=x onerror=alert(1)&gt;<mark>alt</mark>")
+    expect(unsafe).not.toContain("<img src=x")
   })
 })
 
@@ -159,6 +163,8 @@ describe("navigation (#498)", () => {
     expect(html).toContain('<h2 id="footer-col-0"><a href="/category/guides" class="footer-heading">Guides</a></h2><a href="/page/setup">Setup</a>')
     expect(html).toContain('<h2 id="footer-site">Site</h2><a href="/page/about">About</a><a href="/rss.xml">RSS feed</a>')
     expect(render(doc, context(undefined, { menusByLocation: { footer: null } }))).toContain('<h2 id="footer-site">Site</h2><a href="/rss.xml">RSS feed</a>')
+    // A menu chosen by id that was deleted renders nothing, as in every layout.
+    expect(render(docOf(["footer-nav1"], b("footer-nav1", "navigation", { menuId: 9, layout: "columns" })), context(undefined))).toBe('<div class="block-content"></div>')
   })
 })
 

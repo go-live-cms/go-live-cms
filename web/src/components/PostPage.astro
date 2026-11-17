@@ -87,7 +87,9 @@ const isFrontPage = postType === 'page' && site.frontPageId === fullPost.id
 
 // The type's layout variant (the theme's layout_variants setting): a code layout's, and (#498) the
 // block template it picks (`single-sidebar`, `page-fullwidth`).
-const typeVariant = await getPostLayoutVariant(fullPost, postType)
+// The middleware read it with the active theme; without it (a test, a failed read) ask the API.
+const storedVariant = Astro.locals.layoutVariants?.[postType]
+const typeVariant = typeof storedVariant === 'string' && storedVariant ? storedVariant : Astro.locals.layoutVariants ? 'default' : await getPostLayoutVariant(fullPost, postType)
 
 // The site design's one branch (#491, design 3.3): the route's builder template when it wins.
 const templateRoute: TemplateRoute = isFrontPage

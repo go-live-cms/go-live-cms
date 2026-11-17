@@ -76,9 +76,8 @@ const (
 	queryMaxTerms       = 10
 	queryDefaultType    = "post"
 
-	postExcerptMinWords     = 5
-	postExcerptMaxWords     = 100
-	postExcerptDefaultWords = 35
+	postExcerptMinWords = 5
+	postExcerptMaxWords = 100
 
 	postTermsDefaultTaxonomy = "category"
 
@@ -182,7 +181,8 @@ func sanitizeSiteBlockAttrs(blockType string, attrs map[string]interface{}) {
 		}
 	case "post_excerpt":
 		keepOnlyAttrs(attrs, "length")
-		keepClampedInt(attrs, "length", postExcerptMinWords, postExcerptMaxWords, postExcerptDefaultWords)
+		// #498: every length is kept (no default to leave out): absent is the theme's own excerpt.
+		keepClampedInt(attrs, "length", postExcerptMinWords, postExcerptMaxWords, -1)
 	case "post_featured_image":
 		keepOnlyAttrs(attrs, "aspect", "link", "width")
 		if aspect := attrs["aspect"]; aspect != "16-9" && aspect != "3-2" && aspect != "1-1" {

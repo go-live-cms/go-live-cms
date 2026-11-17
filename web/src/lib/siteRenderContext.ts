@@ -415,11 +415,19 @@ export async function loadSiteRenderContext(locals: App.Locals | undefined, opti
         ),
   ])
   const menusById = Object.fromEntries(Object.entries(options.menusById ?? {}).map(([id, menu]) => [id, siteMenu(menu, options.currentPath)]))
-  // #498: what `post_facts` with `fallback` stands back for: a table of contents block anywhere on
-  // the page, and a "In <term>" list with posts.
+  // #498: what `post_facts` with `fallback` stands back for: a table of contents block on the page
+  // (the template's docs and the parts they place, not every override part the resolve carries),
+  // and a "In <term>" list with posts.
   const categoryLists = needs.related.filter((need) => need.attrs.layout === "list")
+  const placedSlugs = new Set(
+    own.flatMap((doc) => (doc?.blocks ? Object.values(doc.blocks) : []))
+      .filter((block) => block?.type === "template_part")
+      .map((block) => (block.attrs as { slug?: unknown } | undefined)?.slug)
+      .filter((slug): slug is string => typeof slug === "string"),
+  )
+  const onPage = [...own, ...[...placedSlugs].map((slug) => parts[slug])]
   const pageShows = {
-    tableOfContents: docs.some((doc) => !!doc?.blocks && Object.values(doc.blocks).some((block) => block?.type === "table_of_contents")),
+    tableOfContents: onPage.some((doc) => !!doc?.blocks && Object.values(doc.blocks).some((block) => block?.type === "table_of_contents")),
     categoryList: categoryLists.some((need) => ((related as Record<string, SitePostList | null>)[need.key]?.items.length ?? 0) > 0),
   }
   return {

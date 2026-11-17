@@ -4,6 +4,7 @@ import { safeAvatarSrc } from "@gl-admin/lib/presence"
 import type { BlockComponentProps } from "../types"
 import { avatarColor, initial } from "../../../lib/bylines"
 import { readingMinutes } from "../../../lib/readingTime"
+import { safeHighlight } from "../../../lib/searchHighlight"
 import { DEFAULT_DATE_SETTINGS, formatSiteDate, siteDay } from "../../../lib/siteDates"
 import { tableOfContents } from "./headingAnchors"
 import { routePostBlocks, usePostContentHeadings } from "./postBlocks"
@@ -65,7 +66,7 @@ export const AuthorAvatarBlock: React.FC<BlockComponentProps> = ({ anchorId }) =
 
 /**
  * `search_results`: the search page's results, as the default theme lists them. The highlights
- * were checked by `safeHighlight` when the route read them (only `<mark>` survives, #145), the only
+ * go through `safeHighlight` again here, as the code layout does (only `<mark>` survives, #145), the only
  * markup the page takes from the API; the query itself is only ever text. Nothing for an empty query.
  */
 export const SearchResultsBlock: React.FC<BlockComponentProps> = ({ anchorId }) => {
@@ -104,9 +105,9 @@ export const SearchResultsBlock: React.FC<BlockComponentProps> = ({ anchorId }) 
                   {result.dateLabel && ` · ${result.dateLabel}`}
                 </span>
                 <h2 className="post-item-title search-result-title">
-                  <a href={result.href} dangerouslySetInnerHTML={{ __html: result.titleHtml }} />
+                  <a href={result.href} dangerouslySetInnerHTML={{ __html: safeHighlight(result.titleHtml) }} />
                 </h2>
-                {result.excerptHtml && <p className="search-result-excerpt" dangerouslySetInnerHTML={{ __html: result.excerptHtml }} />}
+                {result.excerptHtml && <p className="search-result-excerpt" dangerouslySetInnerHTML={{ __html: safeHighlight(result.excerptHtml) }} />}
                 <span className="search-result-path">{result.href}</span>
               </li>
             ))}
