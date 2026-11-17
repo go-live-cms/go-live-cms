@@ -295,7 +295,7 @@ function LoadedEditor({
     void (async () => {
       // Every customized template's working copy, then what the theme ships for the rest.
       const rows = overview.templates.filter((t) => t.kind === "template" && t.working_state === "custom")
-      const docs = await Promise.all(
+      const docs: Array<{ name: string; doc: DocLike }> = await Promise.all(
         rows.map(async (t) => ({ name: siteTemplateName("template", t.slug, context.vocabulary, t.title), doc: (await getSiteTemplate(t.id).catch(() => null))?.block_doc ?? null }))
       )
       const customized = new Set(rows.map((t) => t.slug))
