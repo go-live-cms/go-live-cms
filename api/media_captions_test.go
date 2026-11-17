@@ -411,6 +411,8 @@ func TestGetMediaPostsForCaptions(t *testing.T) {
 		store.EXPECT().GetMedia(gomock.Any(), int64(30)).Return(db.Medium{ID: 30, MimeType: captionsMimeType}, nil)
 		store.EXPECT().GetPostsByMedia(gomock.Any(), int64(30)).Return(nil, nil)
 		store.EXPECT().GetPostsByCaptionsMedia(gomock.Any(), int64(30)).Return(rows, nil)
+		store.EXPECT().ListSiteTemplatesByCaptionsMedia(gomock.Any(), int64(30)).Return(nil, nil)
+		store.EXPECT().GetSettings(gomock.Any()).Return(db.Setting{}, nil)
 		server := newTestServer(t, store)
 
 		request := httptest.NewRequest(http.MethodGet, "/api/v1/media/30/posts", nil)
@@ -445,6 +447,8 @@ func TestGetMediaPostsSkipsCaptionsLookup(t *testing.T) {
 	store.EXPECT().GetMedia(gomock.Any(), int64(12)).Return(db.Medium{ID: 12, MimeType: "video/mp4"}, nil)
 	store.EXPECT().GetPostsByMedia(gomock.Any(), int64(12)).Return(nil, nil)
 	store.EXPECT().GetPostsByCaptionsMedia(gomock.Any(), gomock.Any()).Times(0)
+	store.EXPECT().ListSiteTemplatesByCaptionsMedia(gomock.Any(), gomock.Any()).Times(0)
+	stubNoSiteDesignUses(store, 12)
 	server := newTestServer(t, store)
 
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/media/12/posts", nil)

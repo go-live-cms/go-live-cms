@@ -169,9 +169,31 @@ export interface MediaPostLink {
   usages?: MediaUsage[]
 }
 
+// A template or part showing a file (#496, GET /media/:id/posts' `site_templates`): its
+// published copy (so the site shows it) and/or its working copy (admins only: the Site
+// editor's), with the blocks showing it.
+export interface MediaSiteTemplateUse {
+  id: number
+  theme: string
+  kind: "template" | "part"
+  slug: string
+  title: string
+  published: boolean
+  working: boolean
+  usages?: MediaUsage[]
+}
+
+// The whole "Used in" of a file: posts, templates and parts, and the site logo.
+export interface MediaUsedIn {
+  posts: MediaPostLink[]
+  siteTemplates: MediaSiteTemplateUse[]
+  siteLogo: boolean
+}
+
 export interface UsedInRow {
   key: string
-  postId: number
+  // The post to open; none for the site design's rows (the logo, templates and parts).
+  postId?: number
   title: string
   // How the post uses it: "Featured image", "Image block", "Featured image and 2 image
   // blocks".
@@ -228,6 +250,54 @@ export function usedInRows(links: MediaPostLink[]): UsedInRow[] {
       status: link.post.post_status,
     }
   })
+}
+
+// What the site design calls a template or part: "Header part", "Single post template".
+export function siteTemplateName(use: Pick<MediaSiteTemplateUse, "kind" | "slug" | "title">): string {
+  return `${use.title.trim() || use.slug} ${use.kind === "part" ? "part" : "template"}`
+}
+
+// The names of a file's site design uses, the site logo first: what the delete
+// confirmation lists.
+export function siteDesignNames(usedIn: Pick<MediaUsedIn, "siteTemplates" | "siteLogo">): string[] {
+  const names = usedIn.siteLogo ? [SITE_LOGO_NAME] : []
+  for (const use of usedIn.siteTemplates) {
+    const name = siteTemplateName(use)
+    if (!names.includes(name)) names.push(name)
+  }
+  return names
+}
+
+export const SITE_LOGO_NAME = "Site logo"
+
+// The site design's "Used in" rows (#496): "Site logo", then each template and part, saying
+// how it shows the file and whether that is live yet.
+export function siteDesignUsedInRows(usedIn: Pick<MediaUsedIn, "siteTemplates" | "siteLogo">): UsedInRow[] {
+  const rows: UsedInRow[] = []
+  if (usedIn.siteLogo) rows.push({ key: "site-logo", title: SITE_LOGO_NAME, how: "Settings › General", status: "" })
+  for (const use of usedIn.siteTemplates) {
+    const how = capitalize(usageLabels({ relationship_type: "", usages: use.usages?.length ? use.usages : [{ type: "block" }] }).join(" and "))
+    rows.push({
+      key: `site-template-${use.id}`,
+      title: siteTemplateName(use),
+      how: use.published ? how : `${how} · Not published yet`,
+      status: "",
+    })
+  }
+  return rows
+}
+
+// Every "Used in" row: the site design's first (they show on every page), then the posts.
+export function allUsedInRows(usedIn: MediaUsedIn): UsedInRow[] {
+  return [...siteDesignUsedInRows(usedIn), ...usedInRows(usedIn.posts)]
+}
+
+// What the delete confirmation adds when the site design uses the files (#496): it names
+// them, since a part or the logo shows on every page.
+export function deleteSiteDesignNotice(names: string[]): string | null {
+  if (names.length === 0) return null
+  const list = names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`
+  return `Also used in the site design: ${list}. ${names.length === 1 ? "It shows" : "They show"} nothing in its place once it's deleted.`
 }
 
 export function usedInHeading(count: number): string {

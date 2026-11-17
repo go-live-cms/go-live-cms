@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 const api = vi.hoisted(() => ({
   user: { id: 7, username: "elena", full_name: "Elena V.", role: "editor" } as Record<string, unknown>,
   getMedia: vi.fn(),
-  getMediaPosts: vi.fn(),
+  getMediaUsedIn: vi.fn(),
   getMediaById: vi.fn(),
   createMedia: vi.fn(),
   updateMedia: vi.fn(),
@@ -25,7 +25,7 @@ vi.mock("@gl-admin/lib/auth", () => ({
 vi.mock("@gl-admin/lib/api/media", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@gl-admin/lib/api/media")>()),
   getMedia: api.getMedia,
-  getMediaPosts: api.getMediaPosts,
+  getMediaUsedIn: api.getMediaUsedIn,
   getMediaById: api.getMediaById,
   createMedia: api.createMedia,
   updateMedia: api.updateMedia,
@@ -62,6 +62,9 @@ const file = (id: number, over: Record<string, unknown> = {}) => ({
 
 const page = (items: unknown[], total = items.length) => Promise.resolve({ data: items, meta: { total } })
 
+// GET /media/:id/posts with nothing using the file.
+const NO_USES = { posts: [], siteTemplates: [], siteLogo: false }
+
 async function render(path = "/media") {
   await act(async () => {
     root.render(
@@ -95,7 +98,7 @@ beforeEach(() => {
   root = createRoot(container)
   api.user = { id: 7, username: "elena", full_name: "Elena V.", role: "editor" }
   api.getMedia.mockReset()
-  api.getMediaPosts.mockReset()
+  api.getMediaUsedIn.mockReset()
   api.getMediaById.mockReset()
   api.createMedia.mockReset()
   api.updateMedia.mockReset()
@@ -145,12 +148,15 @@ describe("Media library", () => {
 
   it("lists files with a count, and opens the panel with where each is used", async () => {
     api.getMedia.mockImplementation(() => page([file(1), file(2)], 30))
-    api.getMediaPosts.mockImplementation(() =>
-      Promise.resolve([
-        { post: { id: 11, title: "October changelog", post_type: "post", post_status: "published" }, media_order: 0, relationship_type: "featured" },
-        { post: { id: 11, title: "October changelog", post_type: "post", post_status: "published" }, media_order: 2, relationship_type: "gallery" },
-        { post: { id: 12, title: "About", post_type: "page", post_status: "draft" }, media_order: 1, relationship_type: "gallery" },
-      ])
+    api.getMediaUsedIn.mockImplementation(() =>
+      Promise.resolve({
+        ...NO_USES,
+        posts: [
+          { post: { id: 11, title: "October changelog", post_type: "post", post_status: "published" }, media_order: 0, relationship_type: "featured" },
+          { post: { id: 11, title: "October changelog", post_type: "post", post_status: "published" }, media_order: 2, relationship_type: "gallery" },
+          { post: { id: 12, title: "About", post_type: "page", post_status: "draft" }, media_order: 1, relationship_type: "gallery" },
+        ],
+      })
     )
     await render()
     expect(text()).toContain("30 files")
@@ -162,7 +168,7 @@ describe("Media library", () => {
     await act(async () => {
       await new Promise((r) => setTimeout(r, 0))
     })
-    expect(api.getMediaPosts).toHaveBeenCalledWith(1)
+    expect(api.getMediaUsedIn).toHaveBeenCalledWith(1)
     const panel = container.querySelector("aside[aria-label='File details']")!
     expect(panel).not.toBeNull()
     expect(tiles[0].getAttribute("aria-pressed")).toBe("true")
@@ -173,10 +179,39 @@ describe("Media library", () => {
     expect(panel.querySelector("a[href='/media/1']")?.textContent).toBe("Edit details")
   })
 
+  it("lists the site design's uses (#496) and the delete confirmation names them", async () => {
+    api.getMedia.mockImplementation(() => page([file(1)]))
+    api.getMediaUsedIn.mockImplementation(() =>
+      Promise.resolve({
+        posts: [],
+        siteTemplates: [
+          { id: 5, theme: "default", kind: "part", slug: "header", title: "Header", published: true, working: true, usages: [{ type: "block", block_id: "a", block_type: "image" }] },
+        ],
+        siteLogo: true,
+      })
+    )
+    await render("/media?file=1")
+    const panel = container.querySelector("aside[aria-label='File details']")!
+    const rows = Array.from(panel.querySelectorAll(".gl-used-in__link"))
+    expect(rows.map((r) => r.textContent)).toEqual(["Site logo", "Header part"])
+    expect(panel.querySelector(".gl-used-in__link--static")?.tagName).toBe("SPAN")
+
+    await act(async () => panel.querySelector<HTMLButtonElement>("[aria-label='Delete file']")!.click())
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0))
+    })
+    const dialog = document.querySelector("[role=alertdialog]")!
+    expect(dialog.querySelector("[role=status]")?.textContent).toBe(
+      "Also used in the site design: Site logo and Header part. They show nothing in its place once it's deleted."
+    )
+    const confirm = Array.from(dialog.querySelectorAll("button")).find((b) => b.textContent === "Delete file")!
+    expect(confirm.disabled).toBe(false)
+  })
+
   it("a contributor sees another's file read-only", async () => {
     api.user = { id: 8, username: "c", role: "contributor" }
     api.getMedia.mockImplementation(() => page([file(1)]))
-    api.getMediaPosts.mockImplementation(() => Promise.resolve([]))
+    api.getMediaUsedIn.mockImplementation(() => Promise.resolve(NO_USES))
     await render("/media?file=1")
     const panel = container.querySelector("aside[aria-label='File details']")!
     expect(panel.querySelector("[aria-label='Delete file']")).toBeNull()
@@ -190,7 +225,7 @@ describe("Media library URL state", () => {
   it("opens ?file= for a file that isn't on the first page by fetching it", async () => {
     api.getMedia.mockImplementation(() => page([file(1)], 40))
     api.getMediaById.mockImplementation(() => Promise.resolve({ media: file(99, { name: "deep.jpg" }) }))
-    api.getMediaPosts.mockImplementation(() => Promise.resolve([]))
+    api.getMediaUsedIn.mockImplementation(() => Promise.resolve(NO_USES))
     await render("/media?file=99")
     await act(async () => {
       await new Promise((r) => setTimeout(r, 0))
@@ -368,7 +403,7 @@ describe("Media library: missing alt text (#325)", () => {
 
   it("the panel marks an image decorative, which turns its alt text off", async () => {
     api.getMedia.mockImplementation(() => page([file(1, { alt: "" })]))
-    api.getMediaPosts.mockImplementation(() => Promise.resolve([]))
+    api.getMediaUsedIn.mockImplementation(() => Promise.resolve(NO_USES))
     api.updateMedia.mockImplementation((_id: number, data: Record<string, unknown>) =>
       Promise.resolve({ media: file(1, { alt: "", ...data }) })
     )

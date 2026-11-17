@@ -2,7 +2,7 @@ import type { FocalPoint, Media, MediaSortOption, MediaVariantName, PaginationPa
 import { apiCall, authenticatedFetch, getMediaURL } from "../api"
 import { apiErrorFromResponse, friendlyApiMessage } from "./errors"
 import { buildUrl } from "./utils"
-import type { MediaPostLink } from "../mediaLibrary"
+import type { MediaPostLink, MediaSiteTemplateUse, MediaUsedIn } from "../mediaLibrary"
 
 export interface MediaQueryParams extends PaginationParams {
   sort?: MediaSortOption
@@ -103,12 +103,19 @@ export async function deleteMedia(id: number, token?: string): Promise<any> {
   return response.json()
 }
 
-// getMediaPosts lists the posts linking media `mediaId` through post_media, one row
-// per post: featured image (media_order 0) or content link (> 0), and `usages` saying
-// how (#176); see usedInRows in lib/mediaLibrary.ts.
-export async function getMediaPosts(mediaId: number): Promise<MediaPostLink[]> {
+// getMediaUsedIn is the whole "Used in" of media `mediaId` (GET /media/:id/posts): the posts
+// linking it through post_media, one row per post: featured image (media_order 0) or content
+// link (> 0), and `usages` saying how (#176; see usedInRows in lib/mediaLibrary.ts); and the
+// site design's uses (#496): the templates and parts showing it (`site_templates`; someone
+// who isn't an admin gets the published ones only) and whether it is the site logo. An API
+// older than #496 sends neither: none.
+export async function getMediaUsedIn(mediaId: number): Promise<MediaUsedIn> {
   const response = await apiCall(`/media/${mediaId}/posts`)
-  return response.posts || []
+  return {
+    posts: Array.isArray(response?.posts) ? (response.posts as MediaPostLink[]) : [],
+    siteTemplates: Array.isArray(response?.site_templates) ? (response.site_templates as MediaSiteTemplateUse[]) : [],
+    siteLogo: response?.site_logo === true,
+  }
 }
 
 export interface MissingAltSummary {

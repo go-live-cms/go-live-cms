@@ -11,8 +11,8 @@ import (
 
 // StoreSiteTemplateCollabTxParams is the collab server's store of a template or part
 // (#490, docs/design/theme-builder.md 7.2): StorePostCollabTxParams without what only a
-// post has (block edits, mentions, reminders, media links; comments and the plugin event
-// trigger are posts' too).
+// post has (block edits, mentions, reminders; comments and the plugin event trigger are
+// posts' too). Its media blocks are synced into site_template_media (#496).
 type StoreSiteTemplateCollabTxParams struct {
 	TemplateID int64
 	// State is the full Yjs document (Y.encodeStateAsUpdate).
@@ -22,6 +22,10 @@ type StoreSiteTemplateCollabTxParams struct {
 	// the Yjs state only (the derived doc failed its kind's rules, or didn't change) and
 	// leaves block_doc and block_revision alone.
 	BlockDoc json.RawMessage
+	// ContentMedia are BlockDoc's media blocks (#496): the working copy's
+	// site_template_media rows are synced to them with every store that writes BlockDoc
+	// (nil: it shows none). Ignored without BlockDoc.
+	ContentMedia []ContentMediaUse
 	// BaseRevision, when set, must equal site_templates.block_revision or nothing is
 	// written (ErrCollabRevisionConflict). Required without BlockDoc
 	// (ErrCollabBaseRevisionRequired), for the reason StorePostCollabTxParams gives.
@@ -68,6 +72,10 @@ func (store *SQLStore) StoreSiteTemplateCollabTx(ctx context.Context, arg StoreS
 				BlockDoc: arg.BlockDoc,
 			})
 			if err != nil {
+				return err
+			}
+			// "Used in" (#496): the working copy's media, with the doc they come from.
+			if err := SyncSiteTemplateContentMedia(ctx, q, arg.TemplateID, false, arg.ContentMedia); err != nil {
 				return err
 			}
 			if arg.EditActivityWindow > 0 && arg.LastEditorID.Valid {

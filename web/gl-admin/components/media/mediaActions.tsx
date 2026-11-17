@@ -1,11 +1,11 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Modal from "@gl-admin/components/ui/Modal"
 import Button from "@gl-admin/components/ui/Button"
 import { toast } from "@gl-admin/components/ui/Toast"
 import { getMediaURL } from "@gl-admin/lib/api"
-import { deleteMedia } from "@gl-admin/lib/api/media"
+import { deleteMedia, getMediaUsedIn } from "@gl-admin/lib/api/media"
 import { errorMessage } from "@gl-admin/lib/api/errors"
-import { isCaptionsFile } from "@gl-admin/lib/mediaLibrary"
+import { deleteSiteDesignNotice, isCaptionsFile, siteDesignNames } from "@gl-admin/lib/mediaLibrary"
 import type { Media } from "@gl-admin/lib/types"
 
 // The actions the side panel and the detail page share: copy the URL, download, delete.
@@ -49,12 +49,43 @@ type DeleteMediaDialogProps = {
   onDeleted: (ids: number[]) => void
 }
 
+// The site design's uses of the files being deleted (#496), looked up when the dialog
+// opens: the site logo, templates and parts, by name. `checking` while it loads (Delete
+// waits for it, so the question names them); a failed lookup names none.
+function useSiteDesignNames(media: Media[]): { names: string[]; checking: boolean } {
+  const [state, setState] = useState<{ key: string; names: string[] }>({ key: "", names: [] })
+  const key = media.map((m) => m.id).join(",")
+
+  useEffect(() => {
+    if (!key) return
+    let live = true
+    const ids = key.split(",").map(Number)
+    Promise.all(ids.map((id) => Promise.resolve().then(() => getMediaUsedIn(id)).catch(() => null))).then((results) => {
+      if (!live) return
+      const names: string[] = []
+      for (const usedIn of results) {
+        if (!usedIn) continue
+        for (const name of siteDesignNames(usedIn)) if (!names.includes(name)) names.push(name)
+      }
+      setState({ key, names })
+    })
+    return () => {
+      live = false
+    }
+  }, [key])
+
+  return { names: state.key === key ? state.names : [], checking: !!key && state.key !== key }
+}
+
 // Confirms and runs a delete of one file or a selection. Files a post still uses are
-// deleted too (the API allows it), so the dialog says so.
+// deleted too (the API allows it), so the dialog says so, and names the site design's uses
+// (#496): a part or the logo shows on every page.
 export function DeleteMediaDialog({ media, onClose, onDeleted }: DeleteMediaDialogProps) {
   const [busy, setBusy] = useState(false)
   const count = media.length
   const title = count === 1 ? `Delete “${media[0].name}”?` : `Delete ${count} files?`
+  const siteDesign = useSiteDesignNames(media)
+  const notice = deleteSiteDesignNotice(siteDesign.names)
 
   const run = async () => {
     setBusy(true)
@@ -85,13 +116,16 @@ export function DeleteMediaDialog({ media, onClose, onDeleted }: DeleteMediaDial
           <Button variant="ghost" onClick={onClose} disabled={busy}>
             Cancel
           </Button>
-          <Button variant="danger" loading={busy} onClick={run}>
+          <Button variant="danger" loading={busy || siteDesign.checking} onClick={run}>
             {count === 1 ? "Delete file" : `Delete ${count} files`}
           </Button>
         </>
       }
     >
-      {null}
+      {/* In the page empty first, so the names are announced when they arrive. */}
+      <p className="gl-media-delete__site" role="status">
+        {notice ?? ""}
+      </p>
     </Modal>
   )
 }

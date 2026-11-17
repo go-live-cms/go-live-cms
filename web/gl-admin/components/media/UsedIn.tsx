@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
-import { getMediaPosts } from "@gl-admin/lib/api/media"
-import { usedInHeading, usedInRows, type UsedInRow } from "@gl-admin/lib/mediaLibrary"
+import { getMediaUsedIn } from "@gl-admin/lib/api/media"
+import { allUsedInRows, usedInHeading, type UsedInRow } from "@gl-admin/lib/mediaLibrary"
 import { PostStatusPill } from "@gl-admin/components/ui/PostStatus"
 import Skeleton from "@gl-admin/components/ui/Skeleton"
 
-// Loads the posts that link media `mediaId` (GET /media/:id/posts). `rows` is null while
+// Loads where media `mediaId` is used (GET /media/:id/posts): the posts linking it, and the
+// site design's uses (#496: the site logo, templates and parts). `rows` is null while
 // loading and on failure. `reload` changes refetch it.
 export function useUsedIn(mediaId: number | null, reload = 0): { rows: UsedInRow[] | null; failed: boolean } {
   const [rows, setRows] = useState<UsedInRow[] | null>(null)
@@ -16,8 +17,8 @@ export function useUsedIn(mediaId: number | null, reload = 0): { rows: UsedInRow
     let live = true
     setRows(null)
     setFailed(false)
-    getMediaPosts(mediaId)
-      .then((links) => live && setRows(usedInRows(links)))
+    getMediaUsedIn(mediaId)
+      .then((usedIn) => live && setRows(allUsedInRows(usedIn)))
       .catch(() => live && setFailed(true))
     return () => {
       live = false
@@ -34,7 +35,8 @@ type UsedInProps = {
   compact?: boolean
 }
 
-// "Used in": each post linking the file, opening it in the editor.
+// "Used in": the site design's uses (named, not linked: the Site editor opens them), then
+// each post linking the file, opening it in the editor.
 export default function UsedIn({ rows, failed, compact = false }: UsedInProps) {
   const heading = rows ? (compact ? "Used in" : usedInHeading(rows.length)) : "Used in"
 
@@ -57,17 +59,28 @@ export default function UsedIn({ rows, failed, compact = false }: UsedInProps) {
         <p className="gl-used-in__note">No post or page uses this file yet.</p>
       ) : (
         <ul className="gl-used-in__list">
-          {rows.map((row) => (
-            <li key={row.key}>
-              <Link to={`/content/edit/${row.postId}`} className="gl-used-in__link">
+          {rows.map((row) => {
+            const body = (
+              <>
                 <span className="gl-used-in__text">
                   <span className="gl-used-in__title">{row.title}</span>
                   {!compact && <span className="gl-used-in__how">{row.how}</span>}
                 </span>
                 {!compact && row.status && <PostStatusPill status={row.status} />}
-              </Link>
-            </li>
-          ))}
+              </>
+            )
+            return (
+              <li key={row.key}>
+                {row.postId !== undefined ? (
+                  <Link to={`/content/edit/${row.postId}`} className="gl-used-in__link">
+                    {body}
+                  </Link>
+                ) : (
+                  <span className="gl-used-in__link gl-used-in__link--static">{body}</span>
+                )}
+              </li>
+            )
+          })}
         </ul>
       )}
     </section>

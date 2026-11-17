@@ -719,9 +719,17 @@ type Querier interface {
 	ListSessionsByUsername(ctx context.Context, username string) ([]Session, error)
 	// History and restore (#492, design 5.3).
 	ListSiteDesignReleases(ctx context.Context, arg ListSiteDesignReleasesParams) ([]ListSiteDesignReleasesRow, error)
+	// One template's rows (tests and the publish's checks).
+	ListSiteTemplateMedia(ctx context.Context, templateID int64) ([]SiteTemplateMedium, error)
 	ListSiteTemplateVersions(ctx context.Context, templateID int64) ([]ListSiteTemplateVersionsRow, error)
 	// The items of a page of releases (History), with what each item is now.
 	ListSiteTemplateVersionsByRelease(ctx context.Context, releaseIds []int64) ([]ListSiteTemplateVersionsByReleaseRow, error)
+	// The same for a captions file (#507): it is in no block itself, so these are the templates
+	// and parts showing a video it captions, with that video's video blocks.
+	ListSiteTemplatesByCaptionsMedia(ctx context.Context, captionsMediaID int64) ([]ListSiteTemplatesByCaptionsMediaRow, error)
+	// GET /media/:id/posts' site_templates: every template or part of any theme whose working
+	// or published copy shows the media, one row per block and copy (the handler groups them).
+	ListSiteTemplatesByMedia(ctx context.Context, mediaID int64) ([]ListSiteTemplatesByMediaRow, error)
 	// Publish, history, reset and restore (#492, docs/design/theme-builder.md 5.3, 8, 9).
 	ListSiteTemplatesByTheme(ctx context.Context, themeSlug string) ([]SiteTemplate, error)
 	ListTaxonomyTermsByType(ctx context.Context, arg ListTaxonomyTermsByTypeParams) ([]ListTaxonomyTermsByTypeRow, error)
@@ -999,6 +1007,14 @@ type Querier interface {
 	// the content (#389); only its blocks follow the doc.
 	// Unchanged rows are left alone: the collab store runs this every few seconds.
 	SyncPostContentMedia(ctx context.Context, arg SyncPostContentMediaParams) error
+	// "Used in" for media in templates and parts (#496, 000060, docs/design/theme-builder.md 5.6).
+	// Makes one copy's rows of a template (published = false: the working copy, true: the
+	// published one) match its doc's media blocks. The three arrays are parallel, one entry per
+	// block: media_ids[i] is shown by block block_ids[i] of type block_types[i]. Ids without a
+	// media row are skipped (a stale mediaId must not fail the store or the publish), as
+	// SyncPostContentMedia does. Rows no longer wanted go; the others are inserted or keep
+	// their row with the block's current type.
+	SyncSiteTemplateMedia(ctx context.Context, arg SyncSiteTemplateMediaParams) error
 	TouchMenu(ctx context.Context, id int64) error
 	// A post setting changed outside UPDATE posts (the byline, #319): "last edited".
 	TouchPost(ctx context.Context, id int64) (Post, error)

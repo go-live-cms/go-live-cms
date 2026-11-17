@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const api = vi.hoisted(() => ({
   getMediaById: vi.fn(),
-  getMediaPosts: vi.fn(),
+  getMediaUsedIn: vi.fn(),
   updateMedia: vi.fn(),
 }))
 
@@ -22,7 +22,7 @@ vi.mock("@gl-admin/lib/auth", () => ({
 vi.mock("@gl-admin/lib/api/media", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@gl-admin/lib/api/media")>()),
   getMediaById: api.getMediaById,
-  getMediaPosts: api.getMediaPosts,
+  getMediaUsedIn: api.getMediaUsedIn,
   updateMedia: api.updateMedia,
   replaceMediaFile: vi.fn(),
   deleteMedia: vi.fn(),
@@ -55,7 +55,7 @@ beforeEach(() => {
   document.body.appendChild(container)
   root = createRoot(container)
   api.getMediaById.mockReset()
-  api.getMediaPosts.mockReset().mockImplementation(() => Promise.resolve([]))
+  api.getMediaUsedIn.mockReset().mockImplementation(() => Promise.resolve({ posts: [], siteTemplates: [], siteLogo: false }))
   api.updateMedia.mockReset()
 })
 afterEach(() => {

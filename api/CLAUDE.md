@@ -775,7 +775,8 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   {site_logo_media_id: <id> | null}` (admins; absent keeps): an image, else 400 `invalid_site_logo`. `GET` and `PUT
   /settings` add `site_logo` (`SiteLogoResponse`: public path, size, resized variants, alt, type, names; null for none or
   a failed lookup, logged `site_logo_lookup_failed`). `/settings` is public and cached; media edits and deletes already
-  purge (`publicCachePurgeRoutes`). Activity: the field name in `settings_updated`. "Used in" for the logo is #496.
+  purge (`publicCachePurgeRoutes`). Activity: the field name in `settings_updated`. "Used in" says "Site logo" (#496,
+  `site_logo` on `GET /media/:id/posts`).
 - Tests: `post_blocks_site_test.go` (the vectors, kinds), `site_logo_test.go` (the setting, the lookup, roles).
 - **Site blocks II (#489):** the query loop's three containers are rows of `blockContainers` (`query` at the top or
   in a group holding `post_template`, `query_pagination` and `query_no_results`; those two only in a query, flow,
@@ -1546,7 +1547,8 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   post, list, author, term and menu reads, `/public/front-page` and the site config the web
   reads per request (settings, active theme, extension settings, post types, taxonomy types
   and terms). 200s, plus 404s where the route says (`notFound`: front page, menus). Never with
-  an `Authorization` header, a `Set-Cookie` or `no-store`, over 2 MiB, or search/redirects.
+  an `Authorization` header, a `Set-Cookie` or a `private`/`no-store` directive (any case or form, #495:
+  `cacheControlForbidsStore`), over 2 MiB, or search/redirects.
   Key = method + escaped path + sorted query (hashed past 512 bytes); TTL 5 minutes;
   concurrent misses share one run (singleflight). `X-Cache: HIT|MISS|BYPASS`. A replayed 404
   goes through `requestIDErrorWriter`, so it carries the current request id. A new cached
@@ -1709,7 +1711,7 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
      deleted or changed → `ErrSiteDesignChanged` = 409 `design_changed`, publish again). One release, a version
      **only for the changed items** (`block_doc` NULL for a reset) and their published copy (a reset publishes
      NULL), the styles' version. **No network call inside.** `PublishedTemplate` is the in-transaction hook per
-     published row (`publishedSiteTemplateHook`, nil until #496 syncs `site_template_media` there).
+     published row (`publishedSiteTemplateHook`: #496 syncs `site_template_media`'s published rows there).
   3. **After commit:** the purge (`publicCachePurgeRoutes`; a failed purge is logged, never fails the publish)
      and `site_design_published` on the release (`theme_slug`, `templates`, `parts`, `resets`, `slugs` capped at 8
      as `kind:slug`, `global_styles_groups` and `contrast_failures` when styles were in it). The release's
@@ -1745,6 +1747,33 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
 - Tests: `site_templates_test.go` (mock: names, access, tickets, the internal routes, Customize), `site_templates_db_test.go`
   (real DB through the routes), `theme_block_templates_test.go` (the scan), `sitedesign/sitedesign_test.go`,
   `db/sqlc/site_template_collab_tx_test.go` (the transaction and 000058's constraints).
+
+## Site design caching and "Used in" (#495, #496, `000060`, `site_design_cache_db_test.go`, `media_used_in_site.go`, design `docs/design/theme-builder.md` 5.6, 11)
+
+- **Caching (#495) is #185's cache-aside, nothing of its own.** The design's public reads are `GET
+  /public/site-templates/resolve` (templates, parts, their media and menus by id) and the published global styles in
+  `GET /themes/active`, both in `publicCacheRoutes`. The key is the whole request: the theme and the ranked slugs (the
+  route kind *is* its slug list; another order is another key). Everything else they depend on purges, after commit,
+  through `publicCachePurgeRoutes`: the design publish (a reset publish too), theme activation, `PUT /settings` (site
+  logo, front page), menus, media writes, plugins. The per-item routes (reset, keep editing, start over, version
+  restore, styles restore/discard, the collab store) don't purge: they change only working copies, which no public
+  read serves; a restore reaches the site with the next publish, which purges. Previews never touch the cache: `GET
+  /site-design/draft`'s bearer bypasses it and its `private, no-store` answer can't be stored. Tests (real DB +
+  miniredis): `site_design_cache_db_test.go` (each event, the key, the purge seen after commit from another
+  connection, a failed purge never fails the publish, preview).
+- **`site_template_media` (#496, `000060`):** one row per media block of a template or part per copy (`published`
+  false = working copy, true = published), with `block_type`; FKs cascade from the template and the media.
+  `StoreSiteTemplateCollabTx` syncs the working copy with every store that writes `block_doc` (`ContentMedia`, from
+  `contentMediaUses`; nil = none), `PublishSiteDesignTx`'s hook the published copy (a reset publishes NULL: no rows),
+  and `POST /site-design/templates` once after creating a copy with media (logged on failure; the first store syncs
+  again). `SyncSiteTemplateMedia` skips ids without a media row, like `SyncPostContentMedia`. The migration backfills
+  from both copies.
+- **`GET /media/:id/posts` gains `site_templates`** (`MediaSiteTemplateUse`: id, theme, kind, slug, title,
+  `published`, `working`, `usages` as for posts; a captions file through the video blocks showing a video it captions)
+  **and `site_logo`** (it is `settings.site_logo_media_id`). Only admins see working copies (the Site editor is
+  theirs); other roles see templates whose published copy shows the file, which is on the site anyway. A deleted media
+  renders nothing in the part: the resolve lists it in the doc's `media_missing`, as for posts. Tests:
+  `media_used_in_site_test.go` (mock), `site_template_media_db_test.go` (real DB).
 
 ## Gotchas
 

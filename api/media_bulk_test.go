@@ -272,6 +272,7 @@ func TestGetMediaPostsAPI(t *testing.T) {
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().GetMedia(gomock.Any(), gomock.Eq(media.ID)).Times(1).Return(media, nil)
 				store.EXPECT().GetPostsByMedia(gomock.Any(), gomock.Eq(media.ID)).Times(1).Return(posts, nil)
+				stubNoSiteDesignUses(store, media.ID)
 			},
 			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusOK, recorder.Code)
@@ -315,6 +316,7 @@ func TestGetMediaPostsAPI(t *testing.T) {
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().GetMedia(gomock.Any(), gomock.Eq(media.ID)).Times(1).Return(media, nil)
 				store.EXPECT().GetPostsByMedia(gomock.Any(), gomock.Eq(media.ID)).Times(1).Return(nil, nil)
+				stubNoSiteDesignUses(store, media.ID)
 			},
 			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusOK, recorder.Code)

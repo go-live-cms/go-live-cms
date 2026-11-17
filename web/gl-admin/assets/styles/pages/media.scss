@@ -446,6 +446,11 @@
     }
   }
 
+  // The site design's rows (#496: the site logo, templates and parts): named, not links.
+  &__link--static:hover {
+    background: none;
+  }
+
   &--compact &__link {
     font-size: var(--type-label);
     min-height: 32px;
@@ -742,4 +747,11 @@
     flex-direction: column;
     gap: var(--space-2);
   }
+}
+// The delete confirmation's site design line (#496): a status region, empty until the
+// lookup names the template parts or the site logo using the file.
+.gl-media-delete__site {
+  color: var(--text-primary);
+  font-size: var(--type-label);
+  margin: 0;
 }

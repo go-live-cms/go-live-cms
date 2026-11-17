@@ -18,7 +18,13 @@ import {
   canHaveCaptions,
   isCaptionsFile,
   usedInRows,
+  allUsedInRows,
+  deleteSiteDesignNotice,
+  siteDesignNames,
+  siteDesignUsedInRows,
+  siteTemplateName,
   type MediaPostLink,
+  type MediaSiteTemplateUse,
   type MediaUsage,
 } from "./mediaLibrary"
 
@@ -197,5 +203,66 @@ describe("missing alt text (#325)", () => {
   it("the field's hint follows the decorative option", () => {
     expect(altHint(false)).toMatch(/^Describe what the image shows/)
     expect(altHint(true)).toBe("Not used while the image is marked decorative.")
+  })
+})
+
+describe("the site design's uses (#496)", () => {
+  const header: MediaSiteTemplateUse = {
+    id: 5,
+    theme: "default",
+    kind: "part",
+    slug: "header",
+    title: "Header",
+    published: true,
+    working: true,
+    usages: [{ type: "block", block_id: "a", block_type: "image" }],
+  }
+  const single: MediaSiteTemplateUse = {
+    id: 8,
+    theme: "default",
+    kind: "template",
+    slug: "single",
+    title: "",
+    published: false,
+    working: true,
+    usages: [
+      { type: "block", block_id: "b", block_type: "cover" },
+      { type: "block", block_id: "c", block_type: "image" },
+    ],
+  }
+
+  it("names templates and parts as the Site editor does", () => {
+    expect(siteTemplateName(header)).toBe("Header part")
+    expect(siteTemplateName(single)).toBe("single template")
+  })
+
+  it("rows: the site logo first, then each template or part, saying what isn't live yet", () => {
+    expect(siteDesignUsedInRows({ siteTemplates: [header, single], siteLogo: true })).toEqual([
+      { key: "site-logo", title: "Site logo", how: "Settings › General", status: "" },
+      { key: "site-template-5", title: "Header part", how: "Image block", status: "" },
+      { key: "site-template-8", title: "single template", how: "Cover block and image block · Not published yet", status: "" },
+    ])
+    expect(siteDesignUsedInRows({ siteTemplates: [], siteLogo: false })).toEqual([])
+    // A captions file is used through a video block.
+    expect(siteDesignUsedInRows({ siteTemplates: [{ ...header, usages: [{ type: "captions", block_id: "v", block_type: "video" }] }], siteLogo: false })[0].how).toBe(
+      "Captions of a video block"
+    )
+  })
+
+  it("all rows: the site design first, then the posts (linked)", () => {
+    const rows = allUsedInRows({ posts: [link(11, "featured")], siteTemplates: [header], siteLogo: false })
+    expect(rows.map((r) => [r.title, r.postId])).toEqual([
+      ["Header part", undefined],
+      ["Post 11", 11],
+    ])
+  })
+
+  it("the delete confirmation names them", () => {
+    expect(siteDesignNames({ siteTemplates: [header, header, single], siteLogo: true })).toEqual(["Site logo", "Header part", "single template"])
+    expect(deleteSiteDesignNotice([])).toBeNull()
+    expect(deleteSiteDesignNotice(["Header part"])).toBe("Also used in the site design: Header part. It shows nothing in its place once it's deleted.")
+    expect(deleteSiteDesignNotice(["Site logo", "Header part", "Footer part"])).toBe(
+      "Also used in the site design: Site logo, Header part and Footer part. They show nothing in its place once it's deleted."
+    )
   })
 })
