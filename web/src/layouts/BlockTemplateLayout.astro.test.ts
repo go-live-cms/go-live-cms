@@ -189,7 +189,7 @@ const ROUTES: { kind: string; slugs: string[]; code: string; render: () => Promi
   },
   {
     kind: "term",
-    slugs: ["taxonomy-category", "archive"],
+    slugs: ["taxonomy-category", "taxonomy", "archive"],
     code: "term-header",
     render: () =>
       container.renderToResponse(TermRoute, { request: new Request("http://web:4321/category/guides"), locals: locals({ termArchive: { taxonomy: "category", slug: "guides" } }) }),
@@ -237,7 +237,7 @@ describe("every route kind (design 3.2)", { timeout: 20_000 }, () => {
 
   it("term: a builder `archive` doesn't beat the default theme's own term layout, `taxonomy-category` does", async () => {
     const term = ROUTES.find((r) => r.kind === "term")!
-    // The resolve answers `archive` (rank 1): the active theme's term layout is at rank 0.
+    // The resolve answers `archive` (rank 2): the active theme's term layout is at rank 1 (`taxonomy`, #498).
     api.mode = "override"
     let html = clean(await (await term.render()).text())
     expect(api.slugs).toEqual(term.slugs)
@@ -333,7 +333,8 @@ describe("BlockTemplateLayout (design 3.4)", { timeout: 20_000 }, () => {
     expect(archive).toContain('<h1 class="title">Posts</h1>')
     const search = clean(await (await ROUTES.find((r) => r.kind === "search")!.render()).text())
     expect(search).toContain("Listed post")
-    expect(search).toContain("Search results for “notes”")
+    // #498: the search page's title is the default theme's.
+    expect(search).toContain('<h1 class="title search-title">Search</h1>')
   })
 })
 

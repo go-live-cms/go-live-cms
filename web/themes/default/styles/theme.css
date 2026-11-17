@@ -2648,3 +2648,432 @@ div.post-item-media {
 .color-scheme-switch {
   max-width: 360px;
 }
+
+/* ---------- block templates (#498) ----------
+   The theme's own templates and parts (templates/, parts/) render its pieces with the markup
+   of its components (the site blocks above), without the wrappers its code layouts lay them
+   out with (.container, header.post-header, footer.post-end, .post-grid, header.site-header,
+   .footer-grid, …). These rules lay a block template's page out the same way: by part
+   (.template-part--header, --footer) and by template (`.site[data-template]`), on the blocks'
+   own classes. New rules only: the code layouts' are unchanged.
+
+   A part's blocks sit in its renderer's `div.block-content`. The page's own blocks sit in
+   `main > .block-content` in normal flow (so their margins collapse as the code layouts' do),
+   each as wide as the code layout's column for it: the container by default, the reading
+   column for a post's pieces, the wide column for a wide image, the page for a full one. */
+:root {
+  --template-column: min(100% - 2 * var(--container-gutter), var(--container-width));
+  --template-measure: min(100% - 2 * var(--container-gutter), var(--content-width));
+  --template-wide: min(100% - 2 * var(--container-gutter), var(--wide-width));
+  --template-inset: max(var(--container-gutter), (100% - var(--container-width)) / 2);
+}
+
+/* The header part: the code header's bar, the title, the links, then the search link, the
+   theme button and (on phones) the menu button. The navigation block's pieces take part in
+   the row (display: contents), so its menu button can sit last as in the code header. */
+.template-part--header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--color-background);
+}
+.template-part--header > .block-content {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  height: var(--header-height);
+  padding-inline: var(--template-inset);
+}
+.template-part--header > .block-content > .nav-block {
+  display: contents;
+}
+.template-part--header > .block-content > .nav-block > .site-nav {
+  margin-left: auto;
+}
+.template-part--header > .block-content > .theme-menu,
+.template-part--header > .block-content > .nav-block > .menu-btn {
+  margin-left: calc(2px - var(--space-5));
+}
+.template-part--header > .block-content > .nav-block > .menu-btn {
+  order: 1;
+}
+@media (max-width: 760px) {
+  :root[data-js] .nav-block.has-menu > .site-nav {
+    display: none;
+  }
+  .template-part--header > .block-content > a.icon-btn {
+    margin-left: auto;
+  }
+}
+
+/* The footer part: the code footer's columns (the title and tagline, a group, then each link
+   column of the navigation block, as wide as each other, wrapping), a line, then the
+   copyright and the credit as its bottom row. */
+.template-part--footer {
+  background: var(--color-surface);
+  font-family: var(--font-heading);
+  font-size: var(--size-sm);
+  line-height: var(--leading-normal);
+  color: var(--color-text-muted);
+}
+.template-part--footer > .block-content {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6);
+  padding: var(--space-7) var(--template-inset) 0;
+}
+.template-part--footer > .block-content > .group,
+.template-part--footer .nav-block.is-columns > .footer-col {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+.template-part--footer > .block-content > .group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+.template-part--footer > .block-content > .group > .site-tagline {
+  max-width: 32ch;
+  text-wrap: pretty;
+}
+.template-part--footer .nav-block.is-columns {
+  display: contents;
+}
+/* The bottom row: a full-width break with the code footer's line, then the two. */
+.template-part--footer > .block-content::after {
+  content: "";
+  order: 1;
+  flex-basis: 100%;
+  margin-top: calc(var(--space-7) - var(--space-6));
+  border-top: 1px solid var(--color-border);
+}
+.template-part--footer > .block-content > :is(.site-copyright, .golive-credit) {
+  order: 2;
+  align-self: center;
+  margin-top: calc(var(--space-5) - var(--space-6));
+  margin-bottom: var(--space-5);
+  font-size: var(--size-xs);
+}
+.template-part--footer > .block-content > .site-copyright {
+  margin-right: auto;
+}
+
+/* The page's blocks (no specificity, so every rule below wins). */
+:where(.site--block-template .site-main > .block-content > *) {
+  width: var(--template-column);
+  margin-inline: auto;
+}
+/* A query loop in normal flow too, its pager with the code layouts' space above it. */
+.site--block-template .query-loop {
+  display: block;
+}
+.site--block-template .query-loop > .pagination {
+  padding-top: var(--space-7);
+}
+:where(.site--block-template .site-main > .block-content) > * {
+  margin-block: 0;
+}
+:where(.site--block-template .site-main > .block-content) > * + * {
+  margin-top: var(--space-5);
+}
+/* An eyebrow is a link or a span: a block here, as the code layouts' column makes it. */
+.site--block-template :is(.site-main > .block-content, .column) > .eyebrow {
+  display: block;
+  width: fit-content;
+}
+/* A list's or the 404's label spans its column, as in the code layouts' flex columns. */
+:is([data-template^="archive"], [data-template^="taxonomy"], [data-template="author"], [data-template="404"]) .site-main > .block-content > span.eyebrow {
+  width: auto;
+}
+:is([data-template^="archive"], [data-template^="taxonomy"]) .site-main > .block-content > span.eyebrow {
+  width: var(--template-column);
+}
+[data-template^="taxonomy"] .site-main > .block-content > span.eyebrow {
+  max-width: 760px;
+}
+[data-template="404"] .site-main > .block-content > span.eyebrow {
+  width: var(--template-measure);
+}
+
+/* Posts and pages: the post header, the reading column and the post end. */
+:where([data-template^="single"], [data-template^="page"]) .site-main > .block-content > *,
+:where([data-template="single-sidebar"]) .site-main .column > * {
+  width: var(--template-measure);
+  margin-inline: auto;
+}
+:where([data-template^="single"], [data-template^="page"]) .site-main > .block-content > .eyebrow {
+  width: fit-content;
+  margin-left: max(var(--container-gutter), (100% - var(--content-width)) / 2);
+}
+:where([data-template="single-sidebar"]) .site-main .column > * {
+  width: auto;
+}
+:where([data-template="single-sidebar"]) .site-main .column > .eyebrow {
+  width: fit-content;
+  margin-inline: 0;
+}
+:is([data-template^="single"], [data-template^="page"]) .site-main > .block-content > :first-child:not(.columns, .group.alignfull),
+[data-template="single-sidebar"] .site-main .column:first-child > :first-child {
+  margin-top: var(--space-8);
+}
+:is([data-template^="single"], [data-template^="page"]) :is(.site-main > .block-content, .column) > :is(.eyebrow, .title, .dek) + :is(.title, .dek, .byline) {
+  margin-top: var(--space-4);
+}
+:is([data-template^="single"], [data-template^="page"]) :is(.site-main > .block-content, .column) > .title {
+  font-size: var(--size-4xl);
+}
+.site--block-template :is(.site-main > .block-content, .column) > :is(.post-featured, .prose) {
+  margin-top: var(--space-7);
+}
+.site--block-template :is(.site-main > .block-content, .column) > .prose + :is(.post-terms, .author-cards, .post-nav) {
+  margin-top: var(--space-8);
+}
+.site--block-template :is(.site-main > .block-content, .column) > :is(.post-terms, .author-cards) + :is(.author-cards, .post-nav) {
+  margin-top: var(--space-7);
+}
+.site--block-template .site-main > .block-content > .related-posts {
+  width: var(--template-column);
+  margin-top: var(--space-9);
+}
+.site--block-template .site-main > .block-content > .post-featured--wide {
+  width: var(--template-wide);
+}
+.site--block-template .site-main > .block-content > .post-featured--full {
+  width: 100%;
+}
+
+/* The wide post: its header centred in the wide column, images and code in the body at the
+   wide width. */
+[data-template="single-wide"] .site-main > .block-content > :is(.title, .dek, .byline) {
+  width: fit-content;
+  max-width: var(--template-wide);
+  text-align: center;
+}
+[data-template="single-wide"] .site-main > .block-content > .byline {
+  justify-content: center;
+}
+[data-template="single-wide"] .site-main > .block-content > .eyebrow {
+  margin-inline: auto;
+}
+[data-template="single-wide"] .prose > .block-content > :is(img, pre) {
+  width: min(var(--wide-width), 100vw - 2 * var(--container-gutter));
+  max-width: none;
+  margin-left: 50%;
+  transform: translateX(-50%);
+}
+
+/* The sidebar post: its columns are the code layout's grid, the second one its sticky aside. */
+[data-template="single-sidebar"] .site-main > .block-content > .columns {
+  width: var(--template-column);
+  grid-template-columns: minmax(0, var(--content-width)) 260px;
+  gap: var(--space-8);
+  justify-content: center;
+}
+[data-template="single-sidebar"] .site-main > .block-content > .columns > .column:last-child {
+  position: sticky;
+  top: calc(var(--header-height) + var(--space-6));
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  padding-top: var(--space-8);
+  font-family: var(--font-heading);
+  font-size: var(--size-sm);
+  line-height: var(--leading-normal);
+}
+[data-template="single-sidebar"] .site-main > .block-content > .columns > .column:last-child > * {
+  margin: 0;
+}
+@media (max-width: 1000px) {
+  [data-template="single-sidebar"] .site-main > .block-content > .columns {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+  [data-template="single-sidebar"] .site-main > .block-content > .columns > .column:last-child {
+    position: static;
+    padding-top: var(--space-7);
+    margin-top: var(--space-7);
+    border-top: 1px solid var(--color-border);
+  }
+  [data-template="single-sidebar"] .column .toc-block {
+    display: none;
+  }
+  [data-template="single-sidebar"] .column:last-child:not(:has(> :not(.toc-block))) {
+    display: none;
+  }
+}
+
+/* The full-width page: its title band, full-bleed. */
+[data-template="page-fullwidth"] .site-main > .block-content > .group.alignfull {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  width: 100%;
+  padding: var(--space-9) var(--container-gutter) var(--space-8);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  text-align: center;
+}
+[data-template="page-fullwidth"] .group.alignfull > * {
+  margin: 0;
+}
+[data-template="page-fullwidth"] .group.alignfull > .title {
+  max-width: 820px;
+  font-size: var(--size-4xl);
+}
+[data-template="page-fullwidth"] .group.alignfull > .dek {
+  max-width: 620px;
+}
+[data-template="page-fullwidth"] .site-main > .block-content > .prose {
+  margin-top: var(--space-8);
+}
+
+/* Lists: the archive header (label, title, description, count), then the list and its pager. */
+:is([data-template="home"], [data-template^="archive"], [data-template^="taxonomy"], [data-template="author"]) .site-main > .block-content > :first-child {
+  margin-top: var(--space-8);
+}
+/* The code header is a flex column (gap 12px) whose p.meta keeps its 1em margins. */
+:is([data-template="home"], [data-template^="archive"], [data-template^="taxonomy"], [data-template="author"]) .site-main > .block-content > :is(.eyebrow, .title, .dek, .meta) + :is(.title, .dek) {
+  margin-top: var(--space-3);
+}
+:is([data-template^="archive"], [data-template^="taxonomy"]) .site-main > .block-content > :is(.title, .dek) + .meta {
+  margin-top: calc(var(--space-3) + var(--size-sm));
+}
+:is([data-template^="archive"], [data-template^="taxonomy"]) .site-main > .block-content > .meta + .query-loop {
+  margin-top: calc(var(--space-6) + var(--size-sm));
+}
+[data-template="home"] .site-main > .block-content > .query-loop {
+  margin-top: 0;
+}
+:is([data-template="home"], [data-template^="archive"], [data-template^="taxonomy"]) .site-main > .block-content > :is(.title, .dek, .meta) {
+  max-width: 720px;
+}
+[data-template="author"] .site-main > .block-content > .dek {
+  max-width: 640px;
+}
+[data-template^="taxonomy"] .site-main > .block-content > :is(.title, .dek, .meta) {
+  max-width: 760px;
+}
+:is([data-template="home"], [data-template^="archive"], [data-template^="taxonomy"], [data-template="author"]) .site-main > .block-content > .title {
+  font-size: var(--size-3xl);
+}
+:is([data-template="home"], [data-template^="archive"], [data-template^="taxonomy"]) .site-main > .block-content > :is(.eyebrow, .title, .dek, .meta) {
+  margin-inline: var(--template-inset) auto;
+}
+
+/* The author page: the avatar beside the label, name, bio and count. */
+[data-template="author"] .site-main > .block-content {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: var(--space-6);
+  align-content: start;
+  width: var(--template-column);
+  margin-inline: auto;
+}
+[data-template="author"] .site-main > .block-content > * {
+  grid-column: 1 / -1;
+  width: auto;
+  margin-inline: 0;
+}
+[data-template="author"] .site-main > .block-content > .author-header__avatar {
+  grid-column: 1;
+  grid-row: 1 / span 4;
+  align-self: center;
+  width: 112px;
+  height: 112px;
+  margin-top: var(--space-8);
+  font-size: 40px;
+}
+[data-template="author"] .site-main > .block-content > :is(.eyebrow, .title, .dek, .meta) {
+  grid-column: 2;
+}
+[data-template="author"] .site-main > .block-content > .eyebrow {
+  width: fit-content;
+}
+[data-template="author"] .site-main > .block-content > .author-header__avatar + * {
+  margin-top: var(--space-8);
+}
+[data-template="author"] .site-main > .block-content > :is(.title, .dek) + .meta {
+  margin-top: var(--space-3);
+}
+[data-template="author"] .site-main > .block-content > .query-loop {
+  margin-top: var(--space-6);
+}
+/* The 404's button keeps its width on phones, as the code page's .button-row. */
+[data-template="404"] .site-main > .block-content > .buttons .btn {
+  flex: 0 0 auto;
+}
+@media (max-width: 640px) {
+  [data-template="author"] .site-main > .block-content {
+    column-gap: var(--space-4);
+  }
+  [data-template="author"] .site-main > .block-content > .author-header__avatar {
+    width: 72px;
+    height: 72px;
+    font-size: 28px;
+  }
+}
+/* Where the code header wraps (the avatar, a gap and 320px of text no longer fit): the avatar over the text. */
+@media (max-width: 447px) {
+  [data-template="author"] .site-main > .block-content > .author-header__avatar {
+    grid-row: auto;
+    grid-column: 1 / -1;
+  }
+  [data-template="author"] .site-main > .block-content > :is(.eyebrow, .title, .dek, .meta) {
+    grid-column: 1 / -1;
+  }
+  [data-template="author"] .site-main > .block-content > .author-header__avatar + * {
+    margin-top: var(--space-4);
+  }
+}
+
+/* The search page and the 404: one reading column. */
+:is([data-template="search"], [data-template="404"]) .site-main > .block-content > * {
+  width: var(--template-measure);
+  margin-inline: auto;
+}
+/* The code pages' flex column: a gap between every piece. */
+:is([data-template="search"], [data-template="404"]) .site-main > .block-content > * + * {
+  margin-top: var(--space-5);
+}
+[data-template="search"] .site-main > .block-content > .search-block {
+  max-width: none;
+}
+[data-template="404"] .site-main > .block-content > :is(.search-block, .buttons) {
+  margin-left: max(var(--container-gutter), (100% - var(--content-width)) / 2);
+}
+:is([data-template="search"], [data-template="404"]) .site-main > .block-content > .eyebrow {
+  width: fit-content;
+  margin-left: max(var(--container-gutter), (100% - var(--content-width)) / 2);
+}
+[data-template="search"] .site-main > .block-content > :first-child {
+  margin-top: var(--space-8);
+}
+[data-template="404"] .site-main > .block-content > :first-child {
+  margin-top: var(--space-9);
+}
+[data-template="search"] .site-main > .block-content > .search-results-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding-bottom: var(--space-6);
+}
+[data-template="404"] .site-main > .block-content > .title {
+  font-size: var(--size-4xl);
+}
+/* The 404's "Recent posts": a Heading block styled as the code page's section title, over the list. */
+[data-template="404"] .site-main > .block-content > h2 {
+  margin-top: calc(var(--space-5) + var(--space-6));
+  font-family: var(--font-heading);
+  font-size: var(--size-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: var(--leading-normal);
+  color: var(--color-text-muted);
+}
+[data-template="404"] .site-main > .block-content > h2 + .query-loop {
+  margin-top: var(--space-3);
+}

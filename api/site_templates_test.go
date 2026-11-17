@@ -447,7 +447,7 @@ func TestCreateSiteTemplate(t *testing.T) {
 			require.Equal(t, "starter", arg.Source)
 			require.Equal(t, "Top bar", arg.Title)
 			require.Len(t, arg.SourceHash, 64)
-			require.NotContains(t, string(arg.BlockDoc), "starter-header-logo")
+			require.NotContains(t, string(arg.BlockDoc), "header-site-title", "fresh block ids")
 			require.Contains(t, string(arg.BlockDoc), `"navigation"`)
 		})
 		recorder := createTemplateRequest(t, server, admin, `{"kind":"part","slug":"header","from":"starter","title":"  Top bar "}`)

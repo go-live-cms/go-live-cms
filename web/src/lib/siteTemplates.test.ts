@@ -49,11 +49,19 @@ describe("templateRanks (design 3.2)", () => {
       [{ kind: "archive", postType: "post" }, ["archive-post", "archive"]],
       [{ kind: "single", postType: "post" }, ["single-post", "single"]],
       [{ kind: "single", postType: "case_study" }, ["single-case_study", "single"]],
+      // #498: the type's layout variant picks the default theme's single-sidebar / single-wide.
+      [{ kind: "single", postType: "post", variant: "sidebar" }, ["single-post", "single-sidebar", "single"]],
+      [{ kind: "single", postType: "post", variant: "default" }, ["single-post", "single"]],
+      [{ kind: "single", postType: "wide", variant: "wide" }, ["single-wide", "single"]],
+      [{ kind: "page", variant: "fullwidth" }, ["page-fullwidth", "page"]],
+      [{ kind: "page", template: "landing", variant: "fullwidth" }, ["page-landing", "page-fullwidth", "page"]],
+      [{ kind: "page", template: "fullwidth", variant: "fullwidth" }, ["page-fullwidth", "page"]],
+      [{ kind: "front-page", template: "", variant: "fullwidth" }, ["front-page", "page-fullwidth", "page"]],
       [{ kind: "page" }, ["page"]],
       [{ kind: "page", template: "default" }, ["page"]],
       [{ kind: "page", template: "landing" }, ["page-landing", "page"]],
       [{ kind: "page", template: "block:promo" }, ["custom-promo", "page"]],
-      [{ kind: "term", taxonomy: "category" }, ["taxonomy-category", "archive"]],
+      [{ kind: "term", taxonomy: "category" }, ["taxonomy-category", "taxonomy", "archive"]],
       [{ kind: "author" }, ["author", "archive"]],
       [{ kind: "search" }, ["search"]],
       [{ kind: "404" }, ["404"]],
@@ -91,12 +99,23 @@ describe("the rank comparison (design 3.3)", () => {
   })
 
   it("a builder `archive` beats the default theme's term layout when the active theme has none", () => {
-    expect(codeLayoutRank(templateRanks({ kind: "term", taxonomy: "category" }), "lists", LAYOUTS)).toBe(1)
+    expect(codeLayoutRank(templateRanks({ kind: "term", taxonomy: "category" }), "lists", LAYOUTS)).toBe(2)
     expect(wins({ kind: "term", taxonomy: "category" }, "lists", "archive")).toBe(true)
     expect(wins({ kind: "term", taxonomy: "category" }, "example", "archive")).toBe(true)
-    // On the default theme its own term layout is at the more specific rank.
+    // On the default theme its own term layout is at the more specific rank (#498: `taxonomy`'s).
+    expect(codeLayoutRank(templateRanks({ kind: "term", taxonomy: "category" }), "default", LAYOUTS)).toBe(1)
     expect(wins({ kind: "term", taxonomy: "category" }, "default", "archive")).toBe(false)
+    expect(wins({ kind: "term", taxonomy: "category" }, "default", "taxonomy")).toBe(true)
     expect(wins({ kind: "term", taxonomy: "category" }, "default", "taxonomy-category")).toBe(true)
+  })
+
+  it("a variant's template (#498) has no code layout of its own: a builder `single` still replaces a code theme's variant layout", () => {
+    const sidebar: TemplateRoute = { kind: "single", postType: "post", variant: "sidebar" }
+    expect(codeLayoutRank(templateRanks(sidebar), "default", LAYOUTS)).toBe(2)
+    expect(wins(sidebar, "default", "single-sidebar")).toBe(true)
+    expect(wins(sidebar, "default", "single")).toBe(true)
+    expect(wins({ kind: "page", variant: "fullwidth" }, "default", "page-fullwidth")).toBe(true)
+    expect(wins({ kind: "page", variant: "fullwidth" }, "default", "page")).toBe(true)
   })
 
   it("compares a page's template file, and the 404's error layouts", () => {

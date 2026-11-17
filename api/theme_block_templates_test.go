@@ -6,9 +6,12 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/go-live-cms/go-live-cms/api/sitedesign"
+	mockdb "github.com/go-live-cms/go-live-cms/db/mock"
+	db "github.com/go-live-cms/go-live-cms/db/sqlc"
 )
 
 func writeThemeFile(t *testing.T, root, rel, content string) {
@@ -88,6 +91,85 @@ func TestThemeScanReadsBlockTemplatesAndParts(t *testing.T) {
 	require.False(t, ok, "parts and templates are separate")
 }
 
+// defaultThemeTemplates are the block templates the default theme ships (#498, design 5.7): one
+// per route kind of design 3.2 and the post and page layout variants; never the 500 page's.
+var defaultThemeTemplates = []string{
+	"single", "single-sidebar", "single-wide", "page", "page-fullwidth",
+	"home", "archive", "taxonomy", "author", "search", "404",
+}
+
+// The default theme as the API sees it at startup: scanned from the repository and validated with
+// the installed blocks, as NewServer does.
+func scanDefaultTheme(t *testing.T) db.Theme {
+	t.Helper()
+	themes, err := ScanThemesDirectory("../web/themes")
+	require.NoError(t, err)
+	applyThemeBlockTemplates(themes, loadRepoThemeBlocks(t))
+	for _, theme := range themes {
+		if theme.Slug == "default" {
+			config, err := json.Marshal(theme.Config)
+			require.NoError(t, err)
+			return db.Theme{ID: 1, Slug: "default", Config: config}
+		}
+	}
+	t.Fatal("the default theme isn't in web/themes")
+	return db.Theme{}
+}
+
+func TestDefaultThemeShipsBlockTemplates(t *testing.T) {
+	theme := scanDefaultTheme(t)
+	for _, slug := range defaultThemeTemplates {
+		shipped, ok := themeBlockTemplateFromConfig(theme.Config, sitedesign.KindTemplate, slug)
+		require.True(t, ok, "templates/%s.json is shipped and passes the template's rules", slug)
+		require.NotEmpty(t, shipped.Title, slug)
+		require.Contains(t, string(shipped.Doc), `"template_part"`, "%s places the header and the footer", slug)
+	}
+	for _, slug := range []string{"header", "footer"} {
+		_, ok := themeBlockTemplateFromConfig(theme.Config, sitedesign.KindPart, slug)
+		require.True(t, ok, "parts/%s.json is shipped and passes the part's rules", slug)
+	}
+	// The 500 page renders with the API down: it never has a template, shipped or not.
+	_, ok := themeBlockTemplateFromConfig(theme.Config, sitedesign.KindTemplate, "500")
+	require.False(t, ok)
+	// No front-page template: it would outrank a page set as the front page (design 3.2).
+	_, ok = themeBlockTemplateFromConfig(theme.Config, sitedesign.KindTemplate, "front-page")
+	require.False(t, ok)
+}
+
+// Customize and Start over on the default theme start from what its readers see (#498): its
+// shipped template, as shipped, with the shipped hash; on another code theme the starter is the
+// same file.
+func TestDefaultThemeCustomizeStartsFromItsTemplates(t *testing.T) {
+	theme := scanDefaultTheme(t)
+	server := newTestServer(t, mockdb.NewMockStore(gomock.NewController(t)))
+	server.themeBlocks = loadRepoThemeBlocks(t)
+	for _, slug := range defaultThemeTemplates {
+		shipped, _ := themeBlockTemplateFromConfig(theme.Config, sitedesign.KindTemplate, slug)
+		row := db.SiteTemplate{ID: 9, ThemeSlug: "default", Kind: sitedesign.KindTemplate, Slug: slug}
+		doc, hash, source, ok := server.siteTemplateDefault(theme, row, "")
+		require.True(t, ok, slug)
+		require.Equal(t, siteTemplateFromTheme, source, slug)
+		require.Equal(t, shipped.Hash, hash, slug)
+		require.JSONEq(t, string(shipped.Doc), string(doc), slug)
+
+		// Another code theme (no templates of its own): the starter is the default theme's file.
+		other := db.Theme{ID: 2, Slug: "plain", Config: json.RawMessage(`{}`)}
+		doc, _, source, ok = server.siteTemplateDefault(other, db.SiteTemplate{ID: 9, ThemeSlug: "plain", Kind: sitedesign.KindTemplate, Slug: slug}, "")
+		require.True(t, ok, slug)
+		require.Equal(t, siteTemplateFromStarter, source, slug)
+		normalized, err := server.normalizeSiteTemplateDoc(doc, sitedesign.KindTemplate)
+		require.NoError(t, err, slug)
+		require.JSONEq(t, string(shipped.Doc), string(normalized), "%s: the starter is the default theme's template", slug)
+	}
+	for _, slug := range []string{"header", "footer"} {
+		shipped, _ := themeBlockTemplateFromConfig(theme.Config, sitedesign.KindPart, slug)
+		doc, _, source, ok := server.siteTemplateDefault(theme, db.SiteTemplate{ID: 9, ThemeSlug: "default", Kind: sitedesign.KindPart, Slug: slug}, "")
+		require.True(t, ok, slug)
+		require.Equal(t, siteTemplateFromTheme, source, slug)
+		require.JSONEq(t, string(shipped.Doc), string(doc), slug)
+	}
+}
+
 func TestApplyThemeBlockTemplatesLeavesThemesWithoutAny(t *testing.T) {
 	themes := []DiscoveredTheme{{Slug: "plain"}}
 	applyThemeBlockTemplates(themes, ThemeBlockManifest{})
@@ -110,19 +192,19 @@ func TestCodeLayoutForSlug(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(themePath, "layouts", "search"), 0o755)) // empty: no layout
 
 	for slug, want := range map[string]string{
-		"single":            "layouts/post/default.astro",
-		"single-product":    "layouts/product/default.astro",
-		"page":              "layouts/page/default.astro",
-		"page-fullwidth":    "layouts/page/fullwidth.astro",
-		"home":              "layouts/home/default.astro",
-		"404":               "layouts/error/default.astro",
-		"taxonomy-category": "layouts/term/default.astro",
+		"single":         "layouts/post/default.astro",
+		"single-product": "layouts/product/default.astro",
+		"page":           "layouts/page/default.astro",
+		"page-fullwidth": "layouts/page/fullwidth.astro",
+		"home":           "layouts/home/default.astro",
+		"404":            "layouts/error/default.astro",
+		"taxonomy":       "layouts/term/default.astro",
 	} {
 		got, ok := codeLayoutForSlug(themePath, slug)
 		require.True(t, ok, slug)
 		require.Equal(t, want, got, slug)
 	}
-	for _, slug := range []string{"search", "archive", "author", "front-page", "archive-post", "custom-landing", "single-event", "page-wide"} {
+	for _, slug := range []string{"search", "archive", "author", "front-page", "archive-post", "custom-landing", "single-event", "page-wide", "taxonomy-category"} {
 		_, ok := codeLayoutForSlug(themePath, slug)
 		require.False(t, ok, slug)
 	}

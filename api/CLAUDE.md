@@ -797,6 +797,12 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   `author_cards`, `table_of_contents`, `color_scheme_switch` (`variant: menu`), and `readingTime: true` on
   `post_byline`. Allowlists like the rest (`siteBlockVectors.json`). No route change: related posts read the cached
   `/public/posts/:id/related` (`limit` ≤ 12, `taxonomy`). No migration.
+- **Site blocks IV (#498):** six more flow types, `query_total`, `author_avatar`, `search_results`, `post_facts`
+  (`fallback: true`), `site_copyright`, `golive_credit`, and new attrs on the others: navigation `layout: columns` and
+  `overlay: menu`, search `variant: icon`, query `feature: true` and `layout: links`, query_title `label: true`,
+  query_pagination `end: true`, post_content `width: wide`, post_featured_image `width: wide|full`, post_byline
+  `date: true`, post_terms `all: true` (drops `taxonomy`), related_posts `layout: list`, color_scheme_switch
+  `variant: popover`. Allowlists, defaults left out (`siteBlockVectors.json`). No route change, no migration.
 ## Categories, merges and redirects (#331, #146, `000047`)
 
 - **One category per post** (taxonomy `category`, `db.CategoryTaxonomy`): `PUT
@@ -1656,8 +1662,8 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   `recheckCollabUser`, which covers template connections.
 - **`POST /site-design/templates {kind, slug, from: theme|starter|blank, title?}`** (`requireSiteAdmin`): a row for the
   active theme. `theme` copies the shipped default from the theme's config (404 `no_theme_default`), `starter` core's
-  starter (`sitedesign.Starter`: `parts/header`, `parts/footer`, and for any template slug its own, a prefix's or
-  `templates/index`; 404 `no_starter`), `blank` an empty doc. Copies get fresh block ids and `prepareForStoreAs` (400
+  starter (`sitedesign.Starter`: `parts/header`, `parts/footer`, and for any template slug its own, a prefix's, an
+  alias's or `archive`; 404 `no_starter`), `blank` an empty doc. Copies get fresh block ids and `prepareForStoreAs` (400
   `template_invalid`). 409 `template_exists` with the row's `id`; 400 `invalid_slug` / `invalid_title`. No Yjs
   state is made: the collab server seeds on first open (rule 11). Activity `site_template_created` (`kind`, `slug`,
   `source`; object `site_design`, the row's id). Not public; no purge.
@@ -1677,9 +1683,14 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   override part** (a code layout's `<TemplatePart>`); `menus` the menus its and those parts' navigation blocks name by id
   (as `/public/menus/:location` serves one, at most 16; deleted or failed = absent). Every doc gets `attachBlockMedia`
   and `publicizeBlockDocs`. Cached in `publicCacheRoutes` (the key has the theme and slugs); publish, theme activation,
-  menu, media and settings writes purge it. Core's interim starters are one per route kind (`single`, `page`,
-  `archive`, `home`, `search`, `404`, plus `index`); `author`/`taxonomy` start from `archive`, `custom` from `page`,
-  `front-page` from `home` (`starterAliases`); #498 replaces them. Tests: `site_templates_resolve_test.go`,
+  menu, media and settings writes purge it. **Core's starters are the default theme's templates and parts**
+  (#498, design 5.7): `api/sitedesign/starters/` is a byte-for-byte copy of `web/themes/default/{templates,parts}`
+  (`go generate ./api/sitedesign`, `sync_starters.go`; `TestStartersAreTheDefaultThemes` fails on drift), embedded so
+  the API has them without `web/themes`. `custom` starts from `page`, `front-page` from `home` (`starterAliases`), a
+  slug nothing matches from `archive`. `codeLayoutForSlug` (the scan's "block template wins" log) follows the web's
+  ranks: `taxonomy` is `layouts/term`'s. `TestDefaultThemeShipsBlockTemplates` and
+  `TestDefaultThemeCustomizeStartsFromItsTemplates` scan the real default theme: every route's template validates, and
+  Customize / Start over start from it (other themes from the same file, as a starter). Tests: `site_templates_resolve_test.go`,
   `site_templates_resolve_db_test.go`, `sitedesign_test.go`.
 - Tests: `site_templates_test.go` (mock: names, access, tickets, the internal routes, Customize), `site_templates_db_test.go`
   (real DB through the routes), `theme_block_templates_test.go` (the scan), `sitedesign/sitedesign_test.go`,

@@ -202,10 +202,10 @@ the theme ships (section 5.7), and the theme's code layout for that rank.
 | `/` with a front page (#336) | `front-page`, then the page's own list (below) | `PostPage.astro` with the page's layouts |
 | `/` latest posts | `front-page`, `home` | —, `layouts/home` |
 | `/{type}` list | `archive-{type}`, `archive` | —, `layouts/archive` |
-| A post of type `t` | `single-{t}`, `single` | `layouts/{t}/{variant}`, `layouts/post/{variant}` |
-| A page | `page-{template}` when it has one, `page` | `layouts/page/{template}`, `layouts/page/default` |
+| A post of type `t` | `single-{t}`, `single-{variant}` (T17), `single` | `layouts/{t}/{variant}`, —, `layouts/post/{variant}` |
+| A page | `page-{template}` when it has one, `page-{variant}` (T17), `page` | `layouts/page/{template}`, —, `layouts/page/default` |
 | A page with a builder template | `custom-{name}`, `page` | —, `layouts/page/default` |
-| `/{taxonomy}/{slug}` | `taxonomy-{taxonomy}`, `archive` | `layouts/term`, `layouts/archive` |
+| `/{taxonomy}/{slug}` | `taxonomy-{taxonomy}`, `taxonomy` (T17), `archive` | —, `layouts/term`, `layouts/archive` |
 | `/author/{username}` | `author`, `archive` | `layouts/author`, `layouts/archive` |
 | `/search` | `search` | `layouts/search` |
 | 404 | `404` | `layouts/error` |
@@ -338,9 +338,9 @@ Problem 2 is fixed by a small contract, which the default theme adopts first:
   tests compare the output on the post, page, home, archive, author and search routes).
 - **Preview.** A previewed request renders published templates with the draft global styles. #492 adds templates and
   parts to `GET /site-design/draft` (`?slugs=`); `templateReaderFor` is where a previewed request then reads those.
-- **Starters.** Core's interim starters are one per route kind (`single`, `page`, `archive`, `home`, `search`, `404`)
-  plus `index`; `author` and `taxonomy-*` start from `archive`, `custom-*` from `page`, `front-page` from `home`. #498
-  replaces them with the default theme's own templates.
+- **Starters.** Core's interim starters were one per route kind (`single`, `page`, `archive`, `home`, `search`, `404`)
+  plus `index`; `author` and `taxonomy-*` started from `archive`, `custom-*` from `page`, `front-page` from `home`. #498
+  replaced them with the default theme's own templates (5.7, "As built (T17)").
 - **Render time**, measured against the code layout on the same route (`blockTemplateRenderTime.astro.test.ts`, the
   web server's own work per request with an API stub that answers at once):
 
@@ -756,6 +756,42 @@ layout."
 - **The default theme's templates become the starters.** Core's own starters (T9) exist
   only until T17 lands. After that, customizing on any other code theme starts from the
   default theme's templates.
+
+**As built (T17, #498):**
+
+- **The variant mapping (the first acceptance item).** A type's `layout_variants` value `v`
+  (`sidebar`, `wide`) ranks `single-{v}` between `single-{type}` and `single`; a page type's
+  ranks `page-{v}` between `page-{template}` and `page`. Those ranks have **no code layout of
+  their own**: `layouts/post/{v}.astro` stays `single`'s (and `layouts/page/{v}.astro` `page`'s),
+  so a builder `single` still replaces every post layout of a code theme, as 3.2 says. The
+  default theme ships `single-sidebar` and `single-wide` (and `page-fullwidth`), which the
+  variant picks. On the default theme, then, a builder `single` replaces only the posts of
+  types on the default variant; the sidebar and wide ones keep their own templates and are
+  customized as "Single post · sidebar" / "· wide". A post type named like a variant
+  (`wide`) shares its slug; `single-{type}` ranks first.
+- **A generic `taxonomy` rank** sits between `taxonomy-{taxonomy}` and `archive`, at
+  `layouts/term`'s rank (it was `taxonomy-{taxonomy}`'s), so one shipped template covers every
+  taxonomy, custom ones included. A builder `taxonomy-category` still beats `layouts/term`.
+- **What ships:** `templates/` `single`, `single-sidebar`, `single-wide`, `page`, `page-fullwidth`,
+  `home`, `archive`, `taxonomy`, `author`, `search`, `404`, and `parts/` `header`, `footer`. Never
+  `front-page` (it would outrank a page set as the front page) and never `500`. The `.astro`
+  layouts are **not** removed (a change from the decision above): they are the fallback when the
+  resolve fails or the API is down, and the 500 page's.
+- **Parity.** The existing site blocks could not draw several pieces of the layouts, so #498
+  added **site blocks IV** (`query_total`, `author_avatar`, `search_results`, `post_facts`,
+  `site_copyright`, `golive_credit`) and new attrs (navigation's `columns` layout and `menu`
+  overlay, the search icon link, the switch's popover, the query's featured post and links
+  layout, the pager's list end, the byline's date, every taxonomy's terms, the "In <term>" list,
+  the content's and featured image's widths), each the markup of the theme piece it replaces.
+  `theme.astro.test.ts` compares each template's page with #484's snapshot of its layout
+  element by element; `templateParity.ts` lists the intended differences (wrappers the theme's
+  CSS replaces, the header's DOM order, block-scoped ids, the 404's heading block, React's image
+  preload). Laid out by theme.css's "block templates (#498)" rules, each page matched its code
+  layout's element positions within 2px at 1280, 900 and 375px wide.
+- **The contract gained** `assets.fonts` (preloaded by `BlockTemplateLayout`), `imageSizes` (the
+  body's `sizes` by `post_content`'s `width`) and a skip link in the generic layout.
+- **Starters** are a byte-for-byte copy in `api/sitedesign/starters` (`go generate`; a test fails
+  on drift); a slug nothing matches starts from `archive` (there is no `index`).
 
 ---
 

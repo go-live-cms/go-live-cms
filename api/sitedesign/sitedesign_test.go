@@ -2,6 +2,8 @@ package sitedesign
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -50,7 +52,8 @@ func TestSlugPattern(t *testing.T) {
 func TestStartersAreValid(t *testing.T) {
 	names := StarterNames()
 	require.ElementsMatch(t, []string{
-		"template/index", "template/single", "template/page", "template/archive", "template/home", "template/search", "template/404",
+		"template/single", "template/single-sidebar", "template/single-wide", "template/page", "template/page-fullwidth",
+		"template/archive", "template/taxonomy", "template/author", "template/home", "template/search", "template/404",
 		"part/header", "part/footer",
 	}, names)
 	for _, name := range names {
@@ -78,22 +81,26 @@ func TestStarterLookup(t *testing.T) {
 	require.False(t, ok, "a part has a starter only for its own slug")
 
 	// Every template slug has one: its own, a shorter prefix's, an alias's (#491), or the
-	// generic one.
+	// archive (#498: the default theme's templates, which have no generic `index`).
 	for slug, want := range map[string]string{
 		"single":            "single",
 		"single-case_study": "single",
+		"single-sidebar":    "single-sidebar",
+		"single-wide":       "single-wide",
 		"page":              "page",
-		"page-fullwidth":    "page",
+		"page-fullwidth":    "page-fullwidth",
+		"page-landing":      "page",
 		"custom-landing":    "page",
 		"archive-post":      "archive",
-		"taxonomy-category": "archive",
-		"author":            "archive",
+		"taxonomy":          "taxonomy",
+		"taxonomy-category": "taxonomy",
+		"author":            "author",
 		"home":              "home",
 		"front-page":        "home",
 		"search":            "search",
 		"404":               "404",
-		"index":             "index",
-		"unknown-kind":      "index",
+		"index":             "archive",
+		"unknown-kind":      "archive",
 	} {
 		file, ok := Starter(KindTemplate, slug)
 		require.True(t, ok, slug)
@@ -102,14 +109,34 @@ func TestStarterLookup(t *testing.T) {
 		require.JSONEq(t, string(expected.Doc), string(file.Doc), slug)
 	}
 	single, _ := Starter(KindTemplate, "single")
-	index, _ := Starter(KindTemplate, "index")
-	require.NotEqual(t, string(index.Doc), string(single.Doc))
+	archive, _ := Starter(KindTemplate, "archive")
+	require.NotEqual(t, string(archive.Doc), string(single.Doc))
 	for _, slug := range []string{"", "Bad", "../parts/header"} {
 		_, ok := Starter(KindTemplate, slug)
 		require.False(t, ok, slug)
 	}
 	_, ok = Starter("page", "header")
 	require.False(t, ok)
+}
+
+// The starters are the default theme's templates and parts (#498, design 5.7), byte for byte:
+// `go generate ./api/sitedesign` copies them (sync_starters.go) after the theme's change.
+func TestStartersAreTheDefaultThemes(t *testing.T) {
+	for _, dir := range []string{"templates", "parts"} {
+		shipped, err := filepath.Glob(filepath.Join("..", "..", "web", "themes", "default", dir, "*.json"))
+		require.NoError(t, err)
+		require.NotEmpty(t, shipped, "the default theme ships %s", dir)
+		embedded, err := starters.ReadDir("starters/" + dir)
+		require.NoError(t, err)
+		require.Len(t, embedded, len(shipped), "starters/%s and the default theme's %s differ: run `go generate ./api/sitedesign`", dir, dir)
+		for _, path := range shipped {
+			want, err := os.ReadFile(path)
+			require.NoError(t, err)
+			got, err := starters.ReadFile("starters/" + dir + "/" + filepath.Base(path))
+			require.NoError(t, err, "starters/%s/%s is missing: run `go generate ./api/sitedesign`", dir, filepath.Base(path))
+			require.Equal(t, string(want), string(got), "starters/%s/%s is stale: run `go generate ./api/sitedesign`", dir, filepath.Base(path))
+		}
+	}
 }
 
 func TestHash(t *testing.T) {

@@ -1,6 +1,7 @@
 // Package sitedesign holds what the theme builder's templates and parts start from
 // (#490, docs/design/theme-builder.md 5.7): the file format a theme ships them in
-// (templates/<slug>.json, parts/<slug>.json) and core's starters, embedded in the binary.
+// (templates/<slug>.json, parts/<slug>.json) and core's starters, embedded in the binary: since
+// #498 the default theme's own templates and parts (sync_starters.go copies them; `go generate`).
 //
 // It knows nothing about the database or the Block Spec's rules: the api package
 // validates a doc (prepareForStoreAs, the kind's rules) before anything stores it.
@@ -93,6 +94,11 @@ func Hash(doc []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
+//go:generate go run sync_starters.go
+
+// starters are the default theme's templates/ and parts/ (#498), copied here by sync_starters.go so
+// the API has them without web/themes; TestStartersAreTheDefaultThemes keeps them equal.
+//
 //go:embed starters/templates/*.json starters/parts/*.json
 var starters embed.FS
 
@@ -103,10 +109,12 @@ var starters embed.FS
 // so every template slug has one. ok is false for a part without one, or a slug that
 // isn't a slug.
 //
-// These are core's interim starters (#491): one per route kind of design 3.2 (single,
-// page, archive, home, search, 404), built from site blocks and styled by the default
-// theme's site-block CSS. The slugs that share a shape take another's (starterAliases).
-// The default theme's own templates replace them (#498, 5.7).
+// The starters are the default theme's own templates and parts (#498, design 5.7, which
+// replaced core's interim ones of #491): one per route kind of design 3.2 (single and its
+// sidebar and wide variants, page and page-fullwidth, archive, taxonomy, author, home,
+// search, 404) and the header and footer, so "Customize" on any other code theme starts from
+// what the default theme's readers see. The slugs that share a shape take another's
+// (starterAliases); a slug with nothing closer starts from the archive (fallbackStarter).
 func Starter(kind, slug string) (File, bool) {
 	if !SlugPattern.MatchString(slug) {
 		return File{}, false
@@ -130,7 +138,7 @@ func Starter(kind, slug string) (File, bool) {
 			}
 			candidate = candidate[:cut]
 		}
-		return readStarter("starters/templates/index.json")
+		return readStarter("starters/templates/" + fallbackStarter + ".json")
 	}
 	return File{}, false
 }
@@ -139,6 +147,10 @@ func Starter(kind, slug string) (File, bool) {
 // from: an author page and a term archive are lists like an archive, a builder page
 // template (custom-<name>, design 10) is a page, and the front page lists the latest posts
 // like home (as a page, it customizes `page` or `page-<template>` instead).
+// fallbackStarter is the template a slug that matches nothing closer starts from: a list of
+// the site's posts, with the header and footer.
+const fallbackStarter = "archive"
+
 var starterAliases = map[string]string{
 	"author":   "archive",
 	"taxonomy": "archive",

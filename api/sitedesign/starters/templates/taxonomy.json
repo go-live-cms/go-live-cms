@@ -1,0 +1,24 @@
+{
+  "title": "Category or tag",
+  "doc": {
+    "doc_version": 1,
+    "blocks_order": ["taxonomy-header", "taxonomy-label", "taxonomy-title", "taxonomy-description", "taxonomy-total", "taxonomy-query", "taxonomy-footer"],
+    "blocks": {
+      "taxonomy-header": { "id": "taxonomy-header", "type": "template_part", "version": 1, "attrs": { "slug": "header" } },
+      "taxonomy-label": { "id": "taxonomy-label", "type": "query_title", "version": 1, "attrs": { "label": true } },
+      "taxonomy-title": { "id": "taxonomy-title", "type": "query_title", "version": 1, "attrs": {} },
+      "taxonomy-description": { "id": "taxonomy-description", "type": "term_description", "version": 1, "attrs": {} },
+      "taxonomy-total": { "id": "taxonomy-total", "type": "query_total", "version": 1, "attrs": {} },
+      "taxonomy-query": { "id": "taxonomy-query", "type": "query", "version": 1, "attrs": { "inherit": true }, "children": ["taxonomy-items", "taxonomy-pager", "taxonomy-empty"] },
+      "taxonomy-items": { "id": "taxonomy-items", "type": "post_template", "version": 1, "attrs": {}, "children": ["taxonomy-item-title", "taxonomy-item-excerpt", "taxonomy-item-byline", "taxonomy-item-image"] },
+      "taxonomy-item-title": { "id": "taxonomy-item-title", "type": "post_title", "version": 1, "attrs": { "level": 2 } },
+      "taxonomy-item-excerpt": { "id": "taxonomy-item-excerpt", "type": "post_excerpt", "version": 1, "attrs": {} },
+      "taxonomy-item-byline": { "id": "taxonomy-item-byline", "type": "post_byline", "version": 1, "attrs": { "date": true, "readingTime": true } },
+      "taxonomy-item-image": { "id": "taxonomy-item-image", "type": "post_featured_image", "version": 1, "attrs": { "link": true } },
+      "taxonomy-pager": { "id": "taxonomy-pager", "type": "query_pagination", "version": 1, "attrs": { "end": true } },
+      "taxonomy-empty": { "id": "taxonomy-empty", "type": "query_no_results", "version": 1, "attrs": {}, "children": ["taxonomy-empty-text"] },
+      "taxonomy-empty-text": { "id": "taxonomy-empty-text", "type": "paragraph", "version": 1, "attrs": { "text": "Nothing has been published here yet." } },
+      "taxonomy-footer": { "id": "taxonomy-footer", "type": "template_part", "version": 1, "attrs": { "slug": "footer" } }
+    }
+  }
+}

@@ -3,11 +3,13 @@
 import { experimental_AstroContainer as AstroContainer } from "astro/container"
 import { getContainerRenderer as reactRenderer } from "@astrojs/react"
 import { loadRenderers } from "astro:container"
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 import themeConfig from "./theme.config"
-import { readFileSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 import { createRequire } from "node:module"
 import { JSDOM } from "jsdom"
+import type { BlockTemplateKind } from "@/lib/blockTemplateLayout"
+import { comparablePage, shippedTemplate } from "./templateParity"
 
 // axe-core's browser build, evaluated in a JSDOM window (the layout axe checks, #481).
 const AXE_SOURCE = readFileSync(createRequire(import.meta.url).resolve("axe-core/axe.min.js"), "utf8")
@@ -48,6 +50,7 @@ const AuthorLayout = (await import("./layouts/author/default.astro")).default
 const TermLayout = (await import("./layouts/term/default.astro")).default
 const SearchLayout = (await import("./layouts/search/default.astro")).default
 const ArchiveLayout = (await import("./layouts/archive/default.astro")).default
+const BlockTemplateLayout = (await import("@/layouts/BlockTemplateLayout.astro")).default
 
 const post = {
   id: 42,
@@ -738,6 +741,77 @@ describe("layout snapshots (#484)", () => {
       // The Astro version, so a framework bump alone doesn't fail these.
       .replace(/<meta name="generator" content="Astro v[^"]*">/, '<meta name="generator" content="Astro">')
     await expect(html).toMatchFileSnapshot(`./__snapshots__/layouts/${name}.html`)
+  })
+
+  // #498: the theme's block templates (templates/, parts/) render the same pages as the code
+  // layouts above, on the same fixtures, compared with #484's snapshots: both pages are read into a
+  // DOM and compared element by element, attributes and text included, after the differences this
+  // conversion intends (BLOCK_TEMPLATE_DIFFERENCES: the wrappers a code layout lays its pieces out
+  // with, which the theme's CSS does for a template). Anything else that differs fails.
+  describe("block templates (#498)", () => {
+    const TEMPLATES: [string, string, BlockTemplateKind][] = [
+      ["post-default", "single", "single"],
+      ["post-sidebar", "single-sidebar", "single"],
+      ["post-wide", "single-wide", "single"],
+      ["page-default", "page", "page"],
+      ["page-fullwidth", "page-fullwidth", "page"],
+      ["home", "home", "home"],
+      ["archive", "archive", "archive"],
+      ["author", "author", "author"],
+      ["term", "taxonomy", "term"],
+      ["search", "search", "search"],
+      ["error-404", "404", "404"],
+    ]
+
+    beforeEach(() => {
+      // The 404's recent posts are a query of the latest three (`/public/posts/type/post`).
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (url: string) =>
+          String(url).includes("/public/posts/type/post")
+            ? new Response(JSON.stringify({ posts: [{ ...post, title: "Recent one" }], pagination: { page: 1, per_page: 3, total: 1, total_pages: 1 } }), { status: 200 })
+            : new Response("{}", { status: 404 }),
+        ),
+      )
+    })
+    afterEach(() => {
+      vi.unstubAllGlobals()
+    })
+
+    const renderTemplate = async (slug: string, kind: BlockTemplateKind, props: Record<string, unknown>) => {
+      const template = shippedTemplate("templates", slug)
+      const choice = { template: { slug, rank: 0, source: "theme", title: template.title, doc: template.doc }, parts: { header: shippedTemplate("parts", "header").doc, footer: shippedTemplate("parts", "footer").doc }, menusById: {} }
+      return (await container.renderToString(BlockTemplateLayout as any, { props: { kind, choice, ...props }, request, locals: { activeTheme: "default", themeAssets: themeConfig.assets } }))
+        .replace(/\s+data-astro-source-(?:file|loc)="[^"]*"/g, "")
+        .replace(/<meta name="generator" content="Astro v[^"]*">/, '<meta name="generator" content="Astro">')
+    }
+
+    it.each(TEMPLATES)("%s: the block template renders the code layout's page", async (name, slug, kind) => {
+      const props = KINDS.find(([n]) => n === name)![2]
+      const html = await renderTemplate(slug, kind, props)
+      await expect(html).toMatchFileSnapshot(`./__snapshots__/templates/${name}.html`)
+      const before = readFileSync(new URL(`./__snapshots__/layouts/${name}.html`, import.meta.url), "utf8")
+      const code = comparablePage(before, "code", name)
+      const block = comparablePage(html, "template", name)
+      expect(block.page).toBe(code.page)
+      // Every heading the post's body has, with the same id, so a copied heading link and the
+      // table of contents still point at the same place.
+      expect(block.bodyHeadingIds).toEqual(code.bodyHeadingIds)
+      // The embed loader, once per page.
+      expect(block.embedLoaders).toBe(code.embedLoaders)
+    })
+
+    it("the 500 page has no template: the error layout renders it, with the API down", async () => {
+      expect(existsSync(new URL("./templates/500.json", import.meta.url))).toBe(false)
+      // As with the API down: the settings are the defaults (getSiteSettings never rejects), every other read fails.
+      getSiteSettings.mockResolvedValue(SITE)
+      getMenu.mockRejectedValue(new Error("down"))
+      getPublishedPosts.mockRejectedValue(new Error("down"))
+      const html = await container.renderToString(ErrorLayout, { props: { status: 500, title: "Something went wrong", message: "Oops." }, request })
+      expect(html).toContain("Something went wrong on our side")
+      expect(getMenu).not.toHaveBeenCalled()
+      expect(fetch).not.toHaveBeenCalled()
+    })
   })
 
   // axe-core over every layout, whole (#481): the page as served, in a JSDOM window with axe

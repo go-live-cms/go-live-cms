@@ -27,6 +27,7 @@ import { loadSiteRenderContext } from '@/lib/siteRenderContext'
 import { getSiteSettings } from '@/lib/siteSettings'
 import type { BlockTemplateChoice } from '@/lib/siteTemplates'
 import { resolveThemeTokens, themeCssVariables } from '@/lib/themeTokens'
+import { preloadFonts } from '@/lib/themeAssets'
 
 interface Props {
   kind: BlockTemplateKind
@@ -47,6 +48,8 @@ const route = await templateSiteRoute(kind, layoutProps, {
   siteUrl,
   urlStructure: site.urlStructure,
 })
+// #498: the theme's image sizes for a post's body (`post_content`'s width), as its layouts give them.
+const imageSizes = (themeConfig as { imageSizes?: { column?: string; wide?: string } } | null)?.imageSizes
 const context = await loadSiteRenderContext(Astro.locals, {
   docs: [template.doc],
   parts,
@@ -54,6 +57,7 @@ const context = await loadSiteRenderContext(Astro.locals, {
   currentPath: Astro.url.pathname,
   route,
   siteUrl,
+  ...(imageSizes ? { imageSizes } : {}),
 })
 
 let tokens = ''
@@ -77,6 +81,9 @@ const legacyCssPath = Astro.locals.themeCssPath
     <SeoHead title={head.title} description={head.description} {...head.seo} />
     <link rel="alternate" type="application/rss+xml" title={site.title} href="/rss.xml" />
     <ThemeScripts scripts={themeAssets.scripts} placement="head" />
+    {preloadFonts(themeAssets.fonts).map((font) => (
+      <link rel="preload" href={font.href} as="font" type={font.type} crossorigin />
+    ))}
     {tokens && <style is:inline set:html={tokens}></style>}
     {themeAssets.styles?.map((style: any) => (
       <link rel="stylesheet" href={style.src} media={style.media || 'all'} />
@@ -86,6 +93,7 @@ const legacyCssPath = Astro.locals.themeCssPath
   </head>
   <body>
     <div class="site site--block-template" data-template={template.slug}>
+      <a href="#content" class="skip-link">Skip to content</a>
       <BlockRenderer doc={template.doc} site={context} anchors={false} frame="template" reservedIds={TEMPLATE_ELEMENT_IDS} />
     </div>
     <ThemeScripts scripts={themeAssets.scripts} placement="body" />
