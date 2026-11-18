@@ -15,7 +15,8 @@ import {
   siteBlockTypeOfNode,
   type SiteBlockType,
 } from "@gl-admin/lib/blocks-spec"
-import { editorDocKind } from "./SiteBlocks"
+import { editorDocKind, editorSiteBridge } from "./SiteBlocks"
+import { humanize } from "@gl-admin/lib/siteDesign"
 
 /**
  * The site blocks' views (#488, the blocks canvas's "Site blocks in the editor" board): a
@@ -35,11 +36,8 @@ const PART_LOCK = "M6 11h12v10H6zM8 11V7a4 4 0 0 1 8 0v4"
 
 const ICON_OF: Readonly<Record<SiteBlockType, string>> = { ...SITE_BLOCK_ICONS, template_part: PART_LOCK }
 
-/** "header" → "Header", "promo_bar" → "Promo bar". */
-export function partName(slug: string): string {
-  const words = slug.replace(/[-_]+/g, " ").trim()
-  return words.charAt(0).toUpperCase() + words.slice(1)
-}
+/** "header" → "Header", "promo_bar" → "Promo bar": the Site editor's one rule for a slug's label. */
+export const partName = humanize
 
 /**
  * The placeholder's second line: what the block is set to show, from its attrs only (the
@@ -148,6 +146,7 @@ export class SiteBlockView implements NodeView {
   dom: HTMLElement
   private node: PMNode
   private readonly type: SiteBlockType
+  private openButton: HTMLButtonElement | null = null
 
   constructor(
     node: PMNode,
@@ -184,10 +183,27 @@ export class SiteBlockView implements NodeView {
     name.textContent = slug ? partName(slug) : SITE_BLOCK_LABELS[this.type]
     const detail = document.createElement("span")
     detail.className = "editor-site-block__detail"
-    detail.textContent = siteBlockSummary(this.type, this.node.attrs)
+    // A part card in the Site editor (#493, design 7.5): the part's state and a button that
+    // opens it in its own editor (one binding per editor: its content is never shown here).
+    const bridge = isPart && !inert && slug ? editorSiteBridge(this.editor) : null
+    const status = bridge?.partStatus?.(slug!) ?? null
+    detail.textContent = status?.detail ?? siteBlockSummary(this.type, this.node.attrs)
     text.append(name, detail)
 
     const children: Node[] = [tile, text]
+    if (bridge?.openPart) {
+      const open = document.createElement("button")
+      open.type = "button"
+      open.className = "gl-button gl-button--secondary gl-button--sm editor-site-block__open"
+      open.textContent = status?.action ?? "Edit part"
+      open.setAttribute("aria-label", `${open.textContent}: ${name.textContent}`)
+      open.addEventListener("click", (event) => {
+        event.preventDefault()
+        bridge.openPart?.(slug!)
+      })
+      this.openButton = open
+      children.push(open)
+    } else this.openButton = null
     if (inert) {
       const note = document.createElement("p")
       note.className = "editor-site-block__note"
@@ -215,6 +231,11 @@ export class SiteBlockView implements NodeView {
 
   ignoreMutation() {
     return true
+  }
+
+  // The part card's button handles its own clicks and keys (ProseMirror would select the node).
+  stopEvent(event: Event) {
+    return !!this.openButton && event.target instanceof globalThis.Node && this.openButton.contains(event.target)
   }
 }
 

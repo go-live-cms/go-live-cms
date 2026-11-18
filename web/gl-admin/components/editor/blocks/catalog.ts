@@ -11,7 +11,8 @@ import { EMBED_ICONS, MEDIA_BLOCK_ICONS, type EmbedProvider } from "@gl-admin/li
 import { requestEmbedFieldFocus, takeEmbedFieldFocus } from "./embedLinks"
 import { requestHtmlFieldFocus, takeHtmlFieldFocus } from "./htmlSnippets"
 import { currentAllowedEmbeds } from "@gl-admin/lib/editorSettings"
-import { SITE_BLOCK_CONTEXTS, SITE_BLOCK_ICONS, SITE_BLOCK_LABELS, type BlockDocKind, type SiteBlockType } from "@gl-admin/lib/blocks-spec/siteBlocks"
+import { SITE_BLOCK_CONTEXTS, SITE_BLOCK_ICONS, SITE_BLOCK_LABELS, SITE_BLOCK_NODE_NAMES, type BlockDocKind, type SiteBlockType } from "@gl-admin/lib/blocks-spec/siteBlocks"
+import { editorDocKind, editorSiteBridge } from "../extensions/SiteBlocks"
 
 // The block catalog (#415, docs/design/block-library.md 3.1): every block the editor can
 // insert, in one list. The slash menu, the + menu in the gutter, Turn into (turnInto.ts)
@@ -315,6 +316,8 @@ export const CORE_BLOCKS: readonly CatalogEntry[] = [
     keywords: ["citation", "reference", "endnote", "source"],
     icon: { path: ICONS.footnote },
     inline: true,
+    // A post's notes: a template or part has no body of its own to cite from (the Site editor board).
+    contexts: ["post"],
     insert: (editor, range) => editor.chain().focus().insertFootnote(range).run(),
   },
   // Media
@@ -496,6 +499,8 @@ export const CORE_BLOCKS: readonly CatalogEntry[] = [
     group: "advanced",
     keywords: ["embed code", "markup", "snippet", "raw"],
     icon: { path: ICONS.html },
+    // The markup is the post's (post_html_snippets): a template has no row to hold it (#493).
+    contexts: ["post"],
     insert: (editor, range) => {
       requestHtmlFieldFocus()
       if (!editor.chain().deleteRange(range).insertHtmlBlock().run()) takeHtmlFieldFocus()
@@ -548,7 +553,10 @@ function siteEntry(type: SiteBlockType, keywords: readonly string[]): CatalogEnt
     icon: { path: SITE_BLOCK_ICONS[type] },
     contexts: SITE_BLOCK_CONTEXTS[type],
     insert: (editor, range) => {
-      chain(editor, range).insertSiteBlock(type).run()
+      // A query loop in a template whose route has a list starts on that list (13.1, #493):
+      // "This page's list" is the Block tab's first setting, a switch away from "Posts I choose".
+      const attrs = type === "query" && editorSiteBridge(editor)?.routeHasList ? { inherit: true } : {}
+      chain(editor, range).insertSiteBlock(type, attrs).run()
     },
   }
 }
@@ -603,6 +611,22 @@ export interface MenuContext {
 /** Whether `entry` is offered in a document of `kind` (#488, design 4.4). */
 export function offeredIn(entry: CatalogEntry, kind: BlockDocKind = "post"): boolean {
   return !entry.contexts || entry.contexts.includes(kind)
+}
+
+/**
+ * #493 (design 4.2): a template holds at most one Post content, so once its doc has one the
+ * menus don't offer another (a second would make every store `kept-invalid`). Reads the doc;
+ * everything is offered in a post.
+ */
+export function offeredOnce(editor: Editor): (entry: CatalogEntry) => boolean {
+  if (editorDocKind(editor) === "post") return () => true
+  const name = SITE_BLOCK_NODE_NAMES.post_content
+  let has = false
+  editor.state.doc.descendants((node) => {
+    if (node.type.name === name) has = true
+    return !has
+  })
+  return (entry) => !(has && entry.type === "post_content")
 }
 
 /** The entries a menu offers in `context`, in catalog order. */
@@ -708,7 +732,10 @@ export function matchEntry(entry: CatalogEntry, query: string): CatalogMatch | n
  */
 export function searchCatalog(entries: readonly CatalogEntry[], query: string): CatalogSection[] {
   const matches = entries.map((entry) => matchEntry(entry, query)).filter((m): m is CatalogMatch => m !== null)
-  return BLOCK_GROUPS.map(({ id, label }) => ({ group: id, label, matches: matches.filter((m) => m.entry.group === id) })).filter(
+  // Site blocks are offered only in templates and parts, where they come first (the Site editor
+  // board's "Inserting"): wherever they are offered at all, the Site group leads.
+  const groups = [...BLOCK_GROUPS].sort((a, b) => Number(b.id === "site") - Number(a.id === "site"))
+  return groups.map(({ id, label }) => ({ group: id, label, matches: matches.filter((m) => m.entry.group === id) })).filter(
     (section) => section.matches.length > 0
   )
 }

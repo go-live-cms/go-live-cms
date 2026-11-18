@@ -239,6 +239,11 @@ export interface DesignPreviewState {
   state: "previewing" | "refused" | "off"
   expiresAt: string | null
   applied: boolean
+  /**
+   * While previewing (#493): reads the working templates and parts with this request's token
+   * (`siteTemplates.ts` `readDraftSiteDesign`). A closure, so the token itself is never on locals.
+   */
+  readTemplates?: import("./siteTemplates").SiteTemplateReader
 }
 
 /**

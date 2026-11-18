@@ -414,6 +414,21 @@ are the most fragile part of the codebase. **Before editing anything under
   `ContrastUnconfirmedError` (`pairs`), `StylesChangedError` (`current`) and `DesignInvalidError` (`problems`:
   `template_empty`, `template_invalid`, `part_unresolved`); `design_changed`, `nothing_to_publish` and 503
   `collab_unavailable` (naming the item it couldn't flush) are ApiErrors with the server's message.
+- **Site editor (#493, design `docs/design/theme-builder.md` 13; the redesign canvas's row 8):** `/site-editor` (the
+  overview, `pages/SiteEditor.tsx`), `/site-editor/templates/:id` (the template and part editors,
+  `pages/SiteTemplateEditor.tsx`), `/site-editor/history` (`pages/SiteDesignHistory.tsx`) and #487's
+  `/site-editor/styles`, all `AdminOnly`; Appearance › Site editor (admins, `nav.ts`); Themes › Customize opens it
+  (Layouts… keeps the layout-variant dialog). Rules and wording are `lib/siteDesign.ts` (tested): the overview's rows
+  and "renders now" vocabulary, the row and More menus, new names (`savedTemplateName`, 13.1), the publish list and
+  refusals, preview pages, "Used in". The editors are the post editor: `Editor` with `templateId`/`templateKind`
+  (`template-<id>`, `acquirePostCollab(id, "template")`) and a `siteBridge` (`SiteEditorBridge`: the part card's state
+  and button, `routeHasList` for the query loop). Custom HTML and footnotes are post-only (`contexts`), the Site group
+  comes first, and Post content is offered once (`offeredOnce`). Restore, Discard and Start over go through
+  `templateRestore.ts` with `EditorRef.getRestoreTarget()` (a reset item is read-only: Keep editing first). Publish is
+  `components/site-editor/PublishDesignDialog.tsx` (the overview read on open; refusals, then contrast), shared with
+  the styles screen, whose count now includes templates and parts. The preview frame (`StylesPreview` with the route's
+  pages) reloads on the collab server's `stored`; a previewed request reads the **working copies** through
+  `GET /site-design/draft?slugs=` (`readDraftSiteDesign`, the middleware's `locals.designPreview.readTemplates`).
 - **Theme contract (#484, `themes/README.md` "The theme contract", design
   `docs/design/theme-builder.md` 3.5):** core emits tokens (`src/lib/themeTokens.ts`:
   `themeCssVariables(resolveThemeTokens(config, Astro.locals.globalStyles))`; the middleware

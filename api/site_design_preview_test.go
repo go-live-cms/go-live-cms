@@ -172,6 +172,56 @@ func TestDesignDraftRead(t *testing.T) {
 		requireCode(t, recorder, http.StatusConflict, "preview_theme_inactive")
 	})
 
+	// #493: the Site editor's preview frame renders the working copies (design 8.3).
+	t.Run("slugs: the working copies, a reset one left to the theme", func(t *testing.T) {
+		server, store := siteDesignServer(t)
+		store.EXPECT().GetUser(gomock.Any(), admin.ID).Return(admin, nil)
+		expectStylesRow(store, nil)
+		working := resolveDoc(t, [2]string{"title-0001", `{"type":"site_title","attrs":{}}`}, [2]string{"part-00001", `{"type":"template_part","attrs":{"slug":"header"}}`})
+		store.EXPECT().ListSiteTemplatesByTheme(gomock.Any(), siteDesignTheme.Slug).Return([]db.SiteTemplate{
+			{Kind: "template", Slug: "single", Title: "Single post", WorkingState: siteTemplateCustom, BlockDoc: working},
+			// Reset: what renders after the next publish is the theme's (here core's starter).
+			{Kind: "part", Slug: "header", Title: "My header", WorkingState: siteTemplateReset, BlockDoc: resolveDoc(t, [2]string{"tagline-01", `{"type":"site_tagline","attrs":{}}`})},
+		}, nil)
+		request := httptest.NewRequest(http.MethodGet, "/api/v1/site-design/draft?slugs=single-post,single", nil)
+		request.Header.Set("Authorization", previewBearer(t, server, admin.ID, siteDesignTheme.Slug, time.Minute))
+		recorder := httptest.NewRecorder()
+		server.router.ServeHTTP(recorder, request)
+		requireStatus(t, recorder, http.StatusOK)
+		require.Equal(t, designPreviewCacheControl, recorder.Header().Get("Cache-Control"))
+
+		var rsp DesignDraftResponse
+		require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &rsp))
+		require.NotNil(t, rsp.Template)
+		require.Equal(t, "single", rsp.Template.Slug)
+		require.Equal(t, 1, rsp.Template.Rank)
+		require.Equal(t, siteDesignSourceOverride, rsp.Template.Source)
+		require.Contains(t, rsp.Template.Doc["blocks"], "title-0001")
+		require.Equal(t, siteDesignSourceStarter, rsp.Parts["header"].Source, "a reset part renders the theme's default")
+	})
+
+	t.Run("slugs: refused when malformed, and a failed read", func(t *testing.T) {
+		server, store := siteDesignServer(t)
+		bearer := previewBearer(t, server, admin.ID, siteDesignTheme.Slug, time.Minute)
+		for _, query := range []string{"slugs=Not%20a%20slug", "slugs=a,a"} {
+			store.EXPECT().GetUser(gomock.Any(), admin.ID).Return(admin, nil)
+			expectStylesRow(store, nil)
+			request := httptest.NewRequest(http.MethodGet, "/api/v1/site-design/draft?"+query, nil)
+			request.Header.Set("Authorization", bearer)
+			recorder := httptest.NewRecorder()
+			server.router.ServeHTTP(recorder, request)
+			requireCode(t, recorder, http.StatusBadRequest, "invalid_slugs")
+		}
+		store.EXPECT().GetUser(gomock.Any(), admin.ID).Return(admin, nil)
+		expectStylesRow(store, nil)
+		store.EXPECT().ListSiteTemplatesByTheme(gomock.Any(), siteDesignTheme.Slug).Return(nil, errors.New("boom"))
+		request := httptest.NewRequest(http.MethodGet, "/api/v1/site-design/draft?slugs=single", nil)
+		request.Header.Set("Authorization", bearer)
+		recorder := httptest.NewRecorder()
+		server.router.ServeHTTP(recorder, request)
+		requireStatus(t, recorder, http.StatusInternalServerError)
+	})
+
 	t.Run("database errors", func(t *testing.T) {
 		server, store := siteDesignServer(t)
 		store.EXPECT().GetUser(gomock.Any(), admin.ID).Return(db.User{}, errors.New("boom"))

@@ -1222,6 +1222,25 @@ desktop-only in v1, with "Use a larger screen to edit templates" (open question 
   ones are `site-logo`, `site-logo-block`, `site-tagline`, `site-nav.is-column`,
   `query-no-results` and core's `gl-preview-banner` (8.3).
 
+### 13.2 As built (T11, #493)
+
+- **Screens:** `/site-editor` (the overview), `/site-editor/templates/:id` (a template or part, the
+  post editor bound to `template-<id>`), `/site-editor/history` and #487's `/site-editor/styles`.
+  Themes › Customize opens the overview; the theme's layout variants moved to Themes › Layouts….
+- **The preview shows the working copies.** #492 left `GET /site-design/draft` with the styles
+  only, so a previewed page rendered the published templates. `?slugs=` now answers the template,
+  parts and menus from the working copies (a reset row renders the theme's default, as after
+  the next publish), through the public resolve's own resolver, and a previewed request reads
+  templates from it (`templateReaderFor`). Posts and pages are still the published ones (8.4).
+- **Not built here:** presence on the overview's rows ("Ana Costa is editing": no API lists who
+  is in a document), "Other themes" customizations (no route lists another theme's rows), Compare
+  on "Default changed" (Start over is offered), and inserting a query loop asking which posts: a
+  query loop inserted in a template whose route has a list starts on "This page's list", one
+  switch away from "Posts I choose", and elsewhere the switch isn't offered.
+- **Post content once, Custom HTML and footnotes never:** the menus stop offering Post content
+  once a template has one; Custom HTML (its markup is a post's row) and footnotes (a post's
+  notes) are post-only in the catalog.
+
 ---
 
 ## 14. Export as a theme package (#332)

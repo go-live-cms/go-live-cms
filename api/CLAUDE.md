@@ -1705,7 +1705,10 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   more → 403** (a demotion ends previews at once), a password change since → 401; then the
   active theme must be the token's (409 `preview_theme_inactive`). 200 =
   `DesignDraftResponse{theme, global_styles (the draft, {} when none), expires_at}`: one key per
-  kind of design item, so #492 adds templates and parts (`?slugs=`) beside it.
+  kind of design item. **`?slugs=` (#493)** adds `template`, `parts` and `menus` in the public resolve's shape, from
+  the **working copies** (`workingSiteDesignOverrides`: every `custom` row's `block_doc`; a reset row is left out, so
+  the theme's default renders, as after the next publish), through `resolveSiteDesign`, the resolver the public route
+  uses on the published copies (400 `invalid_slugs` as there). The web's previewed requests read templates from it.
 - Both answer `Cache-Control: private, no-store`, read nothing from the public cache and aren't
   cached (`publicCacheRoutes` never lists them; the preview POST is in `publicCacheNoPurgeRoutes`).
   The token is never logged (`TestDesignPreviewTokenNeverLogged`). Listed in `siteDesignRoutes`
