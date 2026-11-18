@@ -14,6 +14,16 @@
 // globs); a page whose template the active theme doesn't have (after a theme
 // switch) is rendered with the default layout and keeps its name, so switching
 // back brings it back.
+//
+// Builder page templates (#494, docs/design/theme-builder.md section 10): a page may
+// also pick a page template made in the Site editor, the active theme's published site
+// template of slug custom-<name> (#490). It is stored as block:<name> (000062 widened
+// the CHECK; a layout file's name can't hold a ':'), a reference by name only: a
+// template reset, deleted or of another theme leaves the name in place, the page renders
+// with the default and picks it up again once it's published, as after a theme switch.
+// PUT /posts/:id/template accepts one only while the site would render it: a published
+// override, or a custom-<name> block template the theme ships (what the public resolve
+// falls back to, #491). GET /posts/page-templates lists both kinds for the Template field.
 package api
 
 import (
@@ -39,6 +49,71 @@ const defaultPageTemplate = "default"
 // pageTemplateNameRe is a template name: a layout file's name without .astro. The
 // same rule as the posts_page_template_name CHECK (000045), which also allows "".
 var pageTemplateNameRe = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
+
+// A stored builder page template (#494) is block:<name>, and renders the active theme's
+// site template custom-<name>.
+const (
+	builderPageTemplatePrefix = "block:"
+	customPageTemplateSlug    = "custom-"
+)
+
+// builderPageTemplateNameRe is a builder page template's <name>: the same rule as
+// 000062's CHECK. A custom-<name> slug the site template CHECK allows but this doesn't
+// (an underscore) can't be picked.
+var builderPageTemplateNameRe = regexp.MustCompile(`^[a-z0-9-]{1,64}$`)
+
+// builderPageTemplateName is the <name> of a stored block:<name>, or "" when the value
+// isn't a builder page template.
+func builderPageTemplateName(stored string) string {
+	name, ok := strings.CutPrefix(stored, builderPageTemplatePrefix)
+	if !ok || !builderPageTemplateNameRe.MatchString(name) {
+		return ""
+	}
+	return name
+}
+
+// BuilderPageTemplate is a published Site editor page template, as the Template field
+// lists it: Name is the stored value (block:<name>), Label the template's title.
+type BuilderPageTemplate struct {
+	Name  string `json:"name"`
+	Label string `json:"label"`
+}
+
+// builderPageTemplates are the builder page templates a page can store, as the public
+// resolve renders them (#491): every published custom-<name> override (rows, from
+// ListPublishedCustomPageTemplates), then every custom-<name> block template the theme
+// ships (config.block_templates) without one, each labelled by its title and only when
+// <name> fits block:<name>. Sorted by label, then name.
+func builderPageTemplates(rows []db.ListPublishedCustomPageTemplatesRow, shipped map[string]ThemeBlockTemplate) []BuilderPageTemplate {
+	templates := []BuilderPageTemplate{}
+	seen := map[string]bool{}
+	add := func(slug, title string) {
+		name, ok := strings.CutPrefix(slug, customPageTemplateSlug)
+		if !ok || !builderPageTemplateNameRe.MatchString(name) || seen[name] {
+			return
+		}
+		seen[name] = true
+		label := strings.TrimSpace(title)
+		if label == "" {
+			label = humanizeTemplateName(name)
+		}
+		templates = append(templates, BuilderPageTemplate{Name: builderPageTemplatePrefix + name, Label: label})
+	}
+	for _, row := range rows {
+		add(row.Slug, row.Title)
+	}
+	for slug, template := range shipped {
+		add(slug, template.Title)
+	}
+	sort.SliceStable(templates, func(i, j int) bool {
+		a, b := strings.ToLower(templates[i].Label), strings.ToLower(templates[j].Label)
+		if a != b {
+			return a < b
+		}
+		return templates[i].Name < templates[j].Name
+	})
+	return templates
+}
 
 // PageTemplate is one of a theme's page layouts, as the admin's template picker
 // lists it.
@@ -191,20 +266,21 @@ func hasPageTemplate(templates []PageTemplate, name string) bool {
 }
 
 // normalizePageTemplate is the stored form of a requested template: "" for the
-// default (either spelling), else the trimmed name; ok is false when it isn't a
-// template name at all.
+// default (either spelling), else the trimmed name; ok is false when it is neither a
+// template name nor a builder page template (block:<name>, #494).
 func normalizePageTemplate(raw string) (name string, ok bool) {
 	name = strings.TrimSpace(raw)
 	if name == "" || name == defaultPageTemplate {
 		return "", true
 	}
-	return name, pageTemplateNameRe.MatchString(name)
+	return name, pageTemplateNameRe.MatchString(name) || builderPageTemplateName(name) != ""
 }
 
 // UpdatePageTemplateRequest is the body of PUT /posts/:id/template.
 type UpdatePageTemplateRequest struct {
-	// A template of the active theme; "" or "default" for the theme's default.
-	PageTemplate string `json:"page_template" binding:"max=64"`
+	// A template of the active theme; "" or "default" for the theme's default;
+	// block:<name> for a published Site editor page template (#494).
+	PageTemplate string `json:"page_template" binding:"max=70"`
 }
 
 // updatePostPageTemplate handles PUT /posts/:id/template (#336): the page's working
@@ -259,8 +335,24 @@ func (server *Server) updatePostPageTemplate(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get the active theme"})
 			return
 		}
-		if err != nil || !hasPageTemplate(themePageTemplates(theme.Config), name) {
+		builder := builderPageTemplateName(name)
+		known := false
+		if err == nil {
+			if builder != "" {
+				known, err = server.hasBuilderPageTemplate(c, theme, builder)
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get the template"})
+					return
+				}
+			} else {
+				known = hasPageTemplate(themePageTemplates(theme.Config), name)
+			}
+		}
+		if !known {
 			msg := "the active theme has no page template with this name"
+			if builder != "" {
+				msg = "the active theme has no published Site editor template with this name"
+			}
 			c.JSON(http.StatusBadRequest, gin.H{"error": msg, "code": "unknown_template", "fields": gin.H{"page_template": msg}})
 			return
 		}
@@ -277,4 +369,63 @@ func (server *Server) updatePostPageTemplate(c *gin.Context) {
 	}
 	server.recordPostUpdated(c, updated.ID)
 	c.JSON(http.StatusOK, gin.H{"post": toPostResponse(updated)})
+}
+
+// hasBuilderPageTemplate reports whether the active theme renders custom-<name> (#494), as
+// the public resolve would: it ships it as a block template, or has a published override.
+// A working copy, a reset row (published as NULL) and a deleted one don't count.
+func (server *Server) hasBuilderPageTemplate(c *gin.Context, theme db.Theme, name string) (bool, error) {
+	slug := customPageTemplateSlug + name
+	if _, ok := shippedBlockTemplates(theme.Config, "block_templates")[slug]; ok {
+		return true, nil
+	}
+	return server.store.HasPublishedSiteTemplate(c.Request.Context(), db.HasPublishedSiteTemplateParams{ThemeSlug: theme.Slug, Slug: slug})
+}
+
+// PageTemplatesResponse is GET /posts/page-templates (#336, #494): what a page's
+// Template field offers. Theme is the active theme (null with none), Templates its
+// page layouts ("default" first), BuilderTemplates its published Site editor page
+// templates by title.
+type PageTemplatesResponse struct {
+	Theme            *PageTemplatesTheme   `json:"theme"`
+	Templates        []PageTemplate        `json:"templates"`
+	BuilderTemplates []BuilderPageTemplate `json:"builder_templates"`
+}
+
+// PageTemplatesTheme names the theme whose templates are listed ("Paper's layouts").
+type PageTemplatesTheme struct {
+	Slug string `json:"slug"`
+	Name string `json:"name"`
+}
+
+// listPageTemplates handles GET /posts/page-templates (#494): every content role, like
+// the Template field that reads it (a contributor picks the template of their own page).
+// It lists only what PUT /posts/:id/template accepts, and nothing of a builder template
+// but its name and title: the Site editor's routes stay admins' own.
+func (server *Server) listPageTemplates(c *gin.Context) {
+	ctx := c.Request.Context()
+	resp := PageTemplatesResponse{
+		Templates:        []PageTemplate{{Name: defaultPageTemplate, Label: "Default"}},
+		BuilderTemplates: []BuilderPageTemplate{},
+	}
+	theme, err := server.store.GetActiveTheme(ctx)
+	if errors.Is(err, sql.ErrNoRows) {
+		c.JSON(http.StatusOK, resp)
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get the active theme"})
+		return
+	}
+	resp.Theme = &PageTemplatesTheme{Slug: theme.Slug, Name: theme.Name}
+	if templates := themePageTemplates(theme.Config); len(templates) > 0 {
+		resp.Templates = templates
+	}
+	rows, err := server.store.ListPublishedCustomPageTemplates(ctx, theme.Slug)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list the Site editor's page templates"})
+		return
+	}
+	resp.BuilderTemplates = builderPageTemplates(rows, shippedBlockTemplates(theme.Config, "block_templates"))
+	c.JSON(http.StatusOK, resp)
 }

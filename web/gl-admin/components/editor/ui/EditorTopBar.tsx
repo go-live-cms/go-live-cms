@@ -278,28 +278,45 @@ export function offlineLabel(viewOnly: boolean, unsynced: number): string {
   return "Offline · edits wait in this tab"
 }
 
-type Person = AvatarUser & { clientIds: number[]; self: boolean }
+export type Person = AvatarUser & { clientIds: number[]; self: boolean }
+
+/** One avatar per person (two tabs are one person), others first, then you (when `me` is given). */
+export function presencePeople(collabUsers: CollabUser[], me?: AvatarUser): Person[] {
+  const people: Person[] = []
+  for (const u of collabUsers) {
+    const id = u.id ?? -u.clientId
+    if (me && id === me.id) continue
+    const known = people.find((p) => p.id === id)
+    if (known) known.clientIds.push(u.clientId)
+    else people.push({ id, name: u.name ?? "Guest", src: u.avatar, clientIds: [u.clientId], self: false })
+  }
+  if (me) people.push({ ...me, name: `${me.name} (you)`, clientIds: [], self: true })
+  return people
+}
 
 // Who's here (the design's "Presence & permissions"): one avatar per person, others first.
 // Another person's avatar is a button that scrolls to their caret ("Editing · Click to
 // jump to cursor"); yours isn't. Past `max`, the rest collapse into "+n".
-function PresenceAvatars({
+export function PresenceAvatars({
   people,
   max,
   paused,
   onJump,
+  where = "post",
 }: {
   people: Person[]
   max: number
   paused: boolean
   onJump?: (person: Person) => void
+  /** "post", "template", "part": the group's label, "2 people in this template". */
+  where?: string
 }) {
   const shown = people.length > max ? people.slice(0, max - 1) : people
   const rest = people.length - shown.length
   return (
     <div
       role="group"
-      aria-label={`${people.length} ${people.length === 1 ? "person" : "people"} in this post`}
+      aria-label={`${people.length} ${people.length === 1 ? "person" : "people"} in this ${where}`}
       className={`editor-top-bar__people editor-presence${paused ? " is-paused" : ""}`}
     >
       {shown.map((person) =>
@@ -386,16 +403,7 @@ export default function EditorTopBar({
   const connected = mode === "create" || live
   const publishDisabled = viewOnly || isSaving || isPublishing || busy || !connected
 
-  // One avatar per person (two tabs are one person), others first, then you.
-  const people: Person[] = []
-  for (const u of collabUsers) {
-    const id = u.id ?? -u.clientId
-    if (me && id === me.id) continue
-    const known = people.find((p) => p.id === id)
-    if (known) known.clientIds.push(u.clientId)
-    else people.push({ id, name: u.name ?? "Guest", src: u.avatar, clientIds: [u.clientId], self: false })
-  }
-  if (me && mode === "edit") people.push({ ...me, name: `${me.name} (you)`, clientIds: [], self: true })
+  const people = presencePeople(collabUsers, mode === "edit" ? me : undefined)
 
   const jump = onJumpToCursor
     ? (person: Person) => {

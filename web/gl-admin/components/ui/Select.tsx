@@ -2,6 +2,7 @@ import { forwardRef, useEffect, useRef, useState, type CSSProperties, type FC, t
 import { installInputModality, nextRovingIndex, typeaheadIndex, useClickOutside, useFloating, useStableId } from "@gl-admin/components/ui/a11y"
 import { FieldMessage, describedBy } from "@gl-admin/components/ui/Input"
 import { CheckIcon, ChevronDownIcon } from "@gl-admin/components/ui/icons"
+import Pill from "@gl-admin/components/ui/Pill"
 import "@gl-admin/assets/styles/components/ui/select.scss"
 
 export type SelectOption = {
@@ -10,6 +11,35 @@ export type SelectOption = {
   // A second line in the list ("Can publish and edit anyone's posts").
   description?: string
   disabled?: boolean
+  // A heading the option is listed under. Consecutive options with the same group form
+  // one `role="group"` named by it ("Paper's layouts", "Made in the Site editor").
+  group?: string
+  // A small tag after the label, in the list and on the trigger ("Site editor").
+  tag?: string
+}
+
+// The option's label and its tag, if any.
+const OptionLabel = ({ option, className }: { option: SelectOption; className: string }) => (
+  <>
+    <span className={className}>{option.label}</span>
+    {option.tag && (
+      <Pill tone="neutral" dot={false} className="gl-listbox__tag">
+        {option.tag}
+      </Pill>
+    )}
+  </>
+)
+
+// Runs of consecutive options under the same group (none: one run without a heading),
+// each option with its index in the whole list.
+function groupRuns(options: SelectOption[]): { group?: string; items: { option: SelectOption; index: number }[] }[] {
+  const runs: { group?: string; items: { option: SelectOption; index: number }[] }[] = []
+  options.forEach((option, index) => {
+    const last = runs[runs.length - 1]
+    if (last && last.group === option.group) last.items.push({ option, index })
+    else runs.push({ group: option.group, items: [{ option, index }] })
+  })
+  return runs
 }
 
 type ListboxProps = {
@@ -41,30 +71,45 @@ export const Listbox = forwardRef<HTMLDivElement, ListboxProps>(function Listbox
     document.getElementById(optionId(id, activeIndex))?.scrollIntoView?.({ block: "nearest" })
   }, [id, activeIndex])
 
+  const renderOption = (opt: SelectOption, i: number) => (
+    <div
+      key={opt.value}
+      id={optionId(id, i)}
+      role="option"
+      aria-selected={opt.value === value}
+      aria-disabled={opt.disabled || undefined}
+      data-active={i === activeIndex}
+      className="gl-listbox__option"
+      // Keep focus on the trigger/input when picking with the pointer.
+      onMouseDown={(e) => e.preventDefault()}
+      onMouseMove={() => i !== activeIndex && onHover(i)}
+      onClick={() => !opt.disabled && onPick(opt)}
+    >
+      <span className="gl-listbox__text">
+        <span className="gl-listbox__line">
+          <OptionLabel option={opt} className="gl-listbox__label" />
+        </span>
+        {opt.description && <span className="gl-listbox__description">{opt.description}</span>}
+      </span>
+      {opt.value === value && <CheckIcon className="gl-listbox__check" />}
+    </div>
+  )
+
   return (
     <div ref={ref} id={id} role="listbox" aria-label={label} className="gl-listbox" style={style}>
       {options.length === 0 && <div className="gl-listbox__empty">{empty ?? "No options"}</div>}
-      {options.map((opt, i) => (
-        <div
-          key={opt.value}
-          id={optionId(id, i)}
-          role="option"
-          aria-selected={opt.value === value}
-          aria-disabled={opt.disabled || undefined}
-          data-active={i === activeIndex}
-          className="gl-listbox__option"
-          // Keep focus on the trigger/input when picking with the pointer.
-          onMouseDown={(e) => e.preventDefault()}
-          onMouseMove={() => i !== activeIndex && onHover(i)}
-          onClick={() => !opt.disabled && onPick(opt)}
-        >
-          <span className="gl-listbox__text">
-            <span className="gl-listbox__label">{opt.label}</span>
-            {opt.description && <span className="gl-listbox__description">{opt.description}</span>}
-          </span>
-          {opt.value === value && <CheckIcon className="gl-listbox__check" />}
-        </div>
-      ))}
+      {groupRuns(options).map((run, r) =>
+        run.group === undefined ? (
+          run.items.map(({ option, index }) => renderOption(option, index))
+        ) : (
+          <div key={`group-${r}`} role="group" aria-labelledby={`${id}-group-${r}`} className="gl-listbox__group">
+            <div id={`${id}-group-${r}`} role="presentation" className="gl-listbox__group-label">
+              {run.group}
+            </div>
+            {run.items.map(({ option, index }) => renderOption(option, index))}
+          </div>
+        )
+      )}
     </div>
   )
 })
@@ -208,7 +253,7 @@ export const Select: FC<SelectProps> = ({
         onClick={lb.toggle}
         onKeyDown={lb.onKeyDown}
       >
-        <span className={`gl-select__value${selected ? "" : " is-placeholder"}`}>{selected ? selected.label : placeholder}</span>
+        {selected ? <OptionLabel option={selected} className="gl-select__value" /> : <span className="gl-select__value is-placeholder">{placeholder}</span>}
         <ChevronDownIcon className="gl-select__chevron" />
       </button>
       {lb.open && (

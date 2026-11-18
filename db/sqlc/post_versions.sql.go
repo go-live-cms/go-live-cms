@@ -448,7 +448,7 @@ SET title = $2,
     description = $3,
     changed_at = now()
 WHERE id = $1
-RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, seo_title, seo_description, social_image_id, noindex, canonical_url, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error, deleted_at, trashed_from_status, page_template, published_block_hash
+RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, seo_title, seo_description, social_image_id, noindex, canonical_url, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error, deleted_at, trashed_from_status, page_template, published_block_hash, discussion, first_published_at
 `
 
 type RestorePostTitleAndDescriptionParams struct {
@@ -497,6 +497,8 @@ func (q *Queries) RestorePostTitleAndDescription(ctx context.Context, arg Restor
 		&i.TrashedFromStatus,
 		&i.PageTemplate,
 		&i.PublishedBlockHash,
+		&i.Discussion,
+		&i.FirstPublishedAt,
 	)
 	return i, err
 }
@@ -545,7 +547,7 @@ SET post_status = 'draft',
 WHERE id = $1
   -- A trashed post comes back only through restore (#327). No row: missing or trashed.
   AND post_status <> 'trash'
-RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, seo_title, seo_description, social_image_id, noindex, canonical_url, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error, deleted_at, trashed_from_status, page_template, published_block_hash
+RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, seo_title, seo_description, social_image_id, noindex, canonical_url, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error, deleted_at, trashed_from_status, page_template, published_block_hash, discussion, first_published_at
 `
 
 // Back to draft and drop the public snapshot (#136), settings included (#358).
@@ -588,6 +590,8 @@ func (q *Queries) UnpublishPost(ctx context.Context, id int64) (Post, error) {
 		&i.TrashedFromStatus,
 		&i.PageTemplate,
 		&i.PublishedBlockHash,
+		&i.Discussion,
+		&i.FirstPublishedAt,
 	)
 	return i, err
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react"
-import { Link } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 import Button, { buttonClassName } from "@gl-admin/components/ui/Button"
 import Pill from "@gl-admin/components/ui/Pill"
 import Select from "@gl-admin/components/ui/Select"
@@ -15,7 +15,7 @@ import { useStylesDraft, type SaveState } from "@gl-admin/components/site-editor
 import { MOBILE_QUERY } from "@gl-admin/components/sidebar/Sidebar"
 import { useMediaQuery } from "@gl-admin/lib/hooks/useMediaQuery"
 import { usePageTitle } from "@gl-admin/lib/hooks/usePageTitle"
-import { getGlobalStyles, type GlobalStylesResponse } from "@gl-admin/lib/api/siteDesign"
+import { getGlobalStyles, getSiteDesignOverview, type GlobalStylesResponse } from "@gl-admin/lib/api/siteDesign"
 import { errorMessage } from "@gl-admin/lib/api/errors"
 import { normalizeColor } from "@/lib/globalStyles"
 import {
@@ -169,11 +169,21 @@ function LoadingStyles() {
 // ---- The editor ----
 
 function StylesEditor({ initial }: { initial: GlobalStylesResponse }) {
+  const navigate = useNavigate()
   const [previewKey, setPreviewKey] = useState(0)
   const draft = useStylesDraft(initial, { onSaved: () => setPreviewKey((key) => key + 1) })
   const { server, form, overrides, errors, change, commit, saveState } = draft
   const [resetAllOpen, setResetAllOpen] = useState(false)
   const [publishOpen, setPublishOpen] = useState(false)
+  // The templates and parts the same publish puts live (#493): their count from the overview,
+  // read on open and after each publish; the styles are counted from the form.
+  const [otherChanges, setOtherChanges] = useState(0)
+  const readOtherChanges = useCallback(() => {
+    void getSiteDesignOverview()
+      .then((read) => setOtherChanges(read.unpublished_changes - (read.global_styles_changed ? 1 : 0)))
+      .catch(() => setOtherChanges(0))
+  }, [])
+  useEffect(readOtherChanges, [readOtherChanges])
   const [unsavedNote, setUnsavedNote] = useState<string | null>(null)
   const [blockColorsOpen, setBlockColorsOpen] = useState(false)
   const themeName = server.theme.name
@@ -224,9 +234,9 @@ function StylesEditor({ initial }: { initial: GlobalStylesResponse }) {
     heading?.focus({ preventScroll: true })
   }
 
-  // Styles are one item of the release (#492 adds templates and parts): it counts while it
+  // Styles are one item of the release, with the templates and parts (#492, #493): it counts while it
   // differs from the published copy, or while a change of it is still being saved.
-  const publishCount = server.has_unpublished_changes || draft.unsaved ? 1 : 0
+  const publishCount = (server.has_unpublished_changes || draft.unsaved ? 1 : 0) + Math.max(0, otherChanges)
 
   return (
     <div className="gl-styles">
@@ -234,7 +244,9 @@ function StylesEditor({ initial }: { initial: GlobalStylesResponse }) {
       <header className="gl-styles__topbar">
         <nav className="gl-styles__crumb" aria-label="Breadcrumb">
           <ol>
-            <li>Site editor</li>
+            <li>
+              <Link to="/site-editor">Site editor</Link>
+            </li>
             <li aria-current="page">Global styles</li>
           </ol>
         </nav>
@@ -451,7 +463,11 @@ function StylesEditor({ initial }: { initial: GlobalStylesResponse }) {
         onClose={() => setPublishOpen(false)}
         styles={server}
         unsavedNote={unsavedNote}
-        onPublished={(styles) => draft.adopt(styles, false)}
+        onPublished={(styles) => {
+          draft.adopt(styles, false)
+          readOtherChanges()
+        }}
+        onOpenItem={(id) => navigate(`/site-editor/templates/${id}`)}
         onStylesChanged={draft.showConflict}
       />
     </div>

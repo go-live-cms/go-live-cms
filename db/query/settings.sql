@@ -21,6 +21,19 @@ SET
   -- The site logo (#488): set_site_logo says whether the request names one;
   -- site_logo_media_id NULL then means none.
   site_logo_media_id = CASE WHEN sqlc.arg('set_site_logo')::boolean THEN sqlc.narg('site_logo_media_id')::bigint ELSE site_logo_media_id END,
+  -- Settings > Discussion (#522, design 12.1).
+  comments_enabled = COALESCE(sqlc.narg('comments_enabled'), comments_enabled),
+  comments_moderation = COALESCE(sqlc.narg('comments_moderation'), comments_moderation),
+  comments_max_links = COALESCE(sqlc.narg('comments_max_links'), comments_max_links),
+  comments_hold_words = COALESCE(sqlc.narg('comments_hold_words')::text[], comments_hold_words),
+  comments_spam_words = COALESCE(sqlc.narg('comments_spam_words')::text[], comments_spam_words),
+  comments_close_after_days = COALESCE(sqlc.narg('comments_close_after_days'), comments_close_after_days),
+  comments_threading = COALESCE(sqlc.narg('comments_threading'), comments_threading),
+  comments_order = COALESCE(sqlc.narg('comments_order'), comments_order),
+  comments_per_page = COALESCE(sqlc.narg('comments_per_page'), comments_per_page),
+  comments_notice = COALESCE(sqlc.narg('comments_notice'), comments_notice),
+  -- set_comments_privacy_page says whether the request names one; NULL then means none.
+  comments_privacy_page_id = CASE WHEN sqlc.arg('set_comments_privacy_page')::boolean THEN sqlc.narg('comments_privacy_page_id')::bigint ELSE comments_privacy_page_id END,
   changed_at = now()
 WHERE id = 1
 RETURNING *;

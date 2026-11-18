@@ -1,4 +1,4 @@
--- "Used in" for media in templates and parts (#496, 000060, docs/design/theme-builder.md 5.6).
+-- "Used in" for media in templates and parts (#496, 000063, docs/design/theme-builder.md 5.6).
 
 -- name: SyncSiteTemplateMedia :exec
 -- Makes one copy's rows of a template (published = false: the working copy, true: the

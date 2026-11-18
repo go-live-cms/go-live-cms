@@ -5,6 +5,7 @@ import { ExternalIcon } from "@gl-admin/components/ui/icons"
 import { toast } from "@gl-admin/components/ui/Toast"
 import { openDesignPreview } from "@gl-admin/lib/api/designPreview"
 import { errorMessage } from "@gl-admin/lib/api/errors"
+import "@gl-admin/assets/styles/pages/global-styles.scss"
 
 // The Site editor's preview frame (docs/design/theme-builder.md 8.3, the global styles
 // board): the public site with the draft design, through #486's preview cookie. It always
@@ -52,13 +53,30 @@ function Segmented<T extends string>({
   )
 }
 
-export default function StylesPreview({ reloadKey }: { reloadKey: number }) {
+export type PreviewPage = { value: string; label: string }
+
+export default function StylesPreview({
+  reloadKey,
+  pages = PREVIEW_PAGES,
+  frameTitle = "Your site with these styles",
+  note = "Shows what's saved, reloaded after each save. Posts are the published ones.",
+  className = "",
+}: {
+  reloadKey: number
+  /** The pages the picker offers (the template editor: the posts or lists its route renders). */
+  pages?: readonly PreviewPage[]
+  frameTitle?: string
+  note?: string
+  className?: string
+}) {
   const frameName = `gl-styles-preview-${useId().replace(/[^a-zA-Z0-9-]/g, "")}`
   const frameRef = useRef<HTMLIFrameElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
   const [device, setDevice] = useState<PreviewDevice>("desktop")
   const [scheme, setScheme] = useState<PreviewScheme>("light")
-  const [path, setPath] = useState<string>("/")
+  const [chosen, setPath] = useState<string | null>(null)
+  // The chosen page while it is offered, else the first (the list may arrive later).
+  const path = chosen && pages.some((page) => page.value === chosen) ? chosen : (pages[0]?.value ?? "/")
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading")
   const [width, setWidth] = useState(438)
   const schemeRef = useRef(scheme)
@@ -118,7 +136,7 @@ export default function StylesPreview({ reloadKey }: { reloadKey: number }) {
   const scale = Math.min(1, width > 0 ? width / viewport : 1)
 
   return (
-    <aside className="gl-styles-preview" aria-labelledby={`${frameName}-h`}>
+    <aside className={`gl-styles-preview ${className}`.trim()} aria-labelledby={`${frameName}-h`}>
       <h2 id={`${frameName}-h`} className="gl-visually-hidden">
         Preview
       </h2>
@@ -153,7 +171,7 @@ export default function StylesPreview({ reloadKey }: { reloadKey: number }) {
         label="Page"
         value={path}
         onChange={setPath}
-        options={PREVIEW_PAGES.map((page) => ({ ...page }))}
+        options={pages.map((page) => ({ ...page }))}
         className="gl-styles-preview__page"
       />
       <div
@@ -165,7 +183,7 @@ export default function StylesPreview({ reloadKey }: { reloadKey: number }) {
         <iframe
           ref={frameRef}
           name={frameName}
-          title="Your site with these styles"
+          title={frameTitle}
           className="gl-styles-preview__frame"
           hidden={status === "error"}
           style={{
@@ -196,9 +214,7 @@ export default function StylesPreview({ reloadKey }: { reloadKey: number }) {
           </div>
         )}
       </div>
-      <p className="gl-styles-preview__note">
-        Shows what's saved, reloaded after each save. Posts are the published ones.
-      </p>
+      <p className="gl-styles-preview__note">{note}</p>
     </aside>
   )
 }

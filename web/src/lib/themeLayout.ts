@@ -43,7 +43,10 @@ const PAGE_TEMPLATE_NAME = /^[A-Za-z0-9_-]{1,64}$/
 // /public) when the active theme has that page layout in this build, else the type's
 // variant (the theme's layout_variants setting) when it has that one, else "default".
 // A template the theme doesn't have (after a theme switch) renders as the default and
-// stays stored, so switching back brings it back.
+// stays stored, so switching back brings it back. A builder page template (#494,
+// `block:<name>`) never names a layout file: it renders through resolveTemplate while
+// its `custom-<name>` is published, and this code layout chain only when it isn't
+// (reset, deleted, another theme's), so the page renders with the default.
 export function pageLayoutVariant(glob: LayoutGlob, prefix: string, themeSlug: string, template: string | undefined, typeVariant: string): string {
   const has = (name: string | undefined): name is string =>
     !!name && PAGE_TEMPLATE_NAME.test(name) && `${prefix}/${themeSlug}/layouts/page/${name}.astro` in glob

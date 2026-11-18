@@ -44,14 +44,34 @@ func (req UpdateSettingsRequest) frontPageUpdate() (set bool, id *int64, err err
 // active, public page type: what GET /public/front-page shows. Otherwise the save
 // would succeed and / would still list the latest posts.
 func (server *Server) checkFrontPage(c *gin.Context, id int64) bool {
+	return server.checkPublishedPageSetting(c, id, publishedPageSetting{
+		field:      "front_page_id",
+		code:       "invalid_front_page",
+		notPage:    "the front page must be a published page",
+		notServed:  "pages are switched off or not public, so the site can't show one at /",
+		lookupFail: "failed to get the front page",
+	})
+}
+
+// publishedPageSetting names a setting that holds a published page (the front page, the
+// comments' privacy page, #522) and its answers.
+type publishedPageSetting struct {
+	field, code        string
+	notPage, notServed string
+	lookupFail         string
+}
+
+// checkPublishedPageSetting answers 400 (or 500) itself unless id is a published page of
+// an active, public page type.
+func (server *Server) checkPublishedPageSetting(c *gin.Context, id int64, setting publishedPageSetting) bool {
 	ctx := c.Request.Context()
 	invalid := func() bool {
-		msg := "the front page must be a published page"
-		c.JSON(http.StatusBadRequest, gin.H{"error": msg, "code": "invalid_front_page", "fields": gin.H{"front_page_id": msg}})
+		msg := setting.notPage
+		c.JSON(http.StatusBadRequest, gin.H{"error": msg, "code": setting.code, "fields": gin.H{setting.field: msg}})
 		return false
 	}
 	failed := func() bool {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get the front page"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": setting.lookupFail})
 		return false
 	}
 	post, err := server.store.GetPost(ctx, id)
@@ -72,8 +92,8 @@ func (server *Server) checkFrontPage(c *gin.Context, id int64) bool {
 		return failed()
 	}
 	if !pageType.Public || !pageType.IsActive {
-		msg := "pages are switched off or not public, so the site can't show one at /"
-		c.JSON(http.StatusBadRequest, gin.H{"error": msg, "code": "invalid_front_page", "fields": gin.H{"front_page_id": msg}})
+		msg := setting.notServed
+		c.JSON(http.StatusBadRequest, gin.H{"error": msg, "code": setting.code, "fields": gin.H{setting.field: msg}})
 		return false
 	}
 	return true

@@ -294,10 +294,20 @@ describe("the Site group (#488)", () => {
     // #489: a part never holds the post's body (design 4.2); it may hold a query loop.
     expect(names(menuEntries({ role: "editor", context: "part" }).filter((e) => e.group === "site"))).not.toContain("Post content")
     expect(names(menuEntries({ role: "editor", context: "part" }).filter((e) => e.group === "site"))).toContain("Query loop")
-    // Every core block is still offered everywhere it was (no `contexts`).
-    expect(CORE_BLOCKS.every((e) => offeredIn(e, "post") && offeredIn(e, "template") && offeredIn(e, "part"))).toBe(true)
+    // Every core block is still offered in a post; in templates and parts too, but Custom HTML
+    // and footnotes (#493: their data is a post's, post_html_snippets and the post's notes).
+    const postOnly = ["footnote", "html"]
+    expect(CORE_BLOCKS.every((e) => offeredIn(e, "post"))).toBe(true)
+    expect(CORE_BLOCKS.filter((e) => !offeredIn(e, "template") || !offeredIn(e, "part")).map((e) => e.id)).toEqual(postOnly)
+    expect(menuEntries({ role: "admin", context: "template" }).map((e) => e.id)).not.toEqual(expect.arrayContaining(postOnly))
     expect(searchCatalog(menuEntries({ role: "admin", context: "template" }), "").map((s) => s.label)).toContain("Site")
     expect(searchCatalog(menuEntries({ role: "admin" }), "").map((s) => s.label)).not.toContain("Site")
+  })
+
+  // #493 (the template board's "Inserting"): the Site group comes first wherever it's offered.
+  it("puts the Site group first in a template's menus", () => {
+    expect(searchCatalog(menuEntries({ role: "admin", context: "template" }), "").map((s) => s.label)[0]).toBe("Site")
+    expect(searchCatalog(menuEntries({ role: "admin" }), "").map((s) => s.label)[0]).toBe("Text")
   })
 
   // The query loop's parts are only offered inside a query (below).

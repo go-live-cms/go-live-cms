@@ -18,7 +18,7 @@ import { updateSettings } from "@gl-admin/lib/api/settings"
 import { authManager } from "@gl-admin/lib/auth"
 import { canCreateContent, isContentModerator } from "@gl-admin/lib/roles"
 import { FRONT_PAGE_BADGE, canSetFrontPage, isFrontPage } from "@gl-admin/lib/frontPage"
-import { describeTemplate, missingTemplateNote, templateValue } from "@gl-admin/lib/pageTemplates"
+import { describeTemplate, SITE_EDITOR_TAG, templateNote } from "@gl-admin/lib/pageTemplates"
 import { usePageTemplates } from "@gl-admin/lib/hooks/usePageTemplates"
 import { useAuthUser } from "@gl-admin/lib/hooks/useAuthUser"
 import { useSiteSettings } from "@gl-admin/lib/hooks/useSiteSettings"
@@ -82,7 +82,7 @@ export default function Pages({ typeName, postType }: PagesProps) {
   // The front page (#336): the saved setting, then what "Set as front page" chose here.
   const [chosenFrontPage, setChosenFrontPage] = useState<number | null | undefined>(undefined)
   const frontPageId = chosenFrontPage !== undefined ? chosenFrontPage : (siteSettings?.front_page_id ?? null)
-  const { templates } = usePageTemplates()
+  const { choices: templates } = usePageTemplates()
   const pageType = typeName === "page"
   const [params, setParam] = useListParams()
   const tab = findTab(TABS, params.get("view"))
@@ -209,11 +209,17 @@ export default function Pages({ typeName, postType }: PagesProps) {
       width: "8.5rem",
       render: (_, row) => {
         if (!row) return <Skeleton shape="text" width={64} />
+        // What the page renders with; a Site editor template (#494) carries its tag.
         const shown = describeTemplate(templates, row.page.page_template)
-        const note = shown.missing ? missingTemplateNote(templateValue(row.page.page_template), shown.label) : undefined
+        const note = templateNote(templates, row.page.page_template)
         return (
           <span className="gl-page-row__template" title={note ?? shown.description}>
             {shown.label}
+            {shown.builder && !shown.missing && (
+              <Pill tone="neutral" dot={false} className="gl-page-row__template-tag">
+                {SITE_EDITOR_TAG}
+              </Pill>
+            )}
             {note && <span className="gl-content-list__sr">. {note}</span>}
           </span>
         )

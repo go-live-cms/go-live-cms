@@ -200,7 +200,7 @@ type SyncSiteTemplateMediaParams struct {
 	BlockTypes []string `json:"block_types"`
 }
 
-// "Used in" for media in templates and parts (#496, 000060, docs/design/theme-builder.md 5.6).
+// "Used in" for media in templates and parts (#496, 000063, docs/design/theme-builder.md 5.6).
 // Makes one copy's rows of a template (published = false: the working copy, true: the
 // published one) match its doc's media blocks. The three arrays are parallel, one entry per
 // block: media_ids[i] is shown by block block_ids[i] of type block_types[i]. Ids without a

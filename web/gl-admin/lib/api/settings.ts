@@ -32,6 +32,21 @@ export interface Settings {
   site_logo?: SiteLogo | null
   // PUBLIC_BASE_URL, read-only ("" when not configured): the domain is deploy config.
   site_address: string
+  // Settings › Discussion (#522, docs/design/reader-comments.md 12.1), optional until the form
+  // uses them. Off by default; the admin shows no switch until the moderation screens ship (#527).
+  comments_enabled?: boolean
+  comments_moderation?: "all" | "first" | "none"
+  comments_max_links?: number
+  // Admins only: GET /settings sends the word lists only with an admin's token.
+  comments_hold_words?: string[]
+  comments_spam_words?: string[]
+  comments_close_after_days?: number
+  comments_threading?: "replies" | "flat"
+  comments_order?: "oldest" | "newest"
+  comments_per_page?: number
+  // "" = core's notice.
+  comments_notice?: string
+  comments_privacy_page_id?: number | null
   created_at: string
   changed_at: string
 }
@@ -51,6 +66,19 @@ export interface UpdateSettingsRequest {
   front_page_id?: number | null
   // An image's media id, or null for no logo (#488). Admins only.
   site_logo_media_id?: number | null
+  // Settings › Discussion (#522). Word lists: one entry per line in the form; [] clears.
+  comments_enabled?: boolean
+  comments_moderation?: "all" | "first" | "none"
+  comments_max_links?: number
+  comments_hold_words?: string[]
+  comments_spam_words?: string[]
+  comments_close_after_days?: number
+  comments_threading?: "replies" | "flat"
+  comments_order?: "oldest" | "newest"
+  comments_per_page?: number
+  comments_notice?: string
+  // A published page's id, or null for none.
+  comments_privacy_page_id?: number | null
 }
 
 /** GET /settings' `site_logo` (api/site_logo.go). */

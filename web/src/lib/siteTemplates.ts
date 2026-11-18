@@ -21,12 +21,12 @@
  * The answer also carries every published override part, which a code layout's
  * `<TemplatePart slug>` renders in place of the theme's own markup (`templatePartOverride`).
  *
- * **Preview (#486, #492).** A previewed request reads the published templates here; the
- * draft global styles still apply. #492 adds templates and parts to `GET /site-design/draft`;
- * `templateReaderFor` is the seam where a previewed request then reads those instead.
+ * **Preview (#486, #493).** A previewed request reads the working copies (`GET /site-design/draft?slugs=`,
+ * `readDraftSiteDesign`, through `locals.designPreview.readTemplates`) with the draft global styles,
+ * so the Site editor's frame shows the template being edited as the server last stored it.
  */
 import type { BlockDocV1 } from "@gl-admin/lib/blocks-spec"
-import { SERVER_MEDIA_URL } from "@gl-admin/lib/server-api-url"
+import { SERVER_API_URL, SERVER_MEDIA_URL } from "@gl-admin/lib/server-api-url"
 import { log, requestIdHeaders } from "./log"
 import { normalizeMenu, type Menu } from "./menus"
 import { RESERVED_LAYOUT_KINDS } from "./themeLayout"
@@ -253,11 +253,42 @@ export async function readPublishedSiteDesign(
 }
 
 /**
- * The reader a request uses. The published one, also while previewing: #492 adds templates and
- * parts to the draft read (`GET /site-design/draft?slugs=`, design 8.3), and returns its reader
- * here when `locals.designPreview?.state === "previewing"`.
+ * The draft design for these slugs (#493, design 8.3): `GET /site-design/draft?slugs=` with the
+ * preview token as bearer, the working copies in the public resolve's shape. Anything but an
+ * answer (a refusal, an outage, a timeout) reads the published design instead: the banner still
+ * says it's a preview, and the page never breaks for it. The token is never logged.
  */
-export function templateReaderFor(_locals: App.Locals | undefined, fetcher: typeof fetch = fetch): SiteTemplateReader {
+export async function readDraftSiteDesign(
+  token: string,
+  theme: string,
+  slugs: readonly string[],
+  fetcher: typeof fetch = fetch,
+  timeoutMs = SITE_TEMPLATE_RESOLVE_TIMEOUT_MS,
+): Promise<SiteDesignResolve | null> {
+  try {
+    const query = new URLSearchParams({ slugs: slugs.join(",") })
+    const response = await fetcher(`${SERVER_API_URL}/site-design/draft?${query}`, {
+      headers: { Authorization: `Bearer ${token}`, ...requestIdHeaders() },
+      signal: AbortSignal.timeout(timeoutMs),
+    })
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    const design = parseSiteDesignResolve(await response.json())
+    // Another theme's draft (activated since the token) is no draft of this page's.
+    if (design.theme !== theme) throw new Error("another theme's draft")
+    return design
+  } catch (error) {
+    log.warn("design_preview_templates_failed", { reason: error instanceof Error ? error.message : "failed" })
+    return readPublishedSiteDesign(theme, slugs, fetcher, timeoutMs)
+  }
+}
+
+/**
+ * The reader a request uses: the published design, or while previewing (#486, #493) the draft,
+ * through the reader the middleware put on `locals.designPreview` with the request's token.
+ */
+export function templateReaderFor(locals: App.Locals | undefined, fetcher: typeof fetch = fetch): SiteTemplateReader {
+  const preview = locals?.designPreview
+  if (preview?.state === "previewing" && preview.readTemplates) return preview.readTemplates
   return (theme, slugs) => readPublishedSiteDesign(theme, slugs, fetcher)
 }
 

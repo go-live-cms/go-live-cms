@@ -9,7 +9,8 @@ import {
 } from "@gl-admin/lib/api/themes"
 import { authManager } from "@gl-admin/lib/auth"
 import { toast } from "@gl-admin/components/ui/Toast"
-import Button from "@gl-admin/components/ui/Button"
+import { Link } from "react-router-dom"
+import Button, { buttonClassName } from "@gl-admin/components/ui/Button"
 import Pill from "@gl-admin/components/ui/Pill"
 import Select from "@gl-admin/components/ui/Select"
 import Modal from "@gl-admin/components/ui/Modal"
@@ -204,8 +205,12 @@ const ThemesPage: React.FC = () => {
               </dd>
             </dl>
             <div className="gl-theme-active__actions">
-              <Button variant="primary" size="lg" onClick={() => setCustomizerOpen(true)}>
+              {/* Customize opens the Site editor (#493, design 13.1): templates, parts and styles. */}
+              <Link to="/site-editor" className={buttonClassName("primary", "lg")}>
                 Customize
+              </Link>
+              <Button variant="secondary" size="lg" onClick={() => setCustomizerOpen(true)}>
+                Layouts…
               </Button>
               <a className="gl-button gl-button--secondary gl-button--lg" href="/" target="_blank" rel="noreferrer">
                 <span className="gl-button__label">View site</span>

@@ -23,6 +23,39 @@ type Activity struct {
 	CreatedAt  time.Time       `json:"created_at"`
 }
 
+type Commenter struct {
+	ID          int64         `json:"id"`
+	Email       string        `json:"email"`
+	EmailLower  string        `json:"email_lower"`
+	DisplayName string        `json:"display_name"`
+	VerifiedAt  sql.NullTime  `json:"verified_at"`
+	BlockedAt   sql.NullTime  `json:"blocked_at"`
+	LastSpamAt  sql.NullTime  `json:"last_spam_at"`
+	UserID      sql.NullInt64 `json:"user_id"`
+	CreatedAt   time.Time     `json:"created_at"`
+	LastSeenAt  time.Time     `json:"last_seen_at"`
+}
+
+type CommenterKey struct {
+	KeyHash     []byte    `json:"key_hash"`
+	CommenterID int64     `json:"commenter_id"`
+	CreatedAt   time.Time `json:"created_at"`
+	ExpiresAt   time.Time `json:"expires_at"`
+}
+
+type DiscussionMail struct {
+	ID           int64         `json:"id"`
+	Kind         string        `json:"kind"`
+	CommenterID  sql.NullInt64 `json:"commenter_id"`
+	UserID       sql.NullInt64 `json:"user_id"`
+	PostID       sql.NullInt64 `json:"post_id"`
+	CommentIds   []int64       `json:"comment_ids"`
+	DueAt        time.Time     `json:"due_at"`
+	ClaimedUntil sql.NullTime  `json:"claimed_until"`
+	Attempts     int32         `json:"attempts"`
+	SentAt       sql.NullTime  `json:"sent_at"`
+}
+
 type EmailChangeToken struct {
 	ID        int64        `json:"id"`
 	UserID    int64        `json:"user_id"`
@@ -190,6 +223,8 @@ type Post struct {
 	TrashedFromStatus    sql.NullString        `json:"trashed_from_status"`
 	PageTemplate         string                `json:"page_template"`
 	PublishedBlockHash   sql.NullString        `json:"published_block_hash"`
+	Discussion           string                `json:"discussion"`
+	FirstPublishedAt     sql.NullTime          `json:"first_published_at"`
 }
 
 type PostAccessRequest struct {
@@ -374,6 +409,35 @@ type PostYdocState struct {
 	UpdatedAt     time.Time     `json:"updated_at"`
 }
 
+type ReaderComment struct {
+	ID               int64          `json:"id"`
+	PostID           int64          `json:"post_id"`
+	ParentID         sql.NullInt64  `json:"parent_id"`
+	RootID           sql.NullInt64  `json:"root_id"`
+	CommenterID      sql.NullInt64  `json:"commenter_id"`
+	AuthorUserID     sql.NullInt64  `json:"author_user_id"`
+	DisplayName      string         `json:"display_name"`
+	Body             string         `json:"body"`
+	Status           string         `json:"status"`
+	TrashedFrom      sql.NullString `json:"trashed_from"`
+	HeldReason       sql.NullString `json:"held_reason"`
+	HeldDetail       sql.NullString `json:"held_detail"`
+	NotifyReplies    bool           `json:"notify_replies"`
+	NetworkHash      []byte         `json:"network_hash"`
+	RemovedAt        sql.NullTime   `json:"removed_at"`
+	ConfirmTokenHash []byte         `json:"confirm_token_hash"`
+	CreatedAt        time.Time      `json:"created_at"`
+	ApprovedAt       sql.NullTime   `json:"approved_at"`
+	ModeratedBy      sql.NullInt64  `json:"moderated_by"`
+	ModeratedAt      sql.NullTime   `json:"moderated_at"`
+	EditedAt         sql.NullTime   `json:"edited_at"`
+}
+
+type ReaderCommentUnsubscribeToken struct {
+	TokenHash []byte `json:"token_hash"`
+	CommentID int64  `json:"comment_id"`
+}
+
 type Redirect struct {
 	ID         int64         `json:"id"`
 	FromPath   string        `json:"from_path"`
@@ -429,6 +493,17 @@ type Setting struct {
 	AllowSignup             bool           `json:"allow_signup"`
 	FrontPageID             sql.NullInt64  `json:"front_page_id"`
 	SiteLogoMediaID         sql.NullInt64  `json:"site_logo_media_id"`
+	CommentsEnabled         bool           `json:"comments_enabled"`
+	CommentsModeration      string         `json:"comments_moderation"`
+	CommentsMaxLinks        int32          `json:"comments_max_links"`
+	CommentsHoldWords       []string       `json:"comments_hold_words"`
+	CommentsSpamWords       []string       `json:"comments_spam_words"`
+	CommentsCloseAfterDays  int32          `json:"comments_close_after_days"`
+	CommentsThreading       string         `json:"comments_threading"`
+	CommentsOrder           string         `json:"comments_order"`
+	CommentsPerPage         int32          `json:"comments_per_page"`
+	CommentsNotice          string         `json:"comments_notice"`
+	CommentsPrivacyPageID   sql.NullInt64  `json:"comments_privacy_page_id"`
 }
 
 type SignupRequest struct {

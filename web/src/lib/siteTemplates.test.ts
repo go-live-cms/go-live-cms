@@ -5,9 +5,11 @@ import {
   builderWins,
   codeLayoutRank,
   parseSiteDesignResolve,
+  readDraftSiteDesign,
   readPublishedSiteDesign,
   resolveTemplate,
   templatePartOverride,
+  templateReaderFor,
   templateRanks,
   templateSlugs,
   themeLayoutPath,
@@ -152,6 +154,38 @@ describe("readPublishedSiteDesign", () => {
   it("gives up after its timeout", async () => {
     const never = vi.fn(() => new Promise<Response>(() => {}))
     await expect(readPublishedSiteDesign("default", ["single"], never, 10)).rejects.toThrow("timed out")
+  })
+})
+
+// #493: a previewed request renders the working copies (design 8.3).
+describe("readDraftSiteDesign", () => {
+  const working = { theme: "default", template: { slug: "single", rank: 1, source: "override", title: "Single", doc: doc("Working") }, parts: {}, menus: {} }
+
+  it("asks the draft route with the preview token as bearer", async () => {
+    const fetcher = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify({ ...working, global_styles: {}, expires_at: "" }), { status: 200 }))
+    const read = await readDraftSiteDesign("v4.public.token", "default", ["single-post", "single"], fetcher as typeof fetch)
+    expect(read?.template?.slug).toBe("single")
+    const [url, init] = fetcher.mock.calls[0]
+    expect(String(url)).toMatch(/\/site-design\/draft\?slugs=single-post%2Csingle$/)
+    expect(String(url)).not.toContain("token")
+    expect((init!.headers as Record<string, string>).Authorization).toBe("Bearer v4.public.token")
+  })
+
+  it("reads the published design when the draft can't be had, and never logs the token", async () => {
+    const warn = vi.spyOn(log, "warn").mockImplementation(() => {})
+    const published = { theme: "default", template: null, parts: {}, menus: {} }
+    for (const draft of [new Response("{}", { status: 401 }), new Response(JSON.stringify({ ...working, theme: "other" }), { status: 200 })]) {
+      const fetcher = vi.fn(async (url: string) => (String(url).includes("/site-design/draft") ? draft : new Response(JSON.stringify(published), { status: 200 })))
+      expect(await readDraftSiteDesign("secret-token", "default", ["single"], fetcher as unknown as typeof fetch)).toEqual(published)
+    }
+    expect(JSON.stringify(warn.mock.calls)).not.toContain("secret-token")
+  })
+
+  it("is the reader of a previewing request only", () => {
+    const readTemplates = vi.fn()
+    expect(templateReaderFor({ designPreview: { state: "previewing", expiresAt: null, applied: false, readTemplates } } as unknown as App.Locals)).toBe(readTemplates)
+    expect(templateReaderFor({ designPreview: { state: "refused", expiresAt: null, applied: false, readTemplates } } as unknown as App.Locals)).not.toBe(readTemplates)
+    expect(templateReaderFor(undefined)).not.toBe(readTemplates)
   })
 })
 

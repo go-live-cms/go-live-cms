@@ -22,15 +22,36 @@ func (server *Server) getSettings(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, server.settingsResponse(c, settings))
+	c.JSON(http.StatusOK, server.settingsResponse(c, settings, server.optionalCallerIsAdmin(c)))
 }
 
 // settingsResponse is the settings as GET and PUT /settings answer them, the site logo's
-// media (#488) looked up with them.
-func (server *Server) settingsResponse(c *gin.Context, settings db.Setting) SettingsResponse {
-	response := toSettingsResponse(settings, server.siteAddress())
+// media (#488) looked up with them. admin adds the Discussion word lists (#522).
+func (server *Server) settingsResponse(c *gin.Context, settings db.Setting, admin bool) SettingsResponse {
+	response := toSettingsResponse(settings, server.siteAddress(), admin)
 	response.SiteLogo = server.siteLogo(c.Request.Context(), settings)
 	return response
+}
+
+// optionalCallerIsAdmin reports whether a public route's request carries a valid access
+// token of an admin. It never answers the request: a missing, malformed, expired or
+// non-admin token just reads as anonymous (the public answer). GET /settings uses it for
+// the fields only admins read (#522); the public cache never stores or serves a request
+// with an Authorization header, so the anonymous cached answer stays public.
+func (server *Server) optionalCallerIsAdmin(c *gin.Context) bool {
+	fields := strings.Fields(c.GetHeader(authorizationHeaderKey))
+	if len(fields) != 2 || !strings.EqualFold(fields[0], authorizationTypeBearer) {
+		return false
+	}
+	payload, err := server.tokenMaker.VerifyToken(fields[1])
+	if err != nil || payload.TokenType != "access" {
+		return false
+	}
+	user, err := server.store.GetUser(c.Request.Context(), payload.UserID)
+	if err != nil || issuedBeforePasswordChange(payload.IssuedAt, user.PasswordChangedAt) {
+		return false
+	}
+	return isSiteAdmin(user)
 }
 
 // siteAddress is the public origin the Settings page shows read-only (#330), or "" if
@@ -94,6 +115,15 @@ func (server *Server) updateSettings(c *gin.Context) {
 	if siteLogoID != nil {
 		params.SiteLogoMediaID = sql.NullInt64{Int64: *siteLogoID, Valid: true}
 	}
+	// Settings › Discussion (#522).
+	privacyPage, err := req.apply(&params)
+	if err != nil {
+		writeDiscussionSettingsError(c, err)
+		return
+	}
+	if privacyPage != nil && !server.checkPrivacyPage(c, *privacyPage) {
+		return
+	}
 
 	settings, err := server.store.UpdateSettings(c, params)
 	if err != nil {
@@ -109,7 +139,8 @@ func (server *Server) updateSettings(c *gin.Context) {
 		Payload:    map[string]any{"fields": req.setFields()},
 	})
 
-	c.JSON(http.StatusOK, server.settingsResponse(c, settings))
+	// PUT /settings is admins' only (requireSiteAdmin).
+	c.JSON(http.StatusOK, server.settingsResponse(c, settings, true))
 }
 
 // getExtensionSetting handles GET /extension-settings/:key

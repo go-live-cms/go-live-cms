@@ -27,6 +27,8 @@ import Drawer from "./Drawer"
 import { Toaster, dismissToast, toast } from "./Toast"
 import { SidebarNav } from "@gl-admin/components/sidebar/Sidebar"
 import { buildNavigation } from "@gl-admin/components/sidebar/nav"
+import SiteEditorTopBar from "@gl-admin/components/site-editor/SiteEditorTopBar"
+import { NewTemplateDialog } from "@gl-admin/components/site-editor/SiteDesignDialogs"
 
 // Automated accessibility checks (#144): axe-core on the shared UI components and the
 // editor chrome fixed under #144, rendered with react-dom into jsdom, so a regression in
@@ -200,6 +202,26 @@ describe("axe: forms, feedback and structure (#479, #480)", () => {
     })
     expect(input.getAttribute("aria-activedescendant")).not.toBeNull()
     expect(await violations(container)).toEqual([])
+  })
+
+  // The page Template field's list (#494): named groups of options, a tag on some.
+  it("Select with grouped, tagged options, open", async () => {
+    await render(
+      <Select
+        label="Template"
+        value="block:landing"
+        onChange={() => {}}
+        options={[
+          { value: "default", label: "Default", group: "Paper’s layouts" },
+          { value: "fullwidth", label: "Full width", description: "Edge to edge", group: "Paper’s layouts" },
+          { value: "block:landing", label: "Landing", tag: "Site editor", group: "Made in the Site editor" },
+        ]}
+      />
+    )
+    const trigger = container.querySelector<HTMLButtonElement>("[role='combobox']")!
+    await act(async () => trigger.click())
+    expect(document.querySelectorAll("[role='listbox'] > [role='group'][aria-labelledby]")).toHaveLength(2)
+    expect(await violations()).toEqual([])
   })
 
   it("Toaster with an error and an action", async () => {
@@ -393,5 +415,64 @@ describe("axe: editor announcements and shortcuts (#477)", () => {
     const dialog = document.querySelector("[role='dialog']")!
     expect(dialog.textContent).toContain("Keyboard shortcuts")
     expect(await violations()).toEqual([])
+  })
+})
+
+describe("axe: the Site editor (#493)", () => {
+  const topBar = (props: Partial<Parameters<typeof SiteEditorTopBar>[0]> = {}) => (
+    <MemoryRouter>
+      <SiteEditorTopBar
+        kind="template"
+        name="Archive"
+        pill={{ label: "Customized · changes not published", tone: "accent" }}
+        viewOnly={false}
+        saveStatus="saved"
+        connection="online"
+        unsyncedCount={0}
+        collabUsers={[{ clientId: 7, id: 2, name: "Ana Costa" }]}
+        me={{ id: 1, name: "Luan" }}
+        onJumpToCursor={() => true}
+        view="split"
+        onViewChange={() => {}}
+        settingsOpen
+        onSettingsToggle={() => {}}
+        actions={[
+          { id: "history", label: "History" },
+          { id: "discard", label: "Discard changes…" },
+          { id: "reset", label: "Reset to theme default…" },
+        ]}
+        onAction={() => {}}
+        publishCount={3}
+        onPublish={() => {}}
+        back={{ label: "Single post", to: "/site-editor/templates/1" }}
+        {...props}
+      />
+    </MemoryRouter>
+  )
+
+  it("the template editor's top bar: a breadcrumb, one status region, a named View switch and Publish", async () => {
+    for (const props of [{}, { viewOnly: true, connection: "offline" as const }]) {
+      await render(topBar(props))
+      expect(document.querySelectorAll("[data-testid='save-announcer'][role='status']")).toHaveLength(1)
+      expect(container.querySelector("[role='group'][aria-label='View']")).not.toBeNull()
+      expect(container.querySelector("button[aria-label='Publish site design, 3 changes']")).not.toBeNull()
+      expect(container.querySelector("[aria-current='page']")!.textContent).toBe("Archive")
+      expect(await violations(container)).toEqual([])
+    }
+  })
+
+  it("New page template and New part, open, with a name that can't be used", async () => {
+    for (const kind of ["template", "part"] as const) {
+      await render(<NewTemplateDialog isOpen onClose={() => {}} kind={kind} themeName="Paper" taken={new Set()} onCreate={async () => {}} />)
+      const input = document.querySelector<HTMLInputElement>("[role='dialog'] input")!
+      await act(async () => {
+        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!
+        setter.call(input, "★★★")
+        input.dispatchEvent(new Event("input", { bubbles: true }))
+      })
+      expect(document.querySelector("[role='dialog']")!.textContent).toContain("Use at least one letter or number.")
+      expect(input.getAttribute("aria-invalid")).toBe("true")
+      expect(await violations()).toEqual([])
+    }
   })
 })
