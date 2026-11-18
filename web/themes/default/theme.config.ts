@@ -6,8 +6,9 @@
  * custom properties (core's src/lib/themeTokens.ts, with the site's global styles merged
  * in), so styles/theme.css only uses var(--...).
  */
-import type { ThemeScriptAsset, ThemeStyleAsset } from "@/lib/themeAssets"
+import type { ThemeFontAsset, ThemeScriptAsset, ThemeStyleAsset } from "@/lib/themeAssets"
 import type { FontOption } from "@/lib/globalStyles"
+import { COLUMN_IMAGE_SIZES, WIDE_IMAGE_SIZES } from "./lib/imageSizes"
 
 export interface ThemeColors {
   primary: string
@@ -93,6 +94,8 @@ export type ThemeAsset = ThemeStyleAsset & ThemeScriptAsset
 export interface ThemeAssets {
   styles?: ThemeStyleAsset[]
   scripts?: ThemeScriptAsset[]
+  // Fonts to preload (#498).
+  fonts?: ThemeFontAsset[]
 }
 
 // A place in the theme's templates that shows a navigation menu (#347). The admin
@@ -115,6 +118,9 @@ export interface ThemeConfig {
   // WordPress-style asset registration (wp_enqueue_style/script equivalent)
   assets?: ThemeAssets
 
+  // A post body's image `sizes` in the reading column and the wide one (#498, post_content's width).
+  imageSizes?: { column?: string; wide?: string }
+
   supports: {
     postTypes: string[]
     customBlocks: boolean
@@ -122,6 +128,8 @@ export interface ThemeConfig {
     childThemes: boolean
     // base.astro merges the site's global styles into the tokens (resolveThemeTokens, #484).
     globalStyles?: boolean
+    // Its CSS styles `.skip-link`, so core's block template layout adds one (#498).
+    skipLink?: boolean
   }
 
   colors: {
@@ -195,7 +203,17 @@ export const themeConfig: ThemeConfig = {
         data: { "storage-key": DARK_MODE_STORAGE_KEY },
       },
     ],
+    // The fonts the first screen uses, preloaded (#498): base.astro has them in its <head>, and a
+    // block template's layout (core's) preloads the same ones from here.
+    fonts: [
+      { href: "/themes/default/fonts/literata/literata-latin-opsz-normal.woff2", type: "font/woff2" },
+      { href: "/themes/default/fonts/inter/inter-latin-700-normal.woff2", type: "font/woff2" },
+    ],
   },
+
+  // The image `sizes` of a post's body (#498), as the layouts give BlockRenderer: in the reading
+  // column, and in the wide one (post_content's `width`).
+  imageSizes: { column: COLUMN_IMAGE_SIZES, wide: WIDE_IMAGE_SIZES },
 
   supports: {
     postTypes: ["post", "page"],
@@ -203,6 +221,7 @@ export const themeConfig: ThemeConfig = {
     darkMode: true,
     childThemes: true,
     globalStyles: true,
+    skipLink: true,
   },
 
   // Primary is a step between Radix Jade 11 and 12 so links pass 4.5:1 on background and

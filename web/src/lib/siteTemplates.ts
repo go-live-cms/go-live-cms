@@ -36,11 +36,15 @@ import { isTemplatePartSlug, TEMPLATE_PART_SLUG } from "./templateParts"
 export type TemplateRoute =
   | { kind: "home" }
   /** `/` with a front page (#336): `front-page`, then the page's own list. */
-  | { kind: "front-page"; template?: string | null }
+  | { kind: "front-page"; template?: string | null; variant?: string | null }
   | { kind: "archive"; postType: string }
-  | { kind: "single"; postType: string }
-  /** A page: its template (#336) when it has one, `block:<name>` for a builder page template (#494). */
-  | { kind: "page"; template?: string | null }
+  /** A post: its type, and (#498) the type's layout variant (`layout_variants`: `sidebar`, `wide`). */
+  | { kind: "single"; postType: string; variant?: string | null }
+  /**
+   * A page: its template (#336) when it has one, `block:<name>` for a builder page template (#494),
+   * and (#498) its type's layout variant (`layout_variants`), which a page without its own template uses.
+   */
+  | { kind: "page"; template?: string | null; variant?: string | null }
   | { kind: "term"; taxonomy: string }
   | { kind: "author" }
   | { kind: "search" }
@@ -62,15 +66,27 @@ const BUILDER_PAGE_TEMPLATE = /^block:([a-z0-9-]{1,64})$/
 
 const slugRank = (slug: string, code: readonly string[] = []): TemplateRank[] => (TEMPLATE_PART_SLUG.test(slug) ? [{ slug, code }] : [])
 
-/** A page's ranks: `page-{template}` (`custom-{name}` for a builder one), then `page`. */
-function pageRanks(template: string | null | undefined): TemplateRank[] {
+/** A layout variant's name as a slug part (`sidebar`, `fullwidth`), or null for none or the default. */
+function variantName(variant: string | null | undefined): string | null {
+  return typeof variant === "string" && variant !== "default" && PAGE_TEMPLATE_NAME.test(variant) ? variant : null
+}
+
+/**
+ * A page's ranks: `page-{template}` (`custom-{name}` for a builder one), then (#498) `page-{variant}`
+ * for its type's layout variant, which a page whose own template the theme lacks renders with
+ * (`pageLayoutVariant`), then `page`. The variant's rank has no code layout of its own (its
+ * `layouts/page/{variant}.astro` stays `page`'s, as before), so a builder `page` still replaces it.
+ */
+function pageRanks(template: string | null | undefined, variant?: string | null): TemplateRank[] {
   const builder = typeof template === "string" ? BUILDER_PAGE_TEMPLATE.exec(template) : null
   const own = builder
     ? slugRank(`custom-${builder[1]}`)
     : typeof template === "string" && template !== "default" && PAGE_TEMPLATE_NAME.test(template)
       ? slugRank(`page-${template}`, [`layouts/page/${template}.astro`])
       : []
-  return [...own, { slug: "page", code: ["layouts/page/"] }]
+  const typeVariant = variantName(variant)
+  const byVariant = typeVariant && typeVariant !== template ? slugRank(`page-${typeVariant}`) : []
+  return [...own, ...byVariant, { slug: "page", code: ["layouts/page/"] }]
 }
 
 /** Design 3.2's ranked slugs for a route, most specific first, each with its code layouts. */
@@ -79,19 +95,30 @@ export function templateRanks(route: TemplateRoute): TemplateRank[] {
     case "home":
       return [{ slug: "front-page", code: [] }, { slug: "home", code: ["layouts/home/"] }]
     case "front-page":
-      return [{ slug: "front-page", code: [] }, ...pageRanks(route.template)]
+      return [{ slug: "front-page", code: [] }, ...pageRanks(route.template, route.variant)]
     case "archive":
       return [...slugRank(`archive-${route.postType}`), { slug: "archive", code: ["layouts/archive/"] }]
     case "single": {
       // A type's own layouts (never home, archive and the other page kinds' folders); `post`'s
-      // own layouts are `single`'s, so a builder `single` replaces them.
+      // own layouts are `single`'s, so a builder `single` replaces them. #498: the type's layout
+      // variant (`sidebar`, `wide`) ranks `single-{variant}` between them, with no code layout of
+      // its own (`layouts/post/{variant}.astro` stays `single`'s, so a builder `single` still
+      // replaces every post layout of a code theme): the default theme ships `single-sidebar` and
+      // `single-wide`, picked by the variant. (A post type named like a variant shares its slug.)
       const own = !RESERVED_LAYOUT_KINDS.has(route.postType) && route.postType !== "post"
-      return [...slugRank(`single-${route.postType}`, own ? [`layouts/${route.postType}/`] : []), { slug: "single", code: ["layouts/post/"] }]
+      const variant = variantName(route.variant)
+      return [
+        ...slugRank(`single-${route.postType}`, own ? [`layouts/${route.postType}/`] : []),
+        ...(variant && variant !== route.postType ? slugRank(`single-${variant}`) : []),
+        { slug: "single", code: ["layouts/post/"] },
+      ]
     }
     case "page":
-      return pageRanks(route.template)
+      return pageRanks(route.template, route.variant)
     case "term":
-      return [...slugRank(`taxonomy-${route.taxonomy}`, ["layouts/term/"]), { slug: "archive", code: ["layouts/archive/"] }]
+      // #498: `taxonomy` is every taxonomy's template (the default theme ships it), at the rank of
+      // the theme's `layouts/term`; `taxonomy-{name}` is one taxonomy's, above it.
+      return [...slugRank(`taxonomy-${route.taxonomy}`), { slug: "taxonomy", code: ["layouts/term/"] }, { slug: "archive", code: ["layouts/archive/"] }]
     case "author":
       return [{ slug: "author", code: ["layouts/author/"] }, { slug: "archive", code: ["layouts/archive/"] }]
     case "search":

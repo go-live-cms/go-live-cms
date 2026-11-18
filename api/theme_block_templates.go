@@ -164,7 +164,8 @@ func codeLayoutForSlug(themePath, slug string) (string, bool) {
 		candidates = []string{filepath.Join("layouts", "page", "default.astro")}
 	case strings.HasPrefix(slug, "page-"):
 		candidates = []string{filepath.Join("layouts", "page", strings.TrimPrefix(slug, "page-")+".astro")}
-	case strings.HasPrefix(slug, "taxonomy-"):
+	// #498: every taxonomy's template is at layouts/term's rank; one taxonomy's has no code layout.
+	case slug == "taxonomy":
 		candidates = []string{filepath.Join("layouts", "term")}
 	}
 	for _, candidate := range candidates {

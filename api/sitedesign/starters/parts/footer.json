@@ -2,11 +2,14 @@
   "title": "Footer",
   "doc": {
     "doc_version": 1,
-    "blocks_order": ["starter-footer-title", "starter-footer-tagline", "starter-footer-nav"],
+    "blocks_order": ["footer-site", "footer-links", "footer-copyright", "footer-credit"],
     "blocks": {
-      "starter-footer-title": { "id": "starter-footer-title", "type": "site_title", "version": 1, "attrs": { "link": false } },
-      "starter-footer-tagline": { "id": "starter-footer-tagline", "type": "site_tagline", "version": 1, "attrs": {} },
-      "starter-footer-nav": { "id": "starter-footer-nav", "type": "navigation", "version": 1, "attrs": { "location": "footer", "layout": "column" } }
+      "footer-site": { "id": "footer-site", "type": "group", "version": 1, "attrs": {}, "children": ["footer-site-title", "footer-tagline"] },
+      "footer-site-title": { "id": "footer-site-title", "type": "site_title", "version": 1, "attrs": {} },
+      "footer-tagline": { "id": "footer-tagline", "type": "site_tagline", "version": 1, "attrs": {} },
+      "footer-links": { "id": "footer-links", "type": "navigation", "version": 1, "attrs": { "location": "footer", "layout": "columns" } },
+      "footer-copyright": { "id": "footer-copyright", "type": "site_copyright", "version": 1, "attrs": {} },
+      "footer-credit": { "id": "footer-credit", "type": "golive_credit", "version": 1, "attrs": {} }
     }
   }
 }

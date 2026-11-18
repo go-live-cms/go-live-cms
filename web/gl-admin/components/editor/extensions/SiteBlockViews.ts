@@ -9,7 +9,6 @@ import {
   SITE_BLOCK_INERT_NOTE,
   SITE_BLOCK_LABELS,
   SITE_LOGO_DEFAULT_WIDTH,
-  POST_EXCERPT_DEFAULT_WORDS,
   QUERY_DEFAULT_PER_PAGE,
   RELATED_POSTS_DEFAULT_COUNT,
   siteBlockTypeOfNode,
@@ -55,9 +54,12 @@ export function siteBlockSummary(type: SiteBlockType, attrs: Record<string, unkn
       return [`${(a.width as number | undefined) ?? SITE_LOGO_DEFAULT_WIDTH} px`, linksHome].filter(Boolean).join(" · ")
     case "navigation": {
       const source = a.menuId !== undefined ? `Menu ${a.menuId}` : a.location !== undefined ? `Location: ${a.location}` : "No menu chosen"
-      return [source, a.layout === "column" ? "column" : "row", a.overlay === "never" ? "never folds" : null].filter(Boolean).join(" · ")
+      if (a.layout === "columns") return [source, "Footer columns"].join(" · ")
+      const overlay = a.overlay === "never" ? "never folds" : a.overlay === "menu" ? "phone menu" : null
+      return [source, a.layout === "column" ? "column" : "row", overlay].filter(Boolean).join(" · ")
     }
     case "search":
+      if (a.variant === "icon") return `Icon link · “${(a.label as string | undefined) ?? SEARCH_DEFAULTS.label}”`
       return `“${(a.placeholder as string | undefined) ?? (a.label as string | undefined) ?? SEARCH_DEFAULTS.label}” · ${(a.button as string | undefined) ?? SEARCH_DEFAULTS.button}`
     case "template_part":
       return typeof a.slug === "string" ? "Template part" : "Choose a part in the Block tab"
@@ -69,30 +71,38 @@ export function siteBlockSummary(type: SiteBlockType, attrs: Record<string, unkn
     case "query_no_results":
       return "When the list is empty"
     case "query_pagination":
-      return "← Newer · 1 2 3 … · Older →, for the page’s own list"
+      return ["← Newer · 1 2 3 … · Older →, for the page’s own list", a.end === true ? "says when it’s all" : null].filter(Boolean).join(" · ")
     case "query_title":
-      return `${a.level === 2 ? "H2" : "H1"} · the page’s list, named`
+      return a.label === true ? "Label · the page’s kind (Category, Author …)" : `${a.level === 2 ? "H2" : "H1"} · the page’s list, named`
     case "term_description":
-      return "The listed category’s or tag’s description"
+      return "The listed category’s or tag’s description, an author’s bio"
     case "post_title":
       return [a.level ? `H${a.level}` : "Sized for the page", a.link === true ? "links to the post" : a.link === false ? "no link" : null].filter(Boolean).join(" · ")
     case "post_content":
-      return "The post’s blocks render here, with their own anchors."
+      return a.width === "wide" ? "The post’s blocks render here, wide, with their own anchors." : "The post’s blocks render here, with their own anchors."
     case "post_excerpt":
-      return `${(a.length as number | undefined) ?? POST_EXCERPT_DEFAULT_WORDS} words`
+      // #498: no length is the theme's own (about 220 characters in a list); on the page, the dek.
+      return typeof a.length === "number" ? `${a.length} words` : "Theme’s length · the post’s dek on its page"
     case "post_featured_image":
-      return [ASPECT_LABELS[(a.aspect as string | undefined) ?? "auto"], a.link === true ? "links to the post" : null].filter(Boolean).join(" · ")
+      return [
+        ASPECT_LABELS[(a.aspect as string | undefined) ?? "auto"],
+        a.width === "wide" ? "wide" : a.width === "full" ? "full width" : null,
+        a.link === true ? "links to the post" : null,
+      ]
+        .filter(Boolean)
+        .join(" · ")
     case "post_date":
       return `${a.which === "modified" ? "updated" : "published"}, ${a.format === "short" ? "short" : "long"}`
     case "post_byline":
-      return [a.avatars === false ? "Names only" : "With avatars", a.readingTime === true ? "reading time" : null].filter(Boolean).join(" · ")
+      return [a.avatars === false ? "Names only" : "With avatars", a.date === true ? "date" : null, a.readingTime === true ? "reading time" : null].filter(Boolean).join(" · ")
     case "post_terms":
-      return typeof a.taxonomy === "string" ? `Taxonomy: ${a.taxonomy}` : "Category"
+      return a.all === true ? "Every taxonomy" : typeof a.taxonomy === "string" ? `Taxonomy: ${a.taxonomy}` : "Category"
     case "post_navigation":
       return "Older · Newer"
     // #497
     case "related_posts": {
       const count = (a.count as number | undefined) ?? RELATED_POSTS_DEFAULT_COUNT
+      if (a.layout === "list") return `“In <term>” · ${count} ${count === 1 ? "link" : "links"} sharing the post’s ${typeof a.taxonomy === "string" ? a.taxonomy : "category"}`
       return [`“More to read” · ${count} ${count === 1 ? "post" : "posts"}`, typeof a.taxonomy === "string" ? `sharing a ${a.taxonomy}` : null].filter(Boolean).join(", ")
     }
     case "author_cards":
@@ -100,7 +110,20 @@ export function siteBlockSummary(type: SiteBlockType, attrs: Record<string, unkn
     case "table_of_contents":
       return "“On this page” · the post’s H2s and H3s, from three headings"
     case "color_scheme_switch":
-      return `Light · Dark · System, ${a.variant === "menu" ? "a list" : "side by side"}`
+      return `Light · Dark · System, ${a.variant === "menu" ? "a list" : a.variant === "popover" ? "behind an icon button" : "side by side"}`
+    // #498
+    case "query_total":
+      return "“12 posts” · how many the page lists"
+    case "author_avatar":
+      return "The listed author’s picture"
+    case "search_results":
+      return "Count, type filters, results and pages; tips when nothing matches"
+    case "post_facts":
+      return ["Published · Updated · Reading time", a.fallback === true ? "only when nothing else is beside the post" : null].filter(Boolean).join(" · ")
+    case "site_copyright":
+      return "© this year, the site’s title"
+    case "golive_credit":
+      return "Published with GoLive"
   }
 }
 
@@ -109,12 +132,15 @@ const ASPECT_LABELS: Readonly<Record<string, string>> = { auto: "Original shape"
 /** A query's line (the canvas's "This page’s list · 10 per page", "Posts in Guides · 3, newest first"). */
 export function queryLoopSummary(attrs: Record<string, unknown>): string {
   const a = normalizeSiteBlockAttrs("query", attrs)
-  if (a.inherit === true) return "This page’s list · its pages"
+  // #498: the home page's featured first post, or titles only.
+  const look = [a.feature === true ? "Featured first post" : null, a.layout === "links" ? "titles only" : null].filter(Boolean) as string[]
+  const withLook = (summary: string) => [summary, ...look].join(" · ")
+  if (a.inherit === true) return withLook("This page’s list · its pages")
   const type = typeof a.postType === "string" ? a.postType : "Posts"
   const filters = [Array.isArray(a.termIds) ? `in ${a.termIds.length === 1 ? "1 term" : `${a.termIds.length} terms`}` : null, a.authorId ? "by one author" : null]
   const count = (a.perPage as number | undefined) ?? QUERY_DEFAULT_PER_PAGE
   const order = a.orderBy === "title" ? (a.order === "asc" ? "A to Z" : "Z to A") : a.order === "asc" ? "oldest first" : "newest first"
-  return `${[type, ...filters].filter(Boolean).join(" ")} · ${count}, ${order}`
+  return withLook(`${[type, ...filters].filter(Boolean).join(" ")} · ${count}, ${order}`)
 }
 
 /** The inert notice for a site block in a document of `kind`, or null where it works. */

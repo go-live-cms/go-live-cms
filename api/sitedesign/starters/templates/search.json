@@ -1,23 +1,14 @@
 {
-  "title": "Search",
+  "title": "Search results",
   "doc": {
     "doc_version": 1,
-    "blocks_order": ["starter-search-header", "starter-search-title", "starter-search-form", "starter-search-query", "starter-search-footer"],
+    "blocks_order": ["search-header", "search-title", "search-form", "search-results", "search-footer"],
     "blocks": {
-      "starter-search-title": { "id": "starter-search-title", "type": "query_title", "version": 1, "attrs": {} },
-      "starter-search-form": { "id": "starter-search-form", "type": "search", "version": 1, "attrs": {} },
-      "starter-search-query": { "id": "starter-search-query", "type": "query", "version": 1, "attrs": { "inherit": true }, "children": ["starter-search-items", "starter-search-pager", "starter-search-empty"] },
-      "starter-search-items": { "id": "starter-search-items", "type": "post_template", "version": 1, "attrs": {}, "children": ["starter-search-item-terms", "starter-search-item-title", "starter-search-item-date", "starter-search-item-excerpt", "starter-search-item-image"] },
-      "starter-search-item-terms": { "id": "starter-search-item-terms", "type": "post_terms", "version": 1, "attrs": {} },
-      "starter-search-item-title": { "id": "starter-search-item-title", "type": "post_title", "version": 1, "attrs": {} },
-      "starter-search-item-date": { "id": "starter-search-item-date", "type": "post_date", "version": 1, "attrs": { "format": "short" } },
-      "starter-search-item-excerpt": { "id": "starter-search-item-excerpt", "type": "post_excerpt", "version": 1, "attrs": {} },
-      "starter-search-item-image": { "id": "starter-search-item-image", "type": "post_featured_image", "version": 1, "attrs": { "link": true } },
-      "starter-search-pager": { "id": "starter-search-pager", "type": "query_pagination", "version": 1, "attrs": {} },
-      "starter-search-empty": { "id": "starter-search-empty", "type": "query_no_results", "version": 1, "attrs": {}, "children": ["starter-search-empty-text"] },
-      "starter-search-empty-text": { "id": "starter-search-empty-text", "type": "paragraph", "version": 1, "attrs": { "text": "No results. Try other words, or fewer of them." } },
-      "starter-search-header": { "id": "starter-search-header", "type": "template_part", "version": 1, "attrs": { "slug": "header" } },
-      "starter-search-footer": { "id": "starter-search-footer", "type": "template_part", "version": 1, "attrs": { "slug": "footer" } }
+      "search-header": { "id": "search-header", "type": "template_part", "version": 1, "attrs": { "slug": "header" } },
+      "search-title": { "id": "search-title", "type": "query_title", "version": 1, "attrs": {} },
+      "search-form": { "id": "search-form", "type": "search", "version": 1, "attrs": { "label": "Search posts and pages" } },
+      "search-results": { "id": "search-results", "type": "search_results", "version": 1, "attrs": {} },
+      "search-footer": { "id": "search-footer", "type": "template_part", "version": 1, "attrs": { "slug": "footer" } }
     }
   }
 }

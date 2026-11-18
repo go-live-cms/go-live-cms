@@ -222,6 +222,94 @@ describe("site blocks on the relay (#488)", () => {
     expect(c.state.doc.child(1).attrs).toMatchObject({ "data-block-id": ids.postByline, readingTime: true })
   }, 20_000)
 
+  it("#498: the six new blocks written into a post's doc reach every peer, store with no attrs, and render nothing", async () => {
+    const pa = relay.client("1")
+    const pb = relay.client("2")
+    await Promise.all([pa.whenSynced(), pb.whenSynced()])
+    const b = makeEditor(pb.doc)
+    await waitFor(() => b.getText().includes("after"), { what: "b to load" })
+    const ids = {
+      queryTotal: "blk-0498-total-000001",
+      authorAvatar: "blk-0498-avatar-00001",
+      searchResults: "blk-0498-results-0001",
+      postFacts: "blk-0498-facts-000001",
+      siteCopyright: "blk-0498-copyright-01",
+      goliveCredit: "blk-0498-credit-00001",
+    }
+    pa.doc.transact(() => {
+      const elements = Object.entries(ids).map(([name, id]) => {
+        const el = new Y.XmlElement(name)
+        el.setAttribute("data-block-id", id)
+        return el
+      })
+      // Things no site block keeps: a year, a link of the client's, markup, and a valid attr.
+      elements[4].setAttribute("year", "1999")
+      elements[5].setAttribute("href", "https://example.org")
+      elements[2].setAttribute("html", "<mark>x</mark>")
+      elements[3].setAttribute("fallback", true as unknown as string)
+      pa.doc.getXmlFragment("default").insert(0, elements)
+    })
+    await waitFor(() => b.state.doc.childCount >= 7 && b.state.doc.child(0).type.name === "queryTotal", { what: "b to see them" })
+    await waitFor(() => !!stored().blocks[ids.goliveCredit], { what: "the store" })
+    expect(stored().blocks[ids.siteCopyright]).toEqual({ id: ids.siteCopyright, type: "site_copyright", version: 1, attrs: {} })
+    expect(stored().blocks[ids.goliveCredit]).toEqual({ id: ids.goliveCredit, type: "golive_credit", version: 1, attrs: {} })
+    expect(stored().blocks[ids.searchResults]).toEqual({ id: ids.searchResults, type: "search_results", version: 1, attrs: {} })
+    expect(stored().blocks[ids.postFacts]).toEqual({ id: ids.postFacts, type: "post_facts", version: 1, attrs: { fallback: true } })
+    expect(JSON.stringify(stored())).not.toMatch(/1999|example\.org|<mark>/)
+    expect(() => validateBlockDoc(stored())).not.toThrow()
+    const html = renderToStaticMarkup(<BlockRenderer doc={stored()} />)
+    expect(html).toContain("after")
+    expect(html).not.toMatch(/golive-credit|post-facts|search-results|avatar|©/)
+  }, 20_000)
+
+  it("#498: two people changing a navigation's layout and phone menu converge, and a restart keeps the new attrs", async () => {
+    const pa = relay.client("1")
+    const pb = relay.client("2")
+    await Promise.all([pa.whenSynced(), pb.whenSynced()])
+    const a = makeEditor(pa.doc)
+    const b = makeEditor(pb.doc)
+    await waitFor(() => a.getText().includes("after") && b.getText().includes("after"), { what: "both to load" })
+    a.view.dispatch(
+      a.state.tr.insert(0, [
+        a.schema.nodeFromJSON(siteBlockContent("navigation", { location: "primary" })),
+        a.schema.nodeFromJSON(siteBlockContent("post_featured_image", { width: "wide" })),
+        a.schema.nodeFromJSON(siteBlockContent("post_terms", { all: true })),
+      ])
+    )
+    const ids = {
+      navigation: a.state.doc.child(0).attrs["data-block-id"] as string,
+      image: a.state.doc.child(1).attrs["data-block-id"] as string,
+      terms: a.state.doc.child(2).attrs["data-block-id"] as string,
+    }
+    await waitFor(() => b.state.doc.child(0).type.name === "navigation", { what: "b to see them" })
+    await waitFor(() => !!stored().blocks[ids.terms], { what: "the first store" })
+
+    // A gives it the theme's phone menu while B sets the footer's columns: different attrs, both kept.
+    a.view.dispatch(a.state.tr.setNodeMarkup(0, undefined, { ...a.state.doc.child(0).attrs, overlay: "menu" }))
+    b.view.dispatch(b.state.tr.setNodeMarkup(0, undefined, { ...b.state.doc.child(0).attrs, layout: "columns" }))
+    await waitFor(
+      () => {
+        const attrs = stored().blocks[ids.navigation]?.attrs as Record<string, unknown> | undefined
+        return attrs?.overlay === "menu" && attrs?.layout === "columns"
+      },
+      { what: "the store to have both" }
+    )
+    expect(stored().blocks[ids.navigation].attrs).toEqual({ location: "primary", layout: "columns", overlay: "menu" })
+    expect(stored().blocks[ids.image].attrs).toEqual({ width: "wide" })
+    expect(stored().blocks[ids.terms].attrs).toEqual({ all: true })
+    expect(a.state.doc.child(0).attrs).toMatchObject({ overlay: "menu", layout: "columns" })
+    expect(b.state.doc.child(0).attrs).toMatchObject({ overlay: "menu", layout: "columns" })
+
+    await relay.restart()
+    const pc = relay.client("3")
+    await pc.whenSynced()
+    const c = makeEditor(pc.doc)
+    await waitFor(() => c.getText().includes("after"), { what: "c to load after the restart" })
+    expect(c.state.doc.child(0).attrs).toMatchObject({ "data-block-id": ids.navigation, overlay: "menu", layout: "columns" })
+    expect(c.state.doc.child(1).attrs).toMatchObject({ "data-block-id": ids.image, width: "wide" })
+    expect(c.state.doc.child(2).attrs).toMatchObject({ "data-block-id": ids.terms, all: true })
+  }, 20_000)
+
   it("two people changing one block's settings converge, and a restart keeps them", async () => {
     const pa = relay.client("1")
     const pb = relay.client("2")

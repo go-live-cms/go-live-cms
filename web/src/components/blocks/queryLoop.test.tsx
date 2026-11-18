@@ -6,7 +6,7 @@ import type { Post } from "@gl-admin/lib/api/types"
 import BlockRenderer from "../BlockRenderer"
 import { pageLinks, pagePath, pageWindow } from "../../lib/pagination"
 import { queryKey, type SitePostItem, type SitePostList, type SiteRenderContext, type SiteRoute } from "./utils/siteContext"
-import { excerptWords, postDateOf, queryTitleText } from "./utils/postBlocks"
+import { excerptWords, postDateOf, queryLabelText, queryTitleText } from "./utils/postBlocks"
 
 // Site blocks II on the public page (#489; the blocks canvas's "Published site blocks" and the
 // default theme canvas's "Site blocks" boards): the query loop and the post blocks render the
@@ -116,7 +116,8 @@ describe("the query loop (#489)", () => {
   it("a search list's pager keeps its query", () => {
     const search: SitePostList = { items, page: 1, totalPages: 2, basePath: "/search", pageQuery: "?q=alt" }
     const html = render(archiveTemplate, context({ kind: "search", search: { query: "alt" }, list: search }, { "query-0001": search }))
-    expect(html).toContain('<h1 id="b-qtitle-001" class="title">Search results for “alt”</h1>')
+    // #498: the search page's title is the default theme's.
+    expect(html).toContain('<h1 id="b-qtitle-001" class="title search-title">Search</h1>')
     expect(hrefs(html, "page-link page-num")).toEqual(["/search?q=alt", "/search/page/2/?q=alt"])
     expect(html).toContain('<span class="page-link is-disabled" aria-hidden="true">← Newer</span>')
   })
@@ -210,10 +211,12 @@ describe("the post blocks on the page's own post (#489)", () => {
     const html = render(template, context(single))
     expect(html).toContain('<a id="b-terms-0001" class="eyebrow" href="/category/product-updates">Product updates</a>')
     expect(html).toContain('<h1 id="b-title-0001" class="title">Shipping collaboration</h1>')
-    expect(html).toContain('<div id="b-byline-001" class="byline meta"><span>By <a href="/author/luan">Luan</a> and <a href="/author/ana">Ana Costa</a></span></div>')
+    // #498: the theme's PostByline (`byline--post`); no avatars here, no date or reading time asked for.
+    expect(html).toContain('<div id="b-byline-001" class="byline meta byline--post"><span class="byline-text"><span>By <a href="/author/luan">Luan</a> and <a href="/author/ana">Ana Costa</a></span></span></div>')
     expect(html).toContain('<p id="b-date-00001" class="meta post-date"><time dateTime="2026-10-18T12:00:00.000Z">October 18, 2026</time></p>')
     expect(html).toContain('<p id="b-date-00002" class="meta post-date">Updated <time dateTime="2026-11-02T09:00:00.000Z">November 2, 2026</time></p>')
-    expect(html).toContain('<figure id="b-image-0001" class="post-featured"><img class="is-aspect-16-9" src="/uploads/media/hero.jpg" alt="" decoding="async"/></figure>')
+    // #498: the theme's FeaturedImage (`post-featured--column` unless wider), loaded first.
+    expect(html).toContain('<figure id="b-image-0001" class="post-featured post-featured--column"><img class="is-aspect-16-9" src="/uploads/media/hero.jpg" alt="" fetchPriority="high" decoding="async"/></figure>')
     expect(html).toContain('<dt class="section-title">Tags</dt><dd class="post-terms__term" data-slug="editor"><a class="chip" href="/tag/editor">Editor</a></dd>')
     expect(html).toContain('<a href="/post/analytics" class="post-nav-link" rel="prev"><span>← Older post</span>Analytics</a>')
     expect(html).toContain('<a href="/post" class="post-nav-link is-next"><span>Back to</span>All posts →</a>')
@@ -245,13 +248,23 @@ describe("the post blocks on the page's own post (#489)", () => {
 })
 
 describe("what the post blocks read (#489)", () => {
-  it("query_title names what the page lists", () => {
+  it("query_title names what the page lists, as the default theme titles it (#498)", () => {
     expect(queryTitleText({ kind: "term", term: { name: "Guides" } })).toBe("Guides")
-    expect(queryTitleText({ kind: "author", author: { name: "Ana Costa" } })).toBe("Posts by Ana Costa")
-    expect(queryTitleText({ kind: "search", search: { query: "alt text" } })).toBe("Search results for “alt text”")
+    expect(queryTitleText({ kind: "author", author: { name: "Ana Costa" } })).toBe("Ana Costa")
+    expect(queryTitleText({ kind: "search", search: { query: "alt text" } })).toBe("Search")
     expect(queryTitleText({ kind: "archive", postType: { name: "product", label: "Products" } })).toBe("Products")
+    expect(queryTitleText({ kind: "home" }, "Field Notes")).toBe("Field Notes")
+    expect(queryTitleText({ kind: "404" })).toBe("This page isn’t here")
     expect(queryTitleText({ kind: "single" })).toBeNull()
     expect(queryTitleText(undefined)).toBeNull()
+  })
+
+  it("query_title's label is the kind of page (#498)", () => {
+    expect(queryLabelText({ kind: "term", term: { name: "Guides", label: "Category" } })).toBe("Category")
+    expect(queryLabelText({ kind: "author", author: { name: "Ana Costa" } })).toBe("Author")
+    expect(queryLabelText({ kind: "404" })).toBe("Error 404")
+    expect(queryLabelText({ kind: "archive" })).toBeNull()
+    expect(queryLabelText(undefined)).toBeNull()
   })
 
   it("an excerpt is cut at its words, from the excerpt or the first paragraph", () => {

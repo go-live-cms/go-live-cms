@@ -1,0 +1,22 @@
+{
+  "title": "Archive",
+  "doc": {
+    "doc_version": 1,
+    "blocks_order": ["archive-header", "archive-title", "archive-total", "archive-query", "archive-footer"],
+    "blocks": {
+      "archive-header": { "id": "archive-header", "type": "template_part", "version": 1, "attrs": { "slug": "header" } },
+      "archive-title": { "id": "archive-title", "type": "query_title", "version": 1, "attrs": {} },
+      "archive-total": { "id": "archive-total", "type": "query_total", "version": 1, "attrs": {} },
+      "archive-query": { "id": "archive-query", "type": "query", "version": 1, "attrs": { "inherit": true }, "children": ["archive-items", "archive-pager", "archive-empty"] },
+      "archive-items": { "id": "archive-items", "type": "post_template", "version": 1, "attrs": {}, "children": ["archive-item-title", "archive-item-excerpt", "archive-item-byline", "archive-item-image"] },
+      "archive-item-title": { "id": "archive-item-title", "type": "post_title", "version": 1, "attrs": { "level": 2 } },
+      "archive-item-excerpt": { "id": "archive-item-excerpt", "type": "post_excerpt", "version": 1, "attrs": {} },
+      "archive-item-byline": { "id": "archive-item-byline", "type": "post_byline", "version": 1, "attrs": { "date": true, "readingTime": true } },
+      "archive-item-image": { "id": "archive-item-image", "type": "post_featured_image", "version": 1, "attrs": { "link": true } },
+      "archive-pager": { "id": "archive-pager", "type": "query_pagination", "version": 1, "attrs": {} },
+      "archive-empty": { "id": "archive-empty", "type": "query_no_results", "version": 1, "attrs": {}, "children": ["archive-empty-text"] },
+      "archive-empty-text": { "id": "archive-empty-text", "type": "paragraph", "version": 1, "attrs": { "text": "Nothing has been published here yet." } },
+      "archive-footer": { "id": "archive-footer", "type": "template_part", "version": 1, "attrs": { "slug": "footer" } }
+    }
+  }
+}

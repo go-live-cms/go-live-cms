@@ -485,8 +485,10 @@ are the most fragile part of the codebase. **Before editing anything under
   are core's (`src/lib/readingTime.ts`, `src/lib/bylines.ts`), re-exported by the theme.
 - **Template rendering (#491, design `docs/design/theme-builder.md` 3.2–3.4, 3.7):** every public route file makes one
   call, `resolveTemplate(Astro.locals, route)` (`src/lib/siteTemplates.ts`): the route's ranked slugs (`templateRanks`:
-  `single-{type}`/`single`, `page-{template}`/`page`, `front-page` first at `/`, `archive-{type}`/`archive`,
-  `taxonomy-{tax}`/`archive`, `author`/`archive`, `search`, `404`; never the 500 page) go to
+  `single-{type}`/`single-{variant}`/`single`, `page-{template}`/`page-{variant}`/`page` (#498: the type's
+  `layout_variants`, no code layout of their own), `front-page` first at `/`, `archive-{type}`/`archive`,
+  `taxonomy-{tax}`/`taxonomy`/`archive` (#498: `layouts/term` is `taxonomy`'s), `author`/`archive`, `search`, `404`;
+  never the 500 page) go to
   `GET /public/site-templates/resolve?theme=&slugs=` (published only, cached, 2 s; memoized per request on
   `locals.siteTemplateResolves`). The builder template wins when its rank is the same as or more specific than the
   **active theme's** first code layout in the build (`codeLayoutRank`, glob keys only; the default theme's layouts are
@@ -498,6 +500,20 @@ are the most fragile part of the codebase. **Before editing anything under
   parts; parts and the template get no `b-<id>`, the post's blocks keep theirs). `<TemplatePart slug>` in a code layout
   renders a **published override** part (`templatePartOverride`, from the same resolve) and its slot otherwise. A
   previewed request reads published templates until #492 adds them to the draft read (`templateReaderFor` is the seam).
+- **The default theme as block templates (#498, design `docs/design/theme-builder.md` 5.7's "As built (T17)"):**
+  `themes/default/templates/*.json` (every route kind and the post/page variants, never `front-page` or the 500 page)
+  and `parts/{header,footer}.json`, so every default-theme page renders through `BlockTemplateLayout` and "Customize"
+  starts from what readers see; its `.astro` layouts stay as the fallback (a failed resolve, the 500 page). **Parity is
+  tested:** `theme.astro.test.ts`'s "block templates (#498)" renders each template on #484's fixtures and compares it
+  with that layout's snapshot (`__snapshots__/layouts/`) element by element after the listed differences
+  (`themes/default/templateParity.ts` `BLOCK_TEMPLATE_DIFFERENCES`, also in the PR); the template's own page is pinned
+  in `__snapshots__/templates/`. The CSS that lays the blocks out like the code layouts is theme.css's "block templates
+  (#498)" section (by `.template-part--header|footer` and `[data-template]`). What it needed: **site blocks IV**
+  (`src/components/blocks/utils/siteBlocksIV.tsx`, `themeMarkup.tsx`: the theme's `SearchForm`, `ThemeSwitch`,
+  `PostByline` and pager markup), the theme contract's `assets.fonts` and `imageSizes` and a skip link in the generic
+  layout. The files are also core's starters (`api/sitedesign/starters`, a copy: `go generate ./api/sitedesign`, and
+  Go's `TestStartersAreTheDefaultThemes` fails on drift). Changing a template: edit the JSON, run `go generate`, check
+  the parity test (and the snapshot under `templates/`).
 - **Site logo (#488):** Settings › General's **Site logo** (`components/settings/SiteLogoField.tsx`, rules
   `lib/siteLogo.ts`): the media picker (images only), Replace and Remove, saved with the page as
   `site_logo_media_id` (sent only when it changed, like the front page). `GET /settings` answers it with `site_logo`

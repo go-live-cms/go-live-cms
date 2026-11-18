@@ -294,6 +294,24 @@ describe("related posts' data (#497, design 4.3)", () => {
     expect(failed[0][1]).toMatchObject({ block_type: "related_posts", count: 1 })
     warn.mockRestore()
   })
+
+  it("#498: a list layout reads the post's first term of its taxonomy (the category) and carries it; none without one", async () => {
+    const readRelated = vi.fn(async (_post: unknown, _attrs: unknown, _options: { termId?: number }) => listOf("In"))
+    const page = doc({ ...related("r-list-0001", { layout: "list" }), "toc-000001": { type: "table_of_contents", attrs: {} } })
+    const withCategory = { ...routePost, terms: [{ id: 9, name: "Tags", taxonomy_type_name: "post_tag" }, { id: 5, name: "Guides", taxonomy_type_name: "category", href: "/category/guides" }] as never }
+    const site = await loadSiteRenderContext(locals(), { docs: [page], route: { kind: "single", post: withCategory }, readRelated })
+    expect(readRelated.mock.calls[0][2]).toMatchObject({ termId: 5 })
+    expect(site.related?.["r-list-0001"]).toMatchObject({ term: { name: "Guides", href: "/category/guides" } })
+    // What post_facts' fallback stands back for.
+    expect(site.pageShows).toEqual({ tableOfContents: true, categoryList: true })
+
+    readRelated.mockClear()
+    const none = await loadSiteRenderContext(locals(), { docs: [page], route: { kind: "single", post: { ...routePost, terms: [] } }, readRelated })
+    expect(readRelated).not.toHaveBeenCalled()
+    expect(none.related).toEqual({ "r-list-0001": null })
+    expect(none.pageShows).toEqual({ tableOfContents: true, categoryList: false })
+    expect(relatedRequestParams({ layout: "list", count: 4 }, 5)).toEqual({ limit: 4, termId: 5 })
+  })
 })
 
 describe("readRelatedPosts (#497)", () => {

@@ -2,12 +2,12 @@
   "title": "Header",
   "doc": {
     "doc_version": 1,
-    "blocks_order": ["starter-header-logo", "starter-header-title", "starter-header-nav", "starter-header-search"],
+    "blocks_order": ["header-site-title", "header-navigation", "header-search", "header-theme-switch"],
     "blocks": {
-      "starter-header-logo": { "id": "starter-header-logo", "type": "site_logo", "version": 1, "attrs": {} },
-      "starter-header-title": { "id": "starter-header-title", "type": "site_title", "version": 1, "attrs": {} },
-      "starter-header-nav": { "id": "starter-header-nav", "type": "navigation", "version": 1, "attrs": { "location": "primary" } },
-      "starter-header-search": { "id": "starter-header-search", "type": "search", "version": 1, "attrs": {} }
+      "header-site-title": { "id": "header-site-title", "type": "site_title", "version": 1, "attrs": {} },
+      "header-navigation": { "id": "header-navigation", "type": "navigation", "version": 1, "attrs": { "location": "primary", "overlay": "menu" } },
+      "header-search": { "id": "header-search", "type": "search", "version": 1, "attrs": { "variant": "icon" } },
+      "header-theme-switch": { "id": "header-theme-switch", "type": "color_scheme_switch", "version": 1, "attrs": { "variant": "popover" } }
     }
   }
 }

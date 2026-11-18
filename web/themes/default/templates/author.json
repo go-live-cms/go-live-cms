@@ -1,0 +1,23 @@
+{
+  "title": "Author",
+  "doc": {
+    "doc_version": 1,
+    "blocks_order": ["author-header", "author-avatar", "author-label", "author-title", "author-bio", "author-total", "author-query", "author-footer"],
+    "blocks": {
+      "author-header": { "id": "author-header", "type": "template_part", "version": 1, "attrs": { "slug": "header" } },
+      "author-avatar": { "id": "author-avatar", "type": "author_avatar", "version": 1, "attrs": {} },
+      "author-label": { "id": "author-label", "type": "query_title", "version": 1, "attrs": { "label": true } },
+      "author-title": { "id": "author-title", "type": "query_title", "version": 1, "attrs": {} },
+      "author-bio": { "id": "author-bio", "type": "term_description", "version": 1, "attrs": {} },
+      "author-total": { "id": "author-total", "type": "query_total", "version": 1, "attrs": {} },
+      "author-query": { "id": "author-query", "type": "query", "version": 1, "attrs": { "inherit": true }, "children": ["author-items", "author-pager"] },
+      "author-items": { "id": "author-items", "type": "post_template", "version": 1, "attrs": {}, "children": ["author-item-title", "author-item-excerpt", "author-item-byline", "author-item-image"] },
+      "author-item-title": { "id": "author-item-title", "type": "post_title", "version": 1, "attrs": { "level": 2 } },
+      "author-item-excerpt": { "id": "author-item-excerpt", "type": "post_excerpt", "version": 1, "attrs": {} },
+      "author-item-byline": { "id": "author-item-byline", "type": "post_byline", "version": 1, "attrs": { "date": true, "readingTime": true } },
+      "author-item-image": { "id": "author-item-image", "type": "post_featured_image", "version": 1, "attrs": { "link": true } },
+      "author-pager": { "id": "author-pager", "type": "query_pagination", "version": 1, "attrs": { "end": true } },
+      "author-footer": { "id": "author-footer", "type": "template_part", "version": 1, "attrs": { "slug": "footer" } }
+    }
+  }
+}

@@ -4,7 +4,12 @@
  * blocks II (#489): the query loop (`query`, `post_template`, `query_pagination`,
  * `query_no_results`), `query_title`, `term_description` and the `post_*` blocks. Site blocks
  * III (#497): `related_posts`, `author_cards`, `table_of_contents`, `color_scheme_switch`, and
- * `readingTime` on `post_byline`, what converting the default theme (#498) needs.
+ * `readingTime` on `post_byline`, what converting the default theme (#498) needs. Site blocks IV
+ * (#498): `query_total`, `author_avatar`, `search_results`, `post_facts`, `site_copyright` and
+ * `golive_credit`, and the attrs that let the others render each piece of the default theme's
+ * layouts (the header's phone menu and theme popover, the footer's columns, the home page's
+ * featured post, the list end, the bylines with dates), so its block templates render what its
+ * code layouts did.
  *
  * They are **core** Block Spec types (not namespaced, not a theme's). Most are flow atoms
  * that hold no text of their own; the query loop's three containers are rows of the nesting
@@ -50,6 +55,13 @@ export const SITE_FLOW_BLOCK_TYPES = [
   "author_cards",
   "table_of_contents",
   "color_scheme_switch",
+  // #498
+  "query_total",
+  "author_avatar",
+  "search_results",
+  "post_facts",
+  "site_copyright",
+  "golive_credit",
 ] as const
 
 /** An atom that only lives in a query (#489): neither flow nor a container, like a `footnote` in its list. */
@@ -89,6 +101,12 @@ export const SITE_BLOCK_NODE_NAMES: Readonly<Record<SiteBlockType, string>> = {
   author_cards: "authorCards",
   table_of_contents: "tableOfContents",
   color_scheme_switch: "colorSchemeSwitch",
+  query_total: "queryTotal",
+  author_avatar: "authorAvatar",
+  search_results: "searchResults",
+  post_facts: "postFacts",
+  site_copyright: "siteCopyright",
+  golive_credit: "goliveCredit",
   query_pagination: "queryPagination",
   query: "query",
   post_template: "postTemplate",
@@ -148,6 +166,12 @@ export const SITE_BLOCK_LABELS: Readonly<Record<SiteBlockType, string>> = {
   author_cards: "Author cards",
   table_of_contents: "Table of contents",
   color_scheme_switch: "Colour scheme switch",
+  query_total: "Query total",
+  author_avatar: "Author avatar",
+  search_results: "Search results",
+  post_facts: "Post details",
+  site_copyright: "Copyright",
+  golive_credit: "GoLive credit",
   query_pagination: "Pagination",
   query: "Query loop",
   post_template: "Post template",
@@ -176,6 +200,12 @@ export const SITE_BLOCK_ICONS: Readonly<Record<SiteBlockType, string>> = {
   author_cards: "M8 5a3 3 0 1 0 0 6a3 3 0 1 0 0-6M3 19c.7-3 2.6-5 5-5s4.3 2 5 5M15 8h6M15 12h6M17 16h4",
   table_of_contents: "M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01",
   color_scheme_switch: "M12 3a9 9 0 1 0 0 18zM12 3a9 9 0 0 1 0 18",
+  query_total: "M4 6h16M4 12h10M4 18h6M17 15v6M14 18h6",
+  author_avatar: "M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M12 7a3 3 0 1 0 0 6a3 3 0 1 0 0-6M6.5 18c1.2-2 3.2-3 5.5-3s4.3 1 5.5 3",
+  search_results: "M10 4a6 6 0 1 0 0 12a6 6 0 1 0 0-12M18 18l-3.5-3.5M4 20h16",
+  post_facts: "M4 5h6M4 9h10M4 14h6M4 18h10M17 4v16",
+  site_copyright: "M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M15 9.5a3.5 3.5 0 1 0 0 5",
+  golive_credit: "M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6L3.3 9.3l6.1-.7z",
   query_pagination: "M4 12h.01M9 12h.01M15 12h.01M20 12h.01M3 7h18M3 17h18",
   query: "M4 4h16v4H4zM4 10h16v4H4zM4 16h16v4H4z",
   post_template: "M4 4h16v16H4zM8 9h8M8 13h5",
@@ -221,6 +251,13 @@ export const SITE_BLOCK_CONTEXTS: Readonly<Record<SiteBlockType, readonly BlockD
   author_cards: ["template", "part"],
   table_of_contents: ["template", "part"],
   color_scheme_switch: ["template", "part"],
+  // #498. A copyright line and the credit belong in a footer part; the rest wherever a page needs them.
+  query_total: ["template", "part"],
+  author_avatar: ["template", "part"],
+  search_results: ["template", "part"],
+  post_facts: ["template", "part"],
+  site_copyright: ["template", "part"],
+  golive_credit: ["template", "part"],
   query_pagination: ["template", "part"],
   query: ["template", "part"],
   post_template: ["template", "part"],
@@ -301,10 +338,19 @@ export const SITE_LOGO_MIN_WIDTH = 32
 export const SITE_LOGO_MAX_WIDTH = 600
 export const SITE_LOGO_DEFAULT_WIDTH = 48
 
-export const NAVIGATION_LAYOUTS = ["row", "column"] as const
+/**
+ * `row` (the default), `column`, or `columns` (#498): the default theme footer's link columns, a
+ * column per top-level link with children (headed by it) and the "Site" column (the other links and
+ * the site's RSS feed).
+ */
+export const NAVIGATION_LAYOUTS = ["row", "column", "columns"] as const
 export type NavigationLayout = (typeof NAVIGATION_LAYOUTS)[number]
-/** `phone`: at phone width the links fold into a menu button (the theme header's). */
-export const NAVIGATION_OVERLAYS = ["phone", "never"] as const
+/**
+ * `phone` (the default): at phone width the links fold into a `<details>` menu button. `never`.
+ * `menu` (#498): the theme header's menu button and phone menu (a `<dialog>` with the site's title,
+ * Home and the links, a search field and the colour scheme switch), which the theme's script opens.
+ */
+export const NAVIGATION_OVERLAYS = ["phone", "never", "menu"] as const
 export type NavigationOverlay = (typeof NAVIGATION_OVERLAYS)[number]
 
 /** A menu location's name, as a theme's `menuLocations` and `/public/menus/:location` use it. */
@@ -320,6 +366,10 @@ export const SEARCH_BUTTON_MAX_LENGTH = 40
 
 /** What the search block shows for a text left out. */
 export const SEARCH_DEFAULTS = { label: "Search", button: "Search" } as const
+
+/** `form` (the default): the field and its button. `icon` (#498): the header's search link, an icon to the search page. */
+export const SEARCH_VARIANTS = ["form", "icon"] as const
+export type SearchVariant = (typeof SEARCH_VARIANTS)[number]
 
 export function isMenuLocation(value: unknown): value is string {
   return typeof value === "string" && MENU_LOCATION_PATTERN.test(value)
@@ -367,13 +417,14 @@ export interface SiteLogoAttrs {
 export interface NavigationAttrs {
   location?: string
   menuId?: number
-  layout?: "column"
-  overlay?: "never"
+  layout?: "column" | "columns"
+  overlay?: "never" | "menu"
 }
 export interface SearchAttrs {
   label?: string
   placeholder?: string
   button?: string
+  variant?: "icon"
 }
 export interface TemplatePartAttrs {
   slug?: string
@@ -442,6 +493,20 @@ export const POST_DATE_FORMATS = ["long", "short"] as const
 
 export const POST_TERMS_DEFAULT_TAXONOMY = "category"
 
+/**
+ * #498: `post_featured_image`'s and `post_content`'s width in the page, the default theme's
+ * `post-featured--column|wide|full` and image `sizes`: `column` (the default), `wide`, `full` (the
+ * featured image only).
+ */
+export const POST_FEATURED_IMAGE_WIDTHS = ["column", "wide", "full"] as const
+export const POST_CONTENT_WIDTHS = ["column", "wide"] as const
+
+/** #498: a query's list: `list` (the default, a post template's rows) or `links` (titles only, `ul.link-list`). */
+export const QUERY_LAYOUTS = ["list", "links"] as const
+
+/** #498: `related_posts`' looks: `cards` (the default, "More to read") or `list` (the sidebar's "In <category>"). */
+export const RELATED_POSTS_LAYOUTS = ["cards", "list"] as const
+
 /** An excerpt's length in words: a number rounded and clamped to 5–100, else the default. */
 export function normalizePostExcerptLength(value: unknown): number {
   if (typeof value !== "number" || !Number.isFinite(value)) return POST_EXCERPT_DEFAULT_WORDS
@@ -462,9 +527,22 @@ export interface QueryAttrs {
   termIds?: number[]
   /** Credited in the post's published byline. */
   authorId?: number
+  /** #498: the first post of the list's first page as the featured post, the rest under "More posts". */
+  feature?: true
+  /** #498: titles only. */
+  layout?: "links"
 }
 export interface QueryTitleAttrs {
   level?: 2
+  /** #498: the kind of page as a label (`span.eyebrow`: "Category", "Author", "Error 404") instead of the title. */
+  label?: true
+}
+export interface QueryPaginationAttrs {
+  /** #498: on a list of one page, the line that says it is all ("That's every post by …"). */
+  end?: true
+}
+export interface PostContentAttrs {
+  width?: "wide"
 }
 export interface PostTitleAttrs {
   level?: 1 | 2 | 3 | 4
@@ -477,6 +555,8 @@ export interface PostExcerptAttrs {
 export interface PostFeaturedImageAttrs {
   aspect?: "16-9" | "3-2" | "1-1"
   link?: true
+  /** #498: absent is `column`. */
+  width?: "wide" | "full"
 }
 export interface PostDateAttrs {
   which?: "modified"
@@ -486,9 +566,13 @@ export interface PostBylineAttrs {
   avatars?: false
   /** #497: " · 4 min read" after the names, as the theme's byline. */
   readingTime?: true
+  /** #498: the published date in the byline, as the theme's (long on the page, short in a list). */
+  date?: true
 }
 export interface PostTermsAttrs {
   taxonomy?: string
+  /** #498: every taxonomy's terms as chips (the theme's `PostTerms`); `taxonomy` is then left out. */
+  all?: true
 }
 
 // ── #497: related posts, author cards, table of contents, colour scheme switch ──────
@@ -501,8 +585,11 @@ export const RELATED_POSTS_MIN_COUNT = 1
 export const RELATED_POSTS_MAX_COUNT = 6
 export const RELATED_POSTS_DEFAULT_COUNT = 3
 
-/** `color_scheme_switch`'s looks, the theme's `ThemeSwitch` variants: `segmented` (the default) or `menu`. */
-export const COLOR_SCHEME_SWITCH_VARIANTS = ["segmented", "menu"] as const
+/**
+ * `color_scheme_switch`'s looks, the theme's `ThemeSwitch` variants: `segmented` (the default) or
+ * `menu`; `popover` (#498) is the header's icon button that opens the `menu` list.
+ */
+export const COLOR_SCHEME_SWITCH_VARIANTS = ["segmented", "menu", "popover"] as const
 export type ColorSchemeSwitchVariant = (typeof COLOR_SCHEME_SWITCH_VARIANTS)[number]
 
 /** Related posts' count: a number rounded and clamped to 1–6, else the default. */
@@ -516,9 +603,18 @@ export interface RelatedPostsAttrs {
   count?: number
   /** Only posts sharing a term of this taxonomy (`/related`'s `taxonomy`); absent: any shared term, latest posts filling in. */
   taxonomy?: string
+  /**
+   * #498: `list` is the sidebar's "In <term>": the other posts of the post's first term of
+   * `taxonomy` (the category when absent), as links, with "All <term> →".
+   */
+  layout?: "list"
 }
 export interface ColorSchemeSwitchAttrs {
-  variant?: "menu"
+  variant?: "menu" | "popover"
+}
+export interface PostFactsAttrs {
+  /** #498: only when the page shows no table of contents and no "In <term>" list (the theme sidebar's rule). */
+  fallback?: true
 }
 
 /**
@@ -539,15 +635,22 @@ export interface ColorSchemeSwitchAttrs {
  *   `perPage` rounded, clamped to 1–24 (10 is the default); `orderBy: "title"`; `order: "asc"`;
  *   `taxonomy` and `termIds` both or neither (`normalizeTermIds`); `authorId` a user id.
  * - `query_title`: `level: 2`. `post_title`: `level` 1–4, `link` a boolean.
- * - `post_excerpt`: `length` in words, rounded, clamped to 5–100 (35 is the default).
+ * - `post_excerpt`: `length` in words, rounded, clamped to 5–100, every one kept (#498: absent is the theme's own).
  * - `post_featured_image`: `aspect` "16-9", "3-2" or "1-1"; `link: true`.
  * - `post_date`: `which: "modified"`, `format: "short"`. `post_byline`: `avatars: false`,
  *   `readingTime: true` (#497).
  * - `post_terms`: `taxonomy` a taxonomy's name ("category" is the default).
  * - `related_posts` (#497): `count` rounded, clamped to 1–6 (3 is the default); `taxonomy` a
  *   taxonomy's name. `color_scheme_switch`: `variant: "menu"`.
- * - `term_description`, `post_content`, `post_navigation`, `query_pagination`,
- *   `post_template`, `query_no_results`, `author_cards`, `table_of_contents`: none.
+ * - #498: `navigation`'s `layout: "columns"` and `overlay: "menu"`; `search`'s `variant: "icon"`;
+ *   `query`'s `feature: true` and `layout: "links"`; `query_title`'s `label: true`;
+ *   `query_pagination`'s `end: true`; `post_content`'s `width: "wide"`; `post_featured_image`'s
+ *   `width` "wide" or "full"; `post_byline`'s `date: true`; `post_terms`' `all: true` (which
+ *   leaves `taxonomy` out); `related_posts`' `layout: "list"`; `color_scheme_switch`'s
+ *   `variant: "popover"`; `post_facts`' `fallback: true`.
+ * - `term_description`, `post_navigation`, `post_template`, `query_no_results`,
+ *   `author_cards`, `table_of_contents`, `query_total`, `author_avatar`, `search_results`,
+ *   `site_copyright`, `golive_credit`: none.
  */
 export function normalizeSiteBlockAttrs(type: SiteBlockType, attrs: unknown): Record<string, unknown> {
   const a = (attrs && typeof attrs === "object" ? attrs : {}) as Record<string, unknown>
@@ -572,8 +675,8 @@ export function normalizeSiteBlockAttrs(type: SiteBlockType, attrs: unknown): Re
     case "navigation": {
       if (isMenuId(a.menuId)) out.menuId = a.menuId
       else if (isMenuLocation(a.location)) out.location = a.location
-      if (a.layout === "column") out.layout = "column"
-      if (a.overlay === "never") out.overlay = "never"
+      if (a.layout === "column" || a.layout === "columns") out.layout = a.layout
+      if (a.overlay === "never" || a.overlay === "menu") out.overlay = a.overlay
       break
     }
     case "search": {
@@ -583,6 +686,7 @@ export function normalizeSiteBlockAttrs(type: SiteBlockType, attrs: unknown): Re
       if (label !== null) out.label = label
       if (placeholder !== null) out.placeholder = placeholder
       if (button !== null) out.button = button
+      if (a.variant === "icon") out.variant = "icon"
       break
     }
     case "template_part":
@@ -603,10 +707,19 @@ export function normalizeSiteBlockAttrs(type: SiteBlockType, attrs: unknown): Re
         out.termIds = termIds
       }
       if (isPositiveId(a.authorId)) out.authorId = a.authorId
+      if (a.feature === true) out.feature = true
+      if (a.layout === "links") out.layout = "links"
       break
     }
     case "query_title":
       if (a.level === 2) out.level = 2
+      if (a.label === true) out.label = true
+      break
+    case "query_pagination":
+      if (a.end === true) out.end = true
+      break
+    case "post_content":
+      if (a.width === "wide") out.width = "wide"
       break
     case "post_title":
       if ((POST_TITLE_LEVELS as readonly unknown[]).includes(a.level)) out.level = a.level
@@ -615,12 +728,14 @@ export function normalizeSiteBlockAttrs(type: SiteBlockType, attrs: unknown): Re
     case "post_excerpt":
       if (typeof a.length === "number" && Number.isFinite(a.length)) {
         const length = normalizePostExcerptLength(a.length)
-        if (length !== POST_EXCERPT_DEFAULT_WORDS) out.length = length
+        // #498: every length is kept; absent is the theme's own (220 characters in a list).
+        out.length = length
       }
       break
     case "post_featured_image":
       if (a.aspect === "16-9" || a.aspect === "3-2" || a.aspect === "1-1") out.aspect = a.aspect
       if (a.link === true) out.link = true
+      if (a.width === "wide" || a.width === "full") out.width = a.width
       break
     case "post_date":
       if (a.which === "modified") out.which = "modified"
@@ -629,6 +744,7 @@ export function normalizeSiteBlockAttrs(type: SiteBlockType, attrs: unknown): Re
     case "post_byline":
       if (a.avatars === false) out.avatars = false
       if (a.readingTime === true) out.readingTime = true
+      if (a.date === true) out.date = true
       break
     case "related_posts": {
       if (typeof a.count === "number" && Number.isFinite(a.count)) {
@@ -636,22 +752,30 @@ export function normalizeSiteBlockAttrs(type: SiteBlockType, attrs: unknown): Re
         if (count !== RELATED_POSTS_DEFAULT_COUNT) out.count = count
       }
       if (isContentName(a.taxonomy)) out.taxonomy = a.taxonomy
+      if (a.layout === "list") out.layout = "list"
       break
     }
     case "color_scheme_switch":
-      if (a.variant === "menu") out.variant = "menu"
+      if (a.variant === "menu" || a.variant === "popover") out.variant = a.variant
       break
     case "post_terms":
-      if (isContentName(a.taxonomy) && a.taxonomy !== POST_TERMS_DEFAULT_TAXONOMY) out.taxonomy = a.taxonomy
+      if (a.all === true) out.all = true
+      else if (isContentName(a.taxonomy) && a.taxonomy !== POST_TERMS_DEFAULT_TAXONOMY) out.taxonomy = a.taxonomy
+      break
+    case "post_facts":
+      if (a.fallback === true) out.fallback = true
       break
     case "term_description":
-    case "post_content":
     case "post_navigation":
-    case "query_pagination":
     case "post_template":
     case "query_no_results":
     case "author_cards":
     case "table_of_contents":
+    case "query_total":
+    case "author_avatar":
+    case "search_results":
+    case "site_copyright":
+    case "golive_credit":
       break
   }
   return out
@@ -678,7 +802,7 @@ export function siteBlockNodeAttrs(type: SiteBlockType, attrs: unknown): Record<
         overlay: stored.overlay ?? "phone",
       }
     case "search":
-      return { label: stored.label ?? null, placeholder: stored.placeholder ?? null, button: stored.button ?? null }
+      return { label: stored.label ?? null, placeholder: stored.placeholder ?? null, button: stored.button ?? null, variant: stored.variant ?? "form" }
     case "template_part":
       return { slug: stored.slug ?? null }
     case "query":
@@ -692,33 +816,44 @@ export function siteBlockNodeAttrs(type: SiteBlockType, attrs: unknown): Record<
         // A comma list, never an array (normalizeTermIds).
         termIds: Array.isArray(stored.termIds) ? (stored.termIds as number[]).join(",") : null,
         authorId: stored.authorId ?? null,
+        feature: stored.feature === true,
+        layout: stored.layout ?? "list",
       }
     case "query_title":
-      return { level: stored.level ?? 1 }
+      return { level: stored.level ?? 1, label: stored.label === true }
+    case "query_pagination":
+      return { end: stored.end === true }
+    case "post_content":
+      return { width: stored.width ?? "column" }
     case "post_title":
       return { level: stored.level ?? null, link: stored.link ?? null }
     case "post_excerpt":
-      return { length: stored.length ?? POST_EXCERPT_DEFAULT_WORDS }
+      return { length: stored.length ?? null }
     case "post_featured_image":
-      return { aspect: stored.aspect ?? "auto", link: stored.link === true }
+      return { aspect: stored.aspect ?? "auto", link: stored.link === true, width: stored.width ?? "column" }
     case "post_date":
       return { which: stored.which ?? "published", format: stored.format ?? "long" }
     case "post_byline":
-      return { avatars: stored.avatars !== false, readingTime: stored.readingTime === true }
+      return { avatars: stored.avatars !== false, readingTime: stored.readingTime === true, date: stored.date === true }
     case "related_posts":
-      return { count: stored.count ?? RELATED_POSTS_DEFAULT_COUNT, taxonomy: stored.taxonomy ?? null }
+      return { count: stored.count ?? RELATED_POSTS_DEFAULT_COUNT, taxonomy: stored.taxonomy ?? null, layout: stored.layout ?? "cards" }
     case "color_scheme_switch":
       return { variant: stored.variant ?? "segmented" }
     case "post_terms":
-      return { taxonomy: stored.taxonomy ?? POST_TERMS_DEFAULT_TAXONOMY }
+      return { taxonomy: stored.taxonomy ?? POST_TERMS_DEFAULT_TAXONOMY, all: stored.all === true }
+    case "post_facts":
+      return { fallback: stored.fallback === true }
     case "term_description":
-    case "post_content":
     case "post_navigation":
-    case "query_pagination":
     case "post_template":
     case "query_no_results":
     case "author_cards":
     case "table_of_contents":
+    case "query_total":
+    case "author_avatar":
+    case "search_results":
+    case "site_copyright":
+    case "golive_credit":
       return {}
   }
 }

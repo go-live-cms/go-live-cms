@@ -15,7 +15,6 @@ import {
   normalizeQueryPerPage,
   POST_DATE_FORMATS,
   POST_DATE_WHICH,
-  POST_EXCERPT_DEFAULT_WORDS,
   POST_EXCERPT_MAX_WORDS,
   POST_EXCERPT_MIN_WORDS,
   POST_FEATURED_IMAGE_ASPECTS,
@@ -59,8 +58,13 @@ const KNOWN_PARTS = ["header", "footer"] as const
 
 const LEVELS = ["0", "1", "2"] as const
 const LEVEL_LABELS: Record<(typeof LEVELS)[number], string> = { "0": "Paragraph", "1": "H1", "2": "H2" }
-const LAYOUTS = ["row", "column"] as const
-const LAYOUT_LABELS: Record<(typeof LAYOUTS)[number], string> = { row: "Row", column: "Column" }
+const LAYOUTS = ["row", "column", "columns"] as const
+const LAYOUT_LABELS: Record<(typeof LAYOUTS)[number], string> = { row: "Row", column: "Column", columns: "Footer columns" }
+// #498: what a row does on phones: fold into a list, the theme's menu, or nothing.
+const OVERLAYS = ["phone", "menu", "never"] as const
+const OVERLAY_LABELS: Record<(typeof OVERLAYS)[number], string> = { phone: "Fold into a list", menu: "Menu button", never: "Keep the links" }
+export const NAVIGATION_COLUMNS_HELP = "Links with links under them become columns headed by their label; the others go in a “Site” column with the RSS feed."
+export const NAVIGATION_MENU_HELP = "On phones a menu button opens the site’s title, Home, these links, a search field and the colour scheme switch."
 
 function setSiteAttrs(editor: TiptapEditor, ref: BlockRef, attrs: Record<string, unknown>) {
   if (!editor.isEditable) return
@@ -96,6 +100,18 @@ export function siteBlockHint(type: SiteBlockType): string | null {
       return TABLE_OF_CONTENTS_HELP
     case "color_scheme_switch":
       return COLOR_SCHEME_SWITCH_HELP
+    case "query_total":
+      return QUERY_TOTAL_HELP
+    case "author_avatar":
+      return AUTHOR_AVATAR_HELP
+    case "search_results":
+      return SEARCH_RESULTS_HELP
+    case "post_facts":
+      return POST_FACTS_HELP
+    case "site_copyright":
+      return SITE_COPYRIGHT_HELP
+    case "golive_credit":
+      return GOLIVE_CREDIT_HELP
     default:
       return null
   }
@@ -115,11 +131,31 @@ export const POST_TITLE_HELP = "“Sized for the page” is an H1 for the page�
 
 // #497
 export const RELATED_POSTS_HELP = "Published posts that share the most terms with the page’s post; the latest fill in. Shows nothing without a post."
+export const RELATED_POSTS_LIST_HELP = "“In <term>”: other posts in the page’s post’s first term of this taxonomy, as links, with a link to all of them."
 export const AUTHOR_CARDS_HELP = "Each credited author of the page’s post, with their bio, linking to their page."
 export const TABLE_OF_CONTENTS_HELP = "Links to the post’s H2s and H3s. A post with fewer than three shows nothing."
 export const COLOR_SCHEME_SWITCH_HELP = "Readers choose Light, Dark or System. Hidden in browsers without JavaScript, where the system’s choice applies."
-const SWITCH_VARIANTS = ["segmented", "menu"] as const
-const SWITCH_VARIANT_LABELS: Record<(typeof SWITCH_VARIANTS)[number], string> = { segmented: "Side by side", menu: "List" }
+const SWITCH_VARIANTS = ["segmented", "menu", "popover"] as const
+const SWITCH_VARIANT_LABELS: Record<(typeof SWITCH_VARIANTS)[number], string> = { segmented: "Side by side", menu: "List", popover: "Icon button" }
+
+// #498
+export const SEARCH_ICON_HELP = "An icon that opens the search page. The label is what screen readers say."
+export const QUERY_FEATURE_HELP = "On the first page, the first post shows large, and the rest under “More posts”."
+export const QUERY_PAGINATION_END_HELP = "On a list that fits one page: “That’s every post …”, with a link back to all posts."
+export const QUERY_TOTAL_HELP = "How many posts the page lists (“12 posts”, “Page 2 · 12 posts”). On an author’s page, their website too."
+export const AUTHOR_AVATAR_HELP = "The listed author’s picture, or their initial. On other pages it shows nothing."
+export const SEARCH_RESULTS_HELP = "On the search page: the count, filters by type, the results with the words found, and the pages. When nothing matches, tips, topics and recent posts."
+export const POST_FACTS_HELP = "When the post was published and updated, and its reading time."
+export const SITE_COPYRIGHT_HELP = "“© 2026 Site title”: this year, and the title from Settings › General."
+export const GOLIVE_CREDIT_HELP = "“Published with GoLive”, with GoLive’s mark, linking to the project."
+const SEARCH_VARIANTS = ["form", "icon"] as const
+const SEARCH_VARIANT_LABELS: Record<(typeof SEARCH_VARIANTS)[number], string> = { form: "Field", icon: "Icon link" }
+const CONTENT_WIDTHS = ["column", "wide"] as const
+const CONTENT_WIDTH_LABELS: Record<(typeof CONTENT_WIDTHS)[number], string> = { column: "Column", wide: "Wide" }
+const IMAGE_WIDTHS = ["column", "wide", "full"] as const
+const IMAGE_WIDTH_LABELS: Record<(typeof IMAGE_WIDTHS)[number], string> = { column: "Column", wide: "Wide", full: "Full" }
+const RELATED_LAYOUTS = ["cards", "list"] as const
+const RELATED_LAYOUT_LABELS: Record<(typeof RELATED_LAYOUTS)[number], string> = { cards: "Cards", list: "Links" }
 
 const QUERY_TITLE_LEVEL_VALUES = ["1", "2"] as const
 const QUERY_TITLE_LEVEL_LABELS: Record<(typeof QUERY_TITLE_LEVEL_VALUES)[number], string> = { "1": "H1", "2": "H2" }
@@ -270,6 +306,9 @@ function QueryFields({
           <p className="post-settings__hint">{listRoute ? QUERY_INHERIT_HELP : QUERY_NO_LIST_HELP}</p>
         </>
       )}
+      <Switch className="block-settings__switch" label="Feature the first post" checked={stored.feature === true} onChange={(feature) => set({ feature })} />
+      <p className="post-settings__hint">{QUERY_FEATURE_HELP}</p>
+      <Switch className="block-settings__switch" label="Titles only" checked={stored.layout === "links"} onChange={(links) => set({ layout: links ? "links" : "list" })} />
       {stored.inherit !== true && (
         <>
           <div className="post-settings__field">
@@ -405,23 +444,58 @@ export default function SiteBlockSettings({ editor, node, blockRef }: { editor: 
       {type === "navigation" && <NavigationFields ids={ids} attrs={attrs} set={set} />}
       {type === "search" && (
         <>
-          <TextField id={`${ids}-label`} label="Label" value={attrs.label} max={SEARCH_LABEL_MAX_LENGTH} placeholder="Search" hint={SEARCH_LABEL_HELP} onChange={(label) => set({ label })} />
-          <TextField id={`${ids}-placeholder`} label="Placeholder" value={attrs.placeholder} max={SEARCH_PLACEHOLDER_MAX_LENGTH} onChange={(placeholder) => set({ placeholder })} />
+          <Segment label="Look" values={SEARCH_VARIANTS} labels={SEARCH_VARIANT_LABELS} value={attrs.variant === "icon" ? "icon" : "form"} onPick={(variant) => set({ variant })} />
           <TextField
-            id={`${ids}-button`}
-            label="Button"
-            value={attrs.button}
-            max={SEARCH_BUTTON_MAX_LENGTH}
+            id={`${ids}-label`}
+            label="Label"
+            value={attrs.label}
+            max={SEARCH_LABEL_MAX_LENGTH}
             placeholder="Search"
-            hint={`Up to ${SEARCH_BUTTON_MAX_LENGTH} characters.`}
-            onChange={(button) => set({ button })}
+            hint={attrs.variant === "icon" ? SEARCH_ICON_HELP : SEARCH_LABEL_HELP}
+            onChange={(label) => set({ label })}
           />
+          {attrs.variant !== "icon" && (
+            <>
+              <TextField id={`${ids}-placeholder`} label="Placeholder" value={attrs.placeholder} max={SEARCH_PLACEHOLDER_MAX_LENGTH} onChange={(placeholder) => set({ placeholder })} />
+              <TextField
+                id={`${ids}-button`}
+                label="Button"
+                value={attrs.button}
+                max={SEARCH_BUTTON_MAX_LENGTH}
+                placeholder="Search"
+                hint={`Up to ${SEARCH_BUTTON_MAX_LENGTH} characters.`}
+                onChange={(button) => set({ button })}
+              />
+            </>
+          )}
         </>
       )}
       {type === "template_part" && <PartField id={`${ids}-part`} slug={attrs.slug} onPick={(slug) => set({ slug })} />}
       {type === "query" && <QueryFields ids={ids} attrs={attrs} set={set} listRoute={editorSiteBridge(editor)?.routeHasList ?? true} />}
       {type === "query_title" && (
-        <Segment label="Level" values={QUERY_TITLE_LEVEL_VALUES} labels={QUERY_TITLE_LEVEL_LABELS} value={attrs.level === 2 ? "2" : "1"} onPick={(level) => set({ level: Number(level) })} />
+        <>
+          <Switch className="block-settings__switch" label="Show the page’s kind as a label" checked={attrs.label === true} onChange={(label) => set({ label })} />
+          {attrs.label !== true && (
+            <Segment label="Level" values={QUERY_TITLE_LEVEL_VALUES} labels={QUERY_TITLE_LEVEL_LABELS} value={attrs.level === 2 ? "2" : "1"} onPick={(level) => set({ level: Number(level) })} />
+          )}
+        </>
+      )}
+      {type === "query_pagination" && (
+        <>
+          <Switch className="block-settings__switch" label="Say when it’s all on one page" checked={attrs.end === true} onChange={(end) => set({ end })} />
+          <p className="post-settings__hint">{QUERY_PAGINATION_END_HELP}</p>
+        </>
+      )}
+      {type === "post_content" && (
+        <Segment label="Width" values={CONTENT_WIDTHS} labels={CONTENT_WIDTH_LABELS} value={attrs.width === "wide" ? "wide" : "column"} onPick={(width) => set({ width })} />
+      )}
+      {type === "post_facts" && (
+        <Switch
+          className="block-settings__switch"
+          label="Only when the page has no table of contents or category list"
+          checked={attrs.fallback === true}
+          onChange={(fallback) => set({ fallback })}
+        />
       )}
       {type === "post_title" && (
         <>
@@ -443,22 +517,19 @@ export default function SiteBlockSettings({ editor, node, blockRef }: { editor: 
         </>
       )}
       {type === "post_excerpt" && (
-        <NumberField
-          id={`${ids}-length`}
-          label="Length"
-          value={attrs.length}
-          fallback={POST_EXCERPT_DEFAULT_WORDS}
-          min={POST_EXCERPT_MIN_WORDS}
-          max={POST_EXCERPT_MAX_WORDS}
-          hint={`In words, ${POST_EXCERPT_MIN_WORDS} to ${POST_EXCERPT_MAX_WORDS}.`}
-          normalize={normalizePostExcerptLength}
-          onCommit={(length) => set({ length })}
-        />
+        <ExcerptLengthField id={`${ids}-length`} length={attrs.length} onCommit={(length) => set({ length })} />
       )}
       {type === "post_featured_image" && (
         <>
           <Segment label="Shape" values={POST_FEATURED_IMAGE_ASPECTS} labels={ASPECT_LABELS} value={(attrs.aspect as PostFeaturedImageAspect) ?? "auto"} onPick={(aspect) => set({ aspect })} />
           <p className="post-settings__hint">Cropped around the image’s focal point.</p>
+          <Segment
+            label="Width"
+            values={IMAGE_WIDTHS}
+            labels={IMAGE_WIDTH_LABELS}
+            value={attrs.width === "wide" || attrs.width === "full" ? attrs.width : "column"}
+            onPick={(width) => set({ width })}
+          />
           <Switch className="block-settings__switch" label="Link to the post" checked={attrs.link === true} onChange={(link) => set({ link })} />
           <p className="post-settings__hint">A post without one shows nothing here.</p>
         </>
@@ -474,10 +545,12 @@ export default function SiteBlockSettings({ editor, node, blockRef }: { editor: 
         <>
           <Switch className="block-settings__switch" label="Show avatars" checked={attrs.avatars !== false} onChange={(avatars) => set({ avatars })} />
           <Switch className="block-settings__switch" label="Show reading time" checked={attrs.readingTime === true} onChange={(readingTime) => set({ readingTime })} />
+          <Switch className="block-settings__switch" label="Show the date" checked={attrs.date === true} onChange={(date) => set({ date })} />
         </>
       )}
       {type === "related_posts" && (
         <>
+          <Segment label="Look" values={RELATED_LAYOUTS} labels={RELATED_LAYOUT_LABELS} value={attrs.layout === "list" ? "list" : "cards"} onPick={(layout) => set({ layout })} />
           <NumberField
             id={`${ids}-count`}
             label="Posts"
@@ -489,16 +562,89 @@ export default function SiteBlockSettings({ editor, node, blockRef }: { editor: 
             normalize={normalizeRelatedPostsCount}
             onCommit={(count) => set({ count })}
           />
-          <TaxonomyField id={`${ids}-taxonomy`} taxonomy={attrs.taxonomy} anyLabel="Any shared term" onPick={(taxonomy) => set({ taxonomy })} />
-          <p className="post-settings__hint">{RELATED_POSTS_HELP}</p>
+          <TaxonomyField
+            id={`${ids}-taxonomy`}
+            taxonomy={attrs.taxonomy}
+            anyLabel={attrs.layout === "list" ? "Category" : "Any shared term"}
+            onPick={(taxonomy) => set({ taxonomy })}
+          />
+          <p className="post-settings__hint">{attrs.layout === "list" ? RELATED_POSTS_LIST_HELP : RELATED_POSTS_HELP}</p>
         </>
       )}
       {type === "color_scheme_switch" && (
-        <Segment label="Look" values={SWITCH_VARIANTS} labels={SWITCH_VARIANT_LABELS} value={attrs.variant === "menu" ? "menu" : "segmented"} onPick={(variant) => set({ variant })} />
+        <Segment
+          label="Look"
+          values={SWITCH_VARIANTS}
+          labels={SWITCH_VARIANT_LABELS}
+          value={attrs.variant === "menu" || attrs.variant === "popover" ? attrs.variant : "segmented"}
+          onPick={(variant) => set({ variant })}
+        />
       )}
-      {type === "post_terms" && <TaxonomyField id={`${ids}-taxonomy`} taxonomy={attrs.taxonomy} onPick={(taxonomy) => set({ taxonomy })} />}
+      {type === "post_terms" && (
+        <>
+          <Switch className="block-settings__switch" label="Every taxonomy" checked={attrs.all === true} onChange={(all) => set({ all })} />
+          {attrs.all !== true && <TaxonomyField id={`${ids}-taxonomy`} taxonomy={attrs.taxonomy} onPick={(taxonomy) => set({ taxonomy })} />}
+        </>
+      )}
       {hint && <p className="post-settings__hint">{hint}</p>}
     </fieldset>
+  )
+}
+
+// #498: an excerpt without a length follows the theme (about 220 characters in a list); on the
+// page's own post the block is the post's excerpt as its dek.
+export const POST_EXCERPT_LENGTH_HELP = `Empty: the theme’s own length (about 220 characters in a list). Or ${POST_EXCERPT_MIN_WORDS} to ${POST_EXCERPT_MAX_WORDS} words.`
+export const POST_EXCERPT_HELP = "On the page’s own post: its excerpt, under the title."
+
+/**
+ * An excerpt's length in words, or empty for the theme's default. Stored on Enter or when the field
+ * loses focus: empty clears it (the node's default, which the store leaves out), a number is clamped.
+ */
+export function ExcerptLengthField({ id, length, onCommit }: { id: string; length: unknown; onCommit: (length: number | null) => void }) {
+  const set = typeof length === "number" && Number.isFinite(length) ? length : null
+  const [text, setText] = useState(set === null ? "" : String(set))
+  useEffect(() => setText(set === null ? "" : String(set)), [set])
+  const commit = () => {
+    if (text.trim() === "") {
+      setText("")
+      if (set !== null) onCommit(null)
+      return
+    }
+    const typed = Number(text)
+    if (!Number.isFinite(typed)) {
+      setText(set === null ? "" : String(set))
+      return
+    }
+    const next = normalizePostExcerptLength(typed)
+    setText(String(next))
+    if (next !== set) onCommit(next)
+  }
+  return (
+    <div className="post-settings__field">
+      <label className="post-settings__label" htmlFor={id}>
+        Length in words
+      </label>
+      <input
+        id={id}
+        type="number"
+        min={POST_EXCERPT_MIN_WORDS}
+        max={POST_EXCERPT_MAX_WORDS}
+        step={1}
+        value={text}
+        placeholder="Theme default"
+        aria-describedby={`${id}-hint`}
+        onChange={(event) => setText(event.currentTarget.value)}
+        onBlur={commit}
+        onKeyDown={(event) => {
+          if (event.key !== "Enter") return
+          event.preventDefault()
+          commit()
+        }}
+      />
+      <small id={`${id}-hint`} className="post-settings__hint">
+        {POST_EXCERPT_LENGTH_HELP} {POST_EXCERPT_HELP}
+      </small>
+    </div>
   )
 }
 
@@ -649,13 +795,27 @@ function NavigationFields({ ids, attrs, set }: { ids: string; attrs: Record<stri
           {NAVIGATION_HELP}
         </small>
       </div>
-      <Segment label="Layout" values={LAYOUTS} labels={LAYOUT_LABELS} value={stored.layout === "column" ? "column" : "row"} onPick={(layout) => set({ layout })} />
-      <Switch
-        className="block-settings__switch"
-        label="Fold into a menu button on phones"
-        checked={stored.overlay !== "never"}
-        onChange={(fold) => set({ overlay: fold ? "phone" : "never" })}
+      <Segment
+        label="Layout"
+        values={LAYOUTS}
+        labels={LAYOUT_LABELS}
+        value={stored.layout === "column" || stored.layout === "columns" ? stored.layout : "row"}
+        onPick={(layout) => set({ layout })}
       />
+      {stored.layout === "columns" ? (
+        <p className="post-settings__hint">{NAVIGATION_COLUMNS_HELP}</p>
+      ) : (
+        <>
+          <Segment
+            label="On phones"
+            values={OVERLAYS}
+            labels={OVERLAY_LABELS}
+            value={stored.overlay === "never" || stored.overlay === "menu" ? stored.overlay : "phone"}
+            onPick={(overlay) => set({ overlay })}
+          />
+          {stored.overlay === "menu" && <p className="post-settings__hint">{NAVIGATION_MENU_HELP}</p>}
+        </>
+      )}
     </>
   )
 }

@@ -1,0 +1,14 @@
+{
+  "title": "Search results",
+  "doc": {
+    "doc_version": 1,
+    "blocks_order": ["search-header", "search-title", "search-form", "search-results", "search-footer"],
+    "blocks": {
+      "search-header": { "id": "search-header", "type": "template_part", "version": 1, "attrs": { "slug": "header" } },
+      "search-title": { "id": "search-title", "type": "query_title", "version": 1, "attrs": {} },
+      "search-form": { "id": "search-form", "type": "search", "version": 1, "attrs": { "label": "Search posts and pages" } },
+      "search-results": { "id": "search-results", "type": "search_results", "version": 1, "attrs": {} },
+      "search-footer": { "id": "search-footer", "type": "template_part", "version": 1, "attrs": { "slug": "footer" } }
+    }
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "title": "Page not found",
+  "doc": {
+    "doc_version": 1,
+    "blocks_order": ["not-found-header", "not-found-label", "not-found-title", "not-found-text", "not-found-search", "not-found-buttons", "not-found-recent-title", "not-found-recent", "not-found-footer"],
+    "blocks": {
+      "not-found-header": { "id": "not-found-header", "type": "template_part", "version": 1, "attrs": { "slug": "header" } },
+      "not-found-label": { "id": "not-found-label", "type": "query_title", "version": 1, "attrs": { "label": true } },
+      "not-found-title": { "id": "not-found-title", "type": "query_title", "version": 1, "attrs": {} },
+      "not-found-text": { "id": "not-found-text", "type": "term_description", "version": 1, "attrs": {} },
+      "not-found-search": { "id": "not-found-search", "type": "search", "version": 1, "attrs": { "label": "Search posts and pages" } },
+      "not-found-buttons": {
+        "id": "not-found-buttons",
+        "type": "buttons",
+        "version": 1,
+        "attrs": { "pm": { "type": "buttons", "content": [{ "type": "button", "attrs": { "href": "/", "variant": "secondary" }, "content": [{ "type": "text", "text": "Go to the front page" }] }] } }
+      },
+      "not-found-recent-title": { "id": "not-found-recent-title", "type": "heading", "version": 1, "attrs": { "level": 2, "text": "Recent posts" } },
+      "not-found-recent": { "id": "not-found-recent", "type": "query", "version": 1, "attrs": { "perPage": 3, "layout": "links" }, "children": ["not-found-recent-items"] },
+      "not-found-recent-items": { "id": "not-found-recent-items", "type": "post_template", "version": 1, "attrs": {}, "children": ["not-found-recent-item"] },
+      "not-found-recent-item": { "id": "not-found-recent-item", "type": "post_title", "version": 1, "attrs": {} },
+      "not-found-footer": { "id": "not-found-footer", "type": "template_part", "version": 1, "attrs": { "slug": "footer" } }
+    }
+  }
+}

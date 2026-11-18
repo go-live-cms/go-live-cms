@@ -307,6 +307,12 @@ Releases that did this, newest first:
   `color_scheme_switch`, and `readingTime` on `post_byline`): four new node types, a new attr on
   the byline, and a wider doc and containers. No migration. Open editor tabs reload once after
   the deploy.
+- **#498, the default theme as block templates** (site blocks IV: `query_total`, `author_avatar`,
+  `search_results`, `post_facts`, `site_copyright`, `golive_credit`, and new attrs on navigation,
+  search, the query loop, the post blocks, related posts and the switch): six new node types and
+  new attrs. No migration. Open editor tabs reload once after the deploy. Every default-theme page
+  now renders through the theme's shipped block templates (`web/themes/default/templates/`); the
+  web, collab and api images must come from the same commit (the API's starters are those files).
 - **#489, site blocks II** (the query loop: `query`, `post_template`, `query_pagination`,
   `query_no_results`; `query_title`, `term_description` and the `post_*` blocks): fourteen new
   node types, and a wider doc and group. No migration. Open editor tabs reload once after the

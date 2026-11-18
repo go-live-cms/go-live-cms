@@ -281,6 +281,13 @@ describe("the Site group (#488)", () => {
       "Author cards",
       "Table of contents",
       "Colour scheme switch",
+      // #498
+      "Query total",
+      "Author avatar",
+      "Search results",
+      "Post details",
+      "Copyright",
+      "GoLive credit",
     ])
     expect(SITE_BLOCKS.every((e) => e.group === "site")).toBe(true)
     expect(catalogEntries()).toEqual(expect.arrayContaining([...SITE_BLOCKS]))

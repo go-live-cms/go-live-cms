@@ -541,6 +541,13 @@ export const SITE_BLOCKS: readonly CatalogEntry[] = [
   siteEntry("author_cards", ["written", "bio", "author"]),
   siteEntry("table_of_contents", ["toc", "contents", "headings", "outline", "on this page"]),
   siteEntry("color_scheme_switch", ["theme", "dark", "light", "mode", "appearance"]),
+  // #498
+  siteEntry("query_total", ["count", "total", "number", "posts"]),
+  siteEntry("author_avatar", ["author", "picture", "photo", "profile"]),
+  siteEntry("search_results", ["search", "results", "find", "filters"]),
+  siteEntry("post_facts", ["details", "published", "updated", "reading time", "facts"]),
+  siteEntry("site_copyright", ["copyright", "year", "legal"]),
+  siteEntry("golive_credit", ["credit", "powered", "published with"]),
 ]
 
 function siteEntry(type: SiteBlockType, keywords: readonly string[]): CatalogEntry {

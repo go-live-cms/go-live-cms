@@ -65,6 +65,9 @@ async function handleRequest(context: APIContext, next: MiddlewareNext, proxied:
     try {
       const theme = await getActiveTheme()
       context.locals.activeTheme = theme.slug
+      // The theme's layout_variants setting (#498: it picks a post's block template too), so the post
+      // route doesn't read /themes/active again.
+      context.locals.layoutVariants = (theme.settings?.layout_variants ?? {}) as Record<string, string>
       // The published global styles (#485) the theme's base layout merges into its tokens
       // (resolveThemeTokens): served with the active theme, never the draft.
       context.locals.globalStyles = publishedGlobalStyles(theme.global_styles)

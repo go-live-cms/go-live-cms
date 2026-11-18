@@ -695,15 +695,34 @@ starter parts are only used by block templates. Slugs are `^[a-z0-9][a-z0-9_-]{0
 
 **Block templates replace layouts by rank** (#491, `docs/design/theme-builder.md` 3.2). Each
 route has a ranked list of template slugs, most specific first, and each rank has its code
-layouts: `single-{type}` (your `layouts/{type}/`), `single` (`layouts/post/`), `page-{template}`
-(`layouts/page/{template}.astro`), `page` (`layouts/page/`), `front-page` (none), `home`,
-`archive-{type}` (none), `archive`, `taxonomy-{taxonomy}` (`layouts/term/`), `author`, `search`
-and `404` (`layouts/error/404.astro` or `default.astro`). A published builder template, or one
+layouts: `single-{type}` (your `layouts/{type}/`), `single-{variant}` (none: the type's layout
+variant, `sidebar` or `wide`, #498), `single` (`layouts/post/`), `page-{template}`
+(`layouts/page/{template}.astro`), `page-{variant}` (none: the page type's variant), `page`
+(`layouts/page/`), `front-page` (none), `home`, `archive-{type}` (none), `archive`,
+`taxonomy-{taxonomy}` (none), `taxonomy` (`layouts/term/`, #498), `author`, `search` and `404`
+(`layouts/error/404.astro` or `default.astro`). A published builder template, or one
 your theme ships in `templates/<slug>.json`, renders instead of your layout when its rank is the
 same or more specific: customizing "Single" replaces `layouts/post`, never your own
 `layouts/product`. The page then renders through core's `BlockTemplateLayout`, which uses your
 tokens (item 1), your registered styles and scripts (item 2), and the props your layout would
-have had. The 500 page always renders your error layout.
+have had. The 500 page always renders your error layout, and so does any route whose template
+can't be read (the API is down): keep your code layouts, they are the fallback.
+
+**What `BlockTemplateLayout` adds and reads (#498).** With `supports.skipLink: true` (say so once
+your CSS styles `.skip-link`) it puts a skip link first in the body (`a.skip-link` to `#content`), preloads `config.assets.fonts` (`{ href, type }`, paths on
+this site, as your base layout's `<link rel="preload" as="font">`), and gives a post's body
+(`post_content`) your `config.imageSizes` (`{ column, wide }`, the `sizes` your layouts give
+`BlockRenderer`) by the block's `width`. The default theme declares all three.
+
+**The default theme is block templates (#498).** It ships `templates/` for every route kind
+above (`single`, `single-sidebar`, `single-wide`, `page`, `page-fullwidth`, `home`, `archive`,
+`taxonomy`, `author`, `search`, `404`; never `front-page`, which would outrank a page set as the
+front page, and never the 500 page) and `parts/header.json` and `parts/footer.json`, so
+"Customize" there starts from exactly what readers see. Its code layouts stay, as the fallback.
+Those files are also **core's starters** (the API embeds a copy, `api/sitedesign/starters/`,
+`go generate ./api/sitedesign`): customizing a slug on a theme that ships no template for it
+starts from the default theme's, which your theme's CSS should style (the site blocks' markup
+below).
 
 **4. One page, several docs.** A block template renders its own block doc and, inside it,
 the post's (and its parts'). `BlockRenderer` keeps two things unique per page, not per doc:
@@ -740,6 +759,19 @@ Site blocks III (#497) render the default theme's post-end pieces: `.related-pos
 switch has no script of its own: a theme that wants it working ships a script (a `config.assets`
 entry, never inline) that handles clicks on `[data-theme-choice]`, as the default theme's
 `theme-init.js` does, and hides `.color-scheme-switch` until that script runs.
+
+Site blocks IV (#498) render the rest of the default theme's layouts: the list header's count
+(`p.meta`), the author page's `span.avatar.author-header__avatar`, the search page's results
+(`.search-summary`, `.search-chips`, `ol.search-results`, `.search-empty`), the sidebar's
+`dl.post-facts`, the footer's `span.site-copyright` and `a.golive-credit`, and new looks of the others:
+the header's phone menu (`button.menu-btn` + `dialog#site-menu.mobile-menu`, opened by a script of
+yours on `[data-site-menu-open]`), the theme popover (`div.theme-menu`, `[data-theme-menu-toggle]`),
+the search icon link (`a.icon-btn`), the footer's `nav.footer-col` columns, the front page's
+`article.feature`, `ul.link-list`, the list end (`p.meta.list-end`), `byline--post|list` bylines,
+`post-featured--column|wide|full`, and the sidebar's `section.aside-list`. The markup is in
+`src/components/blocks/README.md`; the default theme's layout rules for its templates are the
+"block templates (#498)" section of its `styles/theme.css` (by part, `.template-part--header`, and by
+template, `.site[data-template="single-wide"]`).
 ---
 
 ## Theme Functions (`functions.ts`)

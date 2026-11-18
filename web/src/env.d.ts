@@ -12,6 +12,8 @@ declare namespace App {
 
     // Phase 1: Theme assets (the active theme's `assets`, lib/themeAssets.ts)
     activeTheme?: string
+    // #498: the active theme's `layout_variants` setting (type → variant), read with it once per request.
+    layoutVariants?: Record<string, string>
     themeAssets?: import("./lib/themeAssets").ThemeAssets
     themeCssPath?: string
 

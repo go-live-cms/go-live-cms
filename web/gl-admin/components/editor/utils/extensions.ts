@@ -145,6 +145,13 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
       schema.authorCards,
       schema.tableOfContents,
       schema.colorSchemeSwitch,
+      // #498
+      schema.queryTotal,
+      schema.authorAvatar,
+      schema.searchResults,
+      schema.postFacts,
+      schema.siteCopyright,
+      schema.goliveCredit,
       schema.siteBlockCommands,
       schema.blockId,
       // #488: which kind of document this editor holds (a post until the Site editor, #493); no schema.
@@ -211,6 +218,12 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
             case "authorCards":
             case "tableOfContents":
             case "colorSchemeSwitch":
+            case "queryTotal":
+            case "authorAvatar":
+            case "searchResults":
+            case "postFacts":
+            case "siteCopyright":
+            case "goliveCredit":
               return ""
             case "imageCaption":
             case "tableCaption":

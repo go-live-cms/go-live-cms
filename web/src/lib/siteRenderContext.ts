@@ -33,6 +33,7 @@ import {
   normalizeQueryPerPage,
   normalizeRelatedPostsCount,
   normalizeSiteBlockAttrs,
+  POST_TERMS_DEFAULT_TAXONOMY,
   QUERY_DEFAULT_POST_TYPE,
   type BlockDocV1,
   type QueryAttrs,
@@ -40,7 +41,7 @@ import {
 } from "@gl-admin/lib/blocks-spec"
 import type { Post } from "@gl-admin/lib/api/types"
 import { SERVER_MEDIA_URL } from "@gl-admin/lib/server-api-url"
-import { queryKey, type SiteMenu, type SitePostList, type SiteRenderContext, type SiteRoute } from "@/components/blocks/utils/siteContext"
+import { queryKey, type SiteLinkedTerm, type SiteMenu, type SitePostList, type SiteRenderContext, type SiteRoute } from "@/components/blocks/utils/siteContext"
 import { getRelatedPosts } from "./api"
 import { log, requestIdHeaders } from "./log"
 import { getMenu, withCurrent, type Menu } from "./menus"
@@ -278,16 +279,30 @@ export async function loadQueries(
   return Object.fromEntries(entries)
 }
 
-/** The `/public/posts/:id/related` parameters for a related posts block (#497), one to one: the count always, the taxonomy when set. */
-export function relatedRequestParams(attrs: RelatedPostsAttrs): { limit: number; taxonomy?: string } {
+/**
+ * The `/public/posts/:id/related` parameters for a related posts block (#497), one to one: the count
+ * always, the taxonomy when set. A list of one term's posts (#498, `layout: "list"`) asks for that
+ * term (`termId`), as the default theme's sidebar does.
+ */
+export function relatedRequestParams(attrs: RelatedPostsAttrs, termId?: number): { limit: number; taxonomy?: string; termId?: number } {
+  if (attrs.layout === "list" && termId !== undefined) return { limit: normalizeRelatedPostsCount(attrs.count), termId }
   return { limit: normalizeRelatedPostsCount(attrs.count), ...(attrs.taxonomy ? { taxonomy: attrs.taxonomy } : {}) }
+}
+
+/**
+ * The term a related posts list shows the posts of (#498, `layout: "list"`): the post's first term
+ * of the block's taxonomy, the category when it names none (the theme's `primaryCategory`).
+ */
+export function relatedListTerm(attrs: RelatedPostsAttrs, terms: readonly SiteLinkedTerm[] | undefined): SiteLinkedTerm | null {
+  const taxonomy = attrs.taxonomy ?? POST_TERMS_DEFAULT_TAXONOMY
+  return terms?.find((term) => term.taxonomy_type_name === taxonomy) ?? null
 }
 
 /** What reads a related posts block's posts (tests pass their own). */
 export type RelatedReader = (
   post: { id: number; post_type: string },
   attrs: RelatedPostsAttrs,
-  options: { structure: UrlStructure; siteUrl: string },
+  options: { structure: UrlStructure; siteUrl: string; termId?: number },
 ) => Promise<SitePostList>
 
 /**
@@ -298,15 +313,17 @@ export type RelatedReader = (
 export async function readRelatedPosts(
   post: { id: number; post_type: string },
   attrs: RelatedPostsAttrs,
-  { structure, siteUrl }: { structure: UrlStructure; siteUrl: string },
+  { structure, siteUrl, termId }: { structure: UrlStructure; siteUrl: string; termId?: number },
   read: typeof getRelatedPosts = getRelatedPosts,
 ): Promise<SitePostList> {
-  return onePageOf(await read(post.id, relatedRequestParams(attrs)), post.post_type, structure, siteUrl)
+  return onePageOf(await read(post.id, relatedRequestParams(attrs, termId)), post.post_type, structure, siteUrl)
 }
 
 /**
  * Each related posts block's posts by key (#497), all at once, for the route's post; none (and no
  * read) on a route without one. A failure is null for that block and logged once for the request.
+ * A list of one term's posts (#498) reads nothing when the post has no term of its taxonomy, and
+ * carries the term (its name and archive link) for its heading.
  */
 export async function loadRelated(
   related: readonly TemplateRelatedNeed[],
@@ -318,6 +335,12 @@ export async function loadRelated(
   const entries = await Promise.all(
     related.map(async (need): Promise<[string, SitePostList | null]> => {
       try {
+        if (need.attrs.layout === "list") {
+          const term = relatedListTerm(need.attrs, route?.post?.terms)
+          if (!term) return [need.key, null]
+          const list = await read(post, need.attrs, { structure, siteUrl, termId: term.id })
+          return [need.key, { ...list, term: { name: term.name, ...(term.href ? { href: term.href } : {}) } }]
+        }
         return [need.key, await read(post, need.attrs, { structure, siteUrl })]
       } catch (error) {
         failures.push(error)
@@ -353,6 +376,8 @@ export interface LoadSiteRenderContextOptions {
   readQuery?: QueryReader
   /** For tests: what reads a related posts block's posts. */
   readRelated?: RelatedReader
+  /** #498: the active theme's image `sizes` for a post's body (`config.imageSizes`). */
+  imageSizes?: { column?: string; wide?: string }
 }
 
 /**
@@ -390,6 +415,21 @@ export async function loadSiteRenderContext(locals: App.Locals | undefined, opti
         ),
   ])
   const menusById = Object.fromEntries(Object.entries(options.menusById ?? {}).map(([id, menu]) => [id, siteMenu(menu, options.currentPath)]))
+  // #498: what `post_facts` with `fallback` stands back for: a table of contents block on the page
+  // (the template's docs and the parts they place, not every override part the resolve carries),
+  // and a "In <term>" list with posts.
+  const categoryLists = needs.related.filter((need) => need.attrs.layout === "list")
+  const placedSlugs = new Set(
+    own.flatMap((doc) => (doc?.blocks ? Object.values(doc.blocks) : []))
+      .filter((block) => block?.type === "template_part")
+      .map((block) => (block.attrs as { slug?: unknown } | undefined)?.slug)
+      .filter((slug): slug is string => typeof slug === "string"),
+  )
+  const onPage = [...own, ...[...placedSlugs].map((slug) => parts[slug])]
+  const pageShows = {
+    tableOfContents: onPage.some((doc) => !!doc?.blocks && Object.values(doc.blocks).some((block) => block?.type === "table_of_contents")),
+    categoryList: categoryLists.some((need) => ((related as Record<string, SitePostList | null>)[need.key]?.items.length ?? 0) > 0),
+  }
   return {
     inTemplate: true,
     kind: "template",
@@ -403,6 +443,8 @@ export async function loadSiteRenderContext(locals: App.Locals | undefined, opti
     ...(options.route ? { route: options.route } : {}),
     queries,
     related,
+    pageShows,
+    ...(options.imageSizes ? { imageSizes: options.imageSizes } : {}),
   }
 }
 

@@ -109,6 +109,14 @@ export const RelatedPosts = siteNode("related_posts")
 export const AuthorCards = siteNode("author_cards")
 export const TableOfContents = siteNode("table_of_contents")
 export const ColorSchemeSwitch = siteNode("color_scheme_switch")
+// #498: the count, the author's avatar, the search results, the post's details, the copyright
+// line and the GoLive credit (the default theme's pieces site blocks I to III didn't cover).
+export const QueryTotal = siteNode("query_total")
+export const AuthorAvatar = siteNode("author_avatar")
+export const SearchResults = siteNode("search_results")
+export const PostFacts = siteNode("post_facts")
+export const SiteCopyright = siteNode("site_copyright")
+export const GoliveCredit = siteNode("golive_credit")
 export const QueryPagination = siteNode("query_pagination")
 
 /**

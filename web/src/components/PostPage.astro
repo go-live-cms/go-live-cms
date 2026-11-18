@@ -87,21 +87,24 @@ const site = await getSiteSettings(Astro.locals)
 // The front page (#336) lives at /: that's its address whichever URL reached it.
 const isFrontPage = postType === 'page' && site.frontPageId === fullPost.id
 
+// The type's layout variant (the theme's layout_variants setting): a code layout's, and (#498) the
+// block template it picks (`single-sidebar`, `page-fullwidth`).
+// The middleware read it with the active theme; without it (a test, a failed read) ask the API.
+const storedVariant = Astro.locals.layoutVariants?.[postType]
+const typeVariant = typeof storedVariant === 'string' && storedVariant ? storedVariant : Astro.locals.layoutVariants ? 'default' : await getPostLayoutVariant(fullPost, postType)
+
 // The site design's one branch (#491, design 3.3): the route's builder template when it wins.
 const templateRoute: TemplateRoute = isFrontPage
-  ? { kind: 'front-page', template: fullPost.page_template }
+  ? { kind: 'front-page', template: fullPost.page_template, variant: typeVariant }
   : postType === 'page'
-    ? { kind: 'page', template: fullPost.page_template }
-    : { kind: 'single', postType }
+    ? { kind: 'page', template: fullPost.page_template, variant: typeVariant }
+    : { kind: 'single', postType, variant: typeVariant }
 const blockTemplate = await resolveTemplate(Astro.locals, templateRoute)
 
-// The code layout, only when no builder template renders the post (its variant and the
-// theme's slug are code-layout settings).
+// The code layout, only when no builder template renders the post (the theme's slug is a
+// code-layout setting).
 let LayoutComponent: any = null
 if (!blockTemplate) {
-  // Get layout variant for this post
-  const typeVariant = await getPostLayoutVariant(fullPost, postType)
-
   // Get active theme for dynamic layout loading
   const activeTheme = await getActiveTheme()
   const themeSlug = activeTheme.slug

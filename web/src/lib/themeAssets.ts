@@ -31,12 +31,30 @@ export interface ThemeScriptAsset {
   data?: Record<string, string>
 }
 
+/**
+ * #498: a font file the page should start loading at once (`<link rel="preload" as="font"
+ * crossorigin>`), as a theme's base layout hard-codes for the fonts its first screen uses, so a
+ * generic layout preloads the same ones. A path on this site (`/themes/<slug>/…`), `type` its MIME
+ * type (`font/woff2`).
+ */
+export interface ThemeFontAsset {
+  href: string
+  type?: string
+}
+
 export interface ThemeAssets {
   styles?: ThemeStyleAsset[]
   scripts?: ThemeScriptAsset[]
+  /** #498: fonts to preload. */
+  fonts?: ThemeFontAsset[]
 }
 
 const DATA_NAME = /^[a-z][a-z0-9-]*$/
+
+/** The fonts to preload (#498): only paths on this site, so a theme's config can't make the page fetch another origin's. */
+export function preloadFonts(fonts: ThemeFontAsset[] | undefined): ThemeFontAsset[] {
+  return (fonts ?? []).filter((font) => typeof font?.href === "string" && /^\/(?!\/)/.test(font.href))
+}
 
 /** The `data-*` attributes of a script, ready to spread onto the element. */
 export function scriptDataAttributes(script: ThemeScriptAsset): Record<string, string> {
