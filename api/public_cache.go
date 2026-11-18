@@ -30,7 +30,9 @@ import (
 //   - The key is the method, the escaped path and the canonical query string (sorted
 //     keys), so it carries everything the response can depend on: type, id or slug, page,
 //     term, location, limit. No public handler reads a header, a cookie or the clock
-//     (checked when this was written; a new one that does must not be listed here).
+//     (checked when this was written; a new one that does must not be listed here). The
+//     one exception is GET /settings reading Authorization to add the admin-only
+//     Discussion fields (#522): such a request is never cached, by the rule above.
 //   - Invalidation is one namespace ("public", cache.Namespace): every key carries the
 //     current generation, and a purge moves to a new one. One purge clears every public
 //     response at once, because they reference each other: a post's title is in menus,
@@ -470,6 +472,8 @@ var publicCachePostDetailRoutes = map[string]bool{
 	"DELETE /api/v1/posts/:id/featured-image":  true,
 	"POST /api/v1/posts/:id/media":             true,
 	"DELETE /api/v1/posts/:id/media/:media_id": true,
+	// The post's Discussion choice (#522): live at once, outside the snapshot.
+	"PUT /api/v1/posts/:id/discussion": true,
 }
 
 // publicCachePurgeRoutes are the mutating routes after which the public cache is purged:
@@ -487,6 +491,7 @@ var publicCachePurgeRoutes = map[string]string{
 	"DELETE /api/v1/posts/:id/permanent":       "deleted",
 	"POST /api/v1/posts/:id/publish":           "publish and Update",
 	"POST /api/v1/posts/:id/unpublish":         "off the site",
+	"PUT /api/v1/posts/:id/discussion":         "the post's Discussion choice applies at once, outside the snapshot (#522)",
 	"POST /api/v1/posts/:id/meta":              "with_meta list rows carry meta",
 	"DELETE /api/v1/posts/:id/meta/:key":       "with_meta list rows carry meta",
 	"POST /api/v1/posts/:id/featured-image":    "featured image meta",

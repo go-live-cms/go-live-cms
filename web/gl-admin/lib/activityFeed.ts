@@ -47,6 +47,8 @@ const POST_VERBS: Record<string, string> = {
   unscheduled: "cancelled the schedule of",
   deleted: "deleted",
   version_restored: "restored a version of",
+  // Reader comments (#522): the post's Discussion choice (default, open, closed, off).
+  post_discussion_changed: "changed the discussion settings of",
   update_scheduled: "scheduled an update to",
   update_unscheduled: "cancelled the scheduled update of",
   // Review requests (#323). review_resolved is the publish that resolved one.

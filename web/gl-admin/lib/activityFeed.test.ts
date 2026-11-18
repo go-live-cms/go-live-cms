@@ -46,6 +46,10 @@ describe("describeActivity", () => {
     expect(line({ verb: "comment_resolved", payload: { thread_id: 1 } })).toBe("Ana Costa resolved a comment on October changelog")
     expect(line({ verb: "comment_reopened" })).toBe("Ana Costa reopened a comment on October changelog")
     expect(line({ verb: "comment_deleted" })).toBe("Ana Costa deleted a comment on October changelog")
+    // #522: the post's Discussion choice; the payload holds the choices only.
+    expect(line({ verb: "post_discussion_changed", payload: { from: "default", to: "closed" } })).toBe(
+      "Ana Costa changed the discussion settings of October changelog",
+    )
   })
 
   it("says You for the viewer and Someone without an actor", () => {
