@@ -168,3 +168,26 @@ WHERE theme_slug = @theme_slug
   AND published_block_doc IS NOT NULL
   AND (kind = 'part' OR (kind = 'template' AND slug = ANY(@slugs::varchar[])))
 ORDER BY kind, slug;
+
+-- name: ListPublishedCustomPageTemplates :many
+-- The builder page templates a page may pick (#494, design 10): the theme's published
+-- custom-<name> templates. A reset or never-published one has no published copy, so it
+-- isn't offered (a page that already stores it keeps the name and renders the default).
+SELECT slug, title
+FROM site_templates
+WHERE theme_slug = @theme_slug
+  AND kind = 'template'
+  AND slug LIKE 'custom-%'
+  AND published_block_doc IS NOT NULL
+ORDER BY lower(title), slug;
+
+-- name: HasPublishedSiteTemplate :one
+-- Whether the theme has a published copy of this template (#494: PUT /posts/:id/template
+-- accepts block:<name> for a published custom-<name>), without reading its docs.
+SELECT EXISTS (
+    SELECT 1 FROM site_templates
+    WHERE theme_slug = @theme_slug
+      AND kind = 'template'
+      AND slug = @slug
+      AND published_block_doc IS NOT NULL
+)::bool AS published;

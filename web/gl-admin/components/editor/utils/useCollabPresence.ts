@@ -10,8 +10,9 @@ export type CollabStatus = "connecting" | "connected" | "disconnected" | "ended"
 export type CollabUser = { clientId: number; id?: number; name?: string; color?: string; avatar?: string | null }
 
 // The same connection the editor uses (shared, ref-counted), re-acquired when it goes
-// stale (the server reseeded the doc and the editor remounted).
-export function useCollabPresence(postId?: number, enabled = true) {
+// stale (the server reseeded the doc and the editor remounted). `docKind` "template" is a
+// block template or part's document (`template-<id>`, the Site editor, #493).
+export function useCollabPresence(postId?: number, enabled = true, docKind: "post" | "template" = "post") {
   const [collab, setCollab] = useState<HocuspocusCollaboration | null>(null)
   const [generation, setGeneration] = useState(0)
   const [status, setStatus] = useState<CollabStatus>("disconnected")
@@ -31,7 +32,7 @@ export function useCollabPresence(postId?: number, enabled = true) {
       setUnsyncedCount(0)
       return
     }
-    const instance = acquirePostCollab(postId)
+    const instance = acquirePostCollab(postId, docKind)
     setCollab(instance)
     const awareness = instance.provider.awareness
     // The count is shown only while the connection is down; online it moves on every
@@ -81,7 +82,7 @@ export function useCollabPresence(postId?: number, enabled = true) {
       instance.provider.off("unsyncedChanges", onUnsynced)
       releasePostCollab(instance)
     }
-  }, [postId, enabled, generation])
+  }, [postId, enabled, generation, docKind])
 
   const clientId = collab?.provider.awareness?.clientID
   return { status, unsynced, unsyncedCount, users: clientId != null ? users.filter((u) => u.clientId !== clientId) : users }

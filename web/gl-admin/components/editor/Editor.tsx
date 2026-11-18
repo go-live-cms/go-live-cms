@@ -9,6 +9,9 @@ import { CollabSaveStatus, type SaveState } from "@gl-admin/lib/collaboration/Co
 import type { CollabAccess, HocuspocusCollaboration } from "@gl-admin/lib/collaboration/HocuspocusCollaboration"
 import { restoreVersionLive } from "@gl-admin/lib/collaboration/liveRestore"
 import { acquirePostCollab, releasePostCollab } from "@gl-admin/lib/collaboration/postCollab"
+import { getSiteTemplate } from "@gl-admin/lib/api/siteDesign"
+import type * as Y from "yjs"
+import type { SiteEditorBridge } from "./extensions/SiteBlocks"
 import {
   EDITOR_FRAGMENT,
   describeUnbuildableTypes,
@@ -120,6 +123,23 @@ export type EditorProps = {
   onToggleBlockSettings?: () => void
   /** Opens the settings panel on the Block tab (↵ on a gallery image, #424). */
   onOpenBlockSettings?: () => void
+  /**
+   * A block template or template part instead of a post (#493, the Site editor; design 7):
+   * the same bound editor on `template-<id>` (admins only), with the kind's site blocks in the
+   * menus. Set instead of `postId`. Nothing post-shaped runs for it: no publish, comments,
+   * custom HTML or "Last edited by".
+   */
+  templateId?: number
+  templateKind?: "template" | "part"
+  /** What the Site editor tells the site blocks' views and panels (a part card opens its part). */
+  siteBridge?: SiteEditorBridge | null
+}
+
+/** What `templateRestore.ts` needs (rule 9): the bound, editable editor, its doc and save status. */
+export interface EditorRestoreTarget {
+  editor: TiptapEditor
+  ydoc: Y.Doc
+  status: CollabSaveStatus
 }
 
 export interface EditorRef {
@@ -147,6 +167,11 @@ export interface EditorRef {
    * elsewhere, or their window lost focus, which clears a caret).
    */
   jumpToCollaborator: (clientIds: number[]) => boolean
+  /**
+   * The bound editor, its Y.Doc and save status while it is editable, for a restore through
+   * the editor (rule 9: `templateRestore.ts`); null while read-only, unbound or remounting.
+   */
+  getRestoreTarget: () => EditorRestoreTarget | null
 }
 
 type InnerProps = EditorProps & {
@@ -180,6 +205,9 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
     onEditorReady,
     onToggleBlockSettings,
     onOpenBlockSettings,
+    templateId,
+    templateKind,
+    siteBridge,
     collab,
     unbuildable,
     autoFocus = true,
@@ -187,6 +215,7 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
   },
   ref
 ) {
+  const docKind = templateId ? (templateKind ?? "template") : "post"
   const [isPublishing, setIsPublishing] = useState(false)
   const [saveState, setSaveState] = useState<SaveState>(null)
   const keysHintId = useId()
@@ -237,8 +266,8 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
   }, [collab])
 
   const extensions = useMemo(
-    () => getExtensions({ collabProvider: collab, maxChars, placeholder, setUrl, setIsLinkModalOpen })(),
-    [collab, maxChars, placeholder]
+    () => getExtensions({ collabProvider: collab, maxChars, placeholder, setUrl, setIsLinkModalOpen, docKind, siteBridge })(),
+    [collab, maxChars, placeholder, docKind, siteBridge]
   )
 
   const editor = useEditor(
@@ -266,7 +295,7 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
           // and the slash and @ menus' aria-activedescendant has a role to hang on.
           role: "textbox",
           "aria-multiline": "true",
-          "aria-label": "Post content",
+          "aria-label": docKind === "template" ? "Template content" : docKind === "part" ? "Part content" : "Post content",
           // The keys that leave the text (#477), in its description: read when it's focused.
           ...(readOnly ? {} : { "aria-describedby": keysHintId }),
         },
@@ -324,11 +353,12 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
   }, [editor, postId, collab])
 
   // Not bound because the doc has types this editor can't build: show the REST working
-  // copy (GET /posts/:id/blocks). No Yjs involved.
-  const staticLoadedRef = useRef<{ editor: typeof editor; postId: number } | null>(null)
+  // copy (GET /posts/:id/blocks, or a template's GET /site-design/templates/:id). No Yjs involved.
+  const staticDocId = postId ?? templateId
+  const staticLoadedRef = useRef<{ editor: typeof editor; docId: number } | null>(null)
   useEffect(() => {
-    if (!editor || !readOnly || !postId || collab) return
-    const loaded = () => staticLoadedRef.current?.editor === editor && staticLoadedRef.current?.postId === postId
+    if (!editor || !readOnly || !staticDocId || collab) return
+    const loaded = () => staticLoadedRef.current?.editor === editor && staticLoadedRef.current?.docId === staticDocId
     if (loaded()) return
     let cancelled = false
     let inFlight = false
@@ -336,12 +366,17 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
       if (cancelled || inFlight || loaded()) return
       inFlight = true
       try {
-        const token = authManager.getAccessToken()
-        if (token) blockAPIClient.setAuthToken(token)
-        const { doc } = await blockAPIClient.getPostBlocks(postId)
+        let doc: BlockDocV1 | undefined
+        if (postId) {
+          const token = authManager.getAccessToken()
+          if (token) blockAPIClient.setAuthToken(token)
+          doc = (await blockAPIClient.getPostBlocks(postId)).doc
+        } else {
+          doc = (await getSiteTemplate(staticDocId)).block_doc
+        }
         if (cancelled || editor.isDestroyed) return
-        if (doc.blocks_order.length > 0) setEditorBlockDoc(editor, doc)
-        staticLoadedRef.current = { editor, postId }
+        if (doc && doc.blocks_order?.length > 0) setEditorBlockDoc(editor, doc)
+        staticLoadedRef.current = { editor, docId: staticDocId }
       } catch (error) {
         console.error("[Editor] Failed to load read-only content:", error)
       } finally {
@@ -356,7 +391,7 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
       cancelled = true
       unsubscribe()
     }
-  }, [editor, readOnly, postId, collab])
+  }, [editor, readOnly, postId, staticDocId, collab])
 
   const blockedError = () =>
     new Error(`Editing is disabled: this post has blocks the editor can't load (${describeUnbuildableTypes(unbuildable!)})`)
@@ -414,6 +449,10 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
       getSaveStatus: () => ({ isSaving: saveState === "saving", isPublishing, saveStatus: saveState }),
       jumpToCollaborator: (clientIds) =>
         editor && !editor.isDestroyed && collab ? scrollToCollaborator(editor.view, collab.provider.awareness, clientIds) : false,
+      getRestoreTarget: () =>
+        !unbuildable && collab && saveStatus && editor && !editor.isDestroyed && !readOnly && editor.isEditable
+          ? { editor, ydoc: collab.doc, status: saveStatus }
+          : null,
     }),
     [collab, saveStatus, editor, postId, readOnly, isPublishing, saveState, onPublishStart, onPublishSuccess, onPublishError, unbuildable, htmlSnippets]
   )
@@ -691,25 +730,64 @@ function AccessNotice({ access }: { access: CollabAccess }) {
   return null
 }
 
+/**
+ * A template or part whose connection the server refused or closed (#490, the template board's
+ * "This template closed"): only admins edit templates, so an editor or a demoted admin gets
+ * this, never a read-only view. What was typed before stays (it was stored or is in this tab).
+ */
+export function TemplateClosedNotice() {
+  return (
+    <Notice
+      tone="danger"
+      live="alert"
+      inline
+      className="editor-notice editor-notice--banner"
+      title="This template closed"
+      actions={
+        <>
+          <Button variant="secondary" size="sm" as="a" href="/gl-admin/">
+            Go to Home
+          </Button>
+          <Button variant="ghost" size="sm" onClick={signInAgain}>
+            Sign in again
+          </Button>
+        </>
+      }
+    >
+      Only admins can edit templates, and this session can't any more: your role changed or your session ended. Nothing you
+      typed before this was lost.
+    </Notice>
+  )
+}
+
 // Connects (after the theme gate), waits for the first sync, checks the fragment against
 // the schema the editor will get (rule 10), then mounts the bound editor. A stale-epoch
 // refusal (the server reseeded) bumps `generation`: release the dead connection and start
 // over on a fresh Y.Doc.
 const LiveGate = forwardRef<EditorRef, EditorProps>(function LiveGate(props, ref) {
-  const { postId, enableCollaboration = true, readOnly = false } = props
-  const live = !!postId && enableCollaboration
+  const { postId, templateId, enableCollaboration = true, readOnly = false } = props
+  // A post's document, or a template's (#493: `template-<id>`, parts share the prefix).
+  const docId = templateId ?? postId
+  const collabKind = templateId ? "template" : "post"
+  const live = !!docId && enableCollaboration
   const [generation, setGeneration] = useState(0)
   const [gate, setGate] = useState<Gate | null>(null)
   const [access, setAccess] = useState<CollabAccess | null>(null)
+  // Refused at connect (a template is admins' only, #490): never synced, so say so.
+  const [denied, setDenied] = useState(false)
   const onAccessChange = useRef(props.onAccessChange)
   onAccessChange.current = props.onAccessChange
   // Loaded alongside the connection; only mounting the editor waits for it.
   const editorSettings = useEditorSettings()
 
   useEffect(() => {
-    if (!live || !postId) return
-    const collab = acquirePostCollab(postId)
+    if (!live || !docId) return
+    const collab = acquirePostCollab(docId, collabKind)
     let cancelled = false
+    setDenied(collab.getStatus() === "denied")
+    const offStatus = collab.onStatus((status) => {
+      if (!cancelled) setDenied(status === "denied")
+    })
     const offStale = collab.onStale(() => {
       if (cancelled) return
       setGate(null)
@@ -738,11 +816,12 @@ const LiveGate = forwardRef<EditorRef, EditorProps>(function LiveGate(props, ref
       cancelled = true
       offStale()
       offAccess()
+      offStatus()
       setGate(null)
       setAccess(null)
       releasePostCollab(collab)
     }
-  }, [live, postId, generation])
+  }, [live, docId, collabKind, generation])
 
   if (!editorSettings) return <Placeholder text={live ? "Connecting…" : "Loading…"} />
   const { markdownShortcuts } = editorSettings
@@ -750,6 +829,8 @@ const LiveGate = forwardRef<EditorRef, EditorProps>(function LiveGate(props, ref
   // Refused at connect because the post is in the trash (#327): it never syncs, so say why
   // instead of "Connecting…" forever.
   if (!gate && access?.trashed) return <AccessNotice access={access} />
+  // A template refused at connect: only admins edit templates (#490).
+  if (!gate && denied && templateId) return <TemplateClosedNotice />
   // Refused at connect because the server's schema isn't this editor's (#416): bind
   // nothing, show the stored working copy read-only (REST) under the reload notice.
   if (!gate && access?.outdated) {
@@ -760,12 +841,14 @@ const LiveGate = forwardRef<EditorRef, EditorProps>(function LiveGate(props, ref
       </>
     )
   }
-  if (!gate || gate.collab.postId !== postId || gate.collab.stale) return <Placeholder text="Connecting…" />
+  if (!gate || gate.collab.postId !== docId || gate.collab.stale) return <Placeholder text="Connecting…" />
   if (!gate.unbuildable) {
     const viewOnly = readOnly || (access?.readOnly ?? gate.collab.readOnly)
     return (
       <>
-        {access && <AccessNotice access={access} />}
+        {/* A template's connection is never made read-only (#490): an admin demoted while it is
+            open is closed (`access-revoked`), which for a template says it closed. */}
+        {access && (templateId && access.revoked && !access.outdated ? <TemplateClosedNotice /> : <AccessNotice access={access} />)}
         {/* Remounted (not re-rendered) when the server changes the mode (#313): the
             editing UI (DragHandle's element is moved into the editor DOM by its plugin)
             can't be unmounted on its own while the editor is recreated; React's

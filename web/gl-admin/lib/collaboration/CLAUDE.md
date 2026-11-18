@@ -29,6 +29,12 @@ retries (`onClose`), keeping its doc. The connection registry is keyed by doc na
 (`acquireHocuspocus(postId | docName, …)`), so `post-12` and `template-12` never share an entry. Each store is
 validated with the template's kind (a part holding a `template_part` is `kept-invalid`); there is no
 per-block attribution (#328) on templates. The server half: `collab-server/CLAUDE.md`, "Document kinds".
+**The Site editor (#493)** mounts the same `Editor` with `templateId` + `templateKind` (`acquirePostCollab(id,
+"template")`; `getExtensions({ docKind, siteBridge })`): nothing post-shaped runs for it (no publish, comments, custom
+HTML store or "Last edited by"), its static view reads `GET /site-design/templates/:id`, and a refusal at connect
+(`denied`) or a revoke shows `TemplateClosedNotice`, never a read-only view. `siteBridge` is read by the views at
+render time only (rule 7: the part card's button navigates, nothing touches the doc) and must be stable: a new one
+rebuilds the extensions, which remounts the bound editor. Pinned by `components/site-editor/templateEditor.collab.test.tsx`.
 
 **History:** until P5 (#285) a y-websocket server (`websocket/`, LevelDB) relayed the doc
 and every client autosaved through `PUT /posts/:id/blocks`, which made the client

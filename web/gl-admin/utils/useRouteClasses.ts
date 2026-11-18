@@ -12,6 +12,9 @@ export function useRouteClasses(baseClass = "admin-main") {
       "/content/posts/new": ["editor", "new-content", "posts"],
       "/content/pages/new": ["editor", "new-content", "pages"],
       "/content/edit/": ["editor", "edit-content"],
+      // The template and part editors are the post editor's chrome (#493); History scrolls as a page.
+      "/site-editor/templates/": ["editor", "edit-content", "site-template"],
+      "/site-editor/history": ["site-editor-history"],
       "/site-editor/": ["site-editor"],
       "/content/posts": ["content-list", "posts"],
       "/content/pages": ["content-list", "pages"],

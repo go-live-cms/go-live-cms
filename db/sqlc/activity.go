@@ -45,6 +45,10 @@ const (
 	ActivityTrashed  = "trashed"
 	ActivityRestored = "restored"
 
+	// The post's Discussion choice (#522, reader comments 12.3, 15.2). Payload: from,
+	// to (default, open, closed, off).
+	ActivityPostDiscussionChanged = "post_discussion_changed"
+
 	// Review requests (#323, 000044), on the post. Payload: request_id, plus
 	// reviewer_id on a request, resolution ("published") on review_resolved, which
 	// 000044's publish trigger writes, and withdrawn on a requester's dismissal. Never

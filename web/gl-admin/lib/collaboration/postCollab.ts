@@ -14,11 +14,16 @@ import { acquireHocuspocus, HocuspocusCollaboration, releaseHocuspocus } from ".
 // colour travels to other clients over awareness.
 export const PRESENCE_COLORS = ["#d13415", "#2a7e3b", "#107d98", "#6550b9", "#c2298a", "#cc4e00", "#0d74ce", "#008573"]
 
-export function acquirePostCollab(postId: number): HocuspocusCollaboration {
+/**
+ * The shared connection for a post (`post-<id>`), or for a block template or template part
+ * (`template-<id>`, #490/#493: the Site editor's, admins only) with `docKind: "template"`.
+ */
+export function acquirePostCollab(postId: number, docKind: "post" | "template" = "post"): HocuspocusCollaboration {
   if (typeof window === "undefined") throw new Error("Collaboration is client-only")
-  return acquireHocuspocus(postId, () => {
+  return acquireHocuspocus(docKind === "template" ? `template-${postId}` : postId, () => {
     const user = authManager.getState().user
     return new HocuspocusCollaboration(postId, {
+      docKind,
       url: hocuspocusUrl(window.location),
       getTicket: async (docName) => (await createCollabTicket(docName)).ticket,
       // The editor's schema as it is at each (re)connect (editorSchema.ts, #416).

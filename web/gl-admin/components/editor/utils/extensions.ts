@@ -6,7 +6,7 @@ import { OpenLinkModal } from "../extensions/OpenLinkModal"
 import { slashCommandManager } from "./slashCommandManager"
 import { getCursorCoords } from "./cursorCoords"
 import { CursorAwareness } from "./cursorAwareness"
-import { getActiveTheme, getEnabledPlugins, menuEntries, slotAcceptsAt, type CatalogEntry } from "../blocks/catalog"
+import { getActiveTheme, getEnabledPlugins, menuEntries, offeredOnce, slotAcceptsAt, type CatalogEntry } from "../blocks/catalog"
 import { SlashCommandExtension } from "../ui/SlashCommand"
 import { PasteSanitizer } from "../extensions/PasteSanitizer"
 import { InlineNodeViews } from "../extensions/InlineNodeViews"
@@ -25,7 +25,7 @@ import { BlockNavigationKeys, BlockSelectionKeys } from "../extensions/BlockNavi
 import { NodeSelectionGuard } from "../extensions/NodeSelectionGuard"
 import { FloatingToolbarKeys } from "./floatingToolbar"
 import { EmptyContainerFill } from "../extensions/CoverMediaBlocks"
-import { SiteBlockContext } from "../extensions/SiteBlocks"
+import { SiteBlockContext, type SiteEditorBridge } from "../extensions/SiteBlocks"
 import { authManager } from "@gl-admin/lib/auth"
 import { tiptapExtensionRegistry } from "./extensionRegistry"
 import { installedThemeBlockEditors } from "@gl-admin/lib/theme-blocks/editorBlocks"
@@ -52,7 +52,7 @@ export const DETAILS_CONTENT_HINT = "Hidden content. Type / to add blocks."
 
 // `docKind` (#488): the kind of document the editor holds. A post until the Site editor (#493)
 // passes "template" or "part"; it decides which site blocks the menus offer and how their views read.
-const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkModalOpen, docKind = "post" }: any) => {
+const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkModalOpen, docKind = "post", siteBridge = null }: any) => {
   return () => {
     let slashEntries: { role: string | null; theme: string; plugins: ReadonlySet<string>; entries: CatalogEntry[] } | null = null
     // The schema-defining extensions are shared with the collab server
@@ -155,7 +155,7 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
       schema.siteBlockCommands,
       schema.blockId,
       // #488: which kind of document this editor holds (a post until the Site editor, #493); no schema.
-      SiteBlockContext.configure({ kind: docKind }),
+      SiteBlockContext.configure({ kind: docKind, bridge: siteBridge }),
       BlockNodeViews,
       // #320: the mention's current name and the site's date format; no schema.
       InlineNodeViews,
@@ -294,7 +294,7 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
             if (!slashEntries || slashEntries.role !== role || slashEntries.theme !== theme || slashEntries.plugins !== plugins) {
               slashEntries = { role, theme, plugins, entries: menuEntries({ role, theme, plugins, context: docKind }) }
             }
-            return slashEntries.entries.filter(slotAcceptsAt(editor))
+            return slashEntries.entries.filter(slotAcceptsAt(editor)).filter(offeredOnce(editor))
           },
           render: () => ({
             onStart: (props: any) => slashCommandManager.start(props, getCursorCoords),
@@ -359,6 +359,7 @@ export const getExtensions = ({
   setUrl,
   setIsLinkModalOpen,
   docKind,
+  siteBridge,
 }: {
   collabProvider: any
   maxChars?: number
@@ -367,6 +368,8 @@ export const getExtensions = ({
   setIsLinkModalOpen?: (open: boolean) => void
   /** #488: a post (the default), a block template or a part. */
   docKind?: "post" | "template" | "part"
+  /** #493: what the Site editor tells the site blocks' views and panels (a part card opens its part). */
+  siteBridge?: SiteEditorBridge | null
 }) => {
-  return extensions({ collabProvider, maxChars, placeholder, setUrl, setIsLinkModalOpen, docKind })
+  return extensions({ collabProvider, maxChars, placeholder, setUrl, setIsLinkModalOpen, docKind, siteBridge })
 }

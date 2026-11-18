@@ -182,7 +182,7 @@ func TestGetSettingsReturnsSiteSettings(t *testing.T) {
 func TestSettingsResponseNilEmbedsIsEmptyList(t *testing.T) {
 	setting := randomSetting()
 	setting.EditorAllowedEmbeds = nil
-	data, err := json.Marshal(toSettingsResponse(setting, ""))
+	data, err := json.Marshal(toSettingsResponse(setting, "", false))
 	require.NoError(t, err)
 	require.Contains(t, string(data), `"editor_allowed_embeds":[]`)
 }

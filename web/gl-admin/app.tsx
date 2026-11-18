@@ -47,6 +47,9 @@ const Menus = lazy(() => import("@gl-admin/pages/Menus"))
 const Profile = lazy(() => import("@gl-admin/pages/Profile"))
 const PostTypes = lazy(() => import("@gl-admin/pages/PostTypes"))
 const GlobalStyles = lazy(() => import("@gl-admin/pages/GlobalStyles"))
+const SiteEditor = lazy(() => import("@gl-admin/pages/SiteEditor"))
+const SiteTemplateEditor = lazy(() => import("@gl-admin/pages/SiteTemplateEditor"))
+const SiteDesignHistory = lazy(() => import("@gl-admin/pages/SiteDesignHistory"))
 // Dev-only component gallery (#338): every UI component in light and dark. Vite drops
 // the import from production builds, where import.meta.env.DEV is false.
 const UiGallery = import.meta.env.DEV ? lazy(() => import("@gl-admin/pages/dev/UiGallery")) : null
@@ -125,7 +128,10 @@ function AppLayout() {
                 <Route path="/taxonomies" element={<Taxonomies />} />
                 {/* Admin-only pages (requireSiteAdmin in the API): others get the 403. */}
                 <Route path="/themes" element={<AdminOnly area="Themes"><Themes /></AdminOnly>} />
+                <Route path="/site-editor" element={<AdminOnly area="Site editor"><SiteEditor /></AdminOnly>} />
                 <Route path="/site-editor/styles" element={<AdminOnly area="Site editor"><GlobalStyles /></AdminOnly>} />
+                <Route path="/site-editor/history" element={<AdminOnly area="Site editor"><SiteDesignHistory /></AdminOnly>} />
+                <Route path="/site-editor/templates/:id" element={<AdminOnly area="Site editor"><SiteTemplateEditor /></AdminOnly>} />
                 <Route path="/menus" element={<RequireRole allow={isContentModerator} area="Menus"><Menus /></RequireRole>} />
                 <Route path="/users" element={<AdminOnly area="Users"><Users /></AdminOnly>} />
                 <Route path="/users/new" element={<AdminOnly area="Users"><NewUser /></AdminOnly>} />

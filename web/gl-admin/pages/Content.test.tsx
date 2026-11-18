@@ -40,6 +40,17 @@ vi.mock("@gl-admin/lib/api/posts", () => ({
   trashPost: api.trashPost,
   restorePost: api.restorePost,
   deletePostPermanently: api.deletePostPermanently,
+  // What a page's Template offers (#336, #494): the theme's layouts and its published
+  // Site editor page templates.
+  getPageTemplates: () =>
+    Promise.resolve({
+      theme: { slug: "default", name: "Paper" },
+      templates: [
+        { name: "default", label: "Default", description: "One reading column" },
+        { name: "fullwidth", label: "Full width" },
+      ],
+      builder_templates: [{ name: "block:launch", label: "Launch" }],
+    }),
 }))
 vi.mock("@gl-admin/lib/api/postTemplates", () => ({
   listPostTemplates: api.listPostTemplates,
@@ -617,6 +628,26 @@ describe("Front page and templates in Pages (#336)", () => {
     // A template the active theme doesn't have: the default, and why.
     expect(template("Team").textContent).toContain("Default")
     expect(template("Team").getAttribute("title")).toBe("“landing” isn’t in the active theme, so the page uses Default.")
+  })
+
+  // #494: a published Site editor template by its title, tagged; one that isn't published
+  // any more renders with the default, and the row says why.
+  it("names a page's Site editor template, and says when it isn't published", async () => {
+    api.getPosts.mockImplementation(() =>
+      list([
+        post(5, { title: "Pricing", post_type: "page", post_status: "published", page_template: "block:launch" }),
+        post(6, { title: "Old promo", post_type: "page", post_status: "published", page_template: "block:spring-sale" }),
+      ])
+    )
+    await render("/content/page")
+    await settle()
+    const template = (title: string) => row(title).querySelector(".gl-page-row__template")!
+    expect(template("Pricing").textContent).toBe("LaunchSite editor")
+    expect(template("Old promo").textContent).toContain("Default")
+    expect(template("Old promo").textContent).not.toContain("Site editor")
+    expect(template("Old promo").getAttribute("title")).toBe(
+      "Spring sale isn’t published in Paper, so this page shows with Default. The choice is kept and applies again once it’s published."
+    )
   })
 
   it("lets an admin make a published page the front page from its row menu", async () => {

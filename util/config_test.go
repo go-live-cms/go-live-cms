@@ -121,6 +121,22 @@ func TestLoadConfigActivityRetention(t *testing.T) {
 	require.ErrorContains(t, err, "ACTIVITY_RETENTION")
 }
 
+// Reader comments' retention (#522) runs hourly by default; 0 turns it off.
+func TestLoadConfigDiscussionMaintenanceInterval(t *testing.T) {
+	config, err := LoadConfig(t.TempDir())
+	require.NoError(t, err)
+	require.Equal(t, time.Hour, config.DiscussionMaintenanceInterval)
+
+	t.Setenv("DISCUSSION_MAINTENANCE_INTERVAL", "0")
+	config, err = LoadConfig(t.TempDir())
+	require.NoError(t, err)
+	require.Zero(t, config.DiscussionMaintenanceInterval)
+
+	t.Setenv("DISCUSSION_MAINTENANCE_INTERVAL", "-1m")
+	_, err = LoadConfig(t.TempDir())
+	require.ErrorContains(t, err, "DISCUSSION_MAINTENANCE_INTERVAL")
+}
+
 // Plugin hooks (#458) run every second by default; 0 turns them off.
 func TestLoadConfigPluginHooksInterval(t *testing.T) {
 	config, err := LoadConfig(t.TempDir())

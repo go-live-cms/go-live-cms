@@ -276,7 +276,16 @@
   }
 
   &__template {
+    align-items: center;
     color: var(--text-secondary);
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  // A Site editor page template's tag (#494).
+  &__template-tag {
+    flex: none;
   }
 }
 

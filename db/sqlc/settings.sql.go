@@ -79,7 +79,7 @@ func (q *Queries) DeleteThemeExtensionSetting(ctx context.Context, key string) (
 }
 
 const getPublicFrontPage = `-- name: GetPublicFrontPage :one
-SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, seo_title, seo_description, social_image_id, noindex, canonical_url, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error, deleted_at, trashed_from_status, page_template, published_block_hash FROM posts
+SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, seo_title, seo_description, social_image_id, noindex, canonical_url, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error, deleted_at, trashed_from_status, page_template, published_block_hash, discussion, first_published_at FROM posts
 WHERE id = (SELECT s.front_page_id FROM settings s WHERE s.id = 1)
   AND post_type = 'page'
   AND post_status = 'published'
@@ -126,12 +126,14 @@ func (q *Queries) GetPublicFrontPage(ctx context.Context) (Post, error) {
 		&i.TrashedFromStatus,
 		&i.PageTemplate,
 		&i.PublishedBlockHash,
+		&i.Discussion,
+		&i.FirstPublishedAt,
 	)
 	return i, err
 }
 
 const getSettings = `-- name: GetSettings :one
-SELECT id, post_url_structure, site_title, posts_per_page, created_at, changed_at, site_tagline, site_language, site_timezone, date_format, editor_markdown_shortcuts, editor_allowed_embeds, allow_signup, front_page_id, site_logo_media_id FROM settings WHERE id = 1
+SELECT id, post_url_structure, site_title, posts_per_page, created_at, changed_at, site_tagline, site_language, site_timezone, date_format, editor_markdown_shortcuts, editor_allowed_embeds, allow_signup, front_page_id, site_logo_media_id, comments_enabled, comments_moderation, comments_max_links, comments_hold_words, comments_spam_words, comments_close_after_days, comments_threading, comments_order, comments_per_page, comments_notice, comments_privacy_page_id FROM settings WHERE id = 1
 `
 
 func (q *Queries) GetSettings(ctx context.Context) (Setting, error) {
@@ -153,6 +155,17 @@ func (q *Queries) GetSettings(ctx context.Context) (Setting, error) {
 		&i.AllowSignup,
 		&i.FrontPageID,
 		&i.SiteLogoMediaID,
+		&i.CommentsEnabled,
+		&i.CommentsModeration,
+		&i.CommentsMaxLinks,
+		pq.Array(&i.CommentsHoldWords),
+		pq.Array(&i.CommentsSpamWords),
+		&i.CommentsCloseAfterDays,
+		&i.CommentsThreading,
+		&i.CommentsOrder,
+		&i.CommentsPerPage,
+		&i.CommentsNotice,
+		&i.CommentsPrivacyPageID,
 	)
 	return i, err
 }
@@ -276,9 +289,22 @@ SET
   -- The site logo (#488): set_site_logo says whether the request names one;
   -- site_logo_media_id NULL then means none.
   site_logo_media_id = CASE WHEN $13::boolean THEN $14::bigint ELSE site_logo_media_id END,
+  -- Settings > Discussion (#522, design 12.1).
+  comments_enabled = COALESCE($15, comments_enabled),
+  comments_moderation = COALESCE($16, comments_moderation),
+  comments_max_links = COALESCE($17, comments_max_links),
+  comments_hold_words = COALESCE($18::text[], comments_hold_words),
+  comments_spam_words = COALESCE($19::text[], comments_spam_words),
+  comments_close_after_days = COALESCE($20, comments_close_after_days),
+  comments_threading = COALESCE($21, comments_threading),
+  comments_order = COALESCE($22, comments_order),
+  comments_per_page = COALESCE($23, comments_per_page),
+  comments_notice = COALESCE($24, comments_notice),
+  -- set_comments_privacy_page says whether the request names one; NULL then means none.
+  comments_privacy_page_id = CASE WHEN $25::boolean THEN $26::bigint ELSE comments_privacy_page_id END,
   changed_at = now()
 WHERE id = 1
-RETURNING id, post_url_structure, site_title, posts_per_page, created_at, changed_at, site_tagline, site_language, site_timezone, date_format, editor_markdown_shortcuts, editor_allowed_embeds, allow_signup, front_page_id, site_logo_media_id
+RETURNING id, post_url_structure, site_title, posts_per_page, created_at, changed_at, site_tagline, site_language, site_timezone, date_format, editor_markdown_shortcuts, editor_allowed_embeds, allow_signup, front_page_id, site_logo_media_id, comments_enabled, comments_moderation, comments_max_links, comments_hold_words, comments_spam_words, comments_close_after_days, comments_threading, comments_order, comments_per_page, comments_notice, comments_privacy_page_id
 `
 
 type UpdateSettingsParams struct {
@@ -296,6 +322,18 @@ type UpdateSettingsParams struct {
 	FrontPageID             sql.NullInt64  `json:"front_page_id"`
 	SetSiteLogo             bool           `json:"set_site_logo"`
 	SiteLogoMediaID         sql.NullInt64  `json:"site_logo_media_id"`
+	CommentsEnabled         sql.NullBool   `json:"comments_enabled"`
+	CommentsModeration      sql.NullString `json:"comments_moderation"`
+	CommentsMaxLinks        sql.NullInt32  `json:"comments_max_links"`
+	CommentsHoldWords       []string       `json:"comments_hold_words"`
+	CommentsSpamWords       []string       `json:"comments_spam_words"`
+	CommentsCloseAfterDays  sql.NullInt32  `json:"comments_close_after_days"`
+	CommentsThreading       sql.NullString `json:"comments_threading"`
+	CommentsOrder           sql.NullString `json:"comments_order"`
+	CommentsPerPage         sql.NullInt32  `json:"comments_per_page"`
+	CommentsNotice          sql.NullString `json:"comments_notice"`
+	SetCommentsPrivacyPage  bool           `json:"set_comments_privacy_page"`
+	CommentsPrivacyPageID   sql.NullInt64  `json:"comments_privacy_page_id"`
 }
 
 func (q *Queries) UpdateSettings(ctx context.Context, arg UpdateSettingsParams) (Setting, error) {
@@ -314,6 +352,18 @@ func (q *Queries) UpdateSettings(ctx context.Context, arg UpdateSettingsParams) 
 		arg.FrontPageID,
 		arg.SetSiteLogo,
 		arg.SiteLogoMediaID,
+		arg.CommentsEnabled,
+		arg.CommentsModeration,
+		arg.CommentsMaxLinks,
+		pq.Array(arg.CommentsHoldWords),
+		pq.Array(arg.CommentsSpamWords),
+		arg.CommentsCloseAfterDays,
+		arg.CommentsThreading,
+		arg.CommentsOrder,
+		arg.CommentsPerPage,
+		arg.CommentsNotice,
+		arg.SetCommentsPrivacyPage,
+		arg.CommentsPrivacyPageID,
 	)
 	var i Setting
 	err := row.Scan(
@@ -332,6 +382,17 @@ func (q *Queries) UpdateSettings(ctx context.Context, arg UpdateSettingsParams) 
 		&i.AllowSignup,
 		&i.FrontPageID,
 		&i.SiteLogoMediaID,
+		&i.CommentsEnabled,
+		&i.CommentsModeration,
+		&i.CommentsMaxLinks,
+		pq.Array(&i.CommentsHoldWords),
+		pq.Array(&i.CommentsSpamWords),
+		&i.CommentsCloseAfterDays,
+		&i.CommentsThreading,
+		&i.CommentsOrder,
+		&i.CommentsPerPage,
+		&i.CommentsNotice,
+		&i.CommentsPrivacyPageID,
 	)
 	return i, err
 }

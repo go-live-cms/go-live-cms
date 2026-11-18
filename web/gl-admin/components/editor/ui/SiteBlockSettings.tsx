@@ -41,6 +41,7 @@ import Switch from "../../ui/Switch"
 import Segment from "./BlockSettingsSegment"
 import { keepBlockSelected, resolveEditorBlock, type BlockRef } from "../utils/blockTree"
 import { partName } from "../extensions/SiteBlockViews"
+import { editorSiteBridge } from "../extensions/SiteBlocks"
 
 // The settings panel's Block tab for the site blocks (#488, the blocks canvas's "Site blocks
 // in the editor" settings column). Each change is one `setNodeMarkup` on the block found by
@@ -119,6 +120,7 @@ export function siteBlockHint(type: SiteBlockType): string | null {
 // #489, the canvas's query loop and post blocks rows.
 export const QUERY_PUBLISHED_HELP = "Published posts only, as readers see them."
 export const QUERY_INHERIT_HELP = "For archive, search and home templates: the page’s own posts, with its pages."
+export const QUERY_NO_LIST_HELP = "This template’s pages have no list of their own, so this shows nothing. Turn it off to choose the posts."
 export const QUERY_PAGINATION_HELP = "Only the page’s own list has pages. Under a query of chosen posts it shows nothing."
 export const POST_TEMPLATE_HELP = "Repeats for each post of its query loop. Its post blocks show that post."
 export const QUERY_NO_RESULTS_HELP = "Shows its blocks when the query loop finds no posts."
@@ -276,7 +278,18 @@ function useQueryChoices(postType: string) {
  * or the type, count, order, category and author. Each one change, last writer wins; the store
  * keeps them through `normalizeSiteBlockAttrs`.
  */
-function QueryFields({ ids, attrs, set }: { ids: string; attrs: Record<string, unknown>; set: (attrs: Record<string, unknown>) => void }) {
+function QueryFields({
+  ids,
+  attrs,
+  set,
+  listRoute = true,
+}: {
+  ids: string
+  attrs: Record<string, unknown>
+  set: (attrs: Record<string, unknown>) => void
+  /** The template's route has a list of its own (13.1); false in single, page, 404 and parts. */
+  listRoute?: boolean
+}) {
   const stored = normalizeSiteBlockAttrs("query", attrs) as QueryAttrs
   const postType = stored.postType ?? QUERY_DEFAULT_POST_TYPE
   const { types, categories, authors } = useQueryChoices(postType)
@@ -285,8 +298,14 @@ function QueryFields({ ids, attrs, set }: { ids: string; attrs: Record<string, u
   const typeOptions = types.some((t) => t.name === postType) ? types : [...types, { name: postType, label: postType } as PostType]
   return (
     <>
-      <Switch className="block-settings__switch" label="Use this page’s list" checked={stored.inherit === true} onChange={(inherit) => set({ inherit })} />
-      <p className="post-settings__hint">{QUERY_INHERIT_HELP}</p>
+      {/* Where the route has no list (single, page, 404, a part) the switch isn't offered (13.1),
+          unless the block already inherits, so it can be turned off. */}
+      {(listRoute || stored.inherit === true) && (
+        <>
+          <Switch className="block-settings__switch" label="Use this page’s list" checked={stored.inherit === true} onChange={(inherit) => set({ inherit })} />
+          <p className="post-settings__hint">{listRoute ? QUERY_INHERIT_HELP : QUERY_NO_LIST_HELP}</p>
+        </>
+      )}
       <Switch className="block-settings__switch" label="Feature the first post" checked={stored.feature === true} onChange={(feature) => set({ feature })} />
       <p className="post-settings__hint">{QUERY_FEATURE_HELP}</p>
       <Switch className="block-settings__switch" label="Titles only" checked={stored.layout === "links"} onChange={(links) => set({ layout: links ? "links" : "list" })} />
@@ -452,7 +471,7 @@ export default function SiteBlockSettings({ editor, node, blockRef }: { editor: 
         </>
       )}
       {type === "template_part" && <PartField id={`${ids}-part`} slug={attrs.slug} onPick={(slug) => set({ slug })} />}
-      {type === "query" && <QueryFields ids={ids} attrs={attrs} set={set} />}
+      {type === "query" && <QueryFields ids={ids} attrs={attrs} set={set} listRoute={editorSiteBridge(editor)?.routeHasList ?? true} />}
       {type === "query_title" && (
         <>
           <Switch className="block-settings__switch" label="Show the page’s kind as a label" checked={attrs.label === true} onChange={(label) => set({ label })} />

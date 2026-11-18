@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, type CSSProperties, type ReactNode } from "react"
+import { editorDocKind } from "../extensions/SiteBlocks"
 import { BubbleMenu as TipTapBubbleMenu } from "@tiptap/react/menus"
 import { turnIntoEntries } from "../blocks/catalog"
 import { applyTurnInto, computeTurnIntoFromSelection, type TurnIntoValue } from "../utils/turnInto"
@@ -166,7 +167,8 @@ const BubbleMenu = ({ editor, className = "", openLinkModal, ...props }: any) =>
           </>
         )}
         {/* #422: after the selection, and the caret moves to its note. Not where text can't hold one. */}
-        {editor.can().insertFootnote() && (
+        {/* A post's notes only: a template or part has none (#493, the catalog's contexts). */}
+        {editorDocKind(editor) === "post" && editor.can().insertFootnote() && (
           <>
             <span aria-hidden="true" className="editor-toolbar__divider" />
             <button

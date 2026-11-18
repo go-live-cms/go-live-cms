@@ -18,6 +18,7 @@ import { hocuspocusUrl } from "../../gl-admin/lib/collaboration/backend"
 import { log } from "../lib/log"
 import { NO_GLOBAL_STYLES, publishedGlobalStyles } from "../lib/themeTokens"
 import { requestIdFrom, runWithLogContext } from "./requestContext"
+import { readDraftSiteDesign } from "../lib/siteTemplates"
 import {
   designPreviewCookieSecure,
   designPreviewToken,
@@ -212,6 +213,8 @@ async function handleRequest(context: APIContext, next: MiddlewareNext, proxied:
         state: previewing ? "previewing" : result.status === "refused" ? "refused" : "off",
         expiresAt: result.status === "ok" ? result.draft.expiresAt : null,
         applied: false,
+        // The working templates and parts (#493), read by `resolveTemplate` with this token.
+        ...(previewing ? { readTemplates: (theme: string, slugs: readonly string[]) => readDraftSiteDesign(previewToken, theme, slugs) } : {}),
       }
     }
   }

@@ -1,0 +1,149 @@
+{
+  "_comment": "Reader comments' discussion state (#522, docs/design/reader-comments.md 12.4). Run by api/discussion_test.go (discussionSetting, discussionState) and web/src/lib/discussion.test.ts (the TypeScript twin). `setting` is the clock-free half a cached /public answer carries; `state` applies `now` to it. Times compare as instants.",
+  "cases": [
+    {
+      "name": "the default on a post type with comments, no timer: open",
+      "site": { "comments_enabled": true, "comments_close_after_days": 0 },
+      "type": { "public": true, "supports": ["title", "content", "comments"] },
+      "post": { "discussion": "default", "first_published_at": "2026-01-01T00:00:00Z" },
+      "now": "2030-01-01T00:00:00Z",
+      "setting": { "state": "open", "closes_at": null },
+      "state": "open"
+    },
+    {
+      "name": "the site switch off beats an explicit Open",
+      "site": { "comments_enabled": false, "comments_close_after_days": 0 },
+      "type": { "public": true, "supports": ["comments"] },
+      "post": { "discussion": "open", "first_published_at": "2026-01-01T00:00:00Z" },
+      "now": "2026-01-02T00:00:00Z",
+      "setting": { "state": "off", "closes_at": null },
+      "state": "off"
+    },
+    {
+      "name": "the site switch off beats an explicit Closed",
+      "site": { "comments_enabled": false, "comments_close_after_days": 0 },
+      "type": { "public": true, "supports": ["comments"] },
+      "post": { "discussion": "closed", "first_published_at": null },
+      "now": "2026-01-02T00:00:00Z",
+      "setting": { "state": "off", "closes_at": null },
+      "state": "off"
+    },
+    {
+      "name": "a type the site doesn't serve is off, even for an explicit Open",
+      "site": { "comments_enabled": true, "comments_close_after_days": 0 },
+      "type": { "public": false, "supports": ["comments"] },
+      "post": { "discussion": "open", "first_published_at": "2026-01-01T00:00:00Z" },
+      "now": "2026-01-02T00:00:00Z",
+      "setting": { "state": "off", "closes_at": null },
+      "state": "off"
+    },
+    {
+      "name": "the post's Off",
+      "site": { "comments_enabled": true, "comments_close_after_days": 0 },
+      "type": { "public": true, "supports": ["comments"] },
+      "post": { "discussion": "off", "first_published_at": "2026-01-01T00:00:00Z" },
+      "now": "2026-01-02T00:00:00Z",
+      "setting": { "state": "off", "closes_at": null },
+      "state": "off"
+    },
+    {
+      "name": "the default on a type without the Comments field: off",
+      "site": { "comments_enabled": true, "comments_close_after_days": 0 },
+      "type": { "public": true, "supports": ["title", "content"] },
+      "post": { "discussion": "default", "first_published_at": "2026-01-01T00:00:00Z" },
+      "now": "2026-01-02T00:00:00Z",
+      "setting": { "state": "off", "closes_at": null },
+      "state": "off"
+    },
+    {
+      "name": "an explicit Open on a type without the Comments field: open (12.4 reads the type only for the default)",
+      "site": { "comments_enabled": true, "comments_close_after_days": 0 },
+      "type": { "public": true, "supports": ["title"] },
+      "post": { "discussion": "open", "first_published_at": "2026-01-01T00:00:00Z" },
+      "now": "2026-01-02T00:00:00Z",
+      "setting": { "state": "open", "closes_at": null },
+      "state": "open"
+    },
+    {
+      "name": "an explicit Closed on a type without the Comments field: closed",
+      "site": { "comments_enabled": true, "comments_close_after_days": 0 },
+      "type": { "public": true, "supports": [] },
+      "post": { "discussion": "closed", "first_published_at": "2026-01-01T00:00:00Z" },
+      "now": "2026-01-02T00:00:00Z",
+      "setting": { "state": "closed", "closes_at": null },
+      "state": "closed"
+    },
+    {
+      "name": "an explicit Closed",
+      "site": { "comments_enabled": true, "comments_close_after_days": 30 },
+      "type": { "public": true, "supports": ["comments"] },
+      "post": { "discussion": "closed", "first_published_at": "2026-01-01T00:00:00Z" },
+      "now": "2026-01-02T00:00:00Z",
+      "setting": { "state": "closed", "closes_at": null },
+      "state": "closed"
+    },
+    {
+      "name": "close after 14 days: open before, with closes_at",
+      "site": { "comments_enabled": true, "comments_close_after_days": 14 },
+      "type": { "public": true, "supports": ["comments"] },
+      "post": { "discussion": "default", "first_published_at": "2026-01-01T00:00:00Z" },
+      "now": "2026-01-14T23:59:59Z",
+      "setting": { "state": "open", "closes_at": "2026-01-15T00:00:00Z" },
+      "state": "open"
+    },
+    {
+      "name": "close after 14 days: closed at closes_at exactly",
+      "site": { "comments_enabled": true, "comments_close_after_days": 14 },
+      "type": { "public": true, "supports": ["comments"] },
+      "post": { "discussion": "default", "first_published_at": "2026-01-01T00:00:00Z" },
+      "now": "2026-01-15T00:00:00Z",
+      "setting": { "state": "open", "closes_at": "2026-01-15T00:00:00Z" },
+      "state": "closed"
+    },
+    {
+      "name": "close after 14 days: closed long after",
+      "site": { "comments_enabled": true, "comments_close_after_days": 14 },
+      "type": { "public": true, "supports": ["comments"] },
+      "post": { "discussion": "default", "first_published_at": "2026-01-01T00:00:00Z" },
+      "now": "2027-06-01T00:00:00Z",
+      "setting": { "state": "open", "closes_at": "2026-01-15T00:00:00Z" },
+      "state": "closed"
+    },
+    {
+      "name": "an explicit Open overrides the timer",
+      "site": { "comments_enabled": true, "comments_close_after_days": 14 },
+      "type": { "public": true, "supports": ["comments"] },
+      "post": { "discussion": "open", "first_published_at": "2026-01-01T00:00:00Z" },
+      "now": "2027-06-01T00:00:00Z",
+      "setting": { "state": "open", "closes_at": null },
+      "state": "open"
+    },
+    {
+      "name": "the timer counts from first publish in UTC, whatever the offset",
+      "site": { "comments_enabled": true, "comments_close_after_days": 1 },
+      "type": { "public": true, "supports": ["comments"] },
+      "post": { "discussion": "default", "first_published_at": "2026-03-01T10:00:00+02:00" },
+      "now": "2026-03-02T07:59:59Z",
+      "setting": { "state": "open", "closes_at": "2026-03-02T08:00:00Z" },
+      "state": "open"
+    },
+    {
+      "name": "the longest timer, 3650 days",
+      "site": { "comments_enabled": true, "comments_close_after_days": 3650 },
+      "type": { "public": true, "supports": ["comments"] },
+      "post": { "discussion": "default", "first_published_at": "2026-01-01T00:00:00Z" },
+      "now": "2035-12-29T00:00:00Z",
+      "setting": { "state": "open", "closes_at": "2035-12-30T00:00:00Z" },
+      "state": "open"
+    },
+    {
+      "name": "a timer on a post never published: no closes_at yet",
+      "site": { "comments_enabled": true, "comments_close_after_days": 14 },
+      "type": { "public": true, "supports": ["comments"] },
+      "post": { "discussion": "default", "first_published_at": null },
+      "now": "2027-06-01T00:00:00Z",
+      "setting": { "state": "open", "closes_at": null },
+      "state": "open"
+    }
+  ]
+}

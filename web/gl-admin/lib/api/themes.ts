@@ -21,6 +21,9 @@ export interface Theme {
     // The page layouts the API's theme scan found (#336): layouts/page/*.astro, named
     // and described by theme.config.ts. "default" first.
     page_templates?: PageTemplate[]
+    // The block templates and parts the theme ships (#490, design 5.7), by slug.
+    block_templates?: Record<string, { title?: string; doc?: unknown }>
+    block_parts?: Record<string, { title?: string; doc?: unknown }>
   }
   active: boolean
   created_at: string

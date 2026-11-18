@@ -171,17 +171,38 @@ export const SiteBlockCommands = Extension.create({
  * Which kind of document the editor holds (design 4.2): a post's body (the default), a
  * block template or a part. Editor-only, no schema: the views read it to tell a site
  * block that works here from one that is inert in a post, and the menus read it through
- * `editorDocKind`. The Site editor (#493) configures it.
+ * `editorDocKind`. The Site editor (#493) configures it, with its `bridge`.
  */
-export const SiteBlockContext = Extension.create<{ kind: "post" | "template" | "part" }>({
+export const SiteBlockContext = Extension.create<{ kind: "post" | "template" | "part"; bridge: SiteEditorBridge | null }>({
   name: "siteBlockContext",
   addOptions() {
-    return { kind: "post" }
+    return { kind: "post", bridge: null }
   },
   addStorage() {
-    return { kind: this.options.kind }
+    return { kind: this.options.kind, bridge: this.options.bridge }
   },
 })
+
+/**
+ * What the Site editor (#493) tells the template and part editors' views and panels, read
+ * when they render. Editor-only and read-only: nothing here touches the doc (rule 7).
+ */
+export interface SiteEditorBridge {
+  /** Opens the part with this slug in its own editor (design 7.5): the part card's button. */
+  openPart?: (slug: string) => void
+  /** The part card's second line and button for a slug ("Template part · changes not published", "Edit part"). */
+  partStatus?: (slug: string) => { detail: string; action: string } | null
+  /**
+   * The template's route has a list of its own (13.1: home, archives, taxonomies, author,
+   * search), so a query loop may use "This page's list". False in single, page, 404 and parts.
+   */
+  routeHasList?: boolean
+}
+
+/** The Site editor's bridge, or null (a post's editor, a test). */
+export function editorSiteBridge(editor: { storage: unknown } | null | undefined): SiteEditorBridge | null {
+  return (editor?.storage as { siteBlockContext?: { bridge?: SiteEditorBridge | null } } | undefined)?.siteBlockContext?.bridge ?? null
+}
 
 /** The editor's document kind: `SiteBlockContext`'s, else a post. */
 export function editorDocKind(editor: { storage: unknown } | null | undefined): "post" | "template" | "part" {

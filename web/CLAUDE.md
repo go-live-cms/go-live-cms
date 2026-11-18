@@ -371,6 +371,14 @@ are the most fragile part of the codebase. **Before editing anything under
   `<figcaption>`, and `<cite>` as the last child of `<blockquote>`. The image toolbar is
   `components/editor/ui/ImageToolbar.tsx` (shown on a selected image; the text bubble
   menu hides then, and in a caption shows only bold/italic/link).
+- **Reader comments' rules (#522, `src/lib/discussion.ts`, design
+  `docs/design/reader-comments.md` 6.3, 12.4):** import-free twins of `api/discussion.go` and
+  `api/discussion_text.go`: `discussionSetting` (clock-free `{state, closes_at}`) and
+  `discussionState(setting, now)` for the editor's Discussion section and the renderer, and the
+  text rules (`normalizeReaderCommentBody`, `readerCommentLength` in code points, as the API
+  counts) for the form's counter. Pinned by `src/lib/discussionStateVectors.json` and
+  `src/lib/discussionTextVectors.json` (both suites; `JSON.parse`). Nothing renders comments yet
+  (C5 #525), and `comments_enabled` stays off with no switch until #527.
 - **Global styles (#485, `src/lib/globalStyles.ts`, design `docs/design/theme-builder.md`
   section 6):** the override grammar, validator, contrast (`CONTRAST_PAIRS`, which the
   default theme's `tokens.test.ts` checks) and groups, the same rules as the API's
@@ -406,6 +414,21 @@ are the most fragile part of the codebase. **Before editing anything under
   `ContrastUnconfirmedError` (`pairs`), `StylesChangedError` (`current`) and `DesignInvalidError` (`problems`:
   `template_empty`, `template_invalid`, `part_unresolved`); `design_changed`, `nothing_to_publish` and 503
   `collab_unavailable` (naming the item it couldn't flush) are ApiErrors with the server's message.
+- **Site editor (#493, design `docs/design/theme-builder.md` 13; the redesign canvas's row 8):** `/site-editor` (the
+  overview, `pages/SiteEditor.tsx`), `/site-editor/templates/:id` (the template and part editors,
+  `pages/SiteTemplateEditor.tsx`), `/site-editor/history` (`pages/SiteDesignHistory.tsx`) and #487's
+  `/site-editor/styles`, all `AdminOnly`; Appearance › Site editor (admins, `nav.ts`); Themes › Customize opens it
+  (Layouts… keeps the layout-variant dialog). Rules and wording are `lib/siteDesign.ts` (tested): the overview's rows
+  and "renders now" vocabulary, the row and More menus, new names (`savedTemplateName`, 13.1), the publish list and
+  refusals, preview pages, "Used in". The editors are the post editor: `Editor` with `templateId`/`templateKind`
+  (`template-<id>`, `acquirePostCollab(id, "template")`) and a `siteBridge` (`SiteEditorBridge`: the part card's state
+  and button, `routeHasList` for the query loop). Custom HTML and footnotes are post-only (`contexts`), the Site group
+  comes first, and Post content is offered once (`offeredOnce`). Restore, Discard and Start over go through
+  `templateRestore.ts` with `EditorRef.getRestoreTarget()` (a reset item is read-only: Keep editing first). Publish is
+  `components/site-editor/PublishDesignDialog.tsx` (the overview read on open; refusals, then contrast), shared with
+  the styles screen, whose count now includes templates and parts. The preview frame (`StylesPreview` with the route's
+  pages) reloads on the collab server's `stored`; a previewed request reads the **working copies** through
+  `GET /site-design/draft?slugs=` (`readDraftSiteDesign`, the middleware's `locals.designPreview.readTemplates`).
 - **Theme contract (#484, `themes/README.md` "The theme contract", design
   `docs/design/theme-builder.md` 3.5):** core emits tokens (`src/lib/themeTokens.ts`:
   `themeCssVariables(resolveThemeTokens(config, Astro.locals.globalStyles))`; the middleware
@@ -665,9 +688,22 @@ are the most fragile part of the codebase. **Before editing anything under
   don't carry it) and row menu **Set as front page** (admins, published pages); unpublishing,
   archiving or trashing the front page asks first (`FrontPageConfirm`, in `PostActions` and the
   editor's Publish menu). The page's **Template** field is `components/editor/ui/PageTemplateField.tsx`
-  (saved at once, `PUT /posts/:id/template`; "Settings changed" until Update). Templates come from the
-  API's theme scan (`usePageTemplates`, the active theme's `config.page_templates`). Rules and wording:
+  (saved at once, `PUT /posts/:id/template`; "Settings changed" until Update). Templates come from
+  `GET /posts/page-templates` (`usePageTemplates`: the theme scan's layouts plus the published Site editor
+  page templates; one request shared by what mounts together, asked again on every mount, never caching an
+  answer that started before `resetPageTemplates`; `usePageTemplates.test.tsx`). Rules and wording:
   `lib/frontPage.ts`, `lib/pageTemplates.ts` (tested).
+- **Builder page templates (#494, design `docs/design/theme-builder.md` 10, the canvas's "Template field with
+  builder templates" board):** the Template field lists the theme's layouts under "<Theme>’s layouts", then
+  the `custom-<name>` templates the site would render (published overrides, and any the theme ships) under
+  "Made in the Site editor", each tagged "Site editor" (headings
+  only when there are builder templates: `Select` options take `group` and `tag`, rendered as `role="group"`
+  runs and a `Pill`). A page stores `block:<name>`. One that isn't published any more stays listed and shown,
+  with "Pricing isn’t published in Paper, so this page shows with Default. …" (`templateNote`); the Pages
+  list's Template column shows the title with the tag, or the default with that note. On the site,
+  `templateRanks` ranks `custom-<name>` then `page`, and `pageLayoutVariant` never matches a `block:` name, so
+  an unpublished one renders the default and keeps the name (`BlockTemplateLayout.astro.test.ts`, "builder page
+  templates (#494)").
 - **Edit access requests (#321):** the editor's view-only notice (`components/editor/ui/
   PostEditAccess.tsx` `ViewOnlyNotice`) has **Request access** (a dialog, optional message ≤500)
   for a contributor watching someone else's published post, then "Request sent", or "declined,
