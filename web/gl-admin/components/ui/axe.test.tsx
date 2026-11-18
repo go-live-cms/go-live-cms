@@ -202,6 +202,26 @@ describe("axe: forms, feedback and structure (#479, #480)", () => {
     expect(await violations(container)).toEqual([])
   })
 
+  // The page Template field's list (#494): named groups of options, a tag on some.
+  it("Select with grouped, tagged options, open", async () => {
+    await render(
+      <Select
+        label="Template"
+        value="block:landing"
+        onChange={() => {}}
+        options={[
+          { value: "default", label: "Default", group: "Paper’s layouts" },
+          { value: "fullwidth", label: "Full width", description: "Edge to edge", group: "Paper’s layouts" },
+          { value: "block:landing", label: "Landing", tag: "Site editor", group: "Made in the Site editor" },
+        ]}
+      />
+    )
+    const trigger = container.querySelector<HTMLButtonElement>("[role='combobox']")!
+    await act(async () => trigger.click())
+    expect(document.querySelectorAll("[role='listbox'] > [role='group'][aria-labelledby]")).toHaveLength(2)
+    expect(await violations()).toEqual([])
+  })
+
   it("Toaster with an error and an action", async () => {
     await render(<Toaster />)
     let ids: string[] = []

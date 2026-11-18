@@ -167,6 +167,17 @@ export async function setPageTemplate(id: string | number, template: string): Pr
   return response.json()
 }
 
+// GET /posts/page-templates (#336, #494): what a page's Template field offers, for every
+// content role: the active theme (null with none), its page layouts and its published
+// Site editor page templates (`block:<name>`). Read it through `pageTemplateChoicesOf`.
+export async function getPageTemplates(): Promise<unknown> {
+  const response = await authenticatedFetch(`/api/v1/posts/page-templates`)
+  if (!response.ok) {
+    throw await apiErrorFromResponse(response, { fallback: "Loading the page templates failed" })
+  }
+  return response.json()
+}
+
 // The byline (#319): who the post credits, in order. Separate from the owner
 // (user_id), which alone decides access; on a published post a change reaches the
 // site on Update.

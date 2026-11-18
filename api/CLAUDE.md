@@ -1217,7 +1217,8 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   published, type `page`, and that type public and active, and the site's `/` shows the latest
   posts until it is published again. `GET /settings` returns the id as stored (an id is not
   content). Only `front_page_db_test.go` touches it in tests (a shared singleton; it restores it).
-- **Templates:** `posts.page_template` (`''` = the theme's default; CHECK `[A-Za-z0-9_-]{0,64}`).
+- **Templates:** `posts.page_template` (`''` = the theme's default; CHECK `[A-Za-z0-9_-]{0,64}`, or
+  `block:<name>` since 000062, below).
   **In the snapshot (decision):** `golive_post_settings()` has `page_template`, so a template
   change on a published page waits for Update like every other setting (#358), `golive_post_settings_changed`
   sees it, versions record it and restore-settings brings it back (`RestorePostSEO` takes it; a
@@ -1234,6 +1235,19 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   name. A declared layout without its file is left out. Stored as `config.page_templates`; the admin
   lists it, the web resolves names against its own build (`pageLayoutVariant`). A stored template the
   active theme lacks (theme switch) is kept and renders as the default.
+- **Builder page templates (#494, `000062`, design `docs/design/theme-builder.md` 10):** a page may store
+  `block:<name>` (CHECK widened to `^([A-Za-z0-9_-]{0,64}|block:[a-z0-9-]{1,64})$`; a layout name can't hold
+  `:`), the active theme's site template `custom-<name>`. A reference by name, never an FK: a reset, deleted or
+  other theme's template leaves it stored, and the page renders the default until it's published again. PUT
+  accepts one only while the site would render it, as the resolve does: a **published** override of the active
+  theme (`HasPublishedSiteTemplate`, `published_block_doc` not NULL) or a `custom-<name>` the theme ships
+  (`config.block_templates`); else 400 `unknown_template`. `GET /posts/page-templates` (every content role) is
+  what the Template field offers: `{theme: {slug, name} | null, templates (the layouts), builder_templates:
+  [{name: "block:<n>", label: title}]}` (`ListPublishedCustomPageTemplates` plus the shipped ones, by label; a
+  `custom-` slug with `_` can't be stored, so it's left out). Nothing else changed: it is still the snapshotted setting (Update, versions, restore-settings), and the
+  PUT still doesn't purge; a design publish purges as #492 does. Tests: `page_templates_test.go` (mock),
+  `page_templates_db_test.go` (real DB through the routes: offered and accepted only once published, live on
+  Update, kept after a reset, restored by a version, the CHECK).
 
 ## Block comments (#192, `000048`, `post_comments.go`)
 

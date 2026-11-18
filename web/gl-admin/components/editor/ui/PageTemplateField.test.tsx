@@ -3,20 +3,20 @@ import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 // A page's Template field (#336): the active theme's page layouts, saved at once
-// through PUT /posts/:id/template, with "Settings changed" after.
+// through PUT /posts/:id/template, with "Settings changed" after; and its published Site
+// editor page templates under their own heading (#494).
 
-const api = vi.hoisted(() => ({ setPageTemplate: vi.fn(), getPostById: vi.fn() }))
+const api = vi.hoisted(() => ({ setPageTemplate: vi.fn(), getPostById: vi.fn(), getPageTemplates: vi.fn() }))
 vi.mock("@gl-admin/lib/api/posts", () => api)
-const THEME = {
-  config: {
-    page_templates: [
-      { name: "default", label: "Default", description: "One reading column" },
-      { name: "fullwidth", label: "Full width", description: "A title band across the page" },
-    ],
-  },
+const CHOICES = {
+  theme: { slug: "paper", name: "Paper" },
+  templates: [
+    { name: "default", label: "Default", description: "One reading column" },
+    { name: "fullwidth", label: "Full width", description: "A title band across the page" },
+  ],
+  builder_templates: [],
 }
-const themes = vi.hoisted(() => ({ getActiveTheme: vi.fn() }))
-vi.mock("@gl-admin/lib/api/themes", () => themes)
+const WITH_BUILDER = { ...CHOICES, builder_templates: [{ name: "block:landing", label: "Landing" }, { name: "block:docs", label: "Docs" }] }
 
 import PageTemplateField from "./PageTemplateField"
 import { resetPageTemplates } from "@gl-admin/lib/hooks/usePageTemplates"
@@ -55,7 +55,7 @@ beforeEach(() => {
   root = createRoot(container)
   api.setPageTemplate.mockReset().mockResolvedValue({ post: { id: 7 } })
   api.getPostById.mockReset()
-  themes.getActiveTheme.mockReset().mockResolvedValue(THEME)
+  api.getPageTemplates.mockReset().mockResolvedValue(CHOICES)
   resetPageTemplates()
 })
 afterEach(() => {
@@ -97,7 +97,7 @@ describe("PageTemplateField", () => {
   })
 
   it("says so when the theme's templates can't load, and tries again", async () => {
-    themes.getActiveTheme.mockRejectedValueOnce(new Error("timeout"))
+    api.getPageTemplates.mockRejectedValueOnce(new Error("timeout"))
     await render()
     expect(trigger().disabled).toBe(true)
     expect(hint()).toContain("Couldn't load the theme's templates.")
@@ -113,6 +113,64 @@ describe("PageTemplateField", () => {
   it("is read-only for someone who can't change the page's settings", async () => {
     await render({ readOnly: true })
     expect(trigger().disabled).toBe(true)
+  })
+
+  describe("Site editor page templates (#494)", () => {
+    const groups = () =>
+      [...document.querySelectorAll<HTMLElement>("[role='listbox'] [role='group']")].map((group) => ({
+        name: document.getElementById(group.getAttribute("aria-labelledby")!)?.textContent,
+        options: [...group.querySelectorAll("[role='option']")].map((o) => o.textContent),
+      }))
+
+    it("lists them after the theme's layouts, under their own heading, and saves one", async () => {
+      api.getPageTemplates.mockResolvedValue(WITH_BUILDER)
+      const onSaved = vi.fn()
+      await render({ onSaved })
+      await act(async () => trigger().click())
+      expect(groups()).toEqual([
+        { name: "Paper’s layouts", options: ["DefaultOne reading column", "Full widthA title band across the page"] },
+        { name: "Made in the Site editor", options: ["LandingSite editor", "DocsSite editor"] },
+      ])
+      const option = [...document.querySelectorAll<HTMLElement>("[role='option']")].find((o) => o.textContent?.startsWith("Landing"))!
+      await act(async () => option.click())
+      await settle()
+
+      expect(api.setPageTemplate).toHaveBeenCalledWith(7, "block:landing")
+      expect(onSaved).toHaveBeenCalledTimes(1)
+      // The trigger shows the title and the tag.
+      expect(trigger().textContent).toBe("LandingSite editor")
+      expect(hint()).toContain("A page template made in the Site editor.")
+    })
+
+    it("keeps no headings while the theme has none", async () => {
+      await render()
+      await act(async () => trigger().click())
+      expect(groups()).toEqual([])
+      expect([...document.querySelectorAll("[role='option']")].map((o) => o.textContent)).toEqual([
+        "DefaultOne reading column",
+        "Full widthA title band across the page",
+      ])
+    })
+
+    // Reset, deleted or another theme's: the page renders the default and keeps the name.
+    it("keeps a stored one that isn't published, and says what the page shows instead", async () => {
+      api.getPageTemplates.mockResolvedValue(WITH_BUILDER)
+      await render({ initial: "block:pricing" })
+      expect(trigger().textContent).toBe("PricingSite editor")
+      expect(hint()).toContain(
+        "Pricing isn’t published in Paper, so this page shows with Default. The choice is kept and applies again once it’s published."
+      )
+      await act(async () => trigger().click())
+      expect(groups()[1].options).toEqual(["LandingSite editor", "DocsSite editor", "PricingSite editorNot published · renders with the default"])
+      expect(api.setPageTemplate).not.toHaveBeenCalled()
+    })
+
+    it("shows the stored one, tagged, while the list loads", async () => {
+      api.getPageTemplates.mockReturnValue(new Promise(() => {}))
+      await render({ initial: "block:spring-launch" })
+      expect(trigger().textContent).toBe("Spring launchSite editor")
+      expect(trigger().disabled).toBe(true)
+    })
   })
 
   it("re-reads the template after a restored version", async () => {

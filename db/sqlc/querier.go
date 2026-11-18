@@ -444,6 +444,9 @@ type Querier interface {
 	GetValidUserInvitationByTokenHash(ctx context.Context, tokenHash []byte) (UserInvitation, error)
 	// Idempotent: a grant that already exists keeps its first date and granter.
 	GrantPostCollaborator(ctx context.Context, arg GrantPostCollaboratorParams) error
+	// Whether the theme has a published copy of this template (#494: PUT /posts/:id/template
+	// accepts block:<name> for a published custom-<name>), without reading its docs.
+	HasPublishedSiteTemplate(ctx context.Context, arg HasPublishedSiteTemplateParams) (bool, error)
 	// A plugin seen for the first time. It starts disabled. No row when another replica
 	// inserted it first.
 	InsertDiscoveredPlugin(ctx context.Context, arg InsertDiscoveredPluginParams) (Plugin, error)
@@ -672,6 +675,10 @@ type Querier interface {
 	// sitemap; lastmod is the newest of those posts. closure pairs each term with
 	// itself and every term below it.
 	ListPublicTerms(ctx context.Context, arg ListPublicTermsParams) ([]ListPublicTermsRow, error)
+	// The builder page templates a page may pick (#494, design 10): the theme's published
+	// custom-<name> templates. A reset or never-published one has no published copy, so it
+	// isn't offered (a page that already stores it keeps the name and renders the default).
+	ListPublishedCustomPageTemplates(ctx context.Context, themeSlug string) ([]ListPublishedCustomPageTemplatesRow, error)
 	// The author page's list, newest first. Same columns as ListPostsWithMeta so
 	// rows share its presenter.
 	ListPublishedPostsByAuthor(ctx context.Context, arg ListPublishedPostsByAuthorParams) ([]ListPublishedPostsByAuthorRow, error)

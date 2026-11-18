@@ -41,6 +41,15 @@
   &.is-placeholder {
     color: var(--text-placeholder);
   }
+
+  // A tagged value ("Landing [Site editor]") keeps its tag beside it.
+  &:has(+ .gl-listbox__tag) {
+    flex: 0 1 auto;
+  }
+
+  + .gl-listbox__tag {
+    margin-right: auto;
+  }
 }
 
 .gl-select__chevron {
@@ -143,6 +152,44 @@
     flex-direction: column;
     min-width: 0;
     padding: var(--space-1) 0;
+  }
+
+  &__line {
+    align-items: center;
+    display: flex;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  &__label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__tag {
+    flex: none;
+  }
+
+  // A named run of options (the page Template field's "Made in the Site editor", #494):
+  // a heading, and a rule above every run after the first.
+  &__group {
+    display: flex;
+    flex-direction: column;
+
+    & + & {
+      border-top: 1px solid var(--border-color);
+      margin-top: var(--space-1);
+      padding-top: var(--space-1);
+    }
+  }
+
+  &__group-label {
+    color: var(--text-secondary);
+    font-size: var(--type-footnote);
+    font-weight: 500;
+    line-height: var(--type-footnote-lh);
+    padding: var(--space-1) var(--space-2);
   }
 
   &__description {
