@@ -169,6 +169,10 @@ func (server *Server) putInternalSiteTemplateCollab(c *gin.Context) {
 			return
 		}
 		arg.BlockDoc = blockDoc
+		// "Used in" (#496): the working copy's media blocks, synced in the transaction.
+		if uses := req.BlockDoc.contentMediaUses(); len(uses) > 0 {
+			arg.ContentMedia = uses
+		}
 	}
 
 	result, err := server.store.StoreSiteTemplateCollabTx(c.Request.Context(), arg)

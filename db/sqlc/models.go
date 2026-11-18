@@ -543,6 +543,14 @@ type SiteTemplate struct {
 	ChangedAt          time.Time             `json:"changed_at"`
 }
 
+type SiteTemplateMedium struct {
+	TemplateID int64  `json:"template_id"`
+	MediaID    int64  `json:"media_id"`
+	BlockID    string `json:"block_id"`
+	BlockType  string `json:"block_type"`
+	Published  bool   `json:"published"`
+}
+
 type SiteTemplateVersion struct {
 	ID         int64                 `json:"id"`
 	TemplateID int64                 `json:"template_id"`

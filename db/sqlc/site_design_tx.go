@@ -54,9 +54,10 @@ type PublishSiteDesignTxParams struct {
 	Publish []int64
 
 	// PublishedTemplate runs inside the transaction after each row's published copy is
-	// written (the row as it now is). It's the hook for what follows the published copy
-	// (#496 syncs site_template_media's published rows here, design 8.2). Nil: nothing.
-	// It must not wait on anything but this transaction's queries.
+	// written (the row as it now is). It's the hook for what follows the published copy:
+	// the api's publishedSiteTemplateHook syncs site_template_media's published rows there
+	// (#496, design 8.2). Nil: nothing. It must not wait on anything but this
+	// transaction's queries.
 	PublishedTemplate func(ctx context.Context, q *Queries, row SiteTemplate) error
 }
 

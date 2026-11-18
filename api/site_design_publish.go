@@ -345,10 +345,17 @@ func (server *Server) flushSiteDesign(c *gin.Context, rows []db.SiteTemplate) (d
 const siteDesignFlushParallel = 4
 
 // publishedSiteTemplateHook is the hook PublishSiteDesignTx runs inside its transaction
-// for every row it publishes (design 8.2: "sync site_template_media's published rows").
-// #496 ("Used in" for templates) returns its sync here; nil until then.
+// for every row it publishes (design 8.2): it syncs site_template_media's published rows
+// to the published copy's media blocks (#496, "Used in"). A reset publishes NULL, which
+// shows no media, so its published rows go. Database work only, in the transaction.
 func (server *Server) publishedSiteTemplateHook() func(ctx context.Context, q *db.Queries, row db.SiteTemplate) error {
-	return nil
+	return func(ctx context.Context, q *db.Queries, row db.SiteTemplate) error {
+		var uses []db.ContentMediaUse
+		if row.PublishedBlockDoc.Valid {
+			uses = storedDocMediaUses(row.PublishedBlockDoc.RawMessage)
+		}
+		return db.SyncSiteTemplateContentMedia(ctx, q, row.ID, true, uses)
+	}
 }
 
 // maxActivitySlugs caps the slugs site_design_published lists, so its payload stays

@@ -724,6 +724,16 @@ tree, #352 2.9). `GET /media/:id/posts` gains a `site_templates` list ("Header p
 "Single post template"), and the delete confirmation names them. A deleted media id renders
 nothing, as in posts (`media_missing`).
 
+**As built (T14, #496, `000063`).** `site_template_media` also records each block's type, so
+"Used in" says "Image block" as it does for posts. The working copy is synced by every collab
+store that writes `block_doc` (and once when Customize copies a default that shows media), the
+published copy by `PublishSiteDesignTx`'s per-row hook (a reset leaves no published rows).
+`GET /media/:id/posts` answers `site_templates` (each with `published` and `working`) and
+`site_logo`. Only admins see working copies; other roles see what the site shows. A captions file
+is listed through the video blocks showing a video it captions, as for posts. The admin's "Used
+in" lists the site design first, named but not linked until the Site editor (#493) has routes
+per item, and the delete confirmation looks the files up when it opens and names them.
+
 ### 5.7 What a theme ships
 
 A theme may ship `templates/<slug>.json` and `parts/<slug>.json`: Block Spec v1 docs with a
@@ -1071,6 +1081,20 @@ cache-aside interface and purge hooks.
 - **Request cost.** A builder page makes one resolve read plus at most 4 queries, the same
   order as today's home and archive pages. T9's acceptance measures render time against the
   code layout on the same route.
+
+**As built (T13, #495).** #185 landed as a cache of whole public responses, so the design
+needed no keys of its own: the resolve (with its parts, media and menus) and `/themes/active`
+(with the published styles) are #185 routes, keyed by the whole request, which for the resolve
+is the theme and the ranked slugs (a route kind is its slug list). `design:<theme>:…` keys would
+only repeat that. Every event above purges through #185's after-commit hook: the publish (resets
+included), theme activation, `PUT /settings` (front page, site logo), menu saves, and media
+writes. Per-item writes (reset, restore, start over, the collab store) change only working
+copies, which no public read serves, so they don't purge. Their changes reach the site with
+the next publish, which purges. The response recorder now refuses any `private` or `no-store`
+directive, not only an exact `no-store`, so a preview answer could never be stored even on a
+listed route. `site_design_cache_db_test.go` runs each event against #185's store, checks from a
+second connection that the purge comes after the commit, and checks that a failed purge
+doesn't fail the publish and that a preview stores nothing.
 
 ---
 

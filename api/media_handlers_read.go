@@ -474,7 +474,9 @@ func (server *Server) getMediaByPost(c *gin.Context) {
 // getMediaPosts handles GET /media/:id/posts - posts using specific media.
 // Path param: id (required) - media identifier.
 // Returns posts that reference the specified media asset.
-// Includes media details and linked posts with order information.
+// Includes media details and linked posts with order information, and since #496 the
+// site design's uses: site_templates (templates and parts showing it; a caller who isn't
+// an admin sees only published copies) and site_logo (it is settings.site_logo_media_id).
 func (server *Server) getMediaPosts(c *gin.Context) {
 	mediaIDParam := c.Param("id")
 	mediaID, err := strconv.ParseInt(mediaIDParam, 10, 64)
@@ -525,9 +527,19 @@ func (server *Server) getMediaPosts(c *gin.Context) {
 		})...)
 	}
 
+	// The site design (#496): the templates and parts showing it, and the site logo.
+	siteTemplates, siteLogo, err := server.mediaSiteDesignUses(c.Request.Context(), media, caller)
+	if err != nil {
+		server.requestLog(c).Error("media_used_in_failed", "media_id", mediaID, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get media posts"})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"media": server.mediaResponse(media),
-		"posts": postResponses,
+		"media":          server.mediaResponse(media),
+		"posts":          postResponses,
+		"site_templates": siteTemplates,
+		"site_logo":      siteLogo,
 		"meta": gin.H{
 			"media_id": mediaID,
 			"count":    len(postResponses),

@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -99,7 +100,9 @@ var publicCacheRoutes = map[string]publicCacheRoute{
 	// Menus (#347): a location with no menu is a 404 on every page.
 	"/public/menus/:location": {notFound: true},
 	// The site design's template resolve (#491), asked on every page: keyed by the theme and
-	// the slugs; a design publish, theme activation, menu or media write purges it.
+	// the ranked slugs (#495: the route kind is its slug list); a design publish (resets
+	// included), theme activation, settings (site logo, front page), menu or media write
+	// purges it. Previews read GET /site-design/draft, never this.
 	"/public/site-templates/resolve": {},
 	// Site config the public site reads on every request.
 	"/api/v1/settings":                   {},
@@ -375,14 +378,16 @@ func (w *publicCacheRecorder) WriteString(s string) (int, error) {
 }
 
 // entry returns what to store, if the response may be: a 200 (or a 404 where the route
-// allows it), not too large, no cookie set and not marked no-store by the handler.
+// allows it), not too large, no cookie set and not marked private or no-store by the
+// handler (any directive list holding either: the design preview's answers are "private,
+// no-store", design 11, and must never be stored even if a route serving one were listed).
 func (w *publicCacheRecorder) entry(route publicCacheRoute) (*publicCacheEntry, bool) {
 	status := w.Status()
 	if status != http.StatusOK && (status != http.StatusNotFound || !route.notFound) {
 		return nil, false
 	}
 	header := w.Header()
-	if w.tooLarge || header.Get("Set-Cookie") != "" || header.Get("Cache-Control") == "no-store" {
+	if w.tooLarge || header.Get("Set-Cookie") != "" || cacheControlForbidsStore(header.Values("Cache-Control")) {
 		return nil, false
 	}
 	return &publicCacheEntry{
@@ -390,6 +395,22 @@ func (w *publicCacheRecorder) entry(route publicCacheRoute) (*publicCacheEntry, 
 		contentType: header.Get("Content-Type"),
 		body:        bytes.Clone(w.body.Bytes()),
 	}, true
+}
+
+// cacheControlForbidsStore reports whether Cache-Control headers say a shared cache must
+// not keep the response: a no-store or private directive (any case, with or without a
+// value, in any of the header's lines).
+func cacheControlForbidsStore(values []string) bool {
+	for _, value := range values {
+		for _, directive := range strings.Split(value, ",") {
+			name, _, _ := strings.Cut(strings.TrimSpace(directive), "=")
+			switch strings.ToLower(strings.TrimSpace(name)) {
+			case "no-store", "private":
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // purgePublicCache invalidates every cached public response. Call it after the write

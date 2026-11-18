@@ -128,6 +128,12 @@ func (doc *BlockDocV1) contentMediaUses() []db.ContentMediaUse {
 // body, in document order. A body that doesn't parse as a block doc has no
 // content media.
 func publishedContentMedia(blockDoc json.RawMessage) []db.ContentMediaUse {
+	return storedDocMediaUses(blockDoc)
+}
+
+// storedDocMediaUses is contentMediaUses of a stored doc, a working or a published copy (a
+// template's too, #496). A doc that doesn't parse as a block doc has none.
+func storedDocMediaUses(blockDoc json.RawMessage) []db.ContentMediaUse {
 	var doc BlockDocV1
 	if err := json.Unmarshal(blockDoc, &doc); err != nil {
 		return nil

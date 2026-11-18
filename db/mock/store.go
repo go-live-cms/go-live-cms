@@ -4880,6 +4880,21 @@ func (mr *MockStoreMockRecorder) ListSiteDesignReleases(arg0, arg1 interface{}) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListSiteDesignReleases", reflect.TypeOf((*MockStore)(nil).ListSiteDesignReleases), arg0, arg1)
 }
 
+// ListSiteTemplateMedia mocks base method.
+func (m *MockStore) ListSiteTemplateMedia(arg0 context.Context, arg1 int64) ([]db.SiteTemplateMedium, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListSiteTemplateMedia", arg0, arg1)
+	ret0, _ := ret[0].([]db.SiteTemplateMedium)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListSiteTemplateMedia indicates an expected call of ListSiteTemplateMedia.
+func (mr *MockStoreMockRecorder) ListSiteTemplateMedia(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListSiteTemplateMedia", reflect.TypeOf((*MockStore)(nil).ListSiteTemplateMedia), arg0, arg1)
+}
+
 // ListSiteTemplateVersions mocks base method.
 func (m *MockStore) ListSiteTemplateVersions(arg0 context.Context, arg1 int64) ([]db.ListSiteTemplateVersionsRow, error) {
 	m.ctrl.T.Helper()
@@ -4908,6 +4923,36 @@ func (m *MockStore) ListSiteTemplateVersionsByRelease(arg0 context.Context, arg1
 func (mr *MockStoreMockRecorder) ListSiteTemplateVersionsByRelease(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListSiteTemplateVersionsByRelease", reflect.TypeOf((*MockStore)(nil).ListSiteTemplateVersionsByRelease), arg0, arg1)
+}
+
+// ListSiteTemplatesByCaptionsMedia mocks base method.
+func (m *MockStore) ListSiteTemplatesByCaptionsMedia(arg0 context.Context, arg1 int64) ([]db.ListSiteTemplatesByCaptionsMediaRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListSiteTemplatesByCaptionsMedia", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListSiteTemplatesByCaptionsMediaRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListSiteTemplatesByCaptionsMedia indicates an expected call of ListSiteTemplatesByCaptionsMedia.
+func (mr *MockStoreMockRecorder) ListSiteTemplatesByCaptionsMedia(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListSiteTemplatesByCaptionsMedia", reflect.TypeOf((*MockStore)(nil).ListSiteTemplatesByCaptionsMedia), arg0, arg1)
+}
+
+// ListSiteTemplatesByMedia mocks base method.
+func (m *MockStore) ListSiteTemplatesByMedia(arg0 context.Context, arg1 int64) ([]db.ListSiteTemplatesByMediaRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListSiteTemplatesByMedia", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListSiteTemplatesByMediaRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListSiteTemplatesByMedia indicates an expected call of ListSiteTemplatesByMedia.
+func (mr *MockStoreMockRecorder) ListSiteTemplatesByMedia(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListSiteTemplatesByMedia", reflect.TypeOf((*MockStore)(nil).ListSiteTemplatesByMedia), arg0, arg1)
 }
 
 // ListSiteTemplatesByTheme mocks base method.
@@ -6668,6 +6713,20 @@ func (m *MockStore) SyncPostContentMedia(arg0 context.Context, arg1 db.SyncPostC
 func (mr *MockStoreMockRecorder) SyncPostContentMedia(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SyncPostContentMedia", reflect.TypeOf((*MockStore)(nil).SyncPostContentMedia), arg0, arg1)
+}
+
+// SyncSiteTemplateMedia mocks base method.
+func (m *MockStore) SyncSiteTemplateMedia(arg0 context.Context, arg1 db.SyncSiteTemplateMediaParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SyncSiteTemplateMedia", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SyncSiteTemplateMedia indicates an expected call of SyncSiteTemplateMedia.
+func (mr *MockStoreMockRecorder) SyncSiteTemplateMedia(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SyncSiteTemplateMedia", reflect.TypeOf((*MockStore)(nil).SyncSiteTemplateMedia), arg0, arg1)
 }
 
 // TombstoneExpiredReaderComments mocks base method.

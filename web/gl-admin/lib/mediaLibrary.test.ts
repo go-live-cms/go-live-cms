@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import {
   altHint,
   altTextValue,
@@ -18,7 +18,15 @@ import {
   canHaveCaptions,
   isCaptionsFile,
   usedInRows,
+  allUsedInRows,
+  deleteSiteDesignNotice,
+  lookUpSiteDesignNames,
+  SITE_DESIGN_CHECK_FAILED,
+  siteDesignNames,
+  siteDesignUsedInRows,
+  siteTemplateName,
   type MediaPostLink,
+  type MediaSiteTemplateUse,
   type MediaUsage,
 } from "./mediaLibrary"
 
@@ -197,5 +205,100 @@ describe("missing alt text (#325)", () => {
   it("the field's hint follows the decorative option", () => {
     expect(altHint(false)).toMatch(/^Describe what the image shows/)
     expect(altHint(true)).toBe("Not used while the image is marked decorative.")
+  })
+})
+
+describe("the site design's uses (#496)", () => {
+  const header: MediaSiteTemplateUse = {
+    id: 5,
+    theme: "default",
+    kind: "part",
+    slug: "header",
+    title: "Header",
+    published: true,
+    working: true,
+    usages: [{ type: "block", block_id: "a", block_type: "image" }],
+  }
+  const single: MediaSiteTemplateUse = {
+    id: 8,
+    theme: "default",
+    kind: "template",
+    slug: "single",
+    title: "",
+    published: false,
+    working: true,
+    usages: [
+      { type: "block", block_id: "b", block_type: "cover" },
+      { type: "block", block_id: "c", block_type: "image" },
+    ],
+  }
+
+  it("names templates and parts as the Site editor does", () => {
+    expect(siteTemplateName(header)).toBe("Header part")
+    expect(siteTemplateName(single)).toBe("single template")
+  })
+
+  it("rows: the site logo first, then each template or part, saying what isn't live yet", () => {
+    expect(siteDesignUsedInRows({ siteTemplates: [header, single], siteLogo: true })).toEqual([
+      { key: "site-logo", title: "Site logo", how: "Settings › General", status: "" },
+      { key: "site-template-5", title: "Header part", how: "Image block", status: "" },
+      { key: "site-template-8", title: "single template", how: "Cover block and image block · Not published yet", status: "" },
+    ])
+    expect(siteDesignUsedInRows({ siteTemplates: [], siteLogo: false })).toEqual([])
+    // A captions file is used through a video block.
+    expect(siteDesignUsedInRows({ siteTemplates: [{ ...header, usages: [{ type: "captions", block_id: "v", block_type: "video" }] }], siteLogo: false })[0].how).toBe(
+      "Captions of a video block"
+    )
+  })
+
+  it("all rows: the site design first, then the posts (linked)", () => {
+    const rows = allUsedInRows({ posts: [link(11, "featured")], siteTemplates: [header], siteLogo: false })
+    expect(rows.map((r) => [r.title, r.postId])).toEqual([
+      ["Header part", undefined],
+      ["Post 11", 11],
+    ])
+  })
+
+  it("names another theme's design as such", () => {
+    const classic = { ...header, theme: "classic", theme_active: false }
+    expect(siteTemplateName(classic)).toBe("Header part (classic theme)")
+    expect(siteDesignUsedInRows({ siteTemplates: [classic], siteLogo: false })[0].how).toBe("Image block · Theme not active")
+  })
+
+  it("looks the files up a few at a time, gives up on a hung one and says it couldn't check", async () => {
+    vi.useFakeTimers()
+    try {
+      const started: number[] = []
+      const lookup = (id: number) => {
+        started.push(id)
+        if (id === 3) return new Promise<never>(() => {}) // hangs
+        if (id === 4) return Promise.reject(new Error("500"))
+        return new Promise<{ posts: never[]; siteTemplates: MediaSiteTemplateUse[]; siteLogo: boolean }>((resolve) =>
+          setTimeout(() => resolve({ posts: [], siteTemplates: id === 1 ? [header] : [], siteLogo: id === 2 }), 10)
+        )
+      }
+      const pending = lookUpSiteDesignNames([1, 2, 3, 4, 5, 6], lookup, { concurrency: 2, timeoutMs: 1000 })
+      await vi.advanceTimersByTimeAsync(0)
+      expect(started).toEqual([1, 2]) // two at a time
+      await vi.advanceTimersByTimeAsync(2000)
+      expect(started).toEqual([1, 2, 3, 4, 5, 6]) // the hung one was given up on
+      expect(await pending).toEqual({ names: ["Header part", "Site logo"], failed: true })
+    } finally {
+      vi.useRealTimers()
+    }
+    expect(await lookUpSiteDesignNames([], () => Promise.reject(new Error("never")))).toEqual({ names: [], failed: false })
+  })
+
+  it("the delete confirmation names them", () => {
+    expect(deleteSiteDesignNotice([], true)).toBe(SITE_DESIGN_CHECK_FAILED)
+    expect(deleteSiteDesignNotice(["Site logo"], true)).toBe(
+      "Also used in the site design: Site logo. It shows nothing in its place once it's deleted. Couldn't check the other files."
+    )
+    expect(siteDesignNames({ siteTemplates: [header, header, single], siteLogo: true })).toEqual(["Site logo", "Header part", "single template"])
+    expect(deleteSiteDesignNotice([])).toBeNull()
+    expect(deleteSiteDesignNotice(["Header part"])).toBe("Also used in the site design: Header part. It shows nothing in its place once it's deleted.")
+    expect(deleteSiteDesignNotice(["Site logo", "Header part", "Footer part"])).toBe(
+      "Also used in the site design: Site logo, Header part and Footer part. They show nothing in its place once it's deleted."
+    )
   })
 })

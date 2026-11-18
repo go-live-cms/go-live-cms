@@ -517,3 +517,33 @@ func TestPublicCacheRecoveryPurgesOnce(t *testing.T) {
 	require.False(t, pc.unhealthy.Load())
 	require.False(t, pc.recovering.Load())
 }
+
+// A response marked private or no-store in any form is never stored (#495: the design
+// preview's answers are "private, no-store"), whatever route serves it.
+func TestPublicCacheRecorderHonoursCacheControl(t *testing.T) {
+	for _, tc := range []struct {
+		values []string
+		forbid bool
+	}{
+		{nil, false},
+		{[]string{"public, max-age=60"}, false},
+		{[]string{"no-store"}, true},
+		{[]string{"private, no-store"}, true},
+		{[]string{"Private"}, true},
+		{[]string{"max-age=0", "NO-STORE"}, true},
+		{[]string{`private="Set-Cookie"`}, true},
+		{[]string{"no-cache"}, false},
+	} {
+		require.Equal(t, tc.forbid, cacheControlForbidsStore(tc.values), tc.values)
+
+		c, _ := gin.CreateTestContext(httptest.NewRecorder())
+		recorder := &publicCacheRecorder{ResponseWriter: c.Writer}
+		for _, v := range tc.values {
+			recorder.Header().Add("Cache-Control", v)
+		}
+		recorder.WriteHeader(http.StatusOK)
+		_, _ = recorder.Write([]byte(`{}`))
+		_, stored := recorder.entry(publicCacheRoute{})
+		require.Equal(t, !tc.forbid, stored, tc.values)
+	}
+}
