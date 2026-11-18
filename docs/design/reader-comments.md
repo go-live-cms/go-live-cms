@@ -1,7 +1,8 @@
 # Reader comments on published posts (#499)
 
 Status: **design, accepted with the decisions in section 18**, 2026-11. No code ships with
-this document. The sub-issues of section 17 are filed.
+this document. The sub-issues of section 17 are filed. The boards of section 16 are drawn
+(C1, #521), and 16.1 records what they settled.
 
 Builds on: `docs/design/theme-builder.md` (#475: decision 9 in section 16, the site blocks of
 section 4, caching in section 11; the comments block is its T18, #500) and
@@ -342,7 +343,7 @@ without an editor, which contributors can't do with their own text either.
 ### 4.4 The queue
 
 **Discussion** in the sidebar (under Content, after Media, with the pending count) opens on
-the **Pending** tab: newest first, each row with the commenter's initial, name, email (13.4
+the **Pending** tab: newest first, each row with the commenter's initial, name, email (7.1
 on who sees it), "New commenter" for one with nothing approved, the held reason, the text
 (first 300 characters, expandable), the post's title (link to the public URL and to the
 editor), the time, and **Approve**, **Spam**, **Trash** and **Reply**. Other tabs: Approved,
@@ -437,6 +438,7 @@ CREATE TABLE commenters (
   display_name   varchar(60)  NOT NULL,          -- the latest one used
   verified_at    timestamptz,
   blocked_at     timestamptz,                    -- 5.5
+  blocked_by     bigint REFERENCES users (id) ON DELETE SET NULL,  -- who blocked (16.1)
   last_spam_at   timestamptz,                    -- 4.2 previous_spam; outlives the spam rows
   user_id        bigint REFERENCES users (id) ON DELETE SET NULL,  -- reserved for reader accounts (3.1 B)
   created_at     timestamptz NOT NULL DEFAULT now(),
@@ -464,7 +466,9 @@ CREATE TABLE reader_comments (
   body            text NOT NULL CHECK (char_length(body) <= 4000),
   status          varchar NOT NULL CHECK (status IN ('unconfirmed', 'pending', 'approved', 'spam', 'trash')),
   trashed_from    varchar,                        -- the status a restore puts back
-  held_reason     varchar,                        -- 4.2, NULL when not held
+  held_reason     varchar,                        -- 4.2, or the spam route (spam_word, honeypot,
+                                                  -- plugin, moderator; 16.1); Not spam sets
+                                                  -- previous_spam; NULL otherwise
   held_detail     varchar(200),                   -- a guard's reason, a matched word
   notify_replies  boolean NOT NULL DEFAULT false, -- 8.2, the reader's consent
   network_hash    bytea,                          -- 7.2, NULLed after 30 days
@@ -874,7 +878,7 @@ next to the site blocks.
 | `closed`, no comments | Nothing |
 | `closed`, comments | The threads, then "Comments are closed." |
 | `open`, no comments | "No comments yet." and the form |
-| `open` | "3 comments", the threads, pagination, the form |
+| `open` | The heading with the count ("Comments 3", 16.1), the threads, pagination, the form |
 
 The form: Comment (textarea, counter from the vectors), Name, Email ("Never shown"),
 "Email me replies" (unchecked), the honeypot, **Post comment**, and the privacy notice
@@ -928,7 +932,7 @@ script), so they need scripts; the mail says so in its plain-text part.
 | `comments_max_links` | 0–10 | 1 |
 | `comments_hold_words`, `comments_spam_words` | One per line (4.2) | empty |
 | `comments_close_after_days` | 0 (never) – 3650 | 0 |
-| `comments_threading` | Replies · Flat | Replies |
+| `comments_threading` | Threaded · Flat (labelled "Replies") | Threaded |
 | `comments_order` | Oldest first · Newest first | Oldest first |
 | `comments_per_page` | 10–100 threads | 30 |
 | `comments_notice`, `comments_privacy_page_id` | 7.5 | core's text, none |
@@ -1104,46 +1108,134 @@ Activity feed reads the verbs ("Ana approved a comment on *Shipping real-time co
 
 ## 16. Screens and their boards
 
-Drawn under C1 (17). Each board has its states (empty, loading, error) and, where the canvas
-has both, light and dark. This document doesn't draw them.
+Drawn under C1 (#521, 2026-11-17). Each board has its states (empty, loading, error) and,
+where the canvas has both, light and dark. The board names below are the canvases' frame
+titles; 16.1 records what the boards settled.
 
 **[GoLive Admin Redesign](https://claude.ai/artifact/XcdvESjJxeGK5dPAed7QtF)**, a new row
-"9 · Discussion (reader comments, #499)", plus changes to existing boards:
+"9 · Discussion (reader comments, #499)", plus changes to existing boards. The row's new
+boards are a light and a dark column each, as row 8's are.
 
-1. **Discussion · queue** (new): tabs with counts, filters, rows with the held reason, bulk
-   bar, empty ("Nothing waits for review"), and the comments-off state ("Comments are off for
-   this site" with a link to Settings for admins).
-2. **Discussion · comment drawer** (new): the thread, the reply box, the commenter's summary.
-3. **Discussion · commenter** (new): their comments, Block, Export, Erase and its
-   confirmation.
+1. **Discussion · queue** (new): Pending with the held reasons, a new commenter, a post that
+   isn't published and two rows selected; Spam with why each one is there; Approved with
+   Unapprove and a member's comment; Trash; Delete permanently's confirmation; a filter by
+   post and a bulk action that partly applied; Find a commenter; empty ("Nothing waits for
+   review"), loading, error, and the comments-off state ("Comments are off for this site",
+   with the link to Settings for admins only).
+2. **Discussion · comment drawer** (new): the thread in every status, "Reply to Maya as
+   Luan" with Approve and reply, the commenter's summary; a member editing their own comment;
+   a hidden comment keeping its replies, a tombstone, a removed member; reply posted and not
+   posted; loading, error.
+3. **Discussion · commenter** (new): an admin's view with counts, every comment, mail and
+   network; blocked; Erase and its confirmation; after Erase and Export; an editor's view;
+   loading; gone.
 4. **375 · Discussion** (new): the queue on a phone, where approving and marking spam work
-   (a moderator's most likely phone task); replying needs a larger screen.
-5. **Settings** (existing board): a **Discussion** section after Editor (12.1).
-6. **Post types · edit** (existing): the Comments row in Fields, editable on Posts (12.2).
-7. **Post editor · settings panel** (existing SEO-panel board's shell): the Discussion
-   section (12.3).
-8. **Home** (existing): "4 comments await moderation" in Needs attention; comment verbs in
+   (a moderator's most likely phone task); one comment opened; replying needs a larger
+   screen; empty, loading, error.
+5. **Discussion settings, the post's Discussion section, the comment guard** (new): Settings ›
+   Discussion off and with invalid values; the editor's Discussion section (12.3) in the
+   settings panel's Post tab, in six states; the Plugins enable dialog's lines for
+   `comments:read` and the guard (`comments:private`), drawn here so the Plugins board stays
+   as it is; Home's Activity wording for the comment verbs.
+6. **Settings · Discussion** (new, the Settings board's new `discussion` section): the full
+   form of 12.1, after Editor in the Settings menu.
+7. **Post types · Posts** (new, the Post types board's new `posts` mode): the Comments row
+   in Fields, the only editable one on a built-in type (12.2).
+8. **Home** (existing): "4 comments await moderation" in Needs attention; a comment verb in
    Activity.
 9. **Profile** (existing): Notifications (8.3).
 10. **Sidebar** (existing): Content gains **Discussion** after Media, with the pending
     count, for editors and admins.
-11. **Plugins** (existing): the enable dialog's lines for `comments:private` and the guard.
+11. **Settings** and **Post types · edit** (existing): Settings' menu gains Discussion;
+    Post types' Fields gain Comments, so their counts read "of 10".
 
 **[GoLive Default Theme](https://claude.ai/artifact/8J1ovgRB7YPYVjpDGRXZku)**, a new row
-"6 · Comments":
+"6 · Comments (reader comments, #499)":
 
-1. **Post · comments** at 1280, light and dark: threads with replies, "Replying to", the
-   Author and Staff badges, a tombstone, pagination, the form with the privacy notice,
-   "Comments are closed".
-2. **Comment form states**: field errors, "Check your email", "Awaiting moderation", the
-   published comment in place, rate limited, closed since the page loaded, reply mode.
-3. **375 · Post comments** and **375 · form states**.
-4. **Reader pages**: confirm, unsubscribe, your data (request, list, erased), at 1280 and 375.
+1. **Post · comments** at 1280, light and dark: the Post board's new `comments` option, off
+   by default so the existing post boards don't change. Threads with replies, "Replying to",
+   the Author and Staff badges, a tombstone, a link, pagination, the form with the privacy
+   notice.
+2. **Comment form states**, light and dark: closed with comments, open with none, field
+   errors, "Check your email", awaiting moderation, published in place, rate limited, closed
+   since the page loaded, too many waiting, reply mode; and what renders nothing.
+3. **375 · Post comments** and **375 · form states**, light and dark.
+4. **Reader pages: confirm, unsubscribe, your data**, at 1280 and 375, light and dark:
+   confirm before and after (with the address's other unconfirmed comments), unsubscribe and
+   done, your data (request, sent, the list, delete everything, erased), a used-up link,
+   scripts off, and the themed page for a comment refused without scripts (9.4).
+5. **Comments section (shared component)**: the one component every board above renders.
 
-**[GoLive Blocks](https://claude.ai/artifact/F2x5Yx7DKiPs64VFsUwEpi)**: the comments block's
-placeholder in the Site editor and its Block tab (#500).
+**[GoLive Blocks](https://claude.ai/artifact/F2x5Yx7DKiPs64VFsUwEpi)** (#500):
+**Editor · comments block** in rows 2 and 3 (placeholder, in a single template, selected
+with its toolbar, the Block tab; comments off for the site, where it can't go, the
+inserter, an invalid title), and **Published · comments block** at 1280 and 375 in rows 4
+and 5, light and dark.
 
 Mail templates are text, reviewed on their issue (C8), not drawn.
+
+### 16.1 What the boards settled
+
+None of section 18's decisions changed. These details were open in the text and are now
+drawn; C5 to C10 and #500 build them as drawn.
+
+- **The section's heading is its title plus the count.** "Comments 6": the title
+  (`Comments`, or the comments block's `title`) and the approved count after it in muted
+  text, not "6 comments". A custom title ("Responses") then never needs a plural form. No
+  count when there are none; "No comments yet." follows (11.2).
+- **One red in the theme.** The form's errors use the tomato pair the default theme already
+  has for callouts (`--color-danger`, `--color-danger-bg` in GoLive Blocks' `blocks.css`),
+  so the comments add no colour token.
+- **The form**, in order: "Leave a comment" (or "Reply to Ana" with "Replying to Ana ·
+  Cancel"), the status region, Comment with its counter, Name and "Email · never shown" side
+  by side, "Email me replies", **Post comment**, then the notice with "Privacy" and "Your
+  comments" links (13.2). Each outcome of 9.2 and 9.4 has its wording on the form states
+  board; the ones that refuse keep the typed text.
+- **Reader pages** confirm with **Publish my comment**; after it, "Also written with your
+  address, not confirmed" lists the others with Publish and Discard (3.3 step 5).
+  Unsubscribe offers **Stop these emails** and **Stop all mail from this site**. One page
+  answers every used-up or expired link (400 `invalid_token`), and one says the page needs
+  scripts (11.6).
+- **Spam says why.** The Spam tab shows why each comment is there: the spam word, the
+  honeypot, a plugin's guard, or the moderator who marked it. `held_reason` and
+  `held_detail` therefore also record a spam route (`spam_word`, `honeypot`, `plugin`,
+  `moderator`), and
+  a moderator's mark is `moderator` with `moderated_by` naming them (6.1). Not spam sends a
+  comment back to Pending with `previous_spam` as its reason, never with its old spam route. Trash rows show who trashed them and the date
+  they go (30 days, 6.4).
+- **The queue's rows** carry Approve, Spam, Trash and Reply (Pending); Unapprove first on
+  Approved; Not spam and Delete permanently on Spam; Restore and Delete permanently on Trash.
+  A member's own comment offers Edit, a reader's never does (decision 9). Filters are chips
+  and the tab counts follow them. A bulk action that partly applies says so in a toast
+  ("Approved 2 of 3. One comment was deleted by someone else meanwhile."). Find a commenter
+  is a dialog taking the whole address.
+- **Replying to a pending comment** is one button, **Approve and reply**, with the reason
+  under the box. A reply that fails keeps its text.
+- **The commenter page** shows the names used, the counts, every comment with its status,
+  how many ask for reply mail, and the network count. An editor sees Block only; Export and
+  Erase are an admin's (4.3). Blocking takes effect at once and shows who blocked and when,
+  so `commenters` gains `blocked_by` beside `blocked_at` (6.1).
+- **At 375** each pending row has Approve and Spam as 44px buttons and Trash behind a
+  More button; an opened comment has all three and no reply box.
+- **The sidebar's count** is a small accent pill after Discussion, only for editors and
+  admins. **Home**'s Needs attention reads "4 comments await moderation", with how many
+  posts and how old the oldest is.
+- **Settings › Discussion** is its own page after Editor in the Settings menu, grouped
+  Moderation, Display and Privacy, with the General page's save bar. Off shows the switch
+  alone. The threading setting reads "Replies: Threaded · Flat".
+- **The editor's Discussion section** is the last section of the Post tab: a four-way
+  segmented control (Default, Open, Closed, Off), one line for what applies now ("Default ·
+  Open · closes on Dec 3", "Default · Closed on Nov 3", "Default · Off" on a type without
+  comments), the counts linking to the queue filtered by the post, and a status line after a
+  change, since it saves at once. With comments off for the site the choice is still kept,
+  and applies once an admin turns them on.
+- **Profile's Notifications** are two radio groups, each mail described in a line ("Each
+  one: a few minutes after it's approved; several at once come as one mail").
+- **The comments block** has one Block tab field, Title (empty means "Comments", at most 60
+  characters), and a "Discussion settings" link in its toolbar for admins. With comments off
+  for the site its placeholder says so. Where it can't go, the drop is refused with
+  "Comments can't go here", as Post content's is, and the inserter shows it disabled with
+  the reason ("Already in this template", "Only in single and page templates").
 
 ---
 
