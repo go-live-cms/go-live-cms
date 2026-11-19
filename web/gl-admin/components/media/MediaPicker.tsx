@@ -194,7 +194,8 @@ export default function MediaPicker({
       setUploadError(`None of the added files is ${noun.a}. They're in the library.`)
       return
     }
-    setUploadError(null)
+    const others = added.length - fitting.length
+    setUploadError(others > 0 ? `${others} of the added files ${others === 1 ? "isn't" : "aren't"} ${noun.a}. ${others === 1 ? "It's" : "They're"} in the library.` : null)
     addToChoice(fitting)
   }
 

@@ -189,8 +189,7 @@ type importedFile struct {
 
 // download fetches one link into uploadPath, validated like an upload.
 func (im *mediaImporter) download(ctx context.Context, u *url.URL, uploadPath string, maxBytes int64, tooLarge importFailure) (importedFile, error) {
-	ctx, cancel := context.WithTimeout(ctx, mediaImportTimeout)
-	defer cancel()
+	// The client's Timeout (mediaImportTimeout) bounds the whole exchange, body included.
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
 		return importedFile{}, importInvalidURL
@@ -329,7 +328,7 @@ func sniffedImportExtension(head []byte) string {
 	if isWebVTT(head) {
 		return ".vtt"
 	}
-	if bytes.HasPrefix(head, []byte("\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1")) {
+	if allowedMediaTypes[".doc"].sniff(head) {
 		return ".doc"
 	}
 	if bytes.HasPrefix(head, []byte("ID3")) {
@@ -470,13 +469,10 @@ func (server *Server) importMedia(c *gin.Context) {
 // activity log. Failures are logged by code only.
 func (server *Server) importOne(ctx context.Context, log *slog.Logger, raw string, userID int64) (db.Medium, string, error) {
 	u, err := url.Parse(raw)
-	if err == nil {
-		err = importURLProblem(u)
-	}
 	if err != nil {
-		if !errors.Is(err, importCredentials) {
-			err = importInvalidURL
-		}
+		return db.Medium{}, "", importInvalidURL
+	}
+	if err := importURLProblem(u); err != nil {
 		return db.Medium{}, "", err
 	}
 	host := strings.ToLower(u.Hostname())

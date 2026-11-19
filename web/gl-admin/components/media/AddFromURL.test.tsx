@@ -165,6 +165,26 @@ describe("the media picker's Add from URL", () => {
     expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 9 }))
   })
 
+  it("picks nothing when the picker was closed before the links were added", async () => {
+    let finish: (value: unknown) => void = () => {}
+    api.importMediaFromURLs.mockReturnValue(new Promise((resolve) => (finish = resolve)))
+    const onSelect = vi.fn()
+    const picker = (isOpen: boolean) => <MediaPicker isOpen={isOpen} onClose={() => {}} onSelect={onSelect} kind="image" />
+    await render(picker(true))
+    await click(button("Add from URL"))
+    await type("https://images.example.com/photo.jpg")
+    await click(button("Add 1 file"))
+    await act(async () => root!.render(picker(false)))
+    await act(async () =>
+      finish({
+        results: [{ url: "https://images.example.com/photo.jpg", status: "added", media: media(11) }],
+        meta: { total: 1, successful: 1, failed: 0 },
+      })
+    )
+    await flush()
+    expect(onSelect).not.toHaveBeenCalled()
+  })
+
   it("says so when nothing added is of the picker's kind", async () => {
     api.importMediaFromURLs.mockResolvedValue({
       results: [{ url: "https://cdn.example.com/report.pdf", status: "added", media: media(10, { mime_type: "application/pdf" }) }],

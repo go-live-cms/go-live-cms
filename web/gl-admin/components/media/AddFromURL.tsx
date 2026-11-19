@@ -36,8 +36,15 @@ function useAddFromURL(onAdded: (media: Media[]) => void) {
   const [pending, setPending] = useState<string[]>([])
   const [results, setResults] = useState<ImportResult[]>([])
   const [requestError, setRequestError] = useState<string | null>(null)
-  // Bumped by reset: an answer that arrives after the dialog closed changes nothing on screen.
+  // Bumped by reset and on unmount: an answer that arrives after the dialog or the picker
+  // closed picks nothing and changes nothing on screen (the files are in the library).
   const session = useRef(0)
+  useEffect(
+    () => () => {
+      session.current++
+    },
+    []
+  )
   const parsed = parseImportLinks(text)
 
   const submit = async () => {
@@ -50,9 +57,9 @@ function useAddFromURL(onAdded: (media: Media[]) => void) {
       const response = await importMediaFromURLs(parsed.links)
       const added = response.results.flatMap((r) => (r.status === "added" ? [r.media] : []))
       added.forEach(rememberMedia)
-      // The files are in the library either way; the caller shows them.
-      if (added.length > 0) onAdded(added)
+      // Closed meanwhile: the files are in the library, but nothing is picked.
       if (started !== session.current) return
+      if (added.length > 0) onAdded(added)
       setResults(response.results)
       setPhase("done")
     } catch (e) {
