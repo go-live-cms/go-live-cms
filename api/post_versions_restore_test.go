@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"io"
@@ -256,6 +257,37 @@ func TestRestorePostVersionCollabFailure(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestRestorePostVersionClientGone: the collab server finishes a restore it has
+// started even if the browser goes away, so the API must too: a cancelled
+// request still writes the version's settings (no half-applied restore).
+func TestRestorePostVersionClientGone(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	collab := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cancel() // the tab closes while the collab server is restoring
+		_, _ = w.Write([]byte(`{"restored":true,"revision":9,"block_doc":"written","dropped":0}`))
+	}))
+	defer collab.Close()
+
+	store := mockdb.NewMockStore(gomock.NewController(t))
+	stubLivePost(store)
+	stubRoleLookup(store, publishEditor)
+	store.EXPECT().GetPostVersion(gomock.Any(), gomock.Any()).Times(1).Return(restoreVersionRow(), nil)
+	store.EXPECT().RestorePostSettingsTx(gomock.Any(), gomock.Any()).Times(1).
+		DoAndReturn(func(txCtx context.Context, _ db.RestorePostSettingsTxParams) (db.Post, error) {
+			require.NoError(t, txCtx.Err(), "the settings were written on the cancelled request's context")
+			return db.Post{ID: 7}, nil
+		})
+
+	server := newCollabTestServer(t, store, collab.URL)
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, restoreURL, nil)
+	require.NoError(t, err)
+	addAuthorization(t, request, server.tokenMaker, authorizationTypeBearer, publishEditor.ID, publishEditor.Username, time.Minute)
+	recorder := httptest.NewRecorder()
+	server.router.ServeHTTP(recorder, request)
+	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 }
 
 func TestCollabRestoreTimeoutDefault(t *testing.T) {

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest"
 import type { AddressInfo } from "node:net"
-import type { Server } from "node:http"
+import { request, type Server } from "node:http"
 import { bearerMatches, createInternalServer, RESTORE_BODY_LIMIT, type FlushResult, type RestoreResult } from "./internal"
 
 const SECRET = "flush-secret"
@@ -173,10 +173,25 @@ describe("restore (#286)", () => {
 
   it("refuses a body over the limit without calling restore", async () => {
     restore.mockClear()
-    const huge = JSON.stringify({ user_id: "7", block_doc: { pad: "x".repeat(RESTORE_BODY_LIMIT) } })
-    const res = await restoreRequest("/internal/documents/post-12/restore", huge).catch(() => null)
-    // The listener may close the socket while the body is still being sent.
-    if (res) expect(res.status).toBe(413)
+    // A declared length over the limit is refused before the body is read; send only a
+    // little of it, so the answer always arrives (a real oversized upload could be reset).
+    const status = await new Promise<number>((resolve, reject) => {
+      const req = request(
+        `${base}/internal/documents/post-12/restore`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${SECRET}`, "Content-Type": "application/json", "Content-Length": String(RESTORE_BODY_LIMIT + 1) },
+        },
+        (res) => {
+          res.resume()
+          resolve(res.statusCode ?? 0)
+          req.destroy()
+        },
+      )
+      req.on("error", reject)
+      req.write("{")
+    })
+    expect(status).toBe(413)
     expect(restore).not.toHaveBeenCalled()
   })
 })

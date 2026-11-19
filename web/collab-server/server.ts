@@ -15,6 +15,7 @@ import { docKind, TicketReplayGuard, type CollabDocRef, type TicketClaims } from
 import type { CollabBlockEdit, CollabRecord, CollabStoreBody, CollabStoreResult, InternalApi } from "./api"
 import { AuthRejection, createAuthenticate, DENY, type CollabContext } from "./auth"
 import { BlockChangeTracker, blockEditsFor, type BlockEditCapture } from "./blockEdits"
+import type { RestoreResult } from "./internal"
 import { loadIntoDoc, readMeta, SERVER_ORIGIN } from "./load"
 import { docNameForLog, errorMessage, logEvent } from "./logsafe"
 import { createAccessRecheck, type AccessRecheckOptions } from "./recheck"
@@ -61,19 +62,8 @@ export type CommentsMessage = { type: "comments" }
 
 export type StoreResult = { ok: true; skipped: boolean } | { ok: false; error: string }
 
-/**
- * What a server-side restore (#286) did. `ok: true` means the version is in the live doc
- * AND stored (block_doc and the Yjs state); anything else means neither changed.
- *   - `not-a-post`: only post-<id> docs are restored here (templates keep the editor path);
- *   - `invalid-version`: the version isn't a Block Spec v1 document;
- *   - `not-found`: the post doesn't exist;
- *   - `unstorable`: the restored doc would fail the store's validation (it would be
- *     kept-invalid, so block_doc would never get it);
- *   - `unavailable`: the doc couldn't be loaded or the store failed (retry later).
- */
-export type RestoreResult =
-  | { ok: true; revision: number | null; block_doc: "written" | "unchanged"; dropped: number }
-  | { ok: false; reason: "not-a-post" | "invalid-version" | "not-found" | "unstorable" | "unavailable"; error: string }
+/** What a server-side restore (#286) did: internal.ts (no yjs there) defines it. */
+export type { RestoreResult }
 
 /**
  * Origin of the restore's update when it is applied to the live doc. A string: no
@@ -466,7 +456,10 @@ export function createCollabServer(options: CollabServerOptions) {
       })
     },
 
-    async onDisconnect({ documentName, context }) {
+    async onDisconnect({ documentName, context, socketId }) {
+      // The restore's direct connection (#286, socketId "server") isn't a WebSocket client:
+      // it never logged a ws_connect either.
+      if (socketId === "server") return
       const ctx = contextOf(context) as Partial<CollabContext> & { connectedAt?: number }
       logEvent("info", "ws_close", {
         request_id: ctx.requestId,

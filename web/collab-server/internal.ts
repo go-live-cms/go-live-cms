@@ -57,7 +57,18 @@ export interface FlushResult {
   error?: string
 }
 
-/** server.ts `RestoreResult`, restated here so this file needs nothing that imports yjs. */
+/**
+ * What a server-side restore (#286, server.ts `restore`) did. `ok: true` means the version
+ * is in the live doc AND stored (block_doc and the Yjs state); anything else means neither
+ * changed.
+ *   - `not-a-post`: only post-<id> docs are restored here (templates keep the editor path);
+ *   - `invalid-version`: the version isn't a Block Spec v1 document;
+ *   - `not-found`: the post doesn't exist;
+ *   - `unstorable`: the restored doc would fail the store's validation (it would be
+ *     kept-invalid, so block_doc would never get it);
+ *   - `unavailable`: the doc couldn't be loaded or the store failed (retry later).
+ * Defined here, not in server.ts, so this file needs nothing that imports yjs.
+ */
 export type RestoreResult =
   | { ok: true; revision: number | null; block_doc: "written" | "unchanged"; dropped: number }
   | { ok: false; reason: "not-a-post" | "invalid-version" | "not-found" | "unstorable" | "unavailable"; error: string }
@@ -98,20 +109,13 @@ async function readBody(req: IncomingMessage, limit: number): Promise<string> {
   return Buffer.concat(chunks).toString("utf8")
 }
 
-const RESTORE_STATUS: Record<Exclude<RestoreResult, { ok: true }>["reason"], number> = {
-  "not-a-post": 400,
-  "invalid-version": 400,
-  "not-found": 404,
-  unstorable: 422,
-  unavailable: 503,
-}
-
-const RESTORE_ERRORS: Record<Exclude<RestoreResult, { ok: true }>["reason"], string> = {
-  "not-a-post": "only posts are restored here",
-  "invalid-version": "the version is not a Block Spec v1 document",
-  "not-found": "post not found",
-  unstorable: "the restored document would not pass validation",
-  unavailable: "restore failed",
+/** Each refusal's status and the message sent with it (the detail stays in the log). */
+const RESTORE_REFUSALS: Record<Exclude<RestoreResult, { ok: true }>["reason"], { status: number; error: string }> = {
+  "not-a-post": { status: 400, error: "only posts are restored here" },
+  "invalid-version": { status: 400, error: "the version is not a Block Spec v1 document" },
+  "not-found": { status: 404, error: "post not found" },
+  unstorable: { status: 422, error: "the restored document would not pass validation" },
+  unavailable: { status: 503, error: "restore failed" },
 }
 
 /** Constant-time "Authorization: Bearer <secret>" check. An empty secret rejects everything. */
@@ -235,7 +239,10 @@ export function createInternalHandler({ secret, flush, recheckUser, recheckDoc, 
         reason: result.ok ? undefined : result.reason,
         duration_ms: Date.now() - started,
       })
-      if (!result.ok) return send(res, RESTORE_STATUS[result.reason], { error: RESTORE_ERRORS[result.reason], reason: result.reason })
+      if (!result.ok) {
+        const refusal = RESTORE_REFUSALS[result.reason]
+        return send(res, refusal.status, { error: refusal.error, reason: result.reason })
+      }
       return send(res, 200, { restored: true, revision: result.revision, block_doc: result.block_doc, dropped: result.dropped })
     }
 

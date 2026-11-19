@@ -6,6 +6,7 @@
 package api
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"net/http"
@@ -78,7 +79,7 @@ type restoredVersion struct {
 
 // restoreVersionSettingsTx writes the version's settings into the post's
 // working copy. sql.ErrNoRows: the post is gone.
-func (server *Server) restoreVersionSettingsTx(c *gin.Context, postID int64, version db.GetPostVersionRow) (restoredVersion, error) {
+func (server *Server) restoreVersionSettingsTx(ctx context.Context, postID int64, version db.GetPostVersionRow) (restoredVersion, error) {
 	settings, ok := decodePostSettings(version.Settings)
 	if !ok {
 		return restoredVersion{}, nil
@@ -105,7 +106,7 @@ func (server *Server) restoreVersionSettingsTx(c *gin.Context, postID int64, ver
 	if settings.FeaturedImage != nil {
 		restored.FeaturedImageID = settings.FeaturedImage.ID
 	}
-	post, err := server.store.RestorePostSettingsTx(c, db.RestorePostSettingsTxParams{PostID: postID, Settings: restored})
+	post, err := server.store.RestorePostSettingsTx(ctx, db.RestorePostSettingsTxParams{PostID: postID, Settings: restored})
 	if err != nil {
 		return restoredVersion{}, err
 	}
@@ -126,7 +127,7 @@ func (server *Server) restorePostVersionSettings(c *gin.Context) {
 	if !ok {
 		return
 	}
-	result, err := server.restoreVersionSettingsTx(c, postID, version)
+	result, err := server.restoreVersionSettingsTx(c.Request.Context(), postID, version)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
@@ -196,7 +197,10 @@ func (server *Server) restorePostVersion(c *gin.Context) {
 	caller := getAuthPayload(c).UserID
 	requestID := requestIDFromContext(c)
 
-	blocks, err := server.restoreCollabVersion(c.Request.Context(), postID, caller, version.BlockDoc, requestID)
+	// Not cancelled with the browser's request: the collab server finishes a restore it has
+	// started whatever happens to the caller, so this must go on to write the settings and
+	// the activity too, or a closed tab would leave a restore half-applied.
+	blocks, err := server.restoreCollabVersion(context.WithoutCancel(c.Request.Context()), postID, caller, version.BlockDoc, requestID)
 	if err != nil {
 		var refused *collabRestoreError
 		if !errors.As(err, &refused) {
@@ -212,7 +216,10 @@ func (server *Server) restorePostVersion(c *gin.Context) {
 		// #286 answers 404 for the unknown route, which is a collab server that can't restore.
 		case refused.Status == http.StatusNotFound && refused.Reason == "not-found":
 			c.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
-		case refused.Status == http.StatusUnprocessableEntity, refused.Status == http.StatusBadRequest, refused.Status == http.StatusRequestEntityTooLarge:
+		case refused.Status == http.StatusRequestEntityTooLarge:
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"code": codeVersionUnrestorable,
+				"error": "This version is too large to restore. Nothing was changed."})
+		case refused.Status == http.StatusUnprocessableEntity, refused.Status == http.StatusBadRequest:
 			c.JSON(http.StatusUnprocessableEntity, gin.H{"code": codeVersionUnrestorable,
 				"error": "This version can't be restored: its content doesn't pass the editor's checks. Nothing was changed."})
 		default:
@@ -224,7 +231,7 @@ func (server *Server) restorePostVersion(c *gin.Context) {
 
 	// The blocks are in: now the settings. If this fails, the blocks stay restored
 	// (they are live in every editor and stored), and the answer says so.
-	result, err := server.restoreVersionSettingsTx(c, postID, version)
+	result, err := server.restoreVersionSettingsTx(context.WithoutCancel(c.Request.Context()), postID, version)
 	// The restore happened (its blocks at least): it is one event either way.
 	server.recordPostActivity(c, db.ActivityVersionRestored, postID, map[string]any{"version_no": versionNo})
 	response := RestorePostVersionResponse{Blocks: RestoredBlocks{
