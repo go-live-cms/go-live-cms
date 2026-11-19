@@ -211,14 +211,7 @@ func (server *Server) readerCommentPostOpen(c *gin.Context, settings db.Setting,
 		respondDiscussionError(c, http.StatusNotFound, "not_found", "post not found")
 		return post, false
 	}
-	site := discussionSite{Enabled: settings.CommentsEnabled, CloseAfterDays: settings.CommentsCloseAfterDays}
-	typ := discussionType{Public: true, Supports: toPostTypeResponse(postType).Supports}
-	p := discussionPost{Discussion: post.Discussion}
-	if post.FirstPublishedAt.Valid {
-		first := post.FirstPublishedAt.Time
-		p.FirstPublishedAt = &first
-	}
-	setting := discussionSetting(site, typ, p)
+	setting := discussionSetting(discussionInputs(settings, postType, db.Post{Discussion: post.Discussion, FirstPublishedAt: post.FirstPublishedAt}))
 	switch discussionState(setting, time.Now()) {
 	case discussionStateOff:
 		respondDiscussionError(c, http.StatusConflict, "comments_off", "comments are off for this post")
@@ -251,7 +244,9 @@ func (server *Server) readerCommentQueueFull(c *gin.Context, postID int64) bool 
 }
 
 // readerCommentTargetFor checks everything about the post and the parent, answering
-// itself when the comment can't go there. None of it reads the address.
+// itself when the comment can't go there. None of it reads the address. The post's
+// queue (comments_busy) is checked by the caller once it knows the comment would wait
+// in it, so a flooded queue never refuses a comment the rules would publish.
 func (server *Server) readerCommentTargetFor(c *gin.Context, postID int64, parentID *int64) (readerCommentTarget, bool) {
 	settings, ok := server.discussionEnabled(c)
 	if !ok {
@@ -279,9 +274,6 @@ func (server *Server) readerCommentTargetFor(c *gin.Context, postID int64, paren
 		if !target.RootID.Valid {
 			target.RootID = target.ParentID
 		}
-	}
-	if server.readerCommentQueueFull(c, postID) {
-		return target, false
 	}
 	return target, true
 }
@@ -367,6 +359,11 @@ func (server *Server) createPublicReaderComment(c *gin.Context) {
 		// A key for another address, expired or unknown: no key.
 	}
 
+	// The queue is the post's, not the address's: checking it here says nothing about
+	// the address, and spares a confirmation mail for a post that can't take it.
+	if server.readerCommentQueueFull(c, postID) {
+		return
+	}
 	logger := server.requestLog(c)
 	server.runInBackground(requestIDFromContext(c), c.FullPath(), func() { server.processUnconfirmedReaderComment(logger, draft) })
 	c.Header("Cache-Control", "no-store")
@@ -420,6 +417,10 @@ func (server *Server) createKeyedReaderComment(c *gin.Context, d readerCommentDr
 	if err != nil {
 		logger.Error("reader comment: reading the rules' inputs failed", "post_id", d.Target.Post.ID, "commenter_id", commenter.ID, "error", err)
 		respondDiscussionError(c, http.StatusInternalServerError, "", "failed to save the comment")
+		return
+	}
+	// Only a comment that would wait in the queue is refused when it's full (5.3).
+	if verdict.Status == db.ReaderCommentPending && server.readerCommentQueueFull(c, d.Target.Post.ID) {
 		return
 	}
 	reason, detail := verdict.heldColumns()
@@ -501,9 +502,12 @@ func (server *Server) processUnconfirmedReaderComment(logger *slog.Logger, d rea
 	}
 	params := server.readerCommentParams(logger, d, commenter.ID, status, reason, detail)
 
+	// Every unconfirmed comment gets a token; the cooldown below decides whether it is
+	// mailed. It is taken only once the comment is stored, so a failed store doesn't use up
+	// the address's one mail for the next ten minutes. A token never mailed is never
+	// known: the comment is then published from the first link's page (3.3 step 5).
 	var token string
-	mail := status == db.ReaderCommentUnconfirmed && server.rateLimits.commentMail.allowSilently(ctx, d.EmailLower)
-	if mail {
+	if status == db.ReaderCommentUnconfirmed {
 		var hash []byte
 		if token, hash, err = newAccountToken(); err != nil {
 			logger.Error("reader comment: token generation failed", "post_id", postID, "error", err)
@@ -521,15 +525,17 @@ func (server *Server) processUnconfirmedReaderComment(logger *slog.Logger, d rea
 		return
 	}
 	logger.Info("reader comment stored", "comment_id", comment.ID, "post_id", postID, "commenter_id", commenter.ID, "status", comment.Status, "held_reason", reason.String)
-	if !mail {
-		if status == db.ReaderCommentUnconfirmed {
-			logger.Info("reader comment confirmation skipped: one was mailed to the address less than 10 minutes ago", "comment_id", comment.ID)
-		}
+	if status != db.ReaderCommentUnconfirmed {
+		return
+	}
+	if !server.rateLimits.commentMail.allowSilently(ctx, d.EmailLower) {
+		logger.Info("reader comment confirmation skipped: one was mailed to the address less than 10 minutes ago", "comment_id", comment.ID)
 		return
 	}
 
 	title := d.Target.Settings.SiteTitle.String
-	msg, err := mailer.RenderReaderCommentConfirm(commenter.Email, mailer.ReaderCommentConfirm{
+	// To the address as this request typed it: the stored spelling is whoever typed it first.
+	msg, err := mailer.RenderReaderCommentConfirm(d.Email, mailer.ReaderCommentConfirm{
 		SiteTitle: title,
 		PostTitle: d.Target.Post.Title,
 		PostURL:   server.publicURL + d.Target.path(),

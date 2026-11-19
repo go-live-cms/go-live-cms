@@ -1369,8 +1369,9 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   runs after the response (`processUnconfirmedReaderComment` in `runInBackground`): `EnsureCommenter`
   (never renames an existing row: typing an address proves nothing), the 20-unconfirmed cap (silent
   drop), the guard, the spam routes (stored as spam, **no mail**), the store, the 10-minute mail
-  cooldown (`commentMail`, `newIntervalLimiter`; later comments stored without a token) and the
-  mail. `TestReaderCommentNoAddressEnumeration` compares unknown, known, verified, cooled-down,
+  cooldown (`commentMail`, `newIntervalLimiter`, taken only after the store succeeds; a comment in
+  it keeps a token nobody is mailed) and the mail, to the address as typed. The post's 200-pending
+  cap is checked only for a comment that would wait (no key, or a keyed one the rules hold). `TestReaderCommentNoAddressEnumeration` compares unknown, known, verified, cooled-down,
   blocked, over-cap and other-key cases, the pre-response calls included.
 - **The mail** (`reader_comment_confirm` template, `mailer.ReaderCommentConfirm`) has no field for
   the name or text: site title, the post's published title and URL, the link

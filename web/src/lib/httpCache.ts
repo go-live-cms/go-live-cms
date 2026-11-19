@@ -49,13 +49,16 @@ const SESSION_COOKIES = ["__Host-refresh_token", "refresh_token", "auth_token", 
 // endpoints and the reader pages (confirm, unsubscribe, your data) answer one reader, and
 // a post page with a `commented` notice shows that reader's outcome. All never cached,
 // whatever the route.
-export const NO_STORE_PATH_PREFIXES = ["/gl-comments/", "/comments/confirm", "/comments/unsubscribe", "/comments/your-data"]
+export const NO_STORE_PATH_PREFIXES = ["/gl-comments"]
+export const NO_STORE_PATHS = ["/comments/confirm", "/comments/unsubscribe", "/comments/your-data"]
 export const NO_STORE_QUERY_PARAMS = ["commented"]
 
 /** Whether the URL is one of a reader's own pages (above), never cacheable. */
 export function isPerReaderUrl(url: URL): boolean {
+  const path = url.pathname.replace(/\/$/, "")
   return (
-    NO_STORE_PATH_PREFIXES.some((prefix) => url.pathname === prefix.replace(/\/$/, "") || url.pathname.startsWith(prefix)) ||
+    NO_STORE_PATH_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`)) ||
+    NO_STORE_PATHS.includes(path) ||
     NO_STORE_QUERY_PARAMS.some((param) => url.searchParams.has(param))
   )
 }

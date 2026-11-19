@@ -142,7 +142,11 @@ describe("where the browser goes back to", () => {
     expect(isPerReaderUrl(new URL("https://site.example/post/hello?commented=pending"))).toBe(true)
     expect(isPerReaderUrl(new URL("https://site.example/gl-comments/posts/4"))).toBe(true)
     expect(isPerReaderUrl(new URL("https://site.example/comments/confirm"))).toBe(true)
+    expect(isPerReaderUrl(new URL("https://site.example/comments/confirm/"))).toBe(true)
     expect(isPerReaderUrl(new URL("https://site.example/post/hello?comments=2"))).toBe(false)
+    // A post of a type named "comments" whose slug merely starts like a reader page.
+    expect(isPerReaderUrl(new URL("https://site.example/comments/confirmation-bias"))).toBe(false)
+    expect(isPerReaderUrl(new URL("https://site.example/gl-commentsx"))).toBe(false)
   })
 })
 

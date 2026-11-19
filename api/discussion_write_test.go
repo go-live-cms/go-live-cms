@@ -143,7 +143,9 @@ func TestReaderCommentNoAddressEnumeration(t *testing.T) {
 			require.True(t, server.rateLimits.commentMail.allowSilently(t.Context(), "reader@example.com"))
 			ensure(store, commenter, 1)
 			stored := storedComment(store, 103)
-			t.Cleanup(func() { require.Empty(t, stored.Comment.ConfirmTokenHash, "stored without a link") })
+			t.Cleanup(func() {
+				require.NotEmpty(t, stored.Comment.ConfirmTokenHash, "stored with a token that is never mailed")
+			})
 		}},
 		{name: "blocked", mails: 0, background: func(t *testing.T, store *mockdb.MockStore, _ *Server) {
 			c := commenter
@@ -265,7 +267,7 @@ func TestReaderCommentMailCooldown(t *testing.T) {
 	require.Len(t, rec.messages(), 1, "one mail per address per 10 minutes")
 	require.NotEmpty(t, firstStored.Comment.ConfirmTokenHash)
 	require.Equal(t, db.ReaderCommentUnconfirmed, secondStored.Comment.Status, "the second is stored")
-	require.Empty(t, secondStored.Comment.ConfirmTokenHash, "with no link: it is published from the first link's page")
+	require.NotEqual(t, firstStored.Comment.ConfirmTokenHash, secondStored.Comment.ConfirmTokenHash, "its own token, never mailed: it is published from the first link's page")
 }
 
 func TestReaderCommentSpamRoutesMailNothing(t *testing.T) {
@@ -352,7 +354,7 @@ func TestReaderCommentWithABrowserKey(t *testing.T) {
 	t.Run("an approved commenter is published at once", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		store := mockdb.NewMockStore(ctrl)
-		expectCommentTarget(store, rcSettings())
+		expectPostOpen(store)
 		store.EXPECT().GetCommenterByKeys(gomock.Any(), db.GetCommenterByKeysParams{KeyHashes: [][]byte{keyHash}, EmailLower: "reader@example.com"}).Return(commenter, nil)
 		store.EXPECT().CommenterHasApprovedReaderComment(gomock.Any(), gomock.Any()).Return(true, nil)
 		store.EXPECT().ListMemberNames(gomock.Any()).Return(nil, nil)
@@ -399,7 +401,7 @@ func TestReaderCommentWithABrowserKey(t *testing.T) {
 	t.Run("spam answers pending, silently", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		store := mockdb.NewMockStore(ctrl)
-		expectCommentTarget(store, rcSettings())
+		expectPostOpen(store)
 		expectKeyedRules(store, commenter, true)
 		stored := storedComment(store, 303)
 		server, _, _ := newCommentTestServer(t, store)
@@ -416,7 +418,7 @@ func TestReaderCommentWithABrowserKey(t *testing.T) {
 	t.Run("the parent went meanwhile", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		store := mockdb.NewMockStore(ctrl)
-		expectCommentTarget(store, rcSettings())
+		expectPostOpen(store)
 		expectKeyedRules(store, commenter, true)
 		store.EXPECT().CreateReaderCommentTx(gomock.Any(), gomock.Any()).Return(db.ReaderComment{}, db.ErrReaderCommentParentGone)
 		server, _, _ := newCommentTestServer(t, store)
@@ -1026,4 +1028,53 @@ func TestReaderCommentStoreFailuresAfterTheAnswerAreLogged(t *testing.T) {
 	require.Empty(t, rec.messages())
 	require.Contains(t, logs.String(), "storing the commenter failed")
 	requireNoPersonalData(t, logs.String(), "reader@example.com", rcName, rcBody)
+}
+
+func TestReaderCommentFailedStoreKeepsTheMailCooldown(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	store := mockdb.NewMockStore(ctrl)
+	commenter := db.Commenter{ID: 10, Email: "reader@example.com", EmailLower: "reader@example.com"}
+	for range 2 {
+		expectCommentTarget(store, rcSettings())
+		store.EXPECT().EnsureCommenter(gomock.Any(), gomock.Any()).Return(commenter, nil)
+		store.EXPECT().CountUnconfirmedReaderComments(gomock.Any(), gomock.Any()).Return(int64(0), nil)
+	}
+	gomock.InOrder(
+		store.EXPECT().CreateReaderCommentTx(gomock.Any(), gomock.Any()).Return(db.ReaderComment{}, errors.New("db down")),
+		store.EXPECT().CreateReaderCommentTx(gomock.Any(), gomock.Any()).Return(db.ReaderComment{ID: 101, Status: db.ReaderCommentUnconfirmed}, nil),
+	)
+	server, rec, _ := newCommentTestServer(t, store)
+	postComment(t, server, commentBody("reader@example.com"), nil)
+	require.Empty(t, rec.messages())
+	postComment(t, server, commentBody("reader@example.com"), nil)
+	require.Len(t, rec.messages(), 1, "the failed store didn't use up the address's mail")
+}
+
+func TestReaderCommentFullQueueRefusesOnlyWhatWouldWait(t *testing.T) {
+	key, _, err := newAccountToken()
+	require.NoError(t, err)
+	commenter := db.Commenter{ID: 9, EmailLower: "reader@example.com"}
+	full := func(store *mockdb.MockStore) {
+		store.EXPECT().CountPendingReaderCommentsForPost(gomock.Any(), rcPostID).Return(int64(readerCommentPendingCap), nil)
+	}
+
+	t.Run("a comment the rules publish goes through", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		store := mockdb.NewMockStore(ctrl)
+		expectPostOpen(store)
+		expectKeyedRules(store, commenter, true)
+		storedComment(store, 400)
+		server, _, _ := newCommentTestServer(t, store)
+		require.Equal(t, http.StatusCreated, postComment(t, server, commentBody("reader@example.com"), withKeys(key)).Code)
+	})
+
+	t.Run("a held one is refused", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		store := mockdb.NewMockStore(ctrl)
+		expectPostOpen(store)
+		expectKeyedRules(store, commenter, false)
+		full(store)
+		server, _, _ := newCommentTestServer(t, store)
+		requireErrorCode(t, postComment(t, server, commentBody("reader@example.com"), withKeys(key)), http.StatusTooManyRequests, "comments_busy")
+	})
 }

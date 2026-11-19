@@ -22,6 +22,7 @@
 import { requestIdHeaders } from "./log"
 import { appendForwardedFor } from "../middleware/apiProxy"
 import { PRIVATE_NO_STORE } from "./httpCache"
+import { designPreviewCookieSecure } from "./designPreview"
 
 /** The browser key's cookie (3.3): one value listing up to five keys, `.`-separated. */
 export const COMMENTER_COOKIE = "gl_commenter"
@@ -84,9 +85,8 @@ export function commenterSetCookie(keys: readonly string[], secure: boolean): st
   return parts.join("; ")
 }
 
-export function commenterCookieSecure(url: URL, dev: boolean = import.meta.env.DEV): boolean {
-  return !dev || url.protocol === "https:"
-}
+/** Whether the cookie gets Secure: the design preview cookie's rule (#486), one definition. */
+export const commenterCookieSecure = designPreviewCookieSecure
 
 function field(form: FormData, name: string): string {
   const value = form.get(name)

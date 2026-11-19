@@ -185,7 +185,7 @@ func TestReaderCommentLinkConfirmsOnlyItsOwn(t *testing.T) {
 	comments := f.commentsOf(t, post.ID)
 	require.Len(t, comments, 3)
 	mine, forged, another := comments[0], comments[1], comments[2]
-	require.Empty(t, forged.ConfirmTokenHash, "no link was mailed for it")
+	require.NotEqual(t, mine.ConfirmTokenHash, forged.ConfirmTokenHash, "its own token, never mailed")
 
 	recorder, answer := f.confirm(t, f.lastToken(t, address))
 	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
