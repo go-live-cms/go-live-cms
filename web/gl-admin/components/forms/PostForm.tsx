@@ -15,7 +15,7 @@ import type { Post, PostSEOSettings, ScheduledUpdate } from "@gl-admin/lib/api/t
 import { firstParagraphFromHtml, sameSeo, seoFromPost, seoPayload, seoSaveable } from "@gl-admin/lib/postSeo"
 import { firstParagraphText, postPath } from "@/lib/seo"
 import { authManager } from "@gl-admin/lib/auth"
-import { blockAPIClient, type PostVersion } from "@gl-admin/lib/api/blockAPI"
+import { blockAPIClient, type PostVersion, type RestoredVersion } from "@gl-admin/lib/api/blockAPI"
 import { getSettings, type PostUrlStructure } from "@gl-admin/lib/api/settings"
 import { ApiError, errorMessage, pluginRefusalReason } from "@gl-admin/lib/api/errors"
 import { CollabStoreError } from "@gl-admin/lib/collaboration/CollabSaveStatus"
@@ -855,52 +855,51 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
     }
   }, [scheduledId, publishAt])
 
-  // Load a version into the working copy through the live editor, so collaborators
-  // get it via Yjs (rule 9). Publishing afterwards makes it live (as a new version).
-  // Its settings (title, excerpt, featured image, terms; #358) aren't in the Yjs doc:
-  // the API puts them back into the working copy once the blocks are in.
+  // Load a version into the working copy (#286): the API has the collab server put its
+  // blocks into the live doc and store them, so every open editor (this one too) gets it
+  // as a remote change, then writes its settings (title, excerpt, featured image, terms;
+  // #358), which aren't in the Yjs doc. Publishing afterwards makes it live (as a new
+  // version). A refusal (collab server down, a version it can't store) changed nothing.
   const handleRestoreVersion = async (version: PostVersion) => {
     if (contentReadOnly || !canPublish || !editorRef.current || !initialData?.id) return
     setIsRestoring(true)
     try {
-      const { saved } = await editorRef.current.restoreVersion(version.doc)
-      const token = authManager.getAccessToken()
-      if (token) blockAPIClient.setAuthToken(token)
       let settingsNote = ""
+      let restored: RestoredVersion | null = null
       try {
-        const settings = await blockAPIClient.restoreVersionSettings(initialData.id, version.version_no)
-        if (settings.restored && settings.post) {
-          const { title, description } = settings.post
-          // Already saved: the debounced save mustn't send them again.
-          savedTitleRef.current = title
-          savedExcerptRef.current = description
-          setFormData((prev) => ({ ...prev, title, excerpt: description }))
-          if (settings.post.seo) {
-            savedSeoRef.current = seoFromPost(settings.post)
-            setSeo(seoFromPost(settings.post))
-          }
-          setSettingsKey((k) => k + 1)
-        } else {
-          settingsNote = " This version was published before settings were saved with it, so only its content came back."
-        }
+        restored = await editorRef.current.restoreVersion(version.version_no)
       } catch (error) {
+        // The content came back, the settings didn't (the API says which).
+        if (!(error instanceof ApiError && error.code === "settings_not_restored")) throw error
         console.error("Restoring the version's settings failed:", error)
         settingsNote = " Its title, excerpt, image, terms and custom HTML couldn't be restored."
+      }
+      if (restored?.settings_restored && restored.post) {
+        const { title, description } = restored.post
+        // Already saved: the debounced save mustn't send them again.
+        savedTitleRef.current = title
+        savedExcerptRef.current = description
+        setFormData((prev) => ({ ...prev, title, excerpt: description }))
+        if (restored.post.seo) {
+          savedSeoRef.current = seoFromPost(restored.post)
+          setSeo(seoFromPost(restored.post))
+        }
+        setSettingsKey((k) => k + 1)
+      } else if (restored) {
+        settingsNote = " This version was published before settings were saved with it, so only its content came back."
       }
       // The same route put the version's custom HTML back (#428).
       editorRef.current?.refreshHtmlSnippets()
       void refreshSettingsState()
       const live = formData.post_status === "published" ? "Update" : "Publish"
-      toast.success(
-        (saved
-          ? `Working copy restored to ${versionTime(version.created_at)}. ${live} to make it live.`
-          : `Working copy restored to ${versionTime(version.created_at)}; saving…`) + settingsNote
-      )
+      toast.success(`Working copy restored to ${versionTime(version.created_at)}. ${live} to make it live.` + settingsNote)
       setRevisionsKey((k) => k + 1)
       setConfirmRestore(false)
       setViewingVersion(null)
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Couldn't restore that version")
+      // The API's own words for a refusal ("Nothing was changed; try again in a moment.").
+      const message = error instanceof ApiError && error.serverMessage ? error.serverMessage : error instanceof Error ? error.message : null
+      toast.error(message ?? "Couldn't restore that version")
       console.error("Restore failed:", error)
     } finally {
       setIsRestoring(false)

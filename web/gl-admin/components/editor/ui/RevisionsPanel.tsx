@@ -227,7 +227,7 @@ interface VersionPreviewProps {
  * compared with the working copy as the collab server last stored it (`GET
  * /posts/:id/blocks`, re-read on every store): the comparison reads REST data only, never
  * the live editor or the Yjs document, and changes nothing. The diff runs in a worker
- * (diffClient.ts). Restoring is unchanged: PostForm's restoreVersionLive (rule 9).
+ * (diffClient.ts). Restoring is PostForm's server-side restore (#286, rule 9).
  */
 export function VersionPreview({ version, postId, workingKey = 0 }: VersionPreviewProps) {
   const [highlight] = useHighlightChanges()

@@ -23,8 +23,9 @@ rollback. Guards, reseeding and verification: `docs/operations/collab-cutover.md
 | `load.ts` | `onLoadDocument`: restore stored state, or seed from `block_doc`. |
 | `store.ts` | `onStoreDocument` pipeline (`prepareStore`). |
 | `blockEdits.ts` | The block change tracker (#328): who changed which block, sent with stores that write `block_doc`. |
-| `server.ts` | `createCollabServer`: the hooks wired into a Hocuspocus `Server`, plus `flush`. |
-| `internal.ts` | Internal HTTP listener: `/healthz`, flush, user re-check (#333). |
+| `restore.ts` | A version → ProseMirror (`planRestore`) and into the fragment in one transaction (`applyRestore`), for the server-side restore (#286). |
+| `server.ts` | `createCollabServer`: the hooks wired into a Hocuspocus `Server`, plus `flush` and `restore`. |
+| `internal.ts` | Internal HTTP listener: `/healthz`, flush, re-checks (#333, #327), comments nudge, restore (#286). |
 | `logsafe.ts` | `logEvent`, `requestIdFrom`, `docNameForLog`, `clientContextForLog`. |
 | `env.ts` | `readEnv`, `readSecretEnv` (`<NAME>_FILE`, #158) for `main.ts`. |
 | `probe.ts`, `build.mjs`, `singleYjsInstance.mjs`, `main.ts` | Single-instance probe, esbuild bundle and its yjs plugin, entry point. |
@@ -253,6 +254,40 @@ too: the API answers 400 to a state-only store without it and 409 when it's behi
   a doc whose last store failed: it holds the only copy of those edits.
 - A store whose doc snapshot equals the last stored one is skipped (`Y.equalSnapshots`).
 
+## Restore (#286, `restore.ts`, `server.ts` `restore`)
+
+The server-side restore of a post's version (rule 9 in `gl-admin/lib/collaboration/CLAUDE.md`).
+The API's `POST /posts/:id/versions/:no/restore` checks access, then calls `POST
+/internal/documents/post-<id>/restore {block_doc, user_id}`; this server is still the only
+writer of the Yjs state and `block_doc` (rule 11).
+1. `planRestore`: the version → ProseMirror with **this schema and no stand-ins** (what every
+   connected editor builds: the fingerprint guard, #416), blocks it can't build into the
+   version's `DroppedBlocks` (#213; an uninstalled extension's too, #453, never a stand-in in
+   the fragment). Not a Block Spec v1 doc → `invalid-version`.
+2. `openDirectConnection(docName, {requestId})`: loads the doc (or joins the load), seeding it
+   if it has no usable state, the usual rules (rule 11, the revision guard: a doc reseeded here
+   has a new epoch, and an old tab is refused with `stale-epoch`). The direct connection keeps
+   it loaded; `disconnect()` unloads it again if nobody else is connected.
+3. Under `saveMutex` (no debounced store in between): copy the live doc into a scratch
+   `Y.Doc`, `applyRestore` there (one transaction, `prosemirrorToYXmlFragment` on the existing
+   fragment = y-tiptap's `updateYFragment` diff; `meta.dropped` replaced by the version's), with
+   origin `{context: {userId}}`, so a `BlockChangeTracker` on the copy attributes the changed
+   blocks to the restoring user (#328). Then `prepareStore` on the copy (`clientEdited: true`);
+   `kept-invalid` → `unstorable`, nothing applied. PUT it (`base_revision`, `block_edits`); a
+   failed PUT → `unavailable`, nothing applied.
+4. Stored: `Y.applyUpdate(live, encodeStateAsUpdate(scratch, stateVectorBefore),
+   RESTORE_ORIGIN)`: exactly the stored structs (the restore plus the store's ids and repairs),
+   broadcast to every connection by Hocuspocus as a remote change, then `stored`
+   (`block_doc: "written"` or `"unchanged"`, with `edits`). `RESTORE_ORIGIN` is a string, so
+   onChange and the live tracker ignore it. `storedSnapshot` is the copy's: edits that arrived
+   during the PUT make the live doc differ, and the next debounced store stores them.
+- Only `post-<id>`: `template-<id>` is refused (`not-a-post`); templates restore through the Site
+  editor (`templateRestore.ts`).
+- Concurrent typing merges like any concurrent edit: keystrokes in a node the version doesn't
+  change survive (its Y element is kept); ones inside text or blocks it replaces go with them.
+- Tests: `internal.test.ts` (route, auth, statuses, body limit) and the relay's
+  `gl-admin/lib/collaboration/serverRestore.hocuspocus.test.ts`.
+
 ## Per-block "Last edited by" (#328, `blockEdits.ts`)
 
 Design: `docs/design/block-map-yjs-schema.md` ("Block change tracker", "#328"). Each
@@ -304,6 +339,12 @@ Own port (`INTERNAL_PORT`, default 1236), **never published**.
   editors refetch the post's comments from the API. It never loads a doc and never touches its
   content. 200 `{connections: n}` (0: not loaded), 400 bad name, 401. Logs
   `collab_comments_nudge` / `collab_comments_denied`.
+- `POST /internal/documents/:doc/restore {block_doc, user_id}` (same secret, #286, above):
+  answers once the version is in the live doc **and** stored. 200 `{restored, revision,
+  block_doc: "written"|"unchanged", dropped}`, 400 (bad name, not a post, bad JSON, no user id,
+  not a Block Spec v1 version), 401, 404 (no such post), 413 (over `RESTORE_BODY_LIMIT`, 8 MiB),
+  422 (`unstorable`: it would be kept-invalid), 503 (load or store failed). Anything but 200:
+  nothing changed. The body's `reason` is the code; the detail stays in the log.
 
 ## Logging
 
@@ -312,7 +353,8 @@ Own port (`INTERNAL_PORT`, default 1236), **never published**.
 `ws_access_revoked`, `ws_access_check_failed` (user id, doc, old → new mode), `collab_load`,
 `collab_load_failed`, `collab_reseed_check_failed`, `collab_store`,
 `collab_store_invalid`, `collab_store_empty_skipped`, `collab_store_unconvertible`,
-`collab_store_failed`, `collab_block_edits_failed`, `collab_flush`, `collab_flush_denied`, `collab_listening`,
+`collab_store_failed`, `collab_block_edits_failed`, `collab_flush`, `collab_flush_denied`,
+`collab_restore`, `collab_restore_failed` (`reason`), `collab_restore_request`, `collab_restore_denied`, `collab_listening`,
 `collab_startup_failed`, `collab_shutdown`. Users by id only.
 - **Never log the ticket, a secret, a request, its headers or params, or a store body.**
   `log-guard.test.ts` scans every log call in this directory's non-test files and fails

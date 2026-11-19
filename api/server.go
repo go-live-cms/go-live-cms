@@ -48,6 +48,8 @@ type Server struct {
 	// collabFlushTimeout bounds publish's flush call to the Hocuspocus server
 	// (collab_internal_client.go); a field so tests can shorten it.
 	collabFlushTimeout time.Duration
+	// collabRestoreTimeout bounds a server-side restore (#286); a field for the same reason.
+	collabRestoreTimeout time.Duration
 
 	// Per-client request limits; see ratelimit.go.
 	rateLimits rateLimits
@@ -213,13 +215,14 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 		tokenMaker: tokenMaker,
 		ctx:        context.Background(),
 
-		collabTickets:      tokenMaker,
-		designPreviews:     tokenMaker,
-		collabFlushTimeout: collabFlushTimeout,
-		embedClient:        newEmbedClient(newEmbedTransport(), embedFetchTimeout),
-		webhooks:           newWebhookSender(config.PluginWebhooksAllowInsecure, nil),
-		mediaImport:        newMediaImporter(nil),
-		rateLimits:         limits,
+		collabTickets:        tokenMaker,
+		designPreviews:       tokenMaker,
+		collabFlushTimeout:   collabFlushTimeout,
+		collabRestoreTimeout: collabRestoreTimeout,
+		embedClient:          newEmbedClient(newEmbedTransport(), embedFetchTimeout),
+		webhooks:             newWebhookSender(config.PluginWebhooksAllowInsecure, nil),
+		mediaImport:          newMediaImporter(nil),
+		rateLimits:           limits,
 
 		mailer:    mail,
 		publicURL: publicURL,

@@ -2,6 +2,7 @@
 // internal HTTP endpoints (the other direction from internal_routes.go).
 //
 // flushCollabDoc before a publish fails the publish when it fails (#206).
+// restoreCollabVersion (#286) is the server-side restore of a version.
 // recheckCollabUser after a role change or removal (#333) is best effort: the
 // collab server's periodic re-check (#313) catches up if it fails. Both use
 // COLLAB_INTERNAL_URL and "Authorization: Bearer <COLLAB_INTERNAL_SECRET>" and
@@ -9,11 +10,15 @@
 package api
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 )
 
@@ -25,6 +30,100 @@ const collabRecheckTimeout = 5 * time.Second
 // stores a loaded document within its debounce window anyway, so a flush that
 // takes longer than this means it is unhealthy.
 const collabFlushTimeout = 5 * time.Second
+
+// collabRestoreTimeout bounds a server-side restore (#286). The collab server
+// may have to load the document (GET /internal/posts/:id/collab, 10s at most)
+// before it stores it (PUT, 10s at most), so this is longer than both together:
+// giving up first could report a failure for a restore that then lands.
+const collabRestoreTimeout = 30 * time.Second
+
+// collabRestoreBodyLimit is what the collab server reads at most
+// (RESTORE_BODY_LIMIT in web/collab-server/internal.ts).
+const collabRestoreBodyLimit = 8 << 20
+
+// collabRestoreResult is the collab server's answer to a restore that landed:
+// the version is in the live document and stored.
+type collabRestoreResult struct {
+	Revision *int64 `json:"revision"`
+	// BlockDoc is "written", or "unchanged" when the working copy already was the version.
+	BlockDoc string `json:"block_doc"`
+	// Dropped counts the version's blocks the editor can't show (#213), kept hidden.
+	Dropped int `json:"dropped"`
+}
+
+// collabRestoreError is a restore that didn't land. Status is the collab
+// server's answer (0 when it couldn't be reached or didn't answer in time) and
+// Reason its code (internal.ts RESTORE_STATUS).
+type collabRestoreError struct {
+	Status  int
+	Reason  string
+	Timeout bool
+	Err     error
+}
+
+func (e *collabRestoreError) Error() string {
+	if e.Err != nil {
+		return fmt.Sprintf("collab restore: %v", e.Err)
+	}
+	return fmt.Sprintf("collab restore: status %d (%s)", e.Status, e.Reason)
+}
+
+// restoreCollabVersion asks the collab server to put a stored version into
+// post-<id>'s working copy (#286): it replaces the live document's content in
+// one Yjs transaction and stores it, whether or not anyone has the post open,
+// and answers only once both happened; any error means neither did (except a
+// timeout, which can't tell). Rule 11 holds: the collab server writes
+// block_doc, never the API. userID is who restored it (per-block attribution,
+// #328).
+func (server *Server) restoreCollabVersion(ctx context.Context, postID, userID int64, blockDoc json.RawMessage, requestID string) (collabRestoreResult, error) {
+	ctx, cancel := context.WithTimeout(ctx, server.collabRestoreTimeout)
+	defer cancel()
+
+	body, err := json.Marshal(struct {
+		BlockDoc json.RawMessage `json:"block_doc"`
+		UserID   string          `json:"user_id"`
+	}{BlockDoc: blockDoc, UserID: strconv.FormatInt(userID, 10)})
+	if err != nil {
+		return collabRestoreResult{}, &collabRestoreError{Err: err}
+	}
+	if len(body) > collabRestoreBodyLimit {
+		return collabRestoreResult{}, &collabRestoreError{Status: http.StatusRequestEntityTooLarge, Reason: "too-large"}
+	}
+
+	url := fmt.Sprintf("%s/internal/documents/post-%d/restore", server.config.CollabInternalURL, postID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return collabRestoreResult{}, &collabRestoreError{Err: err}
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(authorizationHeaderKey, "Bearer "+server.config.CollabInternalSecret)
+	if requestID != "" {
+		req.Header.Set(requestIDHeader, requestID)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return collabRestoreResult{}, &collabRestoreError{Err: err, Timeout: errors.Is(ctx.Err(), context.DeadlineExceeded)}
+	}
+	defer resp.Body.Close()
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+	if err != nil {
+		return collabRestoreResult{}, &collabRestoreError{Status: resp.StatusCode, Err: err, Timeout: errors.Is(ctx.Err(), context.DeadlineExceeded)}
+	}
+	if resp.StatusCode != http.StatusOK {
+		var refusal struct {
+			Reason string `json:"reason"`
+		}
+		_ = json.Unmarshal(raw, &refusal)
+		return collabRestoreResult{}, &collabRestoreError{Status: resp.StatusCode, Reason: refusal.Reason}
+	}
+	var result collabRestoreResult
+	if err := json.Unmarshal(raw, &result); err != nil {
+		// It answered 200: the restore landed, whatever else the body says.
+		return collabRestoreResult{BlockDoc: "written"}, nil
+	}
+	return result, nil
+}
 
 // flushCollabDoc asks the Hocuspocus server to store post-<id> now and waits
 // for it, so block_doc holds every edit made before the publish. The server

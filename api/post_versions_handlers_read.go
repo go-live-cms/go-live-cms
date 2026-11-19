@@ -3,14 +3,12 @@
 // Revisions are the Block Spec v1 snapshots publishPost stores in post_versions,
 // not Yjs snapshots, so they don't depend on the collaboration server's storage.
 //
-// There is deliberately no endpoint that restores a version's blocks. Restoring loads
-// a version into the working copy, and while collaborators are connected the live Yjs
-// doc owns the working copy: overwriting posts.block_doc behind its back would be
-// reverted (or fought) by the collab server's next store. The editor fetches the
-// version here and applies it through the editor/Yjs path; the collab server stores
-// it like any edit. The version's settings (#358) aren't in the Yjs doc, so they go
-// back through POST /posts/:id/versions/:version_no/restore-settings
-// (post_versions_handlers_write.go).
+// Restoring loads a version into the working copy, and the live Yjs doc owns the
+// working copy: overwriting posts.block_doc behind its back would be reverted (or
+// fought) by the collab server's next store. So POST /posts/:id/versions/:version_no/restore
+// (#286, post_versions_handlers_write.go) never writes block_doc: it hands the version
+// to the collab server, which puts it into the live doc and stores it, then writes the
+// version's settings (#358), which aren't in the Yjs doc.
 package api
 
 import (

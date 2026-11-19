@@ -602,6 +602,7 @@ var publicCacheNoPurgeRoutes = map[string]string{
 	"DELETE /api/v1/posts/:id/schedule":                            "back to draft from scheduled: wasn't public",
 	"PUT /api/v1/posts/:id/scheduled-update":                       "frozen until the scheduler applies it (and purges)",
 	"DELETE /api/v1/posts/:id/scheduled-update":                    "the live post is unchanged",
+	"POST /api/v1/posts/:id/versions/:version_no/restore":          "the working copy only (#286: blocks through the collab server, settings); reaches the site on Update",
 	"POST /api/v1/posts/:id/versions/:version_no/restore-settings": "the working copy only; reaches the site on Update",
 	"PUT /api/v1/posts/:id/seo":                                    "snapshotted (#357): reaches the site on Update",
 	"PUT /api/v1/posts/:id/template":                               "snapshotted (#336): reaches the site on Update",

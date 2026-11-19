@@ -253,7 +253,9 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   the API (that's `ROLE_LOOKUP_SECRET`). **Before** reading `block_doc`, publish calls
   `POST /internal/documents/post-<id>/flush` synchronously (`collabFlushTimeout`, 5s).
   200 = stored or not loaded. Anything else (down, timeout, non-200) → **503**, nothing
-  published, so a snapshot never misses the last debounced edits.
+  published, so a snapshot never misses the last debounced edits. The version restore
+  (#286, `restoreCollabVersion`) calls `POST /internal/documents/post-<id>/restore`
+  synchronously too (Revisions, below).
 - **Collab → API** (internal listener, `ROLE_LOOKUP_SECRET`, `internal_handlers_collab.go`):
   - `GET /internal/posts/:id/collab` → `{block_doc, block_revision, ydoc_state?, epoch?}`
     (`ydoc_state` base64). **Revision guard is applied here:** the state is returned only
@@ -635,7 +637,7 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   username, full name; GET /users is admin-only, so contributors can list members' names here).
 - **It's a post setting:** `golive_post_settings()` has `author_ids`, so a byline edit on a
   published post waits for Update (#326's flag sees it), versions record it, and
-  restore-settings brings it back (users removed since skipped; none left or a version
+  a restore (#286, or restore-settings) brings it back (users removed since skipped; none left or a version
   without `author_ids` keeps the working byline). `post_published_authors` mirrors
   `published_settings.author_ids` (trigger, like `post_published_terms`; never write it).
 - **Public reads use the published byline only:** `golive_post_published_byline()` in the
@@ -767,7 +769,7 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   duplicates from the source's rows; a template holds the markup in its own `block_doc` (a snapshot,
   like a version) and a post made from it gets rows. An id that isn't the source's is dropped, so a
   copy never inherits another post's snippet.
-- **Restore** (`restore-settings`, editors and admins): the version's markup, read from the version
+- **Restore** (`restore`, #286, and `restore-settings`; editors and admins): the version's markup, read from the version
   and sanitized again, goes back into the working row under the same id, replacing a later edit and
   recreating a deleted row. Like the rest of a restore it reaches the site on Update. An orphan row
   (its block deleted) stays until the post is deleted permanently, so undo and restore find it.
@@ -837,7 +839,7 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   409 `default_term`). `EnsureDefaultCategory(post_ids)` gives a `post` without a category the
   default; every writer of a post's terms calls it in its transaction (create Tx's,
   `UpdatePostTaxonomyTermsTx`, `RemovePostTermTx` (whose `default_term_id` says it did),
-  duplicate, from-template, restore-settings, a category's delete). Deleting a category moves
+  duplicate, from-template, restore and restore-settings, a category's delete). Deleting a category moves
   its posts to the default, **published sets too** (`ReplaceTermInPublishedSettings` /
   `...ScheduledUpdates`), so no post shows a pending change for it. The default never makes
   posts "related" (`ListRelatedPosts`) unless it is the term asked for.
@@ -1003,7 +1005,7 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   `DeleteTrashedPostTx` (status checked under the row lock), the old hard delete. No auto-empty. A pending scheduled update (#335) ends with the trash (its `posts_cancel_scheduled_update` trigger), so a restored post has none.
 - **Nobody edits a trashed post:** `canEditPost` and `canEditPostDetails` are false for it,
   moderators included; `checkPost` answers 409 `post_trashed` (not 403) to a caller who may
-  read it, and the write routes that don't load the post (media links, SEO, restore-settings)
+  read it, and the write routes that don't load the post (media links, SEO, restore, restore-settings)
   use `authorizeWritePost`, which reads it for moderators too. Duplicate answers 409, `PublishPostTx` returns `db.ErrPostTrashed` (409, checked under
   the lock), `UnpublishPost` skips it (404), `SchedulePost` already wanted draft/scheduled.
   The collab store still accepts a trashed post's last store (the edits before the trash).
@@ -1247,7 +1249,7 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   `block:<name>` since 000062, below).
   **In the snapshot (decision):** `golive_post_settings()` has `page_template`, so a template
   change on a published page waits for Update like every other setting (#358), `golive_post_settings_changed`
-  sees it, versions record it and restore-settings brings it back (`RestorePostSEO` takes it; a
+  sees it, versions record it and a restore (or restore-settings) brings it back (`RestorePostSEO` takes it; a
   version without one keeps the working one). 000045 gave every stored snapshot (versions, published,
   #335's scheduled updates) `""`. `/public` answers the published one as `post.page_template`
   (`publishedPageTemplate`); `ListPosts` rows carry the working one (the Pages list), the with_meta
@@ -1270,7 +1272,7 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   (`config.block_templates`); else 400 `unknown_template`. `GET /posts/page-templates` (every content role) is
   what the Template field offers: `{theme: {slug, name} | null, templates (the layouts), builder_templates:
   [{name: "block:<n>", label: title}]}` (`ListPublishedCustomPageTemplates` plus the shipped ones, by label; a
-  `custom-` slug with `_` can't be stored, so it's left out). Nothing else changed: it is still the snapshotted setting (Update, versions, restore-settings), and the
+  `custom-` slug with `_` can't be stored, so it's left out). Nothing else changed: it is still the snapshotted setting (Update, versions, restore and restore-settings), and the
   PUT still doesn't purge; a design publish purges as #492 does. Tests: `page_templates_test.go` (mock),
   `page_templates_db_test.go` (real DB through the routes: offered and accepted only once published, live on
   Update, kept after a reset, restored by a version, the CHECK).
@@ -1763,7 +1765,7 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   scan, seed, a restored DB); `main backfill-variants` after generating. **Every mutating
   route must be in `publicCachePurgeRoutes` or `publicCacheNoPurgeRoutes`**
   (`TestMutatingRoutesDeclarePublicCachePurge` walks both routers). Snapshotted fields (SEO,
-  template, byline, restore-settings, html snippets) don't purge: they reach the site on
+  template, byline, restore and restore-settings, html snippets) don't purge: they reach the site on
   Update, which does. `publicCachePostDetailRoutes` (PUT `/posts/:id`, meta, featured image,
   media links) purge only if that post was or is published (one `GetPost` before and after),
   so the editor's debounced saves of a draft don't empty the cache. Logs use
@@ -2002,11 +2004,20 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   `POST /posts/:id/unpublish` are admin/editor only. Publishing sets
   `post_status='published'`; unpublish sets `draft` and NULLs `published_block_doc` /
   `published_version_id` (versions stay). `/public/posts/:id/blocks` and the SSR post
-  page 404 unless the status is `published`. **There is no restore endpoint on
-  purpose:** never write `block_doc` from the server while editors may be connected;
-  the editor restores through Yjs and the collab server's store persists it. The only
-  `block_doc` writer for an existing post is the collab server's
-  `PUT /internal/posts/:id/collab`.
+  page 404 unless the status is `published`. **Restore (#286) never writes `block_doc`
+  from the API:** `POST /posts/:id/versions/:no/restore` (`restorePostVersion`,
+  `requireContentEditor` + `authorizeWritePost`, the same callers as before) hands the
+  version to the collab server (`restoreCollabVersion`: `POST
+  /internal/documents/post-<id>/restore {block_doc, user_id}`, `collabRestoreTimeout` 30s,
+  longer than the collab server's own load + store), which puts it into the live doc
+  through a direct connection (open or not) and stores it, then answers. Only then are
+  the version's settings written (below) and `version_restored` recorded. Collab down,
+  unreachable or its store failed → **503 `collab_unavailable`, nothing changed** (no
+  settings, no activity); a version it can't store → 422 `version_unrestorable`; a timeout
+  → 503 `restore_unconfirmed` (it may still land). Settings failing after the blocks landed
+  → 500 `settings_not_restored` with the blocks' result. The only `block_doc` writer for
+  an existing post is still the collab server's `PUT /internal/posts/:id/collab`.
+  Templates and parts (#492) still restore through the Site editor (rule 9 there).
 - **Settings snapshots (#358, `000027`, `post_settings.go`):** publish (`PublishPostTx`: lock,
   next version_no, `InsertPublishedVersionFromPost`, `SetPublishedVersionOnPost`, then the
   content image links with `SyncPostContentMedia`, which never moves the featured image's
@@ -2020,10 +2031,13 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   read shows published settings:** `/public/posts[/:id|/slug/:slug]` (the post page, feeds),
   the `/public` lists (`applyPublishedSettings`, `toPublicPostWithMetaResponse`), search and
   menu titles. `/api/v1/posts*` stays the working copy (the admin). The **slug is not in the
-  snapshot** on purpose: it changes at once, with its conflict check. Restoring: the editor
-  restores the blocks (rule 9), then `POST /posts/:id/versions/:no/restore-settings`
-  (`RestorePostSettingsTx`) writes the version's settings into the working copy only;
-  `GET /posts/:id/settings` says whether they differ from the published ones.
+  snapshot** on purpose: it changes at once, with its conflict check. Restoring: `POST
+  /posts/:id/versions/:no/restore` (#286, above) restores the blocks through the collab
+  server, then writes the version's settings into the working copy only
+  (`restoreVersionSettingsTx` → `RestorePostSettingsTx`); `POST .../restore-settings` is
+  that second half alone, kept for editor tabs from before #286 (they restore the blocks
+  through their editor first). `GET /posts/:id/settings` says whether they differ from the
+  published ones.
 - **Changes not published (#326, `000030`):** `has_unpublished_changes` = `post_status =
   'published'` and the working copy differs from what the site shows: the body
   (`posts.block_doc_hash` vs `published_block_hash`, stored generated md5 columns of the jsonb

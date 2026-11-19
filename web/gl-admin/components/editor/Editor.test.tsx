@@ -3,7 +3,7 @@ import { act, createRef, StrictMode } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { Node } from "@tiptap/core"
 import type * as Y from "yjs"
-import { paragraphs } from "../../../collab-server/testkit"
+import { appendParagraph, paragraphs } from "../../../collab-server/testkit"
 import { validateBlockDoc, type BlockDocV1 } from "@gl-admin/lib/blocks-spec"
 import { themeBlockLookup } from "@gl-admin/lib/blocks-spec/themeBlocks"
 import { fragmentToBlockDoc } from "@gl-admin/lib/collaboration/fragmentBridge"
@@ -21,7 +21,7 @@ import { stubJsdomRangeLayout } from "@gl-admin/lib/collaboration/testHelpers"
 // The editor (#206 P3, #283), mounted for real against the in-process collab
 // server: the theme gate, the schema gate (rule 10: theme extensions must be registered
 // before Collaboration binds), no client seeding, the live read-only view, a stale-epoch
-// remount, publish without a client save, restore through the editor, and access changes
+// remount, publish without a client save, restore through the server (#286), and access changes
 // while open (#313).
 
 // The editor focuses itself after mounting; on a timing-dependent tick a missing layout
@@ -44,6 +44,7 @@ vi.mock("@gl-admin/lib/api/blockAPI", () => ({
     setAuthToken: vi.fn(),
     getPostBlocks: vi.fn(),
     publishPost: vi.fn(),
+    restoreVersion: vi.fn(),
   },
 }))
 vi.mock("@gl-admin/lib/auth", () => ({
@@ -192,7 +193,7 @@ describe("Editor", () => {
     await until(() => !!pm()?.textContent?.includes("Intro"), "the REST copy")
     expect(serverFragment().toArray().map((el) => (el as Y.XmlElement).nodeName)).toContain("sidenote")
     await expect(ref.current!.publish()).rejects.toThrow(/sidenote/)
-    await expect(ref.current!.restoreVersion(doc)).rejects.toThrow(/sidenote/)
+    await expect(ref.current!.restoreVersion(1)).rejects.toThrow(/sidenote/)
     expect(blockAPIClient.publishPost).not.toHaveBeenCalled()
   })
 
@@ -261,6 +262,38 @@ describe("Editor", () => {
     const result = await act(async () => ref.current!.publish())
     expect(result).toEqual({ versionId: 1, versionNo: 1, cancelledScheduledUpdate: false })
     expect(blockAPIClient.publishPost).toHaveBeenCalledWith(POST)
+  })
+
+  it("restores through the API's server-side restore (#286): this tab's edits reach the server first, the version arrives live", async () => {
+    tiptapExtensionRegistry.register(Sidenote)
+    const ref = await mount()
+    await until(() => !!pm()?.textContent?.includes("Careful"), "the bound editor")
+    const version: BlockDocV1 = {
+      doc_version: 1,
+      blocks_order: ["restored-block-01"],
+      blocks: { "restored-block-01": { id: "restored-block-01", type: "paragraph", version: 1, attrs: { text: "Restored version" } } },
+    } as unknown as BlockDocV1
+    // The API's route, as it runs on the server: the collab server's restore.
+    let serverHadTheEdit = false
+    vi.mocked(blockAPIClient.restoreVersion).mockImplementation(async (postId: number) => {
+      serverHadTheEdit = paragraphs(relay.server.hocuspocus.documents.get(`post-${postId}`)!).includes("typed just before")
+      const result = await relay.server.restore(`post-${postId}`, version, { userId: "1" })
+      if (!result.ok) throw new Error(result.error)
+      return { blocks: { block_revision: result.revision, changed: true, hidden: result.dropped }, settings_restored: false }
+    })
+
+    // Typed in this tab right before Restore, not yet on the server.
+    const collab = acquireHocuspocus(POST, () => relay.client("1"))
+    appendParagraph(collab.doc, "typed just before", "blk-typed-before")
+    const result = await act(async () => ref.current!.restoreVersion(3))
+    releaseHocuspocus(collab)
+
+    expect(blockAPIClient.restoreVersion).toHaveBeenCalledWith(POST, 3)
+    expect(serverHadTheEdit).toBe(true)
+    expect(result).toMatchObject({ blocks: { changed: true }, settings_restored: false })
+    await until(() => !!pm()?.textContent?.includes("Restored version"), "the restored version in the editor")
+    expect(pm()!.textContent).not.toContain("typed just before")
+    expect(pm()!.textContent).not.toContain("Intro")
   })
 
   it("turns view-only with a notice when the user is demoted while editing, keeping what's on screen", async () => {

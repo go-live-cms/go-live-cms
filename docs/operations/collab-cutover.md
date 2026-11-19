@@ -24,6 +24,11 @@ collab server is fixed forward.
 - **Publish flushes first.** The API asks the collab server to store the doc
   (`POST /internal/documents/post-<id>/flush`) and answers 503 if it can't, so a published
   snapshot never misses the last debounced edits.
+- **Restoring a version goes through the collab server too** (#286). The API hands the
+  version to `POST /internal/documents/post-<id>/restore`; the collab server puts it into
+  the live doc (open or not) in one Yjs transaction and stores it, all or nothing. If it is
+  down, the restore answers 503 and nothing changes. A restore is an ordinary edit for the
+  guards: same epoch, a new `block_revision`.
 
 ## Forcing a reseed
 
@@ -50,11 +55,15 @@ holds in memory. One post only: `DELETE FROM post_ydoc_state WHERE post_id = <id
 - Two logins (`localhost:4321` and `127.0.0.1:4321` have separate cookies): both see each
   other's edits and cursors; reload both; each edit appears once.
 - Publish: the collab log shows `collab_flush`, and the public page has the edit.
+- History › Restore (with a second tab open, and once with the post closed): the collab log
+  shows `collab_restore ... "block_doc":"written"`, the other tab shows the version at once,
+  and History lists it as restored. With `collab` stopped, Restore says nothing was changed
+  (503 `collab_unavailable`).
 - `docker compose -f compose.dev.yaml exec -T postgres psql -U root -d golive_cms -c
   "select post_id, block_revision, epoch from post_ydoc_state"` lists the posts you
   opened.
-- No `collab_store_failed`, `collab_store_invalid`, `collab_store_unconvertible` or
-  `collab_load_failed` that isn't explained.
+- No `collab_store_failed`, `collab_store_invalid`, `collab_store_unconvertible`,
+  `collab_load_failed` or `collab_restore_failed` that isn't explained.
 
 ## Removing the old dev volume
 

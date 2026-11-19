@@ -57,6 +57,21 @@ export interface PostSettingsState {
   scheduled_update?: ScheduledUpdate | null
 }
 
+// POST /posts/:id/versions/:no/restore (#286): what the restore did.
+export interface RestoredVersion {
+  blocks: {
+    // The post's block_revision after it (null if the collab server didn't say).
+    block_revision: number | null
+    // False when the working copy already was the version.
+    changed: boolean
+    // The version's blocks the editor can't show (#213), kept hidden.
+    hidden: number
+  }
+  // False for a version published before settings were saved with it (#358).
+  settings_restored: boolean
+  post?: { title: string; description: string; seo?: PostSEOSettings }
+}
+
 // API client for Block Spec v1 operations
 export class BlockAPIClient {
   private baseURL: string
@@ -171,8 +186,20 @@ export class BlockAPIClient {
     return response.json()
   }
 
-  // Put a version's settings back into the working copy (#358), after its blocks were
-  // restored in the editor. `restored` is false for a version without saved settings.
+  // Restore a version into the working copy (#286): its blocks through the collab server
+  // (live in every open editor, stored before this answers) and its settings (#358). A 503
+  // `collab_unavailable` or 422 `version_unrestorable` changed nothing; the ApiError's
+  // serverMessage says so in words for the person restoring.
+  async restoreVersion(postId: number, versionNo: number): Promise<RestoredVersion> {
+    const response = await this.request(`/posts/${postId}/versions/${versionNo}/restore`, "restore the version", {
+      method: "POST",
+    })
+    return response.json()
+  }
+
+  // Put a version's settings back into the working copy (#358) on their own. Editors restore
+  // through restoreVersion since #286; the route stays for tabs from before it.
+  // `restored` is false for a version without saved settings.
   async restoreVersionSettings(
     postId: number,
     versionNo: number
