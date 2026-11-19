@@ -181,9 +181,14 @@ export function rangeValue(field: DiscussionNumberField, typed: string): number 
   return value >= lo && value <= hi ? value : null
 }
 
-/** The field errors the form shows, keyed by field; empty when it may save. */
+/**
+ * The field errors the form shows, keyed by field; empty when it may save. With comments
+ * off the other fields are hidden (Off shows the switch alone), so they can't block a
+ * save: toDiscussionRequest leaves out any of them that the API would refuse.
+ */
 export function validateDiscussionDraft(draft: DiscussionDraft): Partial<Record<DiscussionField, string>> {
   const errors: Partial<Record<DiscussionField, string>> = {}
+  if (!showDiscussionDetails(draft)) return errors
   for (const field of ["comments_max_links", "comments_close_after_days", "comments_per_page"] as const) {
     if (rangeValue(field, draft[field]) === null) {
       const [lo, hi] = DISCUSSION_LIMITS[field]
@@ -251,7 +256,8 @@ export function showDiscussionDetails(draft: DiscussionDraft): boolean {
  */
 export function apiFieldError(code: string | null, serverMessage: string | null): { field: DiscussionField; message: string } | null {
   if (code === "invalid_privacy_page") {
-    return { field: "comments_privacy_page_id", message: "Choose a published page, or None. This one isn't published any more." }
+    // Not a published page any more, or pages aren't public (checkPrivacyPage): one code for both.
+    return { field: "comments_privacy_page_id", message: "Choose a published page the site shows, or None." }
   }
   if (code !== "invalid_discussion_settings" || !serverMessage) return null
   const space = serverMessage.indexOf(" ")

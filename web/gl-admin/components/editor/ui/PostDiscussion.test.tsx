@@ -126,6 +126,21 @@ it("a failed save goes back to the saved choice and alerts", async () => {
   expect(container.querySelector("[role='alert']")?.textContent).toBe("Couldn’t save the change. Try again.")
 })
 
+it("an earlier change that saved stays shown when a later one fails", async () => {
+  let resolveFirst: (value: unknown) => void = () => {}
+  discussionApi.setPostDiscussion
+    .mockImplementationOnce(() => new Promise((resolve) => (resolveFirst = resolve)))
+    .mockRejectedValueOnce(new Error("down"))
+  await render()
+  await act(async () => radio("Closed").click())
+  await act(async () => radio("Open").click())
+  await settle()
+  await act(async () => resolveFirst(answer("closed")))
+  await settle()
+  expect(radio("Closed").checked).toBe(true)
+  expect(container.querySelector("[role='alert']")?.textContent).toBe("Couldn’t save the change. Try again.")
+})
+
 it("with comments off for the site, the choice is still kept", async () => {
   settingsApi.getSettings.mockResolvedValue({ comments_enabled: false, comments_close_after_days: 0 })
   await render()

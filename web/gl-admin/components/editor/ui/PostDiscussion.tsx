@@ -49,8 +49,17 @@ export default function PostDiscussion({
   // The choice being saved, shown at once; null when nothing is in flight.
   const [pending, setPending] = useState<PostDiscussionChoice | null>(null)
   const [status, setStatus] = useState<Status>(null)
-  // Only the latest change's answer counts.
+  // Changes are numbered: the status line and the pending choice follow the latest one,
+  // and the saved choice is the newest answer the API gave (`applied`), so an earlier
+  // change that succeeded stays shown when a later one fails.
   const saveRef = useRef(0)
+  const appliedRef = useRef(0)
+  // What applies now depends on the clock ("closes on Dec 3" becomes "Closed on Dec 3").
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 60_000)
+    return () => clearInterval(timer)
+  }, [])
 
   const load = useCallback(async () => {
     setLoadFailed(false)
@@ -86,8 +95,11 @@ export default function PostDiscussion({
     setStatus(null)
     try {
       const answer = await setPostDiscussion(postId, choice)
+      if (save > appliedRef.current) {
+        appliedRef.current = save
+        setLoaded((prev) => (prev ? { ...prev, answer } : prev))
+      }
       if (save !== saveRef.current) return
-      setLoaded((prev) => (prev ? { ...prev, answer } : prev))
       setStatus({ tone: "ok", text: discussionSavedMessage(answer.discussion, published, loaded.site.comments_enabled) })
     } catch {
       if (save !== saveRef.current) return
@@ -102,8 +114,8 @@ export default function PostDiscussion({
   const summary = loaded
     ? discussionSummary(
         { site: loaded.site, type: loaded.type, discussion: choice, first_published_at: loaded.answer.first_published_at },
-        new Date(),
-        (iso) => formatScheduleTime(iso, dateSettings)
+        now,
+        (iso) => formatScheduleTime(iso, dateSettings, { now })
       )
     : null
 

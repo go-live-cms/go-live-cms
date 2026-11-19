@@ -157,6 +157,12 @@ describe("validateDiscussionDraft", () => {
     )
   })
 
+  it("with comments off, hidden fields don't block the save, and invalid ones aren't sent", () => {
+    const off = { ...saved, comments_enabled: false, comments_max_links: "12", comments_order: "newest" as const }
+    expect(validateDiscussionDraft(off)).toEqual({})
+    expect(toDiscussionRequest(off, saved)).toEqual({ comments_enabled: false, comments_order: "newest" })
+  })
+
   it("refuses a notice on two lines or over 400 characters", () => {
     expect(validateDiscussionDraft({ ...saved, comments_notice: "One.\nTwo." }).comments_notice).toMatch(/one line/)
     expect(validateDiscussionDraft({ ...saved, comments_notice: "x".repeat(401) }).comments_notice).toMatch(/400/)
