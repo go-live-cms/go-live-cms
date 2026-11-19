@@ -15,6 +15,7 @@ import {
   deleteImport,
   getImport,
   listImportItems,
+  listImportMediaFailures,
   listImports,
   startImport,
   uploadImport,
@@ -22,6 +23,7 @@ import {
   type ImportJob,
   type ImportListItem,
   type ImportMapping,
+  type ImportMediaFailureRow,
 } from "@gl-admin/lib/api/imports"
 import { getPostTypes } from "@gl-admin/lib/api/postTypes"
 import type { PostType, User } from "@gl-admin/lib/api/types"
@@ -41,7 +43,6 @@ import {
   droppedTitle,
   droppedWhere,
   exportTypeLabel,
-  failedMedia,
   finishedTitle,
   importCount,
   isActive,
@@ -406,7 +407,7 @@ function ReportStep({ job, onOpen }: { job: ImportJob; onOpen: (id: number | nul
   const [tab, setTab] = useState<ReportTab>("all")
   const [items, setItems] = useState<ImportItem[] | null>(null)
   const [more, setMore] = useState(false)
-  const [allItems, setAllItems] = useState<ImportItem[]>([])
+  const [media, setMedia] = useState<ImportMediaFailureRow[]>([])
 
   useEffect(() => {
     let live = true
@@ -423,17 +424,16 @@ function ReportStep({ job, onOpen }: { job: ImportJob; onOpen: (id: number | nul
     }
   }, [job.id, tab])
 
-  // Failed images are listed for the whole import, whatever the tab.
+  // Failed images are listed for the whole import, whatever the tab (the API's list).
   useEffect(() => {
     let live = true
-    listImportItems(job.id, { status: "imported", limit: 200 })
-      .then((list) => live && setAllItems(list))
+    listImportMediaFailures(job.id)
+      .then((list) => live && setMedia(list))
       .catch(() => {})
     return () => {
       live = false
     }
   }, [job.id])
-  const media = failedMedia(allItems)
 
   const loadMore = async () => {
     const next = await listImportItems(job.id, { ...tabQuery(tab), limit: REPORT_PAGE, offset: items?.length ?? 0 })
@@ -461,7 +461,7 @@ function ReportStep({ job, onOpen }: { job: ImportJob; onOpen: (id: number | nul
         </div>
       </header>
       <p role="status" className="gl-import__summary">
-        {reportSummary(job, media.length)}
+        {reportSummary(job, job.progress.media_failed ?? media.length)}
       </p>
       <Tabs label="Report" tabs={tabs.map((t) => ({ id: t.id, label: t.label, count: t.count }))} value={tab} onChange={(t) => setTab(t as ReportTab)} activation="manual" />
       {items === null ? (

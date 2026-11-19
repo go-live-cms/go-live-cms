@@ -256,7 +256,10 @@ func TestParseMarkdownZip(t *testing.T) {
 
 	byKey := map[string]Item{}
 	for _, it := range exp.Items {
-		byKey[it.Key] = it
+		// path#hash: the hash is the post's title, slug and date.
+		path, hash, _ := strings.Cut(it.Key, "#")
+		require.Len(t, hash, 12)
+		byKey[path] = it
 	}
 	hello := byKey["md:content/posts/hello.md"]
 	require.Equal(t, "Hello from Hugo", hello.Title)
@@ -383,4 +386,17 @@ func TestSplitFrontMatter(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "a---b", meta["title"])
 	require.Equal(t, "x", string(body))
+}
+
+func TestParseMarkdownZip_KeysDontCollideAcrossSites(t *testing.T) {
+	read := func(body string) string {
+		data := buildZip(t, zipEntry{name: "content/about.md", body: body})
+		exp, err := ParseMarkdownZip(bytes.NewReader(data), int64(len(data)), Limits{})
+		require.NoError(t, err)
+		return exp.Items[0].Key
+	}
+	a := read("---\ntitle: About Site A\ndate: 2024-01-01\n---\nA")
+	require.Equal(t, a, read("---\ntitle: About Site A\ndate: 2024-01-01\n---\nA, edited"), "the same post again: the same key")
+	require.NotEqual(t, a, read("---\ntitle: About Site B\ndate: 2025-06-01\n---\nB"), "another site's file at the same path")
+	require.True(t, strings.HasPrefix(a, "md:content/about.md#"))
 }

@@ -12,6 +12,7 @@ const api = vi.hoisted(() => ({
   listImports: vi.fn(),
   getImport: vi.fn(),
   listImportItems: vi.fn(),
+  listImportMediaFailures: vi.fn(),
   startImport: vi.fn(),
   cancelImport: vi.fn(),
   deleteImport: vi.fn(),
@@ -113,6 +114,7 @@ beforeEach(() => {
   for (const fn of Object.values(api)) fn.mockReset()
   api.listImports.mockResolvedValue([])
   api.listImportItems.mockResolvedValue([])
+  api.listImportMediaFailures.mockResolvedValue([])
 })
 
 afterEach(() => {
@@ -215,7 +217,10 @@ describe("the report", () => {
       item({ id: 2, title: "About", post_type: "page" }),
       item({ id: 3, title: "Hello world!", status: "skipped", reason: "imported_before", post_id: null, post_status: undefined }),
     ]
-    api.listImportItems.mockImplementation(async (_id: number, params: { status?: string }) => (params.status === "imported" ? rows.slice(0, 2) : rows))
+    api.listImportItems.mockResolvedValue(rows)
+    api.listImportMediaFailures.mockResolvedValue([
+      { item_id: 1, post: "Migrating from WordPress", url: "cdn.other.net/a.png", code: "other_host", reason: "Images are only downloaded from the export’s own site" },
+    ])
     const writeText = vi.fn().mockResolvedValue(undefined)
     Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true })
     await render("/import?id=3")

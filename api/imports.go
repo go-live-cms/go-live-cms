@@ -39,6 +39,7 @@ func (server *Server) registerImportRoutes(v1 *gin.RouterGroup) {
 	imports.GET("", server.listImports)
 	imports.GET("/:id", server.getImport)
 	imports.GET("/:id/items", server.listImportItems)
+	imports.GET("/:id/media-failures", server.listImportMediaFailures)
 	imports.POST("/:id/start", server.startImport)
 	imports.POST("/:id/cancel", server.cancelImport)
 	imports.DELETE("/:id", server.deleteImport)
@@ -381,6 +382,8 @@ type importProgress struct {
 	Skipped     int64 `json:"skipped"`
 	Failed      int64 `json:"failed"`
 	WithDropped int64 `json:"with_dropped"`
+	// MediaFailed counts the files that couldn't be added, across the items.
+	MediaFailed int64 `json:"media_failed"`
 }
 
 func (server *Server) importJobResponse(c *gin.Context, job db.ImportJob) (ImportJobResponse, error) {
@@ -402,6 +405,9 @@ func (server *Server) importJobResponse(c *gin.Context, job db.ImportJob) (Impor
 		return resp, err
 	}
 	resp.Progress = progressOf(counts)
+	if resp.Progress.MediaFailed, err = server.store.CountImportMediaFailures(ctx, job.ID); err != nil {
+		return resp, err
+	}
 	if job.Status == db.ImportJobMapping {
 		before, err := server.store.CountImportedBefore(ctx, job.ID)
 		if err != nil {
@@ -567,8 +573,8 @@ func (server *Server) listImportItems(c *gin.Context) {
 // StartImportRequest is the mapping: each author's login → a member's id (0 = the admin
 // starting the import), each export post type → a GoLive post type ("" = not imported).
 type StartImportRequest struct {
-	Authors map[string]int64  `json:"authors" binding:"max=1000"`
-	Types   map[string]string `json:"types" binding:"required,max=100"`
+	Authors map[string]int64  `json:"authors" binding:"max=1000,dive,keys,max=200,endkeys"`
+	Types   map[string]string `json:"types" binding:"required,max=100,dive,keys,max=100,endkeys,max=50"`
 }
 
 // importMapping is the stored mapping (import_jobs.mapping).
@@ -770,4 +776,37 @@ type importItemResult struct {
 	Error string `json:"error,omitempty"`
 	// PublishRefused is a plugin's reason for keeping a published post a draft (#459).
 	PublishRefused string `json:"publish_refused,omitempty"`
+}
+
+// importMediaFailuresLimit caps the report's list of files that couldn't be added.
+const importMediaFailuresLimit = 1000
+
+// ImportMediaFailureRow is one file an import couldn't add, with the post it was in.
+type ImportMediaFailureRow struct {
+	importMediaFailure
+	ItemID int64  `json:"item_id"`
+	Post   string `json:"post"`
+}
+
+// listImportMediaFailures handles GET /imports/:id/media-failures: every item's failed files
+// (at most importMediaFailuresLimit), in import order.
+func (server *Server) listImportMediaFailures(c *gin.Context) {
+	job, ok := server.loadImportJob(c)
+	if !ok {
+		return
+	}
+	rows, err := server.store.ListImportMediaFailures(c.Request.Context(), db.ListImportMediaFailuresParams{JobID: job.ID, Limit: importMediaFailuresLimit})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list the report"})
+		return
+	}
+	out := make([]ImportMediaFailureRow, 0, len(rows))
+	for _, row := range rows {
+		entry := ImportMediaFailureRow{ItemID: row.ItemID, Post: row.Title}
+		if err := json.Unmarshal(row.Failure, &entry.importMediaFailure); err != nil {
+			continue
+		}
+		out = append(out, entry)
+	}
+	c.JSON(http.StatusOK, gin.H{"media_failures": out})
 }

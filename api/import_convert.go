@@ -1751,7 +1751,7 @@ func (c *importConverter) fit(parent string, blocks []*ob) []*ob {
 				continue
 			}
 			if len(b.children) < rule.min || (rule.max > 0 && len(b.children) > rule.max) || !fitsIn(parent, b.typ) {
-				out = append(out, c.fit(parent, flattenOB(b))...)
+				out = append(out, c.fit(parent, c.flattenOB(b))...)
 				continue
 			}
 			out = append(out, b)
@@ -1772,9 +1772,23 @@ func fitsIn(parent, typ string) bool {
 	return containerAccepts(parent, typ)
 }
 
-// flattenOB is a container's content without it (a columns block's columns' content).
-func flattenOB(b *ob) []*ob {
+// flattenOB is a container's content without it (a columns block's columns' content). The
+// parts that aren't blocks are kept as paragraphs: a details' summary (bold) before its
+// content, a gallery's or cover's caption after it, so flattening loses no text.
+func (c *importConverter) flattenOB(b *ob) []*ob {
 	var out []*ob
+	if summary, ok := b.attrs["summary"].([]any); ok && b.typ == "details" && len(summary) > 0 {
+		var runs []map[string]any
+		for _, r := range summary {
+			if run, ok := r.(map[string]any); ok {
+				run = withMark(run, markOf("bold"))
+				runs = append(runs, run)
+			}
+		}
+		if p := c.paragraph(runs); p != nil {
+			out = append(out, p)
+		}
+	}
 	for _, ch := range b.children {
 		if _, isContainer := blockContainers[ch.typ]; isContainer && ch.typ == "column" {
 			out = append(out, ch.children...)
@@ -1782,7 +1796,34 @@ func flattenOB(b *ob) []*ob {
 		}
 		out = append(out, ch)
 	}
+	if caption, ok := b.attrs["caption"].([]any); ok && len(caption) > 0 {
+		var runs []map[string]any
+		for _, r := range caption {
+			if run, ok := r.(map[string]any); ok {
+				runs = append(runs, run)
+			}
+		}
+		if p := c.paragraph(runs); p != nil {
+			out = append(out, p)
+		}
+	}
 	return out
+}
+
+// withMark is a copy of a text run with one more mark (unless it has it, or has code).
+func withMark(run map[string]any, mark map[string]any) map[string]any {
+	cp := map[string]any{}
+	for k, v := range run {
+		cp[k] = v
+	}
+	marks, _ := run["marks"].([]any)
+	for _, m := range marks {
+		if t := stringOf(m.(map[string]any)["type"]); t == mark["type"] || t == "code" {
+			return cp
+		}
+	}
+	cp["marks"] = append(append([]any{}, marks...), mark)
+	return cp
 }
 
 // flattenImportBlocks writes the tree as a Block Spec v1 doc.

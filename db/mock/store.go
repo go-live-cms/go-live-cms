@@ -613,6 +613,21 @@ func (mr *MockStoreMockRecorder) CountImportItemsByStatus(arg0, arg1 interface{}
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountImportItemsByStatus", reflect.TypeOf((*MockStore)(nil).CountImportItemsByStatus), arg0, arg1)
 }
 
+// CountImportMediaFailures mocks base method.
+func (m *MockStore) CountImportMediaFailures(arg0 context.Context, arg1 int64) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CountImportMediaFailures", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CountImportMediaFailures indicates an expected call of CountImportMediaFailures.
+func (mr *MockStoreMockRecorder) CountImportMediaFailures(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountImportMediaFailures", reflect.TypeOf((*MockStore)(nil).CountImportMediaFailures), arg0, arg1)
+}
+
 // CountImportedBefore mocks base method.
 func (m *MockStore) CountImportedBefore(arg0 context.Context, arg1 int64) (int64, error) {
 	m.ctrl.T.Helper()
@@ -4724,6 +4739,21 @@ func (m *MockStore) ListImportJobs(arg0 context.Context, arg1 int32) ([]db.ListI
 func (mr *MockStoreMockRecorder) ListImportJobs(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListImportJobs", reflect.TypeOf((*MockStore)(nil).ListImportJobs), arg0, arg1)
+}
+
+// ListImportMediaFailures mocks base method.
+func (m *MockStore) ListImportMediaFailures(arg0 context.Context, arg1 db.ListImportMediaFailuresParams) ([]db.ListImportMediaFailuresRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListImportMediaFailures", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListImportMediaFailuresRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListImportMediaFailures indicates an expected call of ListImportMediaFailures.
+func (mr *MockStoreMockRecorder) ListImportMediaFailures(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListImportMediaFailures", reflect.TypeOf((*MockStore)(nil).ListImportMediaFailures), arg0, arg1)
 }
 
 // ListMedia mocks base method.

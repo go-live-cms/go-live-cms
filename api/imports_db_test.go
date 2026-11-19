@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	db "github.com/go-live-cms/go-live-cms/db/sqlc"
+	"github.com/go-live-cms/go-live-cms/importer"
 	"github.com/go-live-cms/go-live-cms/util"
 )
 
@@ -356,7 +357,17 @@ func TestImportWordPressExport(t *testing.T) {
 	rec = f.do(f.admin, http.MethodGet, fmt.Sprintf("/api/v1/imports/%d", jobID), nil, "")
 	require.Equal(t, http.StatusOK, rec.Code)
 	got := decodeJob(t, rec)
-	require.Equal(t, importProgress{Total: 6, Imported: 4, Skipped: 2, WithDropped: 2}, got.Import.Progress)
+	require.Equal(t, importProgress{Total: 6, Imported: 4, Skipped: 2, WithDropped: 2, MediaFailed: 2}, got.Import.Progress)
+	rec = f.do(f.admin, http.MethodGet, fmt.Sprintf("/api/v1/imports/%d/media-failures", jobID), nil, "")
+	require.Equal(t, http.StatusOK, rec.Code)
+	var failures struct {
+		MediaFailures []ImportMediaFailureRow `json:"media_failures"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &failures))
+	require.Len(t, failures.MediaFailures, 2)
+	require.Equal(t, "Hello & welcome: a classic post", failures.MediaFailures[0].Post)
+	require.Equal(t, "other_host", failures.MediaFailures[0].Code)
+	require.Equal(t, "cdn.other-host.net/podcast.mp3", failures.MediaFailures[1].URL)
 	rec = f.do(f.admin, http.MethodGet, fmt.Sprintf("/api/v1/imports/%d/items?dropped=true", jobID), nil, "")
 	require.Equal(t, http.StatusOK, rec.Code)
 	var report struct {
@@ -592,6 +603,7 @@ func TestImportRoutesAndRefusals(t *testing.T) {
 	require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
 	jobID := decodeJob(t, rec).Import.ID
 	for body, code := range map[string]string{
+		`{"types":{"post":"` + strings.Repeat("x", 60) + `"}}`:        "types",
 		`{"types":{"post":"nope"}}`:                                   "invalid_type",
 		fmt.Sprintf(`{"authors":{"ana":%d},"types":{}}`, int64(9e15)): "invalid_author",
 	} {
@@ -607,4 +619,30 @@ func TestImportRoutesAndRefusals(t *testing.T) {
 	require.Equal(t, http.StatusBadRequest, f.do(f.admin, http.MethodGet, fmt.Sprintf("/api/v1/imports/%d/items?status=odd", jobID), nil, "").Code)
 	// Not started: deletable.
 	require.Equal(t, http.StatusNoContent, f.do(f.admin, http.MethodDelete, fmt.Sprintf("/api/v1/imports/%d", jobID), nil, "").Code)
+}
+
+// Categories nest one level (#331), also when the export's parent is an existing category
+// that is itself nested here: the new one goes under that one's top-level category.
+func TestImportTermsKeepOneLevel(t *testing.T) {
+	f := newImportDBFixture(t, nil)
+	ctx := context.Background()
+	category, err := f.store.GetTaxonomyType(ctx, db.CategoryTaxonomy)
+	require.NoError(t, err)
+	top, err := f.store.CreateTaxonomyTerm(ctx, db.CreateTaxonomyTermParams{Name: "Top", Slug: "imp-top-" + f.run, TaxonomyTypeID: category.ID})
+	require.NoError(t, err)
+	mid, err := f.store.CreateTaxonomyTerm(ctx, db.CreateTaxonomyTermParams{Name: "Mid", Slug: "imp-mid-" + f.run, TaxonomyTypeID: category.ID, ParentID: sql.NullInt64{Int64: top.ID, Valid: true}})
+	require.NoError(t, err)
+
+	ids, slugs := map[string]int64{}, map[int64]string{}
+	skipped, err := f.server.importTerms(ctx, []importer.Term{
+		{Taxonomy: "category", Slug: mid.Slug, Name: "Mid"},
+		{Taxonomy: "category", Slug: "imp-leaf-" + f.run, Name: "Leaf", Parent: mid.Slug},
+		{Taxonomy: "category", Slug: "", Name: "No slug"},
+	}, ids, slugs)
+	require.NoError(t, err)
+	require.Zero(t, skipped)
+	require.Equal(t, mid.ID, ids["category:"+mid.Slug], "the existing category is reused")
+	leaf, err := f.store.GetTaxonomyTerm(ctx, ids["category:imp-leaf-"+f.run])
+	require.NoError(t, err)
+	require.Equal(t, top.ID, leaf.ParentID.Int64, "under the top-level category, not two levels deep")
 }

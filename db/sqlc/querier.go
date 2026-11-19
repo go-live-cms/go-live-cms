@@ -105,6 +105,7 @@ type Querier interface {
 	CountEmailChangeTokensSince(ctx context.Context, arg CountEmailChangeTokensSinceParams) (int64, error)
 	CountFilteredPosts(ctx context.Context, arg CountFilteredPostsParams) (int64, error)
 	CountImportItemsByStatus(ctx context.Context, jobID int64) ([]CountImportItemsByStatusRow, error)
+	CountImportMediaFailures(ctx context.Context, jobID int64) (int64, error)
 	// Items of this job whose key an earlier job imported, its post still there: the mapping
 	// step's "imported before, will be skipped".
 	CountImportedBefore(ctx context.Context, jobID int64) (int64, error)
@@ -667,6 +668,8 @@ type Querier interface {
 	ListImportItems(ctx context.Context, arg ListImportItemsParams) ([]ListImportItemsRow, error)
 	// The Import page's recent imports, newest first, without the parsed data.
 	ListImportJobs(ctx context.Context, limit int32) ([]ListImportJobsRow, error)
+	// The report's "Images that couldn't be added": every item's failed files, in order.
+	ListImportMediaFailures(ctx context.Context, arg ListImportMediaFailuresParams) ([]ListImportMediaFailuresRow, error)
 	// published_post_count is how many of the posts using it (post_media) are
 	// published. $7 keeps only images missing their alt text (#325): not
 	// decorative, and alt empty or only whitespace. CountMedia and

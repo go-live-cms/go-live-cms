@@ -111,6 +111,10 @@ func (server *Server) runImportJob(ctx context.Context, job db.ImportJob) {
 		return
 	}
 	run.media = server.newImportJobMedia(ctx, log, job, run.mapping.ImporterID)
+	run.media.renew = func() {
+		// A lost claim shows at the item's fenced write; this only keeps a live one.
+		_, _ = server.store.RenewImportJobLease(ctx, db.RenewImportJobLeaseParams{ID: job.ID, LeaseToken: job.LeaseToken})
+	}
 
 	for ctx.Err() == nil {
 		item, err := server.store.NextPendingImportItem(ctx, job.ID)
@@ -457,8 +461,12 @@ func (run *importRun) ensureTerms() error {
 	}
 	var terms []importer.Term
 	_ = json.Unmarshal(run.job.Terms, &terms)
-	if err := run.server.importTerms(run.ctx, terms, run.terms, run.categorySlugs); err != nil {
+	skipped, err := run.server.importTerms(run.ctx, terms, run.terms, run.categorySlugs)
+	if err != nil {
 		return err
+	}
+	if skipped > 0 {
+		run.log.Warn("import_terms_skipped", "count", skipped)
 	}
 	slugs := map[string]string{}
 	for id, slug := range run.categorySlugs {

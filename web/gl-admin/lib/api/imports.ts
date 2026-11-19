@@ -53,6 +53,8 @@ export interface ImportProgress {
   skipped: number
   failed: number
   with_dropped: number
+  // Files that couldn't be added, across the items.
+  media_failed?: number
 }
 
 export interface ImportMapping {
@@ -151,6 +153,17 @@ export async function listImports(): Promise<ImportListItem[]> {
 export async function getImport(id: number): Promise<ImportJob> {
   const response = await apiCall(`/imports/${id}`)
   return response.import
+}
+
+export interface ImportMediaFailureRow extends ImportMediaFailure {
+  item_id: number
+  post: string
+}
+
+// Every item's files that couldn't be added (up to 1,000), in import order.
+export async function listImportMediaFailures(id: number): Promise<ImportMediaFailureRow[]> {
+  const response = await apiCall(`/imports/${id}/media-failures`)
+  return response.media_failures ?? []
 }
 
 export async function listImportItems(

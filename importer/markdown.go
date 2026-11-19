@@ -3,6 +3,8 @@ package importer
 import (
 	"archive/zip"
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -214,9 +216,7 @@ func markdownItem(name string, data []byte, modified time.Time) (Item, error) {
 	if item.Dir == "." {
 		item.Dir = ""
 	}
-	if s := metaString(meta, "guid", "id", "uuid"); s != "" {
-		item.Key = "md:" + s
-	}
+	explicitKey := metaString(meta, "guid", "id", "uuid")
 	item.Title = metaString(meta, "title")
 	item.Slug = metaString(meta, "slug")
 	item.Excerpt = metaString(meta, "description", "excerpt", "summary")
@@ -268,6 +268,15 @@ func markdownItem(name string, data []byte, modified time.Time) (Item, error) {
 	}
 	if item.Title == "" {
 		item.Title = stem
+	}
+	// The key that makes a re-run skip the file: its front matter's id, else its path plus
+	// what identifies the post (title, slug, date), so two unrelated zips that both have
+	// "content/about.md" don't take each other's posts for imported.
+	if explicitKey != "" {
+		item.Key = "md:" + explicitKey
+	} else {
+		sum := sha256.Sum256([]byte(item.Title + "|" + item.Slug + "|" + item.Date.UTC().Format(time.RFC3339)))
+		item.Key = "md:" + name + "#" + hex.EncodeToString(sum[:6])
 	}
 	return item, nil
 }

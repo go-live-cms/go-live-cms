@@ -25,8 +25,10 @@ import (
 const maxTermSlugTries = 20
 
 // importTerms fills ids ("<taxonomy>:<export slug>" → term id) and categorySlugs (category
-// id → its slug here).
-func (server *Server) importTerms(ctx context.Context, terms []importer.Term, ids map[string]int64, categorySlugs map[int64]string) error {
+// id → its slug here). A term that can't be made is left out (its posts go without it) and
+// counted in skipped, so one bad term never stalls the whole import; only an error reading
+// the taxonomies is returned.
+func (server *Server) importTerms(ctx context.Context, terms []importer.Term, ids map[string]int64, categorySlugs map[int64]string) (skipped int, err error) {
 	types := map[string]db.TaxonomyType{}
 	for _, name := range []string{db.CategoryTaxonomy, "tag"} {
 		t, err := server.store.GetTaxonomyType(ctx, name)
@@ -34,7 +36,7 @@ func (server *Server) importTerms(ctx context.Context, terms []importer.Term, id
 			continue
 		}
 		if err != nil {
-			return err
+			return 0, err
 		}
 		types[name] = t
 	}
@@ -70,6 +72,7 @@ func (server *Server) importTerms(ctx context.Context, terms []importer.Term, id
 			ordered = append(ordered, t)
 		}
 	}
+	parentOf := map[int64]int64{}
 	for _, t := range ordered {
 		taxonomy, ok := types[t.Taxonomy]
 		if !ok || t.Slug == "" {
@@ -83,20 +86,32 @@ func (server *Server) importTerms(ctx context.Context, terms []importer.Term, id
 		if t.Taxonomy == db.CategoryTaxonomy {
 			if top := topOf(t); top != t.Slug {
 				if id, ok := ids[db.CategoryTaxonomy+":"+top]; ok {
+					// One level only (#331): a reused parent that is itself nested here gives
+					// its own top-level category.
+					if above, nested := parentOf[id]; nested {
+						id = above
+					}
 					parent = sql.NullInt64{Int64: id, Valid: true}
 				}
 			}
 		}
 		term, err := server.importTerm(ctx, taxonomy, t, parent)
 		if err != nil {
-			return fmt.Errorf("term %q: %w", t.Slug, err)
+			if ctx.Err() != nil {
+				return skipped, ctx.Err()
+			}
+			skipped++
+			continue
+		}
+		if term.ParentID.Valid {
+			parentOf[term.ID] = term.ParentID.Int64
 		}
 		ids[key] = term.ID
 		if t.Taxonomy == db.CategoryTaxonomy {
 			categorySlugs[term.ID] = term.Slug
 		}
 	}
-	return nil
+	return skipped, nil
 }
 
 // importTerm finds the term (same taxonomy, same slug, a suffix tried when another
@@ -135,7 +150,7 @@ func (server *Server) importTerm(ctx context.Context, taxonomy db.TaxonomyType, 
 		existing, err := server.store.GetTaxonomyTermBySlug(ctx, slug)
 		if err == nil {
 			if existing.TaxonomyTypeName == taxonomy.Name {
-				return db.TaxonomyTerm{ID: existing.ID, Slug: existing.Slug, Name: existing.Name}, nil
+				return db.TaxonomyTerm{ID: existing.ID, Slug: existing.Slug, Name: existing.Name, ParentID: existing.ParentID}, nil
 			}
 			continue // another taxonomy has it
 		}
@@ -159,7 +174,7 @@ func (server *Server) importTerm(ctx context.Context, taxonomy db.TaxonomyType, 
 		}
 		// Taken meanwhile: the same term if it's this taxonomy's, else the next suffix.
 		if existing, err := server.store.GetTaxonomyTermBySlug(ctx, slug); err == nil && existing.TaxonomyTypeName == taxonomy.Name {
-			return db.TaxonomyTerm{ID: existing.ID, Slug: existing.Slug, Name: existing.Name}, nil
+			return db.TaxonomyTerm{ID: existing.ID, Slug: existing.Slug, Name: existing.Name, ParentID: existing.ParentID}, nil
 		}
 	}
 	return db.TaxonomyTerm{}, errors.New("no free slug")

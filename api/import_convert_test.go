@@ -470,6 +470,16 @@ func TestImportConvert_Rules(t *testing.T) {
 		_, conv := convert(t, "<!-- wp:nextpage --><!--nextpage--><!-- /wp:nextpage -->", false)
 		require.Equal(t, []string{"page_breaks"}, conv.Notes)
 	})
+	t.Run("a flattened details keeps its summary, a flattened gallery its caption", func(t *testing.T) {
+		doc, _ := convert(t, `<!-- wp:cover {"url":"https://example.com/c.jpg"} --><div class="wp-block-cover"><div class="wp-block-cover__inner-container"><!-- wp:details --><details class="wp-block-details"><summary>The question</summary><!-- wp:paragraph --><p>The answer</p><!-- /wp:paragraph --></details><!-- /wp:details --></div></div><!-- /wp:cover --><!-- wp:group --><div class="wp-block-group"><!-- wp:gallery --><figure class="wp-block-gallery"><!-- wp:image --><figure class="wp-block-image"><img src="https://example.com/g.png" alt="g"/></figure><!-- /wp:image --><figcaption class="blocks-gallery-caption">Two views</figcaption></figure><!-- /wp:gallery --></div><!-- /wp:group -->`, false)
+		cover := childBlocks(doc, blocksOfType(doc, "cover")[0])
+		require.Equal(t, []string{"paragraph", "paragraph"}, []string{cover[0]["type"].(string), cover[1]["type"].(string)})
+		require.Equal(t, "The question", impAttrs(cover[0])["text"])
+		require.Contains(t, jsonOf(t, impAttrs(cover[0])["pm"]), `"bold"`)
+		group := childBlocks(doc, blocksOfType(doc, "group")[0])
+		require.Equal(t, "image", group[0]["type"])
+		require.Equal(t, "Two views", impAttrs(group[1])["text"])
+	})
 	t.Run("custom html that sanitizes to nothing is dropped", func(t *testing.T) {
 		_, conv := convert(t, "<!-- wp:html --><script>x()</script><!-- /wp:html -->", false)
 		require.Equal(t, "Custom HTML", conv.Dropped[0].Label)

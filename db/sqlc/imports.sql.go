@@ -129,6 +129,19 @@ func (q *Queries) CountImportItemsByStatus(ctx context.Context, jobID int64) ([]
 	return items, nil
 }
 
+const countImportMediaFailures = `-- name: CountImportMediaFailures :one
+SELECT COALESCE(sum(jsonb_array_length(COALESCE(result->'media_failed', '[]'::jsonb))), 0)::bigint
+FROM import_items
+WHERE job_id = $1
+`
+
+func (q *Queries) CountImportMediaFailures(ctx context.Context, jobID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countImportMediaFailures, jobID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const countImportedBefore = `-- name: CountImportedBefore :one
 SELECT count(*)::bigint FROM import_items i
 WHERE i.job_id = $1
@@ -629,6 +642,50 @@ func (q *Queries) ListImportJobs(ctx context.Context, limit int32) ([]ListImport
 			&i.StartedAt,
 			&i.FinishedAt,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listImportMediaFailures = `-- name: ListImportMediaFailures :many
+SELECT i.id AS item_id, i.title, f.value::jsonb AS failure
+FROM import_items i
+CROSS JOIN LATERAL jsonb_array_elements(COALESCE(i.result->'media_failed', '[]'::jsonb)) AS f(value)
+WHERE i.job_id = $1
+ORDER BY i.position
+LIMIT $2
+`
+
+type ListImportMediaFailuresParams struct {
+	JobID int64 `json:"job_id"`
+	Limit int32 `json:"limit"`
+}
+
+type ListImportMediaFailuresRow struct {
+	ItemID  int64           `json:"item_id"`
+	Title   string          `json:"title"`
+	Failure json.RawMessage `json:"failure"`
+}
+
+// The report's "Images that couldn't be added": every item's failed files, in order.
+func (q *Queries) ListImportMediaFailures(ctx context.Context, arg ListImportMediaFailuresParams) ([]ListImportMediaFailuresRow, error) {
+	rows, err := q.db.QueryContext(ctx, listImportMediaFailures, arg.JobID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListImportMediaFailuresRow{}
+	for rows.Next() {
+		var i ListImportMediaFailuresRow
+		if err := rows.Scan(&i.ItemID, &i.Title, &i.Failure); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

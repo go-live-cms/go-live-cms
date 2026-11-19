@@ -6,7 +6,6 @@ import {
   droppedTitle,
   droppedWhere,
   exportTypeLabel,
-  failedMedia,
   importCount,
   importNoticeBody,
   importNoticeTitle,
@@ -173,10 +172,6 @@ describe("progress and the report", () => {
     expect(droppedWhere(undefined)).toBe("at the start")
     expect(originalText([{ label: "a", original: "[form]" }, { label: "b", original: "<script>x</script>" }])).toBe("[form]\n\n<script>x</script>")
     const failure = { url: "example.com/a.jpg", code: "status", reason: "The server answered 404" }
-    expect(failedMedia([item({ result: { media_failed: [failure] } }), item({ title: "" , result: { media_failed: [failure] } })])).toEqual([
-      { ...failure, post: "Hello" },
-      { ...failure, post: "Untitled" },
-    ])
     const notice = { dropped: [{ label: "Latest posts block", original: "x", after: "Intro" }], media_failed: [failure] }
     expect(importNoticeTitle(notice)).toBe("1 block couldn’t be kept, and 1 image couldn’t be added in the import")
     expect(importNoticeTitle({ dropped: [], media_failed: [failure, failure] })).toBe("2 images couldn’t be added in the import")

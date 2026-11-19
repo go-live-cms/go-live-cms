@@ -79,6 +79,10 @@ type importJobMedia struct {
 	byURL map[string]int64
 	// dir is the current Markdown file's folder.
 	dir string
+	// renew extends the job's lease before each download (nil = none): an item with many
+	// slow files must not outlive its claim, or another replica takes the job and fetches
+	// them again.
+	renew func()
 }
 
 var resizedSuffix = regexp.MustCompile(`-\d{1,5}x\d{1,5}(\.[A-Za-z0-9]{2,5})$`)
@@ -174,6 +178,9 @@ func (m *importJobMedia) resolveSite(ref importMediaRef) (importedMediaItem, *im
 		return m.item(media, ref.Kind, alt)
 	} else if !errors.Is(err, sql.ErrNoRows) {
 		return importedMediaItem{}, failureOf(u.String(), importSaveFailed)
+	}
+	if m.renew != nil {
+		m.renew()
 	}
 	file, err := m.server.siteImporter(m.host).download(m.ctx, u, m.server.config.UploadPath, m.server.maxUploadBytes, m.server.importTooLarge())
 	if err != nil {

@@ -302,11 +302,6 @@ export function importNoticeBody(notice: { dropped: { label: string; after?: str
   ]
 }
 
-// Every image an import couldn't add, with the post it was in.
-export function failedMedia(items: ImportItem[]): (ImportMediaFailure & { post: string })[] {
-  return items.flatMap((item) => (item.result?.media_failed ?? []).map((f) => ({ ...f, post: item.title || "Untitled" })))
-}
-
 export type ReportTab = "all" | "imported" | "dropped" | "skipped" | "failed"
 
 export function reportTabs(job: Pick<ImportJob, "progress">): { id: ReportTab; label: string; count: number }[] {

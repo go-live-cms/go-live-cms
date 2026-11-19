@@ -168,3 +168,17 @@ LIMIT 1;
 -- name: DismissImportNotice :execrows
 UPDATE import_items SET notice_dismissed_at = now()
 WHERE id = $1 AND post_id = $2 AND notice_dismissed_at IS NULL;
+
+-- name: ListImportMediaFailures :many
+-- The report's "Images that couldn't be added": every item's failed files, in order.
+SELECT i.id AS item_id, i.title, f.value::jsonb AS failure
+FROM import_items i
+CROSS JOIN LATERAL jsonb_array_elements(COALESCE(i.result->'media_failed', '[]'::jsonb)) AS f(value)
+WHERE i.job_id = $1
+ORDER BY i.position
+LIMIT $2;
+
+-- name: CountImportMediaFailures :one
+SELECT COALESCE(sum(jsonb_array_length(COALESCE(result->'media_failed', '[]'::jsonb))), 0)::bigint
+FROM import_items
+WHERE job_id = $1;
