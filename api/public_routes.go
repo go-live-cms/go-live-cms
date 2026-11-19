@@ -23,6 +23,16 @@ func (server *Server) registerPublicRoutes(rg *gin.RouterGroup) {
 		posts.GET("/:id/authors", server.listPublicPostAuthors)
 		// Reader comments: approved ones only, by page or one thread (#523, discussion_public.go)
 		posts.GET("/:id/comments", server.getPublicPostComments)
+		// A reader's comment (#524, discussion_write.go). Only the web's /gl-comments
+		// endpoint calls it; limited per browser (its X-Forwarded-For), never exempt.
+		posts.POST("/:id/comments", server.rateLimits.commentPost.perIP(), server.createPublicReaderComment)
+	}
+
+	// Reader comments' confirmation (#524, discussion_write.go): emailed-token endpoints.
+	discussion := rg.Group("/discussion", server.rateLimits.commentConfirm.perIP())
+	{
+		discussion.POST("/confirm", server.confirmPublicReaderComment)
+		discussion.POST("/unconfirmed/:id", server.actOnUnconfirmedReaderComment)
 	}
 
 	// The page shown at / (#336, front_page.go); 404 = the latest posts

@@ -408,6 +408,21 @@ func (mr *MockStoreMockRecorder) ClearPublishedHTMLSnippetsExcept(arg0, arg1 int
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClearPublishedHTMLSnippetsExcept", reflect.TypeOf((*MockStore)(nil).ClearPublishedHTMLSnippetsExcept), arg0, arg1)
 }
 
+// CommenterHasApprovedReaderComment mocks base method.
+func (m *MockStore) CommenterHasApprovedReaderComment(arg0 context.Context, arg1 sql.NullInt64) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CommenterHasApprovedReaderComment", arg0, arg1)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CommenterHasApprovedReaderComment indicates an expected call of CommenterHasApprovedReaderComment.
+func (mr *MockStoreMockRecorder) CommenterHasApprovedReaderComment(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CommenterHasApprovedReaderComment", reflect.TypeOf((*MockStore)(nil).CommenterHasApprovedReaderComment), arg0, arg1)
+}
+
 // ConfirmEmailChangeTx mocks base method.
 func (m *MockStore) ConfirmEmailChangeTx(arg0 context.Context, arg1 []byte) (db.ConfirmEmailChangeTxResult, error) {
 	m.ctrl.T.Helper()
@@ -626,6 +641,21 @@ func (m *MockStore) CountPasswordResetTokensSince(arg0 context.Context, arg1 db.
 func (mr *MockStoreMockRecorder) CountPasswordResetTokensSince(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountPasswordResetTokensSince", reflect.TypeOf((*MockStore)(nil).CountPasswordResetTokensSince), arg0, arg1)
+}
+
+// CountPendingReaderCommentsForPost mocks base method.
+func (m *MockStore) CountPendingReaderCommentsForPost(arg0 context.Context, arg1 int64) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CountPendingReaderCommentsForPost", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CountPendingReaderCommentsForPost indicates an expected call of CountPendingReaderCommentsForPost.
+func (mr *MockStoreMockRecorder) CountPendingReaderCommentsForPost(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountPendingReaderCommentsForPost", reflect.TypeOf((*MockStore)(nil).CountPendingReaderCommentsForPost), arg0, arg1)
 }
 
 // CountPostsByStatus mocks base method.
@@ -851,6 +881,21 @@ func (m *MockStore) CountTotalUsers(arg0 context.Context) (int64, error) {
 func (mr *MockStoreMockRecorder) CountTotalUsers(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountTotalUsers", reflect.TypeOf((*MockStore)(nil).CountTotalUsers), arg0)
+}
+
+// CountUnconfirmedReaderComments mocks base method.
+func (m *MockStore) CountUnconfirmedReaderComments(arg0 context.Context, arg1 db.CountUnconfirmedReaderCommentsParams) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CountUnconfirmedReaderComments", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CountUnconfirmedReaderComments indicates an expected call of CountUnconfirmedReaderComments.
+func (mr *MockStoreMockRecorder) CountUnconfirmedReaderComments(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountUnconfirmedReaderComments", reflect.TypeOf((*MockStore)(nil).CountUnconfirmedReaderComments), arg0, arg1)
 }
 
 // CreateActivity mocks base method.
@@ -1256,6 +1301,21 @@ func (m *MockStore) CreateReaderComment(arg0 context.Context, arg1 db.CreateRead
 func (mr *MockStoreMockRecorder) CreateReaderComment(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateReaderComment", reflect.TypeOf((*MockStore)(nil).CreateReaderComment), arg0, arg1)
+}
+
+// CreateReaderCommentTx mocks base method.
+func (m *MockStore) CreateReaderCommentTx(arg0 context.Context, arg1 db.CreateReaderCommentTxParams) (db.ReaderComment, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateReaderCommentTx", arg0, arg1)
+	ret0, _ := ret[0].(db.ReaderComment)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateReaderCommentTx indicates an expected call of CreateReaderCommentTx.
+func (mr *MockStoreMockRecorder) CreateReaderCommentTx(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateReaderCommentTx", reflect.TypeOf((*MockStore)(nil).CreateReaderCommentTx), arg0, arg1)
 }
 
 // CreateReviewRequest mocks base method.
@@ -2160,6 +2220,21 @@ func (mr *MockStoreMockRecorder) DeleteTrashedPostTx(arg0, arg1 interface{}) *go
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTrashedPostTx", reflect.TypeOf((*MockStore)(nil).DeleteTrashedPostTx), arg0, arg1)
 }
 
+// DeleteUnconfirmedReaderComment mocks base method.
+func (m *MockStore) DeleteUnconfirmedReaderComment(arg0 context.Context, arg1 db.DeleteUnconfirmedReaderCommentParams) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteUnconfirmedReaderComment", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DeleteUnconfirmedReaderComment indicates an expected call of DeleteUnconfirmedReaderComment.
+func (mr *MockStoreMockRecorder) DeleteUnconfirmedReaderComment(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteUnconfirmedReaderComment", reflect.TypeOf((*MockStore)(nil).DeleteUnconfirmedReaderComment), arg0, arg1)
+}
+
 // DeleteUnpublishedSiteTemplate mocks base method.
 func (m *MockStore) DeleteUnpublishedSiteTemplate(arg0 context.Context, arg1 int64) (int64, error) {
 	m.ctrl.T.Helper()
@@ -2275,6 +2350,21 @@ func (m *MockStore) EnablePlugin(arg0 context.Context, arg1 db.EnablePluginParam
 func (mr *MockStoreMockRecorder) EnablePlugin(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnablePlugin", reflect.TypeOf((*MockStore)(nil).EnablePlugin), arg0, arg1)
+}
+
+// EnsureCommenter mocks base method.
+func (m *MockStore) EnsureCommenter(arg0 context.Context, arg1 db.EnsureCommenterParams) (db.Commenter, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "EnsureCommenter", arg0, arg1)
+	ret0, _ := ret[0].(db.Commenter)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// EnsureCommenter indicates an expected call of EnsureCommenter.
+func (mr *MockStoreMockRecorder) EnsureCommenter(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnsureCommenter", reflect.TypeOf((*MockStore)(nil).EnsureCommenter), arg0, arg1)
 }
 
 // EnsureDefaultCategory mocks base method.
@@ -2408,6 +2498,21 @@ func (m *MockStore) GetCommenter(arg0 context.Context, arg1 int64) (db.Commenter
 func (mr *MockStoreMockRecorder) GetCommenter(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCommenter", reflect.TypeOf((*MockStore)(nil).GetCommenter), arg0, arg1)
+}
+
+// GetCommenterByKeys mocks base method.
+func (m *MockStore) GetCommenterByKeys(arg0 context.Context, arg1 db.GetCommenterByKeysParams) (db.Commenter, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetCommenterByKeys", arg0, arg1)
+	ret0, _ := ret[0].(db.Commenter)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetCommenterByKeys indicates an expected call of GetCommenterByKeys.
+func (mr *MockStoreMockRecorder) GetCommenterByKeys(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCommenterByKeys", reflect.TypeOf((*MockStore)(nil).GetCommenterByKeys), arg0, arg1)
 }
 
 // GetCurrentReviewRequest mocks base method.
@@ -3280,6 +3385,21 @@ func (mr *MockStoreMockRecorder) GetReaderComment(arg0, arg1 interface{}) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetReaderComment", reflect.TypeOf((*MockStore)(nil).GetReaderComment), arg0, arg1)
 }
 
+// GetReaderCommentPost mocks base method.
+func (m *MockStore) GetReaderCommentPost(arg0 context.Context, arg1 int64) (db.GetReaderCommentPostRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetReaderCommentPost", arg0, arg1)
+	ret0, _ := ret[0].(db.GetReaderCommentPostRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetReaderCommentPost indicates an expected call of GetReaderCommentPost.
+func (mr *MockStoreMockRecorder) GetReaderCommentPost(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetReaderCommentPost", reflect.TypeOf((*MockStore)(nil).GetReaderCommentPost), arg0, arg1)
+}
+
 // GetRedirect mocks base method.
 func (m *MockStore) GetRedirect(arg0 context.Context, arg1 int64) (db.Redirect, error) {
 	m.ctrl.T.Helper()
@@ -3668,6 +3788,36 @@ func (m *MockStore) GetThemeSetting(arg0 context.Context, arg1 db.GetThemeSettin
 func (mr *MockStoreMockRecorder) GetThemeSetting(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetThemeSetting", reflect.TypeOf((*MockStore)(nil).GetThemeSetting), arg0, arg1)
+}
+
+// GetUnconfirmedReaderCommentByToken mocks base method.
+func (m *MockStore) GetUnconfirmedReaderCommentByToken(arg0 context.Context, arg1 db.GetUnconfirmedReaderCommentByTokenParams) (db.ReaderComment, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetUnconfirmedReaderCommentByToken", arg0, arg1)
+	ret0, _ := ret[0].(db.ReaderComment)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetUnconfirmedReaderCommentByToken indicates an expected call of GetUnconfirmedReaderCommentByToken.
+func (mr *MockStoreMockRecorder) GetUnconfirmedReaderCommentByToken(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUnconfirmedReaderCommentByToken", reflect.TypeOf((*MockStore)(nil).GetUnconfirmedReaderCommentByToken), arg0, arg1)
+}
+
+// GetUnconfirmedReaderCommentForCommenters mocks base method.
+func (m *MockStore) GetUnconfirmedReaderCommentForCommenters(arg0 context.Context, arg1 db.GetUnconfirmedReaderCommentForCommentersParams) (db.ReaderComment, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetUnconfirmedReaderCommentForCommenters", arg0, arg1)
+	ret0, _ := ret[0].(db.ReaderComment)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetUnconfirmedReaderCommentForCommenters indicates an expected call of GetUnconfirmedReaderCommentForCommenters.
+func (mr *MockStoreMockRecorder) GetUnconfirmedReaderCommentForCommenters(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUnconfirmedReaderCommentForCommenters", reflect.TypeOf((*MockStore)(nil).GetUnconfirmedReaderCommentForCommenters), arg0, arg1)
 }
 
 // GetUser mocks base method.
@@ -4085,6 +4235,21 @@ func (mr *MockStoreMockRecorder) ListCollaboratorPostIDs(arg0, arg1 interface{})
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListCollaboratorPostIDs", reflect.TypeOf((*MockStore)(nil).ListCollaboratorPostIDs), arg0, arg1)
 }
 
+// ListCommenterIDsByKeys mocks base method.
+func (m *MockStore) ListCommenterIDsByKeys(arg0 context.Context, arg1 [][]byte) ([]int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListCommenterIDsByKeys", arg0, arg1)
+	ret0, _ := ret[0].([]int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListCommenterIDsByKeys indicates an expected call of ListCommenterIDsByKeys.
+func (mr *MockStoreMockRecorder) ListCommenterIDsByKeys(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListCommenterIDsByKeys", reflect.TypeOf((*MockStore)(nil).ListCommenterIDsByKeys), arg0, arg1)
+}
+
 // ListContentLinkTargets mocks base method.
 func (m *MockStore) ListContentLinkTargets(arg0 context.Context, arg1 []int64) ([]db.ListContentLinkTargetsRow, error) {
 	m.ctrl.T.Helper()
@@ -4263,6 +4428,21 @@ func (m *MockStore) ListMediaPathsIn(arg0 context.Context, arg1 []string) ([]str
 func (mr *MockStoreMockRecorder) ListMediaPathsIn(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListMediaPathsIn", reflect.TypeOf((*MockStore)(nil).ListMediaPathsIn), arg0, arg1)
+}
+
+// ListMemberNames mocks base method.
+func (m *MockStore) ListMemberNames(arg0 context.Context) ([]db.ListMemberNamesRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListMemberNames", arg0)
+	ret0, _ := ret[0].([]db.ListMemberNamesRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListMemberNames indicates an expected call of ListMemberNames.
+func (mr *MockStoreMockRecorder) ListMemberNames(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListMemberNames", reflect.TypeOf((*MockStore)(nil).ListMemberNames), arg0)
 }
 
 // ListMembers mocks base method.
@@ -5150,6 +5330,21 @@ func (mr *MockStoreMockRecorder) ListThemes(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListThemes", reflect.TypeOf((*MockStore)(nil).ListThemes), arg0)
 }
 
+// ListUnconfirmedReaderCommentsForCommenter mocks base method.
+func (m *MockStore) ListUnconfirmedReaderCommentsForCommenter(arg0 context.Context, arg1 db.ListUnconfirmedReaderCommentsForCommenterParams) ([]db.ListUnconfirmedReaderCommentsForCommenterRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListUnconfirmedReaderCommentsForCommenter", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListUnconfirmedReaderCommentsForCommenterRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListUnconfirmedReaderCommentsForCommenter indicates an expected call of ListUnconfirmedReaderCommentsForCommenter.
+func (mr *MockStoreMockRecorder) ListUnconfirmedReaderCommentsForCommenter(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListUnconfirmedReaderCommentsForCommenter", reflect.TypeOf((*MockStore)(nil).ListUnconfirmedReaderCommentsForCommenter), arg0, arg1)
+}
+
 // ListUsers mocks base method.
 func (m *MockStore) ListUsers(arg0 context.Context, arg1 db.ListUsersParams) ([]db.User, error) {
 	m.ctrl.T.Helper()
@@ -5315,6 +5510,21 @@ func (mr *MockStoreMockRecorder) LockReaderComment(arg0, arg1 interface{}) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockReaderComment", reflect.TypeOf((*MockStore)(nil).LockReaderComment), arg0, arg1)
 }
 
+// LockReaderCommentForShare mocks base method.
+func (m *MockStore) LockReaderCommentForShare(arg0 context.Context, arg1 int64) (db.ReaderComment, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LockReaderCommentForShare", arg0, arg1)
+	ret0, _ := ret[0].(db.ReaderComment)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LockReaderCommentForShare indicates an expected call of LockReaderCommentForShare.
+func (mr *MockStoreMockRecorder) LockReaderCommentForShare(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockReaderCommentForShare", reflect.TypeOf((*MockStore)(nil).LockReaderCommentForShare), arg0, arg1)
+}
+
 // LockReaderCommentReplyStatuses mocks base method.
 func (m *MockStore) LockReaderCommentReplyStatuses(arg0 context.Context, arg1 int64) ([]string, error) {
 	m.ctrl.T.Helper()
@@ -5402,6 +5612,21 @@ func (m *MockStore) LockSiteTemplatesByTheme(arg0 context.Context, arg1 string) 
 func (mr *MockStoreMockRecorder) LockSiteTemplatesByTheme(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockSiteTemplatesByTheme", reflect.TypeOf((*MockStore)(nil).LockSiteTemplatesByTheme), arg0, arg1)
+}
+
+// LockUnconfirmedReaderComment mocks base method.
+func (m *MockStore) LockUnconfirmedReaderComment(arg0 context.Context, arg1 db.LockUnconfirmedReaderCommentParams) (db.ReaderComment, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LockUnconfirmedReaderComment", arg0, arg1)
+	ret0, _ := ret[0].(db.ReaderComment)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LockUnconfirmedReaderComment indicates an expected call of LockUnconfirmedReaderComment.
+func (mr *MockStoreMockRecorder) LockUnconfirmedReaderComment(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockUnconfirmedReaderComment", reflect.TypeOf((*MockStore)(nil).LockUnconfirmedReaderComment), arg0, arg1)
 }
 
 // LockUserForShare mocks base method.
@@ -5594,6 +5819,21 @@ func (mr *MockStoreMockRecorder) PublishPostTx(arg0, arg1 interface{}) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishPostTx", reflect.TypeOf((*MockStore)(nil).PublishPostTx), arg0, arg1)
 }
 
+// PublishReaderCommentTx mocks base method.
+func (m *MockStore) PublishReaderCommentTx(arg0 context.Context, arg1 db.PublishReaderCommentTxParams) (db.ReaderComment, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PublishReaderCommentTx", arg0, arg1)
+	ret0, _ := ret[0].(db.ReaderComment)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PublishReaderCommentTx indicates an expected call of PublishReaderCommentTx.
+func (mr *MockStoreMockRecorder) PublishReaderCommentTx(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishReaderCommentTx", reflect.TypeOf((*MockStore)(nil).PublishReaderCommentTx), arg0, arg1)
+}
+
 // PublishScheduledPostTx mocks base method.
 func (m *MockStore) PublishScheduledPostTx(arg0 context.Context, arg1 db.PublishScheduledPostTxParams) (db.PublishPostTxResult, error) {
 	m.ctrl.T.Helper()
@@ -5637,6 +5877,21 @@ func (m *MockStore) PublishSiteDesignTx(arg0 context.Context, arg1 db.PublishSit
 func (mr *MockStoreMockRecorder) PublishSiteDesignTx(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishSiteDesignTx", reflect.TypeOf((*MockStore)(nil).PublishSiteDesignTx), arg0, arg1)
+}
+
+// PublishUnconfirmedReaderComment mocks base method.
+func (m *MockStore) PublishUnconfirmedReaderComment(arg0 context.Context, arg1 db.PublishUnconfirmedReaderCommentParams) (db.ReaderComment, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PublishUnconfirmedReaderComment", arg0, arg1)
+	ret0, _ := ret[0].(db.ReaderComment)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PublishUnconfirmedReaderComment indicates an expected call of PublishUnconfirmedReaderComment.
+func (mr *MockStoreMockRecorder) PublishUnconfirmedReaderComment(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishUnconfirmedReaderComment", reflect.TypeOf((*MockStore)(nil).PublishUnconfirmedReaderComment), arg0, arg1)
 }
 
 // ReassignPostBylines mocks base method.
@@ -7573,4 +7828,19 @@ func (m *MockStore) UpsertThemeSetting(arg0 context.Context, arg1 db.UpsertTheme
 func (mr *MockStoreMockRecorder) UpsertThemeSetting(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpsertThemeSetting", reflect.TypeOf((*MockStore)(nil).UpsertThemeSetting), arg0, arg1)
+}
+
+// VerifyCommenter mocks base method.
+func (m *MockStore) VerifyCommenter(arg0 context.Context, arg1 db.VerifyCommenterParams) (db.Commenter, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VerifyCommenter", arg0, arg1)
+	ret0, _ := ret[0].(db.Commenter)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// VerifyCommenter indicates an expected call of VerifyCommenter.
+func (mr *MockStoreMockRecorder) VerifyCommenter(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VerifyCommenter", reflect.TypeOf((*MockStore)(nil).VerifyCommenter), arg0, arg1)
 }

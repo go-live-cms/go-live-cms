@@ -9,6 +9,8 @@ import (
 	"context"
 	"database/sql"
 	"time"
+
+	"github.com/lib/pq"
 )
 
 const clearOldReaderCommentNetworkHashes = `-- name: ClearOldReaderCommentNetworkHashes :execrows
@@ -28,6 +30,53 @@ func (q *Queries) ClearOldReaderCommentNetworkHashes(ctx context.Context, before
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const commenterHasApprovedReaderComment = `-- name: CommenterHasApprovedReaderComment :one
+SELECT EXISTS (
+  SELECT 1 FROM reader_comments WHERE commenter_id = $1 AND status = 'approved'
+)::boolean
+`
+
+// 4.2 first_comment: whether a moderator (or the rules) approved one of theirs before.
+func (q *Queries) CommenterHasApprovedReaderComment(ctx context.Context, commenterID sql.NullInt64) (bool, error) {
+	row := q.db.QueryRowContext(ctx, commenterHasApprovedReaderComment, commenterID)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const countPendingReaderCommentsForPost = `-- name: CountPendingReaderCommentsForPost :one
+SELECT count(*) FROM reader_comments
+WHERE post_id = $1 AND status = 'pending'
+`
+
+// 5.3's cap: comments waiting for review on one post.
+func (q *Queries) CountPendingReaderCommentsForPost(ctx context.Context, postID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countPendingReaderCommentsForPost, postID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countUnconfirmedReaderComments = `-- name: CountUnconfirmedReaderComments :one
+SELECT count(*) FROM reader_comments
+WHERE commenter_id = $1
+  AND status = 'unconfirmed'
+  AND created_at > $2::timestamptz
+`
+
+type CountUnconfirmedReaderCommentsParams struct {
+	CommenterID  sql.NullInt64 `json:"commenter_id"`
+	CreatedAfter time.Time     `json:"created_after"`
+}
+
+// 5.3's cap: unconfirmed comments of an address still waiting (not expired).
+func (q *Queries) CountUnconfirmedReaderComments(ctx context.Context, arg CountUnconfirmedReaderCommentsParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countUnconfirmedReaderComments, arg.CommenterID, arg.CreatedAfter)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
 }
 
 const createCommenterKey = `-- name: CreateCommenterKey :one
@@ -276,12 +325,104 @@ func (q *Queries) DeleteTombstoneUnsubscribeTokens(ctx context.Context) (int64, 
 	return result.RowsAffected()
 }
 
+const deleteUnconfirmedReaderComment = `-- name: DeleteUnconfirmedReaderComment :execrows
+DELETE FROM reader_comments
+WHERE id = $1
+  AND commenter_id = ANY($2::bigint[])
+  AND status = 'unconfirmed'
+`
+
+type DeleteUnconfirmedReaderCommentParams struct {
+	ID           int64   `json:"id"`
+	CommenterIds []int64 `json:"commenter_ids"`
+}
+
+// 3.3 step 5's Discard. An unconfirmed comment has no replies (a reply needs an approved
+// parent), so deleting it takes nothing else.
+func (q *Queries) DeleteUnconfirmedReaderComment(ctx context.Context, arg DeleteUnconfirmedReaderCommentParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteUnconfirmedReaderComment, arg.ID, pq.Array(arg.CommenterIds))
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const ensureCommenter = `-- name: EnsureCommenter :one
+INSERT INTO commenters (email, email_lower, display_name)
+VALUES ($1, $2, $3)
+ON CONFLICT (email_lower) DO UPDATE SET email_lower = commenters.email_lower
+RETURNING id, email, email_lower, display_name, verified_at, blocked_at, last_spam_at, user_id, created_at, last_seen_at
+`
+
+type EnsureCommenterParams struct {
+	Email       string `json:"email"`
+	EmailLower  string `json:"email_lower"`
+	DisplayName string `json:"display_name"`
+}
+
+// The commenter of a typed address, created when new. An existing row is returned as it
+// is: whoever typed the address hasn't shown they own it, so their name and spelling of
+// the address don't replace the owner's (a confirmation or a key does that).
+func (q *Queries) EnsureCommenter(ctx context.Context, arg EnsureCommenterParams) (Commenter, error) {
+	row := q.db.QueryRowContext(ctx, ensureCommenter, arg.Email, arg.EmailLower, arg.DisplayName)
+	var i Commenter
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.EmailLower,
+		&i.DisplayName,
+		&i.VerifiedAt,
+		&i.BlockedAt,
+		&i.LastSpamAt,
+		&i.UserID,
+		&i.CreatedAt,
+		&i.LastSeenAt,
+	)
+	return i, err
+}
+
 const getCommenter = `-- name: GetCommenter :one
 SELECT id, email, email_lower, display_name, verified_at, blocked_at, last_spam_at, user_id, created_at, last_seen_at FROM commenters WHERE id = $1
 `
 
 func (q *Queries) GetCommenter(ctx context.Context, id int64) (Commenter, error) {
 	row := q.db.QueryRowContext(ctx, getCommenter, id)
+	var i Commenter
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.EmailLower,
+		&i.DisplayName,
+		&i.VerifiedAt,
+		&i.BlockedAt,
+		&i.LastSpamAt,
+		&i.UserID,
+		&i.CreatedAt,
+		&i.LastSeenAt,
+	)
+	return i, err
+}
+
+const getCommenterByKeys = `-- name: GetCommenterByKeys :one
+SELECT c.id, c.email, c.email_lower, c.display_name, c.verified_at, c.blocked_at, c.last_spam_at, c.user_id, c.created_at, c.last_seen_at FROM commenter_keys k
+JOIN commenters c ON c.id = k.commenter_id
+WHERE k.key_hash = ANY($1::bytea[])
+  AND k.expires_at > now()
+  AND c.email_lower = $2
+ORDER BY k.created_at DESC
+LIMIT 1
+`
+
+type GetCommenterByKeysParams struct {
+	KeyHashes  [][]byte `json:"key_hashes"`
+	EmailLower string   `json:"email_lower"`
+}
+
+// 3.3: the commenter one of the browser's keys belongs to, when that is the typed address.
+// A key for another address, an expired one or an unknown one matches nothing, so the
+// answer never says anything about an address.
+func (q *Queries) GetCommenterByKeys(ctx context.Context, arg GetCommenterByKeysParams) (Commenter, error) {
+	row := q.db.QueryRowContext(ctx, getCommenterByKeys, pq.Array(arg.KeyHashes), arg.EmailLower)
 	var i Commenter
 	err := row.Scan(
 		&i.ID,
@@ -331,12 +472,304 @@ func (q *Queries) GetReaderComment(ctx context.Context, id int64) (ReaderComment
 	return i, err
 }
 
+const getReaderCommentPost = `-- name: GetReaderCommentPost :one
+
+SELECT p.id, p.post_type, p.slug, p.post_status, p.discussion, p.first_published_at,
+  coalesce(p.published_settings->>'title', p.title)::text AS title,
+  coalesce(golive_post_category_slug(p.id, true), '')::text AS category_slug
+FROM posts p
+WHERE p.id = $1
+`
+
+type GetReaderCommentPostRow struct {
+	ID               int64        `json:"id"`
+	PostType         string       `json:"post_type"`
+	Slug             string       `json:"slug"`
+	PostStatus       string       `json:"post_status"`
+	Discussion       string       `json:"discussion"`
+	FirstPublishedAt sql.NullTime `json:"first_published_at"`
+	Title            string       `json:"title"`
+	CategorySlug     string       `json:"category_slug"`
+}
+
+// ---------------------------------------------------------------------------------
+// The public write path (#524, api/discussion_write.go, design 3.3, 4.2, 5, 9.2).
+// What the write path reads of the post a comment is for: its state's inputs (12.4) and
+// what its link needs (the published title and category, as the public site shows them).
+func (q *Queries) GetReaderCommentPost(ctx context.Context, id int64) (GetReaderCommentPostRow, error) {
+	row := q.db.QueryRowContext(ctx, getReaderCommentPost, id)
+	var i GetReaderCommentPostRow
+	err := row.Scan(
+		&i.ID,
+		&i.PostType,
+		&i.Slug,
+		&i.PostStatus,
+		&i.Discussion,
+		&i.FirstPublishedAt,
+		&i.Title,
+		&i.CategorySlug,
+	)
+	return i, err
+}
+
+const getUnconfirmedReaderCommentByToken = `-- name: GetUnconfirmedReaderCommentByToken :one
+SELECT id, post_id, parent_id, root_id, commenter_id, author_user_id, display_name, body, status, trashed_from, held_reason, held_detail, notify_replies, network_hash, removed_at, confirm_token_hash, created_at, approved_at, moderated_by, moderated_at, edited_at FROM reader_comments
+WHERE confirm_token_hash = $1
+  AND status = 'unconfirmed'
+  AND created_at > $2::timestamptz
+`
+
+type GetUnconfirmedReaderCommentByTokenParams struct {
+	TokenHash    []byte    `json:"token_hash"`
+	CreatedAfter time.Time `json:"created_after"`
+}
+
+// 3.3: the comment a confirmation link names, while it waits (48 hours).
+func (q *Queries) GetUnconfirmedReaderCommentByToken(ctx context.Context, arg GetUnconfirmedReaderCommentByTokenParams) (ReaderComment, error) {
+	row := q.db.QueryRowContext(ctx, getUnconfirmedReaderCommentByToken, arg.TokenHash, arg.CreatedAfter)
+	var i ReaderComment
+	err := row.Scan(
+		&i.ID,
+		&i.PostID,
+		&i.ParentID,
+		&i.RootID,
+		&i.CommenterID,
+		&i.AuthorUserID,
+		&i.DisplayName,
+		&i.Body,
+		&i.Status,
+		&i.TrashedFrom,
+		&i.HeldReason,
+		&i.HeldDetail,
+		&i.NotifyReplies,
+		&i.NetworkHash,
+		&i.RemovedAt,
+		&i.ConfirmTokenHash,
+		&i.CreatedAt,
+		&i.ApprovedAt,
+		&i.ModeratedBy,
+		&i.ModeratedAt,
+		&i.EditedAt,
+	)
+	return i, err
+}
+
+const getUnconfirmedReaderCommentForCommenters = `-- name: GetUnconfirmedReaderCommentForCommenters :one
+SELECT id, post_id, parent_id, root_id, commenter_id, author_user_id, display_name, body, status, trashed_from, held_reason, held_detail, notify_replies, network_hash, removed_at, confirm_token_hash, created_at, approved_at, moderated_by, moderated_at, edited_at FROM reader_comments
+WHERE id = $1
+  AND commenter_id = ANY($2::bigint[])
+  AND status = 'unconfirmed'
+  AND created_at > $3::timestamptz
+`
+
+type GetUnconfirmedReaderCommentForCommentersParams struct {
+	ID           int64     `json:"id"`
+	CommenterIds []int64   `json:"commenter_ids"`
+	CreatedAfter time.Time `json:"created_after"`
+}
+
+// 3.3 step 5: an unconfirmed comment of one of the browser's commenters.
+func (q *Queries) GetUnconfirmedReaderCommentForCommenters(ctx context.Context, arg GetUnconfirmedReaderCommentForCommentersParams) (ReaderComment, error) {
+	row := q.db.QueryRowContext(ctx, getUnconfirmedReaderCommentForCommenters, arg.ID, pq.Array(arg.CommenterIds), arg.CreatedAfter)
+	var i ReaderComment
+	err := row.Scan(
+		&i.ID,
+		&i.PostID,
+		&i.ParentID,
+		&i.RootID,
+		&i.CommenterID,
+		&i.AuthorUserID,
+		&i.DisplayName,
+		&i.Body,
+		&i.Status,
+		&i.TrashedFrom,
+		&i.HeldReason,
+		&i.HeldDetail,
+		&i.NotifyReplies,
+		&i.NetworkHash,
+		&i.RemovedAt,
+		&i.ConfirmTokenHash,
+		&i.CreatedAt,
+		&i.ApprovedAt,
+		&i.ModeratedBy,
+		&i.ModeratedAt,
+		&i.EditedAt,
+	)
+	return i, err
+}
+
+const listCommenterIDsByKeys = `-- name: ListCommenterIDsByKeys :many
+SELECT DISTINCT k.commenter_id FROM commenter_keys k
+WHERE k.key_hash = ANY($1::bytea[])
+  AND k.expires_at > now()
+`
+
+// The commenters the browser's valid keys belong to (the confirm page's Publish and
+// Discard, 3.3 step 5).
+func (q *Queries) ListCommenterIDsByKeys(ctx context.Context, keyHashes [][]byte) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listCommenterIDsByKeys, pq.Array(keyHashes))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var commenter_id int64
+		if err := rows.Scan(&commenter_id); err != nil {
+			return nil, err
+		}
+		items = append(items, commenter_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMemberNames = `-- name: ListMemberNames :many
+SELECT username, full_name FROM users
+`
+
+type ListMemberNamesRow struct {
+	Username string `json:"username"`
+	FullName string `json:"full_name"`
+}
+
+// 3.4: a guest name equal to a member's full name or username is held.
+func (q *Queries) ListMemberNames(ctx context.Context) ([]ListMemberNamesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listMemberNames)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListMemberNamesRow{}
+	for rows.Next() {
+		var i ListMemberNamesRow
+		if err := rows.Scan(&i.Username, &i.FullName); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUnconfirmedReaderCommentsForCommenter = `-- name: ListUnconfirmedReaderCommentsForCommenter :many
+SELECT c.id, c.post_id, c.created_at,
+  left(c.body, 100)::text AS excerpt,
+  p.post_type, p.slug,
+  coalesce(p.published_settings->>'title', p.title)::text AS post_title,
+  coalesce(golive_post_category_slug(p.id, true), '')::text AS category_slug
+FROM reader_comments c
+JOIN posts p ON p.id = c.post_id
+WHERE c.commenter_id = $1
+  AND c.status = 'unconfirmed'
+  AND c.created_at > $2::timestamptz
+  AND c.id <> $3
+ORDER BY c.created_at DESC
+LIMIT 20
+`
+
+type ListUnconfirmedReaderCommentsForCommenterParams struct {
+	CommenterID  sql.NullInt64 `json:"commenter_id"`
+	CreatedAfter time.Time     `json:"created_after"`
+	ExcludeID    int64         `json:"exclude_id"`
+}
+
+type ListUnconfirmedReaderCommentsForCommenterRow struct {
+	ID           int64     `json:"id"`
+	PostID       int64     `json:"post_id"`
+	CreatedAt    time.Time `json:"created_at"`
+	Excerpt      string    `json:"excerpt"`
+	PostType     string    `json:"post_type"`
+	Slug         string    `json:"slug"`
+	PostTitle    string    `json:"post_title"`
+	CategorySlug string    `json:"category_slug"`
+}
+
+// 3.3 step 5: the address's other unconfirmed comments, for the person holding the link:
+// the post's title and link, and the first 100 characters.
+func (q *Queries) ListUnconfirmedReaderCommentsForCommenter(ctx context.Context, arg ListUnconfirmedReaderCommentsForCommenterParams) ([]ListUnconfirmedReaderCommentsForCommenterRow, error) {
+	rows, err := q.db.QueryContext(ctx, listUnconfirmedReaderCommentsForCommenter, arg.CommenterID, arg.CreatedAfter, arg.ExcludeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListUnconfirmedReaderCommentsForCommenterRow{}
+	for rows.Next() {
+		var i ListUnconfirmedReaderCommentsForCommenterRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.PostID,
+			&i.CreatedAt,
+			&i.Excerpt,
+			&i.PostType,
+			&i.Slug,
+			&i.PostTitle,
+			&i.CategorySlug,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockReaderComment = `-- name: LockReaderComment :one
 SELECT id, post_id, parent_id, root_id, commenter_id, author_user_id, display_name, body, status, trashed_from, held_reason, held_detail, notify_replies, network_hash, removed_at, confirm_token_hash, created_at, approved_at, moderated_by, moderated_at, edited_at FROM reader_comments WHERE id = $1 FOR UPDATE
 `
 
 func (q *Queries) LockReaderComment(ctx context.Context, id int64) (ReaderComment, error) {
 	row := q.db.QueryRowContext(ctx, lockReaderComment, id)
+	var i ReaderComment
+	err := row.Scan(
+		&i.ID,
+		&i.PostID,
+		&i.ParentID,
+		&i.RootID,
+		&i.CommenterID,
+		&i.AuthorUserID,
+		&i.DisplayName,
+		&i.Body,
+		&i.Status,
+		&i.TrashedFrom,
+		&i.HeldReason,
+		&i.HeldDetail,
+		&i.NotifyReplies,
+		&i.NetworkHash,
+		&i.RemovedAt,
+		&i.ConfirmTokenHash,
+		&i.CreatedAt,
+		&i.ApprovedAt,
+		&i.ModeratedBy,
+		&i.ModeratedAt,
+		&i.EditedAt,
+	)
+	return i, err
+}
+
+const lockReaderCommentForShare = `-- name: LockReaderCommentForShare :one
+SELECT id, post_id, parent_id, root_id, commenter_id, author_user_id, display_name, body, status, trashed_from, held_reason, held_detail, notify_replies, network_hash, removed_at, confirm_token_hash, created_at, approved_at, moderated_by, moderated_at, edited_at FROM reader_comments WHERE id = $1 FOR SHARE
+`
+
+// A reply's root and parent while it is inserted or published (6.4): the retention job
+// (SKIP LOCKED) and a delete (FOR UPDATE) wait instead of cascading it away.
+func (q *Queries) LockReaderCommentForShare(ctx context.Context, id int64) (ReaderComment, error) {
+	row := q.db.QueryRowContext(ctx, lockReaderCommentForShare, id)
 	var i ReaderComment
 	err := row.Scan(
 		&i.ID,
@@ -397,6 +830,101 @@ func (q *Queries) LockReaderCommentReplyStatuses(ctx context.Context, id int64) 
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockUnconfirmedReaderComment = `-- name: LockUnconfirmedReaderComment :one
+SELECT id, post_id, parent_id, root_id, commenter_id, author_user_id, display_name, body, status, trashed_from, held_reason, held_detail, notify_replies, network_hash, removed_at, confirm_token_hash, created_at, approved_at, moderated_by, moderated_at, edited_at FROM reader_comments
+WHERE id = $1 AND status = 'unconfirmed'
+  AND created_at > $2::timestamptz
+FOR UPDATE
+`
+
+type LockUnconfirmedReaderCommentParams struct {
+	ID           int64     `json:"id"`
+	CreatedAfter time.Time `json:"created_after"`
+}
+
+func (q *Queries) LockUnconfirmedReaderComment(ctx context.Context, arg LockUnconfirmedReaderCommentParams) (ReaderComment, error) {
+	row := q.db.QueryRowContext(ctx, lockUnconfirmedReaderComment, arg.ID, arg.CreatedAfter)
+	var i ReaderComment
+	err := row.Scan(
+		&i.ID,
+		&i.PostID,
+		&i.ParentID,
+		&i.RootID,
+		&i.CommenterID,
+		&i.AuthorUserID,
+		&i.DisplayName,
+		&i.Body,
+		&i.Status,
+		&i.TrashedFrom,
+		&i.HeldReason,
+		&i.HeldDetail,
+		&i.NotifyReplies,
+		&i.NetworkHash,
+		&i.RemovedAt,
+		&i.ConfirmTokenHash,
+		&i.CreatedAt,
+		&i.ApprovedAt,
+		&i.ModeratedBy,
+		&i.ModeratedAt,
+		&i.EditedAt,
+	)
+	return i, err
+}
+
+const publishUnconfirmedReaderComment = `-- name: PublishUnconfirmedReaderComment :one
+UPDATE reader_comments
+SET status = $1::text,
+    held_reason = $2,
+    held_detail = $3,
+    confirm_token_hash = NULL,
+    approved_at = CASE WHEN $1::text = 'approved' THEN now() END
+WHERE id = $4 AND status = 'unconfirmed'
+RETURNING id, post_id, parent_id, root_id, commenter_id, author_user_id, display_name, body, status, trashed_from, held_reason, held_detail, notify_replies, network_hash, removed_at, confirm_token_hash, created_at, approved_at, moderated_by, moderated_at, edited_at
+`
+
+type PublishUnconfirmedReaderCommentParams struct {
+	Status     string         `json:"status"`
+	HeldReason sql.NullString `json:"held_reason"`
+	HeldDetail sql.NullString `json:"held_detail"`
+	ID         int64          `json:"id"`
+}
+
+// An unconfirmed comment leaves unconfirmed with what the rules decided (4.2); its
+// confirm token is spent with it.
+func (q *Queries) PublishUnconfirmedReaderComment(ctx context.Context, arg PublishUnconfirmedReaderCommentParams) (ReaderComment, error) {
+	row := q.db.QueryRowContext(ctx, publishUnconfirmedReaderComment,
+		arg.Status,
+		arg.HeldReason,
+		arg.HeldDetail,
+		arg.ID,
+	)
+	var i ReaderComment
+	err := row.Scan(
+		&i.ID,
+		&i.PostID,
+		&i.ParentID,
+		&i.RootID,
+		&i.CommenterID,
+		&i.AuthorUserID,
+		&i.DisplayName,
+		&i.Body,
+		&i.Status,
+		&i.TrashedFrom,
+		&i.HeldReason,
+		&i.HeldDetail,
+		&i.NotifyReplies,
+		&i.NetworkHash,
+		&i.RemovedAt,
+		&i.ConfirmTokenHash,
+		&i.CreatedAt,
+		&i.ApprovedAt,
+		&i.ModeratedBy,
+		&i.ModeratedAt,
+		&i.EditedAt,
+	)
+	return i, err
 }
 
 const restoreReaderComment = `-- name: RestoreReaderComment :one
@@ -749,6 +1277,40 @@ type UpsertCommenterParams struct {
 // typed win, and last_seen_at moves (which keeps the maintenance job off it).
 func (q *Queries) UpsertCommenter(ctx context.Context, arg UpsertCommenterParams) (Commenter, error) {
 	row := q.db.QueryRowContext(ctx, upsertCommenter, arg.Email, arg.EmailLower, arg.DisplayName)
+	var i Commenter
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.EmailLower,
+		&i.DisplayName,
+		&i.VerifiedAt,
+		&i.BlockedAt,
+		&i.LastSpamAt,
+		&i.UserID,
+		&i.CreatedAt,
+		&i.LastSeenAt,
+	)
+	return i, err
+}
+
+const verifyCommenter = `-- name: VerifyCommenter :one
+UPDATE commenters
+SET verified_at = coalesce(verified_at, now()),
+    display_name = $1,
+    last_seen_at = now()
+WHERE id = $2
+RETURNING id, email, email_lower, display_name, verified_at, blocked_at, last_spam_at, user_id, created_at, last_seen_at
+`
+
+type VerifyCommenterParams struct {
+	DisplayName string `json:"display_name"`
+	ID          int64  `json:"id"`
+}
+
+// A confirmation or a key proved the address (3.3): verified, the name used now becomes
+// the commenter's, and last_seen_at moves.
+func (q *Queries) VerifyCommenter(ctx context.Context, arg VerifyCommenterParams) (Commenter, error) {
+	row := q.db.QueryRowContext(ctx, verifyCommenter, arg.DisplayName, arg.ID)
 	var i Commenter
 	err := row.Scan(
 		&i.ID,

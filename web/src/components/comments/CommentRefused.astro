@@ -1,0 +1,82 @@
+---
+/**
+ * "Your comment wasn't posted" (#524, docs/design/reader-comments.md 9.4): the page the
+ * comment endpoint answers a browser without scripts when the API refuses a comment
+ * (422, 429, or 503 when it couldn't answer). Nothing is kept on the server, so the typed
+ * text is shown back, read-only, to copy, with Back to the post.
+ *
+ * Core markup, in the active theme's stylesheets and tokens (as ErrorLayout.astro loads
+ * them), noindex. The default theme's reader-page styles are #525's (the "themed page for
+ * a comment refused without scripts" board).
+ */
+import SeoHead from '@/components/SeoHead.astro'
+import { getSiteSettings } from '@/lib/siteSettings'
+
+interface Props {
+  reason: string
+  // What the reader typed, shown back to copy (rendered as text, never markup).
+  text: string
+  // Where Back to the post goes: a path on this site.
+  back: string
+}
+
+const { reason, text, back } = Astro.props
+const site = await getSiteSettings(Astro.locals)
+const themeAssets = Astro.locals.themeAssets || {}
+const legacyCssPath = Astro.locals.themeCssPath
+const title = "Your comment wasn't posted"
+---
+
+<!doctype html>
+<html lang={site.language}>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <SeoHead title={`${title} | ${site.title}`} description={reason} siteName={site.title} noindex />
+    {themeAssets.styles?.map((style: any) => <link rel="stylesheet" href={style.src} media={style.media || 'all'} />)}
+    {!themeAssets.styles?.length && legacyCssPath && <link rel="stylesheet" href={legacyCssPath} />}
+  </head>
+  <body>
+    <main class="comment-refused" aria-labelledby="comment-refused-title">
+      <h1 id="comment-refused-title">{title}</h1>
+      <p class="comment-refused-reason" role="alert">{reason}</p>
+      {text && (
+        <div class="comment-refused-text">
+          <label for="comment-refused-copy">Your comment, to copy</label>
+          <textarea id="comment-refused-copy" readonly rows="8">{text}</textarea>
+        </div>
+      )}
+      <p><a class="comment-refused-back" href={back}>Back to the post</a></p>
+    </main>
+  </body>
+</html>
+
+<style>
+  .comment-refused {
+    margin: 0 auto;
+    max-width: 40rem;
+    padding: 3rem var(--gutter, 1rem);
+    color: var(--text-primary, #202222);
+    font-family: var(--font-sans, sans-serif);
+  }
+  .comment-refused h1 {
+    font-family: var(--font-heading, var(--font-sans, sans-serif));
+    font-size: 1.75rem;
+    margin: 0 0 1rem;
+  }
+  .comment-refused-reason {
+    color: var(--color-danger, #b42318);
+    margin: 0 0 1.5rem;
+  }
+  .comment-refused-text label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+  }
+  .comment-refused-text textarea {
+    box-sizing: border-box;
+    font: inherit;
+    padding: 0.75rem;
+    width: 100%;
+  }
+</style>

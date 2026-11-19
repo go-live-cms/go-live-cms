@@ -5,7 +5,10 @@ import { describe, expect, it } from "vitest"
 import {
   discussionSetting,
   discussionState,
+  matchDiscussionWord,
+  matchesMemberName,
   normalizeReaderCommentBody,
+  readerCommentLinks,
   normalizeReaderCommentName,
   READER_COMMENT_LIMITS,
   readerCommentLength,
@@ -95,5 +98,33 @@ describe("discussionTextVectors.json", () => {
   it("counts code points, as the API does", () => {
     expect(readerCommentLength("😀😀")).toBe(2)
     expect("😀😀".length).toBe(4)
+  })
+})
+
+interface RulesVectors {
+  words: { name: string; words: string[]; text: string; match: string | null }[]
+  links: { name: string; text: string; links: string[] }[]
+  member_names: { name: string; guest: string; members: { username: string; full_name: string }[]; match: boolean }[]
+}
+
+const rulesVectors = readVectors<RulesVectors>("discussionRulesVectors.json")
+
+describe("discussionRulesVectors.json (#524)", () => {
+  it("has cases", () => {
+    expect(rulesVectors.words.length).toBeGreaterThan(10)
+    expect(rulesVectors.links.length).toBeGreaterThan(10)
+    expect(rulesVectors.member_names.length).toBeGreaterThan(3)
+  })
+
+  it.each(rulesVectors.words.map((c) => [c.name, c] as const))("words: %s", (_name, c) => {
+    expect(matchDiscussionWord(c.text, c.words)).toBe(c.match)
+  })
+
+  it.each(rulesVectors.links.map((c) => [c.name, c] as const))("links: %s", (_name, c) => {
+    expect(readerCommentLinks(c.text)).toEqual(c.links)
+  })
+
+  it.each(rulesVectors.member_names.map((c) => [c.name, c] as const))("member names: %s", (_name, c) => {
+    expect(matchesMemberName(c.guest, c.members)).toBe(c.match)
   })
 })

@@ -247,3 +247,138 @@ WHERE c.id IN (
     AND NOT EXISTS (SELECT 1 FROM commenter_keys k WHERE k.commenter_id = x.id)
   FOR UPDATE OF x SKIP LOCKED
 );
+
+-- ---------------------------------------------------------------------------------
+-- The public write path (#524, api/discussion_write.go, design 3.3, 4.2, 5, 9.2).
+
+-- name: GetReaderCommentPost :one
+-- What the write path reads of the post a comment is for: its state's inputs (12.4) and
+-- what its link needs (the published title and category, as the public site shows them).
+SELECT p.id, p.post_type, p.slug, p.post_status, p.discussion, p.first_published_at,
+  coalesce(p.published_settings->>'title', p.title)::text AS title,
+  coalesce(golive_post_category_slug(p.id, true), '')::text AS category_slug
+FROM posts p
+WHERE p.id = $1;
+
+-- name: GetCommenterByKeys :one
+-- 3.3: the commenter one of the browser's keys belongs to, when that is the typed address.
+-- A key for another address, an expired one or an unknown one matches nothing, so the
+-- answer never says anything about an address.
+SELECT c.* FROM commenter_keys k
+JOIN commenters c ON c.id = k.commenter_id
+WHERE k.key_hash = ANY(sqlc.arg('key_hashes')::bytea[])
+  AND k.expires_at > now()
+  AND c.email_lower = sqlc.arg('email_lower')
+ORDER BY k.created_at DESC
+LIMIT 1;
+
+-- name: ListCommenterIDsByKeys :many
+-- The commenters the browser's valid keys belong to (the confirm page's Publish and
+-- Discard, 3.3 step 5).
+SELECT DISTINCT k.commenter_id FROM commenter_keys k
+WHERE k.key_hash = ANY(sqlc.arg('key_hashes')::bytea[])
+  AND k.expires_at > now();
+
+-- name: EnsureCommenter :one
+-- The commenter of a typed address, created when new. An existing row is returned as it
+-- is: whoever typed the address hasn't shown they own it, so their name and spelling of
+-- the address don't replace the owner's (a confirmation or a key does that).
+INSERT INTO commenters (email, email_lower, display_name)
+VALUES (sqlc.arg('email'), sqlc.arg('email_lower'), sqlc.arg('display_name'))
+ON CONFLICT (email_lower) DO UPDATE SET email_lower = commenters.email_lower
+RETURNING *;
+
+-- name: VerifyCommenter :one
+-- A confirmation or a key proved the address (3.3): verified, the name used now becomes
+-- the commenter's, and last_seen_at moves.
+UPDATE commenters
+SET verified_at = coalesce(verified_at, now()),
+    display_name = sqlc.arg('display_name'),
+    last_seen_at = now()
+WHERE id = sqlc.arg('id')
+RETURNING *;
+
+-- name: CountUnconfirmedReaderComments :one
+-- 5.3's cap: unconfirmed comments of an address still waiting (not expired).
+SELECT count(*) FROM reader_comments
+WHERE commenter_id = sqlc.arg('commenter_id')
+  AND status = 'unconfirmed'
+  AND created_at > sqlc.arg('created_after')::timestamptz;
+
+-- name: CountPendingReaderCommentsForPost :one
+-- 5.3's cap: comments waiting for review on one post.
+SELECT count(*) FROM reader_comments
+WHERE post_id = $1 AND status = 'pending';
+
+-- name: CommenterHasApprovedReaderComment :one
+-- 4.2 first_comment: whether a moderator (or the rules) approved one of theirs before.
+SELECT EXISTS (
+  SELECT 1 FROM reader_comments WHERE commenter_id = $1 AND status = 'approved'
+)::boolean;
+
+-- name: ListMemberNames :many
+-- 3.4: a guest name equal to a member's full name or username is held.
+SELECT username, full_name FROM users;
+
+-- name: GetUnconfirmedReaderCommentByToken :one
+-- 3.3: the comment a confirmation link names, while it waits (48 hours).
+SELECT * FROM reader_comments
+WHERE confirm_token_hash = sqlc.arg('token_hash')
+  AND status = 'unconfirmed'
+  AND created_at > sqlc.arg('created_after')::timestamptz;
+
+-- name: GetUnconfirmedReaderCommentForCommenters :one
+-- 3.3 step 5: an unconfirmed comment of one of the browser's commenters.
+SELECT * FROM reader_comments
+WHERE id = sqlc.arg('id')
+  AND commenter_id = ANY(sqlc.arg('commenter_ids')::bigint[])
+  AND status = 'unconfirmed'
+  AND created_at > sqlc.arg('created_after')::timestamptz;
+
+-- name: LockReaderCommentForShare :one
+-- A reply's root and parent while it is inserted or published (6.4): the retention job
+-- (SKIP LOCKED) and a delete (FOR UPDATE) wait instead of cascading it away.
+SELECT * FROM reader_comments WHERE id = $1 FOR SHARE;
+
+-- name: LockUnconfirmedReaderComment :one
+SELECT * FROM reader_comments
+WHERE id = sqlc.arg('id') AND status = 'unconfirmed'
+  AND created_at > sqlc.arg('created_after')::timestamptz
+FOR UPDATE;
+
+-- name: PublishUnconfirmedReaderComment :one
+-- An unconfirmed comment leaves unconfirmed with what the rules decided (4.2); its
+-- confirm token is spent with it.
+UPDATE reader_comments
+SET status = sqlc.arg('status')::text,
+    held_reason = sqlc.narg('held_reason'),
+    held_detail = sqlc.narg('held_detail'),
+    confirm_token_hash = NULL,
+    approved_at = CASE WHEN sqlc.arg('status')::text = 'approved' THEN now() END
+WHERE id = sqlc.arg('id') AND status = 'unconfirmed'
+RETURNING *;
+
+-- name: ListUnconfirmedReaderCommentsForCommenter :many
+-- 3.3 step 5: the address's other unconfirmed comments, for the person holding the link:
+-- the post's title and link, and the first 100 characters.
+SELECT c.id, c.post_id, c.created_at,
+  left(c.body, 100)::text AS excerpt,
+  p.post_type, p.slug,
+  coalesce(p.published_settings->>'title', p.title)::text AS post_title,
+  coalesce(golive_post_category_slug(p.id, true), '')::text AS category_slug
+FROM reader_comments c
+JOIN posts p ON p.id = c.post_id
+WHERE c.commenter_id = sqlc.arg('commenter_id')
+  AND c.status = 'unconfirmed'
+  AND c.created_at > sqlc.arg('created_after')::timestamptz
+  AND c.id <> sqlc.arg('exclude_id')
+ORDER BY c.created_at DESC
+LIMIT 20;
+
+-- name: DeleteUnconfirmedReaderComment :execrows
+-- 3.3 step 5's Discard. An unconfirmed comment has no replies (a reply needs an approved
+-- parent), so deleting it takes nothing else.
+DELETE FROM reader_comments
+WHERE id = sqlc.arg('id')
+  AND commenter_id = ANY(sqlc.arg('commenter_ids')::bigint[])
+  AND status = 'unconfirmed';

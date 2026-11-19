@@ -37,6 +37,21 @@ export function isCaptionsPath(pathname: string): boolean {
   return pathname.startsWith("/uploads/") && pathname.toLowerCase().endsWith(".vtt")
 }
 
+/**
+ * Appends the browser's address (Astro's clientAddress: the peer, Caddy in production) to
+ * the X-Forwarded-For the request came with (Caddy's, holding the browser's address), as
+ * the dev proxy's xfwd does. The API reads X-Forwarded-For only from TRUSTED_PROXIES
+ * (the web container and Caddy), so its rate limits key on the browser, not this server.
+ */
+export function appendForwardedFor(headers: Headers, incoming: Headers, clientAddress: string | undefined): void {
+  const prior = incoming.get("x-forwarded-for")
+  if (clientAddress) {
+    headers.set("x-forwarded-for", prior ? `${prior}, ${clientAddress}` : clientAddress)
+  } else if (prior) {
+    headers.set("x-forwarded-for", prior)
+  }
+}
+
 export function isApiProxyPath(pathname: string): boolean {
   return pathname === "/api/v1" || pathname.startsWith("/api/v1/") || pathname.startsWith("/uploads/")
 }
@@ -56,10 +71,7 @@ export async function proxyToApi(
   for (const name of HOP_BY_HOP_REQUEST) headers.delete(name)
   // Same as the dev proxy's xfwd: append the peer, so the API (which only reads
   // X-Forwarded-For from TRUSTED_PROXIES) rate-limits the browser, not this server.
-  if (clientAddress) {
-    const prior = headers.get("x-forwarded-for")
-    headers.set("x-forwarded-for", prior ? `${prior}, ${clientAddress}` : clientAddress)
-  }
+  appendForwardedFor(headers, request.headers, clientAddress)
   // The id this request logs under (Caddy's, or the one the middleware made up when it
   // was missing or malformed), so the API's lines match the web's.
   for (const [name, value] of Object.entries(requestIdHeaders())) headers.set(name, value)

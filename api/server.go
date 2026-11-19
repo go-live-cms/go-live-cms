@@ -60,6 +60,10 @@ type Server struct {
 	// password flow). A field so tests can run it synchronously.
 	runInBackground func(requestID, route string, f func())
 
+	// readerCommentGuard is the comment guard's hook point (discussion_guard.go): nil
+	// until the plugins' comment.before_create guards are built (#530).
+	readerCommentGuard readerCommentGuardFunc
+
 	// Observability (observability.go, metrics.go, health.go).
 	logger        *slog.Logger
 	metrics       *httpMetrics

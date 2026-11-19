@@ -121,4 +121,8 @@ func (server *Server) purgeDiscussion(ctx context.Context, log *slog.Logger, pos
 // pending comments included) nor in publicCacheNoPurgeRoutes
 // (TestMutatingRoutesDeclarePublicCachePurge). /public has no purge middleware at all, so
 // a /public write must be here or in publicCacheNoPurgeRoutes.
-var publicCacheDiscussionRoutes = map[string]string{}
+var publicCacheDiscussionRoutes = map[string]string{
+	"POST /public/posts/:id/comments":         "only a keyed comment the rules publish; an unconfirmed or held one changes nothing public (#524)",
+	"POST /public/discussion/confirm":         "only when the confirmed comment is published, not held (#524)",
+	"POST /public/discussion/unconfirmed/:id": "only a Publish the rules approve; a discard or a hold changes nothing public (#524)",
+}

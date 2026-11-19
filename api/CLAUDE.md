@@ -1310,7 +1310,7 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
 ## Reader comments: storage, settings, the state rule, retention (#522, `000061`, `discussion*.go`)
 
 - Design: `docs/design/reader-comments.md` (#499; decisions in its section 18). `/public` reads
-  them since C3 (#523, below); nothing writes them there yet (C4 #524), and
+  them since C3 (#523, below) and writes them since C4 (#524, below), and
   `settings.comments_enabled` starts off with its switch hidden until #526/#527. Never #192's
   names: `reader_comment*`, `commenter*`, `discussion*`.
 - **Tables (6.1):** `commenters` (one per address, `email_lower` UNIQUE; never public, never
@@ -1403,6 +1403,73 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   a public thread and doesn't purge. Tests: `discussion_public_db_test.go`,
   `discussion_purge_db_test.go` (miniredis + DB: each event, pending-only doesn't purge, after
   commit via `purgeWatch`), `discussion_public_test.go`, `discussion_purge_test.go`.
+
+## Reader comments: the public write path (#524, `discussion_write.go`, `discussion_rules.go`)
+
+- **The API's first anonymous writes outside `/auth`**, under `/public` (server-side only: the
+  web's `/gl-comments/*` endpoints call them, web/CLAUDE.md): `POST /public/posts/:id/comments`,
+  `POST /public/discussion/confirm {token}`, `POST /public/discussion/unconfirmed/:id {action:
+  publish|discard}` (the confirm page's step 5). All answer 409 `comments_off` while
+  `comments_enabled` is off. Every anonymous write is listed with its reason in
+  `route_auth_test.go`'s **`publicPOSTRoutes`** (`TestAnonymousWritesAreListed` walks the router:
+  a write that doesn't answer 401 anonymously must be there; every `/public` write must be).
+  Bodies are capped at 24 KiB (`discussionBodyLimit` in `bodyLimitOverrides`: 4000 emoji are
+  16,000 bytes, so the design's 16 KiB was too tight).
+- **No address enumeration (as open signup):** without a valid browser key for the typed address
+  the answer is always 202 `{outcome: confirm_email, post_url}`. Before it, only the post is read
+  (settings, `GetReaderCommentPost`, the type, the parent, `CountPendingReaderCommentsForPost`) and,
+  when `GoLive-Commenter-Key` is sent, `GetCommenterByKeys` (keys **and** address: a key for another
+  address, expired or unknown, finds nothing, so it's no key). Everything that touches the address
+  runs after the response (`processUnconfirmedReaderComment` in `runInBackground`): `EnsureCommenter`
+  (never renames an existing row: typing an address proves nothing), the 20-unconfirmed cap (silent
+  drop), the guard, the spam routes (stored as spam, **no mail**), the store, the 10-minute mail
+  cooldown (`commentMail`, `newIntervalLimiter`, taken only after the store succeeds; a comment in
+  it keeps a token nobody is mailed) and the mail, to the address as typed. The post's 200-pending
+  cap is checked only for a comment that would wait (no key, or a keyed one the rules hold). `TestReaderCommentNoAddressEnumeration` compares unknown, known, verified, cooled-down,
+  blocked, over-cap and other-key cases, the pre-response calls included.
+- **The mail** (`reader_comment_confirm` template, `mailer.ReaderCommentConfirm`) has no field for
+  the name or text: site title, the post's published title and URL, the link
+  `PUBLIC_BASE_URL/comments/confirm#token=…` (48 h). Only the token's SHA-256 is stored
+  (`confirm_token_hash`).
+- **Confirm** spends the token only by POST (`PublishReaderCommentTx`: thread FOR SHARE, then the
+  row FOR UPDATE, token re-checked; every bad link 400 `invalid_token`; a parent gone 404
+  `parent_not_found` and nothing is spent), publishes or holds **that comment alone**, verifies the
+  commenter (name from the comment), stores a new browser key (`set_key`, its hash in
+  `commenter_keys`, a year) and lists the address's other unconfirmed comments (`others`: post
+  title, URL, first 100 characters), which only the key can then publish or discard one by one.
+- **Keyed comments** (`createKeyedReaderComment`) decide at once: 201 `published` (purges) or 202
+  `pending` (also spam, silently). `CreateReaderCommentTx` re-checks a reply's parent under a share
+  lock (`ErrReaderCommentParentGone`). A reply goes only under an approved, shown comment of the
+  same post; `root_id` is the parent's root.
+- **Rules** (`decideReaderComment`, design 4.2): spam first (blocked commenter → `blocked`,
+  honeypot `website` → `honeypot`, a spam word in text or name → `spam_word` + the word, a guard →
+  `plugin`), then holds (`plugin`, `member_name`, `held_word`, `links` over `comments_max_links`,
+  `previous_spam` within 90 days, `moderation_all`, `first_comment`), else approved. The rules
+  never set `last_spam_at` (a moderator's Spam does, #526). Words: folded (NFD, marks dropped,
+  lower case), word boundaries by letter/number runes; links: http(s) only, trailing punctuation
+  trimmed. Both pinned by `web/src/lib/discussionRulesVectors.json` (twins in
+  `web/src/lib/discussion.ts`). Member names: `ListMemberNames`, folded and spaces collapsed.
+- **The guard's hook** (`discussion_guard.go`): `server.readerCommentGuard`, nil until #530. Called
+  after core's checks, before the insert, with the candidate (email, IP, UA included); hold or spam
+  only (an approve is ignored); a hold on an unconfirmed comment is stored (`held_reason plugin`)
+  and applied at confirmation without asking again.
+- **Limits** (`ratelimit.go`): `commentPost` per IP (`RATE_LIMIT_COMMENT_POST_PER_MINUTE`, 5,
+  middleware, no exempt CIDR), `commentAddress` per IP + address
+  (`RATE_LIMIT_COMMENT_ADDRESS_PER_MINUTE`, 3), `commentMail` (silent, 10 minutes, on when
+  `commentPost` is), `commentConfirm` on the two confirmation routes (the account-token limit).
+  The IP is the browser's: the web endpoint appends its peer to Caddy's X-Forwarded-For, read
+  from `TRUSTED_PROXIES` only (`TestReaderCommentRateLimitsKeyOnTheBrowser`). 200 pending on a post
+  → 429 `comments_busy`.
+- **Purges:** through #523's `purgeDiscussion` (`discussion_purge.go`), after the commit: a keyed
+  POST with `discussionStatusEvent("", status)`, a confirmation or Publish with
+  `discussionStatusEvent(unconfirmed, status)`, so only a comment that became approved purges.
+  The three routes are in `publicCacheDiscussionRoutes` and `publicReaderCommentRoutes`.
+- Logs: ids, status and held reason only (`requireNoPersonalData` checks address, name, text,
+  token and key in the tests).
+- Tests: `discussion_write_test.go` (mock), `discussion_rules_test.go` (vectors, one case per hold
+  reason and spam route), `discussion_write_db_test.go` (real DB: the flow to the key, a link
+  confirming only its own, single use, expiry, keys for another address, step 5, the Tx
+  re-checks, no address in any answer).
 
 ## Per-block "Last edited by" (#328, `000049`, `post_block_edits.go`)
 

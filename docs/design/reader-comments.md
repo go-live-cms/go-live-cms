@@ -322,7 +322,7 @@ these hold a comment as `pending`, each with a reason the queue shows:
 | `plugin` | a guard answered hold (14.2), with its reason |
 
 And these send it to `spam`: a word from `comments_spam_words`, the honeypot (5.2), a guard
-answering spam. A spam word beats a hold word.
+answering spam, a blocked commenter (5.5, route `blocked`). A spam word beats a hold word.
 
 Word lists are one entry per line, at most 500 entries of at most 64 characters, matched
 case-insensitively on word boundaries after accents are dropped (one rule in Go, vectors for
@@ -1251,6 +1251,33 @@ drawn; C5 to C10 and #500 build them as drawn.
   the reason ("Already in this template", "Only in single and page templates").
 
 ---
+
+### 16.2 What C4 settled (#524)
+
+Built as designed, with these details the text left open:
+
+- **Spam routes** are `spam_word`, `honeypot`, `plugin`, `moderator` and **`blocked`** (5.5: a
+  blocked commenter's comment, silently). The rules never set `last_spam_at`: only a moderator's
+  Spam does (#526), so a false-positive spam word doesn't hold a commenter for 90 days.
+- **Holds are decided when a comment is published**, at confirmation or with a key, so the
+  settings and the commenter's state then apply. Spam routes are applied at once: an unconfirmed
+  comment that is spam is stored as spam and **mails nothing**, so a bot can't use the form to
+  mail anyone. A guard's hold is stored with the unconfirmed comment (`held_reason = plugin`).
+- **Typing an address proves nothing:** an existing commenter isn't renamed by an unconfirmed
+  comment; a confirmation or a key makes the name used the commenter's.
+- **Step 5's route** is `POST /public/discussion/unconfirmed/:id {action: publish|discard}`,
+  authorized by the browser key the confirmation set (the cookie reaches `/gl-comments/*`), and
+  the confirm answer lists `others` (id, post title and URL, the first 100 characters).
+- **The comment answers carry `post_url`** (address-independent), where the no-script redirect
+  goes when the form has no `return_to`.
+- **Body limit 24 KiB**, not 16: 4000 characters of emoji are 16,000 bytes of UTF-8.
+- **The form's field names** are `comment`, `name`, `email`, `notify_replies`, `website` (the
+  honeypot), `parent_id` and `return_to` (`web/src/lib/commentWrites.ts`).
+- **The refusal page** is core markup in the theme's stylesheets (`CommentRefused.astro`); the
+  default theme's styles for it are C5's. A confirmation refused without scripts goes to
+  `/comments/confirm?error=<code>`.
+- The three writes are in C3's `publicCacheDiscussionRoutes`: their handlers purge through
+  `purgeDiscussion`, only when a comment was published.
 
 ## 17. Phased plan
 

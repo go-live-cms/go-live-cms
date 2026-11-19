@@ -196,6 +196,13 @@ type Config struct {
 	// RateLimitAccessRequestPerMinute applies to POST /posts/:id/access-requests
 	// (#321) per member and client IP: each request emails the post's reviewers.
 	RateLimitAccessRequestPerMinute int `mapstructure:"RATE_LIMIT_ACCESS_REQUEST_PER_MINUTE"`
+	// RateLimitCommentPostPerMinute applies to POST /public/posts/:id/comments (#524)
+	// per client IP (the browser's, through the web endpoint's X-Forwarded-For). Above 0 it
+	// also turns on the silent one-confirmation-mail-per-10-minutes cooldown per address.
+	RateLimitCommentPostPerMinute int `mapstructure:"RATE_LIMIT_COMMENT_POST_PER_MINUTE"`
+	// RateLimitCommentAddressPerMinute applies to the same route per client IP and typed
+	// address (never the address alone, which would let anyone lock its owner out).
+	RateLimitCommentAddressPerMinute int `mapstructure:"RATE_LIMIT_COMMENT_ADDRESS_PER_MINUTE"`
 	// RateLimitMediaImportPerMinute applies to POST /media/import (#29) per member
 	// and client IP: each request downloads up to 10 files on the member's behalf.
 	RateLimitMediaImportPerMinute int `mapstructure:"RATE_LIMIT_MEDIA_IMPORT_PER_MINUTE"`
@@ -363,6 +370,8 @@ func LoadConfig(path string) (config Config, err error) {
 	viper.SetDefault("RATE_LIMIT_PASSWORD_FORGOT_PER_MINUTE", 5)
 	viper.SetDefault("RATE_LIMIT_ACCOUNT_TOKEN_PER_MINUTE", 10)
 	viper.SetDefault("RATE_LIMIT_ACCESS_REQUEST_PER_MINUTE", 3)
+	viper.SetDefault("RATE_LIMIT_COMMENT_POST_PER_MINUTE", 5)
+	viper.SetDefault("RATE_LIMIT_COMMENT_ADDRESS_PER_MINUTE", 3)
 	viper.SetDefault("RATE_LIMIT_MEDIA_IMPORT_PER_MINUTE", 6)
 	viper.SetDefault("RATE_LIMIT_EXEMPT_CIDRS", "")
 
@@ -505,6 +514,8 @@ func LoadConfig(path string) (config Config, err error) {
 		"RATE_LIMIT_PASSWORD_FORGOT_PER_MINUTE": config.RateLimitPasswordForgotPerMinute,
 		"RATE_LIMIT_ACCOUNT_TOKEN_PER_MINUTE":   config.RateLimitAccountTokenPerMinute,
 		"RATE_LIMIT_ACCESS_REQUEST_PER_MINUTE":  config.RateLimitAccessRequestPerMinute,
+		"RATE_LIMIT_COMMENT_POST_PER_MINUTE":    config.RateLimitCommentPostPerMinute,
+		"RATE_LIMIT_COMMENT_ADDRESS_PER_MINUTE": config.RateLimitCommentAddressPerMinute,
 		"RATE_LIMIT_MEDIA_IMPORT_PER_MINUTE":    config.RateLimitMediaImportPerMinute,
 	} {
 		if v < 0 {
