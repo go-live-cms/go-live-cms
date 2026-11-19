@@ -190,6 +190,7 @@ func TestGetPublicFrontPage(t *testing.T) {
 		store := mockdb.NewMockStore(gomock.NewController(t))
 		store.EXPECT().GetPublicFrontPage(gomock.Any()).Times(1).Return(page, nil)
 		store.EXPECT().GetPublishedPostTaxonomyTerms(gomock.Any(), page.ID).Return(nil, nil)
+		expectDiscussionOff(store)
 		recorder := serveSettingsGET(t, newTestServer(t, store), "/public/front-page")
 		require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 		var view publicPostView
@@ -219,6 +220,7 @@ func TestGetPublicFrontPage(t *testing.T) {
 		store := mockdb.NewMockStore(gomock.NewController(t))
 		store.EXPECT().GetPublicFrontPage(gomock.Any()).Return(page, nil)
 		store.EXPECT().GetPublishedPostTaxonomyTerms(gomock.Any(), page.ID).Return(nil, fmt.Errorf("db down"))
+		expectDiscussionOff(store)
 		require.Equal(t, http.StatusInternalServerError, serveSettingsGET(t, newTestServer(t, store), "/public/front-page").Code)
 	})
 }

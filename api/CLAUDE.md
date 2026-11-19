@@ -131,6 +131,25 @@ the collab server.
   `sanitizeFileAttrs`, allowlists). Ids the lookup didn't find are listed in **`media_missing`**
   (sorted): the media was deleted, and the renderer leaves those blocks out, the image's too. A
   failed lookup adds neither key, so an image still renders from its `src`.
+- **Add from URL (#29, `media_import.go`):** `POST /media/import {urls}` (any content role,
+  1-10 links of ≤ 2048 characters) downloads each file and stores it **like an upload**
+  (copy only, never a hotlink): `saveUploadedFile` names, `prepareStoredImage`, no alt,
+  description "Imported from <host>". It is the API's third outbound request on a user's behalf
+  (with embeds and plugin webhooks), so treat it as SSRF surface: it dials through
+  `outbound_http.go` (every connection, each redirect's too, refused unless public after DNS),
+  http(s) only, no userinfo, ≤ 5 redirects (`checkImportRedirect`), 5s connect / 15s headers /
+  60s per link, 64 KB headers, no proxy or cookies, a `Content-Length` over `MAX_UPLOAD_SIZE`
+  refused and the body cut off one byte past it (nothing left behind). **The type is sniffed:**
+  an allowed extension on the name (Content-Disposition, else the final URL's path) must match
+  the content as for uploads; any other name gets the extension its bytes identify
+  (`sniffedImportExtension`; plain text, DOCX and MKV need theirs). 200 `{results: [{url,
+  status: added|failed, media | code+error}], meta}`, one per link in order (a repeated link
+  shares one fetch); every failure is a fixed `importFailure` (code + message, never the URL or
+  Go's error text, which holds it). Rate limit `RATE_LIMIT_MEDIA_IMPORT_PER_MINUTE` (6, per
+  member+IP). Activity: `imported` per file, payload `{mime_type, host}` only. Tests reach a
+  local `httptest` server through `newMediaImporter(allowAddress)`, a test-only allowance for
+  that one address and port (`outboundTransportOptions.allowAddress`, never from config); every
+  other address, a second local server included, gets the real policy.
 - **Missing alt text (#325, `000026`):** alt is optional on upload (no file-name fallback;
   bulk uploads store `""`), `PUT /media/:id` `alt: ""` clears it (absent keeps; name and
   description still treat `""` as keep), and `media.decorative` marks an image whose empty
@@ -697,7 +716,7 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   checked against its provider's pattern, a title is plain text (`normalizeEmbedTitle`: one holding
   a tag is dropped, `a < b` isn't). `embedVectors.json` (web) is shared with `embeds_test.go`.
 - **`POST /embeds/resolve {url}` (`requireContentEditor`) is an outbound request made on a user's
-  behalf (plugin webhooks, #460, are the other; both dial through `outbound_http.go`), so treat
+  behalf (plugin webhooks, #460, and media import, #29, are the others; all dial through `outbound_http.go`), so treat
   every line of it as SSRF surface.** The pasted URL only ever yields a
   ref; what is fetched is `embedProviderTable[id].oEmbed`, a literal per provider, asked about the
   URL rebuilt from the ref. HTTPS only, `embedFetchTimeout` 3s for the whole exchange,
@@ -1290,8 +1309,8 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
 
 ## Reader comments: storage, settings, the state rule, retention (#522, `000061`, `discussion*.go`)
 
-- Design: `docs/design/reader-comments.md` (#499; decisions in its section 18). Phase 1: storage;
-  the public writes are #524 (next section), the reads C3 #523, and
+- Design: `docs/design/reader-comments.md` (#499; decisions in its section 18). `/public` reads
+  them since C3 (#523, below) and writes them since C4 (#524, below), and
   `settings.comments_enabled` starts off with its switch hidden until #526/#527. Never #192's
   names: `reader_comment*`, `commenter*`, `discussion*`.
 - **Tables (6.1):** `commenters` (one per address, `email_lower` UNIQUE; never public, never
@@ -1349,6 +1368,37 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
 - Tests: `discussion_db_test.go` (real DB: lifecycle, tombstones, constraints, first publish, the
   snapshot rule, every retention rule, the routes, settings, post types) and `discussion_test.go`
   (vectors, network hash, word lists).
+- **Public thread reads (#523, `discussion_public.go`, `db/query/discussion_public.sql`, design 6.2,
+  9.1):** `GET /public/posts/:id/comments?page=N` → `{discussion, threads: [{comment, replies,
+  reply_count}], pagination}` (`comments_per_page` threads, each with its first 100 replies;
+  `comments_order` orders threads, replies always oldest first; `comments_threading: flat` = every
+  shown comment on its own, no `replying_to`); `?thread=<root id>` → `{discussion, thread}` with every
+  reply (`page` and `thread` together: 400). 404 for a post `/public` doesn't serve (not published,
+  or its type isn't public and active), past the last page, and for anything but a shown root of
+  that post. **Only approved comments**: "shown" = approved and not a tombstone; a hidden root or
+  reply that a shown comment answers is listed as a placeholder (`removed: true`, empty name and
+  body: the SQL blanks them), so unapproving never hides replies. `replying_to` = the shown parent's
+  name on a reply to a reply. A member's comment: current name, avatar, badge `author` (on the
+  **published** byline) or `staff`. `GET /public/posts/:id`, `/slug/:slug` and the front page carry
+  `discussion: {state, closes_at, count}` (`publicPostView`; `off` counts 0 and lists nothing; a
+  failed read is `null` with `Cache-Control: no-store`, never a failed post; with comments off for
+  the site they read the settings only).
+  **Cached and clock-free:** `state` never applies `closes_at` (the renderer and the write path
+  do). `PublicReaderComment` is built field by field; no email, commenter id, status, hash or token
+  (7.1: `TestPublicCommentAnswersHoldNoAddress` in `route_auth_test.go`, which also lists every
+  `/public` comment route in `publicReaderCommentRoutes`). Mock tests of the post reads call
+  `expectDiscussionOff(store)` after their own expectations.
+- **Purges (#523, `discussion_purge.go`, design 10):** comment writes call
+  **`server.purgeDiscussion(ctx, log, postID, event)` after their commit**, never inside a
+  transaction; `discussionEventPurges` decides (published, hidden, removed, edited, bulk purge;
+  unconfirmed, pending, unseen don't), `discussionStatusEvent(from, to)` names a status change
+  (`""` = a new row), and a post known not to be published skips it (`postID` 0 = several posts:
+  purge once per bulk request). Such routes go in **`publicCacheDiscussionRoutes`** (neither purge
+  list: the purge depends on the outcome). The Discussion choice and Settings saves purge through
+  the middleware; publish/unpublish/trash/delete cover the thread; the retention job never changes
+  a public thread and doesn't purge. Tests: `discussion_public_db_test.go`,
+  `discussion_purge_db_test.go` (miniredis + DB: each event, pending-only doesn't purge, after
+  commit via `purgeWatch`), `discussion_public_test.go`, `discussion_purge_test.go`.
 
 ## Reader comments: the public write path (#524, `discussion_write.go`, `discussion_rules.go`)
 
@@ -1406,9 +1456,10 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   The IP is the browser's: the web endpoint appends its peer to Caddy's X-Forwarded-For, read
   from `TRUSTED_PROXIES` only (`TestReaderCommentRateLimitsKeyOnTheBrowser`). 200 pending on a post
   → 429 `comments_busy`.
-- **Purges:** `purgeAfterDiscussionChange` is the one entry point (after the commit, only when a
-  comment reached readers); #523 and #526 purge through it. The three routes are in
-  `publicCacheHandlerPurgeRoutes` (the handler purges; `/public` has no purge middleware).
+- **Purges:** through #523's `purgeDiscussion` (`discussion_purge.go`), after the commit: a keyed
+  POST with `discussionStatusEvent("", status)`, a confirmation or Publish with
+  `discussionStatusEvent(unconfirmed, status)`, so only a comment that became approved purges.
+  The three routes are in `publicCacheDiscussionRoutes` and `publicReaderCommentRoutes`.
 - Logs: ids, status and held reason only (`requireNoPersonalData` checks address, name, text,
   token and key in the tests).
 - Tests: `discussion_write_test.go` (mock), `discussion_rules_test.go` (vectors, one case per hold
@@ -1664,7 +1715,7 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   `GoLive-Event-Id` (the idempotency key), `GoLive-Event`, `GoLive-Timestamp`, `GoLive-Signature:
   v1=<hex>`; body `pluginsdk.WebhookPayload`. `VerifyWebhook` = the receiver's side (5-minute
   window, any `v1` in a comma list). Rotation = saving a new secret setting.
-- **SSRF:** `outbound_http.go` is the one guard, shared with `POST /embeds/resolve`: the dialer's
+- **SSRF:** `outbound_http.go` is the one guard, shared with `POST /embeds/resolve` and `POST /media/import` (#29): the dialer's
   `Control` refuses every non-public range (`nonPublicPrefixes`: private, loopback, link-local,
   CGNAT, multicast, reserved, documentation, metadata, NAT64/6to4/Teredo/IPv4-compatible; mapped
   addresses unmapped) **at connect time**, so DNS answers and rebinding are covered; no proxy, no

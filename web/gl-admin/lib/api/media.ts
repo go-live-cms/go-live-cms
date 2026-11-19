@@ -3,6 +3,7 @@ import { apiCall, authenticatedFetch, getMediaURL } from "../api"
 import { apiErrorFromResponse, friendlyApiMessage } from "./errors"
 import { buildUrl } from "./utils"
 import type { MediaPostLink, MediaSiteTemplateUse, MediaUsedIn } from "../mediaLibrary"
+import type { ImportResponse } from "../mediaImport"
 
 export interface MediaQueryParams extends PaginationParams {
   sort?: MediaSortOption
@@ -50,6 +51,15 @@ export async function getPopularMedia(params: PaginationParams = {}): Promise<Ap
     data: response.media || [],
     meta: response.meta || { count: 0, limit: 10, offset: 0, total: 0 },
   }
+}
+
+/**
+ * "Add from URL" (#29): the API downloads each link into the library, stored like an
+ * upload, and answers one result per link (`lib/mediaImport.ts`). Up to 10 links.
+ */
+export async function importMediaFromURLs(urls: string[]): Promise<ImportResponse> {
+  const response = await apiCall("/media/import", { method: "POST", body: { urls } })
+  return { results: response?.results ?? [], meta: response?.meta ?? { total: 0, successful: 0, failed: 0 } }
 }
 
 export async function createMedia(formData: FormData, token?: string): Promise<any> {

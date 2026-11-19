@@ -451,7 +451,7 @@ func (server *Server) createKeyedReaderComment(c *gin.Context, d readerCommentDr
 	logger.Info("reader comment stored", "comment_id", comment.ID, "post_id", comment.PostID, "commenter_id", commenter.ID, "status", comment.Status, "held_reason", reason.String)
 	c.Header("Cache-Control", "no-store")
 	if comment.Status == db.ReaderCommentApproved {
-		server.purgeAfterDiscussionChange(ctx, logger, c.FullPath())
+		server.purgeDiscussion(ctx, logger, comment.PostID, discussionStatusEvent("", comment.Status))
 		c.JSON(http.StatusCreated, gin.H{
 			"outcome":     readerCommentOutcomePublished,
 			"post_url":    d.Target.path(),
@@ -700,9 +700,10 @@ func (server *Server) publishUnconfirmedReaderComment(c *gin.Context, settings d
 	outcome, commentURL := readerCommentOutcomePending, postPath+"#comments"
 	if published.Status == db.ReaderCommentApproved {
 		outcome, commentURL = readerCommentOutcomePublished, readerCommentURL(postPath, published.ID)
-		server.purgeAfterDiscussionChange(ctx, logger, c.FullPath())
 	}
 	response := gin.H{"outcome": outcome, "comment_id": published.ID, "post_url": postPath, "comment_url": commentURL}
+	// unconfirmed → approved purges; a comment left pending (or spam) changes nothing public.
+	server.purgeDiscussion(ctx, logger, post.ID, discussionStatusEvent(db.ReaderCommentUnconfirmed, published.Status))
 	if tokenHash != nil {
 		response["set_key"] = key
 		others, err := server.store.ListUnconfirmedReaderCommentsForCommenter(ctx, db.ListUnconfirmedReaderCommentsForCommenterParams{
@@ -790,15 +791,4 @@ func (server *Server) actOnUnconfirmedReaderComment(c *gin.Context) {
 		return
 	}
 	server.publishUnconfirmedReaderComment(c, settings, comment, nil)
-}
-
-// purgeAfterDiscussionChange is the one entry point for purging the public cache after a
-// change readers see in a thread (design section 10): a comment entering or leaving
-// approved, a tombstone, a member's edit. Call it after the commit, and only when the
-// change reached readers: a comment that is only pending (or waits for its confirmation)
-// changes nothing public, so it doesn't purge. #523 (the thread reads) and #526 (the
-// moderation screens) purge through it, so a later per-post namespace (section 10) is one
-// change here. reason is the route template or the job.
-func (server *Server) purgeAfterDiscussionChange(ctx context.Context, logger *slog.Logger, reason string) {
-	server.purgePublicCache(ctx, logger, reason)
 }

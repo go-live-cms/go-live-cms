@@ -203,6 +203,9 @@ type Config struct {
 	// RateLimitCommentAddressPerMinute applies to the same route per client IP and typed
 	// address (never the address alone, which would let anyone lock its owner out).
 	RateLimitCommentAddressPerMinute int `mapstructure:"RATE_LIMIT_COMMENT_ADDRESS_PER_MINUTE"`
+	// RateLimitMediaImportPerMinute applies to POST /media/import (#29) per member
+	// and client IP: each request downloads up to 10 files on the member's behalf.
+	RateLimitMediaImportPerMinute int `mapstructure:"RATE_LIMIT_MEDIA_IMPORT_PER_MINUTE"`
 
 	// Outgoing email (#148): invitations and password resets.
 	//
@@ -369,6 +372,7 @@ func LoadConfig(path string) (config Config, err error) {
 	viper.SetDefault("RATE_LIMIT_ACCESS_REQUEST_PER_MINUTE", 3)
 	viper.SetDefault("RATE_LIMIT_COMMENT_POST_PER_MINUTE", 5)
 	viper.SetDefault("RATE_LIMIT_COMMENT_ADDRESS_PER_MINUTE", 3)
+	viper.SetDefault("RATE_LIMIT_MEDIA_IMPORT_PER_MINUTE", 6)
 	viper.SetDefault("RATE_LIMIT_EXEMPT_CIDRS", "")
 
 	// Members' "last active" (#333): written at most once per interval per user.
@@ -512,6 +516,7 @@ func LoadConfig(path string) (config Config, err error) {
 		"RATE_LIMIT_ACCESS_REQUEST_PER_MINUTE":  config.RateLimitAccessRequestPerMinute,
 		"RATE_LIMIT_COMMENT_POST_PER_MINUTE":    config.RateLimitCommentPostPerMinute,
 		"RATE_LIMIT_COMMENT_ADDRESS_PER_MINUTE": config.RateLimitCommentAddressPerMinute,
+		"RATE_LIMIT_MEDIA_IMPORT_PER_MINUTE":    config.RateLimitMediaImportPerMinute,
 	} {
 		if v < 0 {
 			return config, fmt.Errorf("invalid %s %d: must be >= 0 (0 disables the limit)", name, v)

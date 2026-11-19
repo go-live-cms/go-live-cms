@@ -27,24 +27,25 @@ func TestMutatingRoutesDeclarePublicCachePurge(t *testing.T) {
 		registered[key] = true
 		_, purges := publicCachePurgeRoutes[key]
 		_, keeps := publicCacheNoPurgeRoutes[key]
-		_, handlerPurges := publicCacheHandlerPurgeRoutes[key]
+		// Comment writes purge themselves by outcome (#523, discussion_purge.go).
+		_, self := publicCacheDiscussionRoutes[key]
 		declared := 0
-		for _, in := range []bool{purges, keeps, handlerPurges} {
+		for _, in := range []bool{purges, keeps, self} {
 			if in {
 				declared++
 			}
 		}
 		require.Equal(t, 1, declared,
-			"%s writes: declare it in exactly one of publicCachePurgeRoutes, publicCacheNoPurgeRoutes or publicCacheHandlerPurgeRoutes (public_cache.go): can it change what the public site shows?", key)
-		// The purge middleware is on /api/v1 only: a /public write purges in its handler.
-		if strings.HasPrefix(route.Path, "/public/") {
-			require.False(t, purges, "%s: /public has no purge middleware; list it in publicCacheHandlerPurgeRoutes and purge in the handler", key)
-		}
+			"%s writes: it must be in exactly one of publicCachePurgeRoutes, publicCacheNoPurgeRoutes (public_cache.go) or publicCacheDiscussionRoutes (discussion_purge.go): can it change what the public site shows?", key)
 	}
-	for _, routes := range []map[string]string{publicCachePurgeRoutes, publicCacheNoPurgeRoutes, publicCacheHandlerPurgeRoutes} {
-		for key := range routes {
-			require.True(t, registered[key], "%s is listed but is no longer a route", key)
-		}
+	for key := range publicCacheDiscussionRoutes {
+		require.True(t, registered[key], "publicCacheDiscussionRoutes lists %s, which is no longer a route", key)
+	}
+	for key := range publicCachePurgeRoutes {
+		require.True(t, registered[key], "publicCachePurgeRoutes lists %s, which is no longer a route", key)
+	}
+	for key := range publicCacheNoPurgeRoutes {
+		require.True(t, registered[key], "publicCacheNoPurgeRoutes lists %s, which is no longer a route", key)
 	}
 	// The internal router has no purge middleware: none of its writes may need one.
 	for _, route := range server.internalRouter.Routes() {

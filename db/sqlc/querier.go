@@ -118,6 +118,7 @@ type Querier interface {
 	CountPostsByTaxonomyTerm(ctx context.Context, taxonomyTermID int64) (int64, error)
 	CountPostsByType(ctx context.Context, postType string) (int64, error)
 	CountPostsByTypeFiltered(ctx context.Context, arg CountPostsByTypeFilteredParams) (int64, error)
+	CountPublicReaderCommentThreads(ctx context.Context, postID int64) (int64, error)
 	// The public search's matches per type, for the All / Posts / Pages chips and
 	// the total. Same filters as SearchPublicPosts, without the type.
 	CountPublicSearchResults(ctx context.Context, query string) ([]CountPublicSearchResultsRow, error)
@@ -126,6 +127,23 @@ type Querier interface {
 	CountRedirects(ctx context.Context, query string) (int64, error)
 	// SearchPostsWithMeta's total, with the same filters.
 	CountSearchPosts(ctx context.Context, arg CountSearchPostsParams) (int64, error)
+	// The public thread reads (#523, C3; docs/design/reader-comments.md 6.2, 6.4, 7.1, 9.1).
+	//
+	// What a reader sees of a post's reader comments: only approved ones. A comment that
+	// isn't approved (pending again, spam, trash) or is a tombstone (removed_at) is never
+	// shown as itself; it appears as a placeholder ("This comment was removed") only when an
+	// approved comment hangs from it, so unapproving or removing a comment never hides its
+	// replies (6.4). For those rows the queries blank the name, the text and the member, so
+	// no presenter can leak them.
+	//
+	// Never selected: the commenter (id, address), the network hash, tokens, held reasons,
+	// the status itself. Nothing here reads the clock (the answers are cached, #185).
+	//
+	// "Shown" = status 'approved' AND removed_at IS NULL. A thread is shown when its root is
+	// shown or any comment in it is; a reply is listed when it is shown or a shown comment
+	// answers it.
+	// discussion.count (9.1): the comments a reader sees; placeholders and tombstones aren't.
+	CountShownReaderComments(ctx context.Context, postID int64) (int64, error)
 	// Counting functions
 	CountTaxonomyTerms(ctx context.Context, name string) (int64, error)
 	CountTermChildren(ctx context.Context, parentID sql.NullInt64) (int64, error)
@@ -426,6 +444,8 @@ type Querier interface {
 	// The page the public site renders at / (#336): the settings' front page while it is
 	// a published page of an active, public type. No row: / shows the latest posts.
 	GetPublicFrontPage(ctx context.Context) (Post, error)
+	// One thread's root (?thread=, 6.2), when it is a shown thread of this post.
+	GetPublicReaderCommentThread(ctx context.Context, arg GetPublicReaderCommentThreadParams) (GetPublicReaderCommentThreadRow, error)
 	// Public term archives (#348): /{taxonomy}/{slug}, e.g. /category/guides. A term
 	// has a page when its taxonomy type is public; its list is the published posts of
 	// public, active post types tagged with the term or, for a hierarchical taxonomy,
@@ -730,6 +750,16 @@ type Querier interface {
 	ListPostsWithUnpublishedChanges(ctx context.Context, rowLimit int32) ([]ListPostsWithUnpublishedChangesRow, error)
 	// Every author with a page, for the sitemap; lastmod is their newest post's.
 	ListPublicAuthors(ctx context.Context, arg ListPublicAuthorsParams) ([]ListPublicAuthorsRow, error)
+	// The listed replies of the given threads, oldest first, at most per_thread of each, with
+	// how many each thread lists in all (6.2: a thread over 100 shows the first 100 and "Show
+	// more replies").
+	ListPublicReaderCommentReplies(ctx context.Context, arg ListPublicReaderCommentRepliesParams) ([]ListPublicReaderCommentRepliesRow, error)
+	// One page of a post's threads (6.2), by their root's created_at.
+	ListPublicReaderCommentThreads(ctx context.Context, arg ListPublicReaderCommentThreadsParams) ([]ListPublicReaderCommentThreadsRow, error)
+	// Flat threading (comments_threading = flat, 6.2 A): every shown comment, replies
+	// included, each on its own, by created_at. No placeholders: nothing hides behind
+	// another comment.
+	ListPublicReaderCommentsFlat(ctx context.Context, arg ListPublicReaderCommentsFlatParams) ([]ListPublicReaderCommentsFlatRow, error)
 	// Every term page with at least one post (its own or a descendant's), for the
 	// sitemap; lastmod is the newest of those posts. closure pairs each term with
 	// itself and every term below it.

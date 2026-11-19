@@ -718,6 +718,21 @@ func (mr *MockStoreMockRecorder) CountPostsByTypeFiltered(arg0, arg1 interface{}
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountPostsByTypeFiltered", reflect.TypeOf((*MockStore)(nil).CountPostsByTypeFiltered), arg0, arg1)
 }
 
+// CountPublicReaderCommentThreads mocks base method.
+func (m *MockStore) CountPublicReaderCommentThreads(arg0 context.Context, arg1 int64) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CountPublicReaderCommentThreads", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CountPublicReaderCommentThreads indicates an expected call of CountPublicReaderCommentThreads.
+func (mr *MockStoreMockRecorder) CountPublicReaderCommentThreads(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountPublicReaderCommentThreads", reflect.TypeOf((*MockStore)(nil).CountPublicReaderCommentThreads), arg0, arg1)
+}
+
 // CountPublicSearchResults mocks base method.
 func (m *MockStore) CountPublicSearchResults(arg0 context.Context, arg1 string) ([]db.CountPublicSearchResultsRow, error) {
 	m.ctrl.T.Helper()
@@ -776,6 +791,21 @@ func (m *MockStore) CountSearchPosts(arg0 context.Context, arg1 db.CountSearchPo
 func (mr *MockStoreMockRecorder) CountSearchPosts(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountSearchPosts", reflect.TypeOf((*MockStore)(nil).CountSearchPosts), arg0, arg1)
+}
+
+// CountShownReaderComments mocks base method.
+func (m *MockStore) CountShownReaderComments(arg0 context.Context, arg1 int64) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CountShownReaderComments", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CountShownReaderComments indicates an expected call of CountShownReaderComments.
+func (mr *MockStoreMockRecorder) CountShownReaderComments(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountShownReaderComments", reflect.TypeOf((*MockStore)(nil).CountShownReaderComments), arg0, arg1)
 }
 
 // CountTaxonomyTerms mocks base method.
@@ -3280,6 +3310,21 @@ func (mr *MockStoreMockRecorder) GetPublicFrontPage(arg0 interface{}) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPublicFrontPage", reflect.TypeOf((*MockStore)(nil).GetPublicFrontPage), arg0)
 }
 
+// GetPublicReaderCommentThread mocks base method.
+func (m *MockStore) GetPublicReaderCommentThread(arg0 context.Context, arg1 db.GetPublicReaderCommentThreadParams) (db.GetPublicReaderCommentThreadRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPublicReaderCommentThread", arg0, arg1)
+	ret0, _ := ret[0].(db.GetPublicReaderCommentThreadRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPublicReaderCommentThread indicates an expected call of GetPublicReaderCommentThread.
+func (mr *MockStoreMockRecorder) GetPublicReaderCommentThread(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPublicReaderCommentThread", reflect.TypeOf((*MockStore)(nil).GetPublicReaderCommentThread), arg0, arg1)
+}
+
 // GetPublicTerm mocks base method.
 func (m *MockStore) GetPublicTerm(arg0 context.Context, arg1 db.GetPublicTermParams) (db.GetPublicTermRow, error) {
 	m.ctrl.T.Helper()
@@ -4848,6 +4893,51 @@ func (m *MockStore) ListPublicAuthors(arg0 context.Context, arg1 db.ListPublicAu
 func (mr *MockStoreMockRecorder) ListPublicAuthors(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPublicAuthors", reflect.TypeOf((*MockStore)(nil).ListPublicAuthors), arg0, arg1)
+}
+
+// ListPublicReaderCommentReplies mocks base method.
+func (m *MockStore) ListPublicReaderCommentReplies(arg0 context.Context, arg1 db.ListPublicReaderCommentRepliesParams) ([]db.ListPublicReaderCommentRepliesRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListPublicReaderCommentReplies", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListPublicReaderCommentRepliesRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListPublicReaderCommentReplies indicates an expected call of ListPublicReaderCommentReplies.
+func (mr *MockStoreMockRecorder) ListPublicReaderCommentReplies(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPublicReaderCommentReplies", reflect.TypeOf((*MockStore)(nil).ListPublicReaderCommentReplies), arg0, arg1)
+}
+
+// ListPublicReaderCommentThreads mocks base method.
+func (m *MockStore) ListPublicReaderCommentThreads(arg0 context.Context, arg1 db.ListPublicReaderCommentThreadsParams) ([]db.ListPublicReaderCommentThreadsRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListPublicReaderCommentThreads", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListPublicReaderCommentThreadsRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListPublicReaderCommentThreads indicates an expected call of ListPublicReaderCommentThreads.
+func (mr *MockStoreMockRecorder) ListPublicReaderCommentThreads(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPublicReaderCommentThreads", reflect.TypeOf((*MockStore)(nil).ListPublicReaderCommentThreads), arg0, arg1)
+}
+
+// ListPublicReaderCommentsFlat mocks base method.
+func (m *MockStore) ListPublicReaderCommentsFlat(arg0 context.Context, arg1 db.ListPublicReaderCommentsFlatParams) ([]db.ListPublicReaderCommentsFlatRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListPublicReaderCommentsFlat", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListPublicReaderCommentsFlatRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListPublicReaderCommentsFlat indicates an expected call of ListPublicReaderCommentsFlat.
+func (mr *MockStoreMockRecorder) ListPublicReaderCommentsFlat(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPublicReaderCommentsFlat", reflect.TypeOf((*MockStore)(nil).ListPublicReaderCommentsFlat), arg0, arg1)
 }
 
 // ListPublicTerms mocks base method.

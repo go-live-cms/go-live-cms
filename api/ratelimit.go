@@ -44,6 +44,9 @@
 //     the web's endpoint forwards its address in X-Forwarded-For, which the API
 //     reads from TRUSTED_PROXIES only. These limits skip no exempt CIDR: they are
 //     never reached by the web's own SSR reads.
+//   - Media import (#29): POST /media/import, per member and client
+//     (RATE_LIMIT_MEDIA_IMPORT_PER_MINUTE): each request downloads up to 10 files
+//     on the member's behalf.
 //
 // The internal listener (/internal/*) is not limited: only the collab WS server
 // can reach it, it calls once per connection for every editor, and its
@@ -377,6 +380,9 @@ type rateLimits struct {
 	commentAddress *rateLimiter
 	commentMail    *rateLimiter
 	commentConfirm *rateLimiter
+	// mediaImport limits "Add from URL" (#29) per member and client IP: each request
+	// makes outbound downloads.
+	mediaImport *rateLimiter
 	// generalExempt client IPs skip the general limit only.
 	generalExempt []netip.Prefix
 }
@@ -404,6 +410,7 @@ func newRateLimits(config util.Config) (rateLimits, error) {
 		commentAddress: newRateLimiter("comment-address", config.RateLimitCommentAddressPerMinute),
 		commentMail:    newIntervalLimiter("comment-mail", readerCommentMailCooldown, config.RateLimitCommentPostPerMinute > 0),
 		commentConfirm: newRateLimiter("comment-confirm", config.RateLimitAccountTokenPerMinute),
+		mediaImport:    newRateLimiter("media-import", config.RateLimitMediaImportPerMinute),
 		generalExempt:  exempt,
 	}, nil
 }

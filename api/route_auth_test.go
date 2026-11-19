@@ -1,6 +1,9 @@
 package api
 
 import (
+	"context"
+	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"log/slog"
@@ -172,12 +175,9 @@ func TestCommentRoutesRequireAuth(t *testing.T) {
 			continue
 		}
 		key := route.Method + " " + route.Path
-		if strings.HasPrefix(route.Path, "/public/") {
-			// Reader comments (#499), never #192's: the public discussion. Their writes
-			// are audited by TestAnonymousWritesAreListed, and no /public route reads
-			// post_comments.
-			_, reader := publicPOSTRoutes[key]
-			require.True(t, reader || route.Method == http.MethodGet, "%s: a /public comment route must be a reader comment route", key)
+		if _, reader := publicReaderCommentRoutes[key]; reader && strings.HasPrefix(route.Path, "/public/") {
+			// Reader comments (#499) are another feature: TestPublicReaderCommentRoutes.
+			// Only on /public: anything else named "comment" still answers 401 here.
 			continue
 		}
 		registered[key] = true
@@ -192,6 +192,44 @@ func TestCommentRoutesRequireAuth(t *testing.T) {
 	}
 	for key := range commentRoutes {
 		require.True(t, registered[key], "commentRoutes lists %s, which is no longer a route", key)
+	}
+}
+
+// publicReaderCommentRoutes are the /public reader comment routes (#499), every method,
+// with what they may answer. TestPublicReaderCommentRoutes fails when one is added
+// without being listed; TestPublicCommentAnswersHoldNoAddress renders every GET here.
+// The writes (#524) add themselves with their reason (and to publicCacheDiscussionRoutes).
+var publicReaderCommentRoutes = map[string]string{
+	"GET /public/posts/:id/comments": "approved comments of a published post of a public type; no address, commenter id, status or hash (7.1)",
+	// The writes (#524, discussion_write.go), also in publicPOSTRoutes with why they may be
+	// anonymous: their answers hold no address either (TestReaderCommentAnswersHoldNoAddress).
+	"POST /public/posts/:id/comments":         "a reader's comment: confirm_email, pending or published, with the post's URL; never an address",
+	"POST /public/discussion/confirm":         "the confirmed comment's outcome and URLs, the new key, the address's other unconfirmed comments for the link's holder",
+	"POST /public/discussion/unconfirmed/:id": "the published comment's outcome and URLs, or 204",
+}
+
+func TestPublicReaderCommentRoutes(t *testing.T) {
+	server := newTestServer(t, mockdb.NewMockStore(gomock.NewController(t)))
+	registered := map[string]bool{}
+	for _, route := range server.router.Routes() {
+		key := route.Method + " " + route.Path
+		// Every route counts as registered: the confirmation writes (#524) are under
+		// /public/discussion, without "comment" in their path.
+		registered[key] = true
+		if !strings.HasPrefix(route.Path, "/public") || !strings.Contains(route.Path, "comment") {
+			continue
+		}
+		_, listed := publicReaderCommentRoutes[key]
+		require.True(t, listed, "%s is a public comment route missing from publicReaderCommentRoutes", key)
+		if route.Method == http.MethodGet {
+			_, cached := publicCacheRoutes[route.Path]
+			require.True(t, cached, "%s: public comment reads are cached like every /public read (#185)", key)
+		}
+	}
+	for key := range publicReaderCommentRoutes {
+		require.True(t, registered[key], "publicReaderCommentRoutes lists %s, which is no longer a route", key)
+		_, path, _ := strings.Cut(key, " ")
+		require.True(t, strings.HasPrefix(path, "/public/"), "publicReaderCommentRoutes is for /public routes only: %s", key)
 	}
 }
 
@@ -427,6 +465,76 @@ func TestSiteDesignRoutesRequireAdmin(t *testing.T) {
 	}
 	for key := range siteDesignRoutes {
 		require.True(t, registered[key], "siteDesignRoutes lists %s, which is no longer a route", key)
+	}
+}
+
+// TestPublicCommentAnswersHoldNoAddress is design 7.1's address check, against the test
+// database: every /public reader comment read (and the post reads that carry
+// `discussion`), rendered for a post with comments from a commenter and a member whose
+// addresses are known, holds neither address in any case, nor a hash or token stored with
+// the comments, nor the text of a comment that isn't approved.
+func TestPublicCommentAnswersHoldNoAddress(t *testing.T) {
+	f := newCommentsFixture(t)
+	ctx := context.Background()
+	post := f.publishedPost(t)
+	reader := f.commenter(t)
+	root := f.says(t, post, reader, nil, db.ReaderCommentApproved, marker("approved"))
+	reply := f.says(t, post, reader, &root, db.ReaderCommentApproved, marker("approved reply"))
+	f.byMember(t, post, f.editor, marker("by a member"))
+	unapproved := []db.ReaderComment{
+		f.says(t, post, reader, &root, db.ReaderCommentPending, marker("pending")),
+		f.says(t, post, reader, &root, db.ReaderCommentSpam, marker("spam")),
+		f.says(t, post, reader, nil, db.ReaderCommentUnconfirmed, marker("unconfirmed")),
+	}
+	trashed := f.says(t, post, reader, &reply, db.ReaderCommentApproved, marker("trashed"))
+	_, err := f.store.TrashReaderComment(ctx, db.TrashReaderCommentParams{ID: trashed.ID})
+	require.NoError(t, err)
+	unapproved = append(unapproved, trashed)
+
+	forbidden := []string{reader.Email, reader.EmailLower, strings.ToUpper(reader.Email), f.editor.Email, strings.ToLower(f.editor.Email)}
+	var secrets [][]byte
+	rows, err := f.conn.Query(`SELECT network_hash, confirm_token_hash FROM reader_comments WHERE post_id = $1`, post.ID)
+	require.NoError(t, err)
+	for rows.Next() {
+		var network, confirm []byte
+		require.NoError(t, rows.Scan(&network, &confirm))
+		secrets = append(secrets, network, confirm)
+	}
+	require.NoError(t, rows.Close())
+	for _, secret := range secrets {
+		if len(secret) == 0 {
+			continue
+		}
+		forbidden = append(forbidden, string(secret), hex.EncodeToString(secret), base64.StdEncoding.EncodeToString(secret),
+			base64.RawURLEncoding.EncodeToString(secret))
+	}
+
+	var paths []string
+	for key := range publicReaderCommentRoutes {
+		method, template, _ := strings.Cut(key, " ")
+		if method != http.MethodGet {
+			continue
+		}
+		path := strings.ReplaceAll(template, ":id", fmt.Sprint(post.ID))
+		require.NotContains(t, path, ":", "%s: fill its parameters here", key)
+		paths = append(paths, path, path+fmt.Sprintf("?thread=%d", root.ID))
+	}
+	paths = append(paths, fmt.Sprintf("/public/posts/%d", post.ID), "/public/posts/slug/"+post.Slug)
+
+	for _, path := range paths {
+		recorder := f.read(t, path)
+		require.Equal(t, http.StatusOK, recorder.Code, "%s: %s", path, recorder.Body.String())
+		body := recorder.Body.String()
+		require.Contains(t, body, `"discussion"`, path)
+		for _, value := range forbidden {
+			require.NotContains(t, strings.ToLower(body), strings.ToLower(value), "%s holds an address, hash or token", path)
+		}
+		for _, comment := range unapproved {
+			require.NotContains(t, body, comment.Body, "%s serves a %s comment", path, comment.Status)
+		}
+		if strings.Contains(path, "/comments") {
+			require.Contains(t, body, root.Body, "%s: the check isn't vacuous", path)
+		}
 	}
 }
 

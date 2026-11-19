@@ -90,6 +90,9 @@ var publicCacheRoutes = map[string]publicCacheRoute{
 	"/public/posts/:id/related":  {},
 	"/public/posts/type/:type":   {},
 	"/public/posts/:id/authors":  {},
+	// Reader comments (#523): approved ones, clock-free (closes_at, never a computed
+	// closed); comment writes purge through purgeDiscussion (discussion_purge.go).
+	"/public/posts/:id/comments": {},
 	"/public/front-page":         {notFound: true},
 	// Author and term pages (#350, #348).
 	"/public/authors":                                {},
@@ -558,15 +561,6 @@ var publicCachePurgeRoutes = map[string]string{
 	"PUT /api/v1/users/:id/role":             "conservative: who is listed as an author",
 }
 
-// publicCacheHandlerPurgeRoutes are the mutating routes whose effect on the public site
-// depends on the outcome, so their handler purges (purgeAfterDiscussionChange, after the
-// commit) only when it changed what readers see. /public has no purge middleware.
-var publicCacheHandlerPurgeRoutes = map[string]string{
-	"POST /public/posts/:id/comments":         "only a keyed comment the rules publish; an unconfirmed or held one changes nothing public (#524)",
-	"POST /public/discussion/confirm":         "only when the confirmed comment is published, not held (#524)",
-	"POST /public/discussion/unconfirmed/:id": "only a Publish the rules approve; a discard or a hold changes nothing public (#524)",
-}
-
 // publicCacheNoPurgeRoutes are the mutating routes that change nothing the public site
 // shows, with why.
 var publicCacheNoPurgeRoutes = map[string]string{
@@ -630,6 +624,7 @@ var publicCacheNoPurgeRoutes = map[string]string{
 	"POST /api/v1/media":                                           "a new upload is on no published page",
 	"POST /api/v1/media/batch":                                     "a new upload is on no published page",
 	"POST /api/v1/media/bulk":                                      "a new upload is on no published page",
+	"POST /api/v1/media/import":                                    "a new import (#29) is on no published page",
 	"POST /api/v1/redirects":                                       "redirect lookups aren't cached; the web caches its own 301s",
 	"DELETE /api/v1/redirects/:id":                                 "redirect lookups aren't cached; the web caches its own 301s",
 	// Internal listener.
