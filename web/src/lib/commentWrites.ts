@@ -114,7 +114,9 @@ export function safeReturnPath(value: unknown, fallback = "/"): string {
   }
   try {
     const url = new URL(value, "http://site.invalid")
-    return url.origin === "http://site.invalid" ? `${url.pathname}${url.search}` : fallback
+    // "/.//evil.example/x" normalizes to the path "//evil.example/x": a link off the site.
+    if (url.origin !== "http://site.invalid" || url.pathname.startsWith("//")) return fallback
+    return `${url.pathname}${url.search}`
   } catch {
     return fallback
   }

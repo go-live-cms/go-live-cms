@@ -126,7 +126,7 @@ describe("the form's mapping", () => {
 describe("where the browser goes back to", () => {
   it("is a path on this site, else the fallback", () => {
     expect(safeReturnPath("/post/hello?comments=2")).toBe("/post/hello?comments=2")
-    for (const bad of ["https://evil.example/", "//evil.example/", "/\\evil.example", "javascript:alert(1)", "", null, 3, "/a\nb"]) {
+    for (const bad of ["https://evil.example/", "//evil.example/", "/\\evil.example", "javascript:alert(1)", "", null, 3, "/a\nb", "/.//evil.example/x", "/x/..//evil.example"]) {
       expect(safeReturnPath(bad, "/fallback")).toBe("/fallback")
     }
   })

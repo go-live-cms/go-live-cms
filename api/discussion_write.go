@@ -52,11 +52,13 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/gin-gonic/gin"
 	db "github.com/go-live-cms/go-live-cms/db/sqlc"
@@ -329,6 +331,15 @@ func (server *Server) createPublicReaderComment(c *gin.Context) {
 		return
 	}
 	email := strings.TrimSpace(req.Email)
+	// The commenter (and so the browser key a confirmation gives) is matched by the
+	// lower-cased address, but the link is mailed to the address as typed. A letter whose
+	// lower case is another letter's (U+0130 İ → i, U+212A K → k) would let a look-alike
+	// domain receive the link for someone else's commenter, so such an address is refused.
+	if foldsOutsideASCII(email) {
+		c.Header("Cache-Control", "no-store")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "email must be a valid email address", "fields": gin.H{"email": "must be a valid email address"}})
+		return
+	}
 	emailLower := normEmail(email)
 	// Per client and address, never the address alone (#190).
 	if !server.rateLimits.commentAddress.allow(c, clientKey(c.ClientIP())+"|"+emailLower) {
@@ -453,6 +464,17 @@ func (server *Server) createKeyedReaderComment(c *gin.Context, d readerCommentDr
 	c.JSON(http.StatusAccepted, gin.H{"outcome": readerCommentOutcomePending, "comment_id": comment.ID, "post_url": d.Target.path()})
 }
 
+// foldsOutsideASCII reports whether lower-casing s changes a character outside ASCII:
+// then the address matched (normEmail) isn't the one the mail goes to.
+func foldsOutsideASCII(s string) bool {
+	for _, r := range s {
+		if r > unicode.MaxASCII && unicode.ToLower(r) != r {
+			return true
+		}
+	}
+	return false
+}
+
 // readerCommentURL is a comment's link on its post (11.3).
 func readerCommentURL(postPath string, id int64) string {
 	return postPath + "#comment-" + strconv.FormatInt(id, 10)
@@ -546,7 +568,7 @@ func (server *Server) processUnconfirmedReaderComment(logger *slog.Logger, d rea
 		err = server.sendMail(ctx, msg)
 	}
 	if err != nil {
-		logger.Error("reader comment confirmation email failed", "comment_id", comment.ID, "error", err)
+		logger.Error("reader comment confirmation email failed", "comment_id", comment.ID, "error_type", fmt.Sprintf("%T", err))
 		return
 	}
 	logger.Info("reader comment confirmation email sent", "comment_id", comment.ID)

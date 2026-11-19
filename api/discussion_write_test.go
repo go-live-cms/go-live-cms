@@ -1078,3 +1078,18 @@ func TestReaderCommentFullQueueRefusesOnlyWhatWouldWait(t *testing.T) {
 		requireErrorCode(t, postComment(t, server, commentBody("reader@example.com"), withKeys(key)), http.StatusTooManyRequests, "comments_busy")
 	})
 }
+
+// An address whose lower case changes a non-ASCII letter would match one commenter and
+// mail another domain (İ → i, K → k): refused before anything is read.
+func TestReaderCommentRefusesAddressesThatFoldOutsideASCII(t *testing.T) {
+	store := mockdb.NewMockStore(gomock.NewController(t))
+	server, _, _ := newCommentTestServer(t, store)
+	for _, email := range []string{"victim@gma" + string(rune(0x130)) + "l.com", "victim@" + string(rune(0x212a)) + "ite.example"} {
+		recorder := postComment(t, server, commentBody(email), nil)
+		require.Equal(t, http.StatusBadRequest, recorder.Code, recorder.Body.String())
+		require.Contains(t, recorder.Body.String(), `"email"`)
+	}
+	require.False(t, foldsOutsideASCII("Reader@Example.com"))
+	require.False(t, foldsOutsideASCII("joão@exemplo.pt"), "a lower-case accented letter folds to itself")
+	require.True(t, foldsOutsideASCII("JOÃO@exemplo.pt"))
+}
