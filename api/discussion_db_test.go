@@ -652,26 +652,52 @@ func TestUpdatePostDiscussionRoute(t *testing.T) {
 	recorder = trashCall(t, f.server, nil, http.MethodPut, path, map[string]any{"discussion": "open"})
 	require.Equal(t, http.StatusUnauthorized, recorder.Code)
 
-	// A contributor may not change a published post's details, even their own.
+	// Contributors have no access to Discussion (decision 3, #527): not on a published
+	// post of theirs, not on their draft, and they can't read it either.
 	contributor := scheduleUser(t, f.store, RoleContributor)
 	own := publishForTest(t, f.store, scheduleDraft(t, f.store, contributor, scheduleWord()), f.editor)
-	recorder = trashCall(t, f.server, &contributor, http.MethodPut, fmt.Sprintf("/api/v1/posts/%d/discussion", own.ID), map[string]any{"discussion": "off"})
-	require.Equal(t, http.StatusForbidden, recorder.Code, recorder.Body.String())
-	// Their draft, yes.
 	draft := scheduleDraft(t, f.store, contributor, scheduleWord())
-	recorder = trashCall(t, f.server, &contributor, http.MethodPut, fmt.Sprintf("/api/v1/posts/%d/discussion", draft.ID), map[string]any{"discussion": "off"})
+	for _, id := range []int64{own.ID, draft.ID} {
+		recorder = trashCall(t, f.server, &contributor, http.MethodPut, fmt.Sprintf("/api/v1/posts/%d/discussion", id), map[string]any{"discussion": "off"})
+		require.Equal(t, http.StatusForbidden, recorder.Code, recorder.Body.String())
+		recorder = trashCall(t, f.server, &contributor, http.MethodGet, fmt.Sprintf("/api/v1/posts/%d/discussion", id), nil)
+		require.Equal(t, http.StatusForbidden, recorder.Code, recorder.Body.String())
+	}
+	require.Equal(t, "default", reloadPost(t, f.store, draft.ID).Discussion)
+	// An editor may set a contributor's draft.
+	recorder = trashCall(t, f.server, &f.editor, http.MethodPut, fmt.Sprintf("/api/v1/posts/%d/discussion", draft.ID), map[string]any{"discussion": "off"})
 	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 
-	// Not in the trash.
+	// GET answers the choice and the rule's input.
+	recorder = trashCall(t, f.server, &f.editor, http.MethodGet, path, nil)
+	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+	body = PostDiscussionResponse{}
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &body))
+	require.Equal(t, "closed", body.Discussion)
+	require.NotNil(t, body.FirstPublishedAt, "a published post has a first publish")
+	recorder = trashCall(t, f.server, &f.editor, http.MethodGet, fmt.Sprintf("/api/v1/posts/%d/discussion", draft.ID), nil)
+	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+	body = PostDiscussionResponse{}
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &body))
+	require.Nil(t, body.FirstPublishedAt, "a draft has none")
+	require.Equal(t, discussionStateOff, body.State)
+	recorder = trashCall(t, f.server, nil, http.MethodGet, path, nil)
+	require.Equal(t, http.StatusUnauthorized, recorder.Code)
+
+	// Not in the trash; reading it still works.
 	_, err := f.store.TrashPost(ctx, post.ID)
 	require.NoError(t, err)
 	recorder = trashCall(t, f.server, &f.editor, http.MethodPut, path, map[string]any{"discussion": "open"})
 	require.Equal(t, http.StatusConflict, recorder.Code, recorder.Body.String())
+	recorder = trashCall(t, f.server, &f.editor, http.MethodGet, path, nil)
+	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 
-	recorder = trashCall(t, f.server, &f.editor, http.MethodPut, "/api/v1/posts/999999999999/discussion", map[string]any{"discussion": "open"})
-	require.Equal(t, http.StatusNotFound, recorder.Code, recorder.Body.String())
-	recorder = trashCall(t, f.server, &f.editor, http.MethodPut, "/api/v1/posts/x/discussion", map[string]any{"discussion": "open"})
-	require.Equal(t, http.StatusBadRequest, recorder.Code)
+	for _, method := range []string{http.MethodPut, http.MethodGet} {
+		recorder = trashCall(t, f.server, &f.editor, method, "/api/v1/posts/999999999999/discussion", map[string]any{"discussion": "open"})
+		require.Equal(t, http.StatusNotFound, recorder.Code, recorder.Body.String())
+		recorder = trashCall(t, f.server, &f.editor, method, "/api/v1/posts/x/discussion", map[string]any{"discussion": "open"})
+		require.Equal(t, http.StatusBadRequest, recorder.Code)
+	}
 }
 
 // The response applies the rule with the site's settings, the type and the clock.

@@ -336,6 +336,21 @@ func TestPostSettingsBackfillMigration(t *testing.T) {
 	require.NoError(t, err)
 	defer tx.Rollback() //nolint:errcheck
 	ids := []int64{f.post.ID, seeded.post.ID, draft.post.ID}
+	// The statements as written update every published post and version, so on the
+	// shared database they lock rows other packages' tests are writing at the same time
+	// (the api tests' permanent delete deadlocked with them). Run them on this test's
+	// posts only: the same statements, each WHERE narrowed to these ids.
+	scope := fmt.Sprintf("(%d, %d, %d)", ids[0], ids[1], ids[2])
+	for _, narrow := range []struct{ from, to string }{
+		{"WHERE p.published_version_id = v.id;", "WHERE p.published_version_id = v.id AND p.id IN " + scope + ";"},
+		{
+			"WHERE post_status = 'published' OR published_block_doc IS NOT NULL;",
+			"WHERE (post_status = 'published' OR published_block_doc IS NOT NULL) AND id IN " + scope + ";",
+		},
+	} {
+		require.Equal(t, 1, strings.Count(backfill, narrow.from), "the backfill changed: %q", narrow.from)
+		backfill = strings.Replace(backfill, narrow.from, narrow.to, 1)
+	}
 	_, err = tx.ExecContext(ctx, `UPDATE post_versions SET settings = NULL WHERE post_id = ANY($1)`, pq.Array(ids))
 	require.NoError(t, err)
 	_, err = tx.ExecContext(ctx, `UPDATE posts SET published_settings = NULL WHERE id = ANY($1)`, pq.Array(ids))

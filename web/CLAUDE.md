@@ -391,11 +391,28 @@ are the most fragile part of the codebase. **Before editing anything under
   text rules (`normalizeReaderCommentBody`, `readerCommentLength` in code points, as the API
   counts) for the form's counter. Pinned by `src/lib/discussionStateVectors.json` and
   `src/lib/discussionTextVectors.json` (both suites; `JSON.parse`). Nothing renders comments yet
-  (C5 #525), and `comments_enabled` stays off with no switch until #527. **The reads (#523):**
+  (C5 #525), and `comments_enabled` stays off, its switch hidden until #526 (#527, below). **The reads (#523):**
   `getPublicPost`/`getPublicFrontPage` carry `discussion` (`{state, closes_at, count}`, cached and
   clock-free: apply `discussionState(discussion, now)` before showing a form), and
   `getPublicPostComments(id, page)` / `getPublicCommentThread(id, rootId)` in `src/lib/api.ts` read
   the threads (null on a 404; types `PublicReaderComment`, `PublicReaderCommentThread`).
+- **Discussion settings screens (#527, design 12.1–12.3; the canvas's "Settings · Discussion", "Post types ·
+  Posts" and "Discussion settings…" boards):** Settings › Discussion is its own page, `/settings/discussion`
+  (`pages/SettingsDiscussion.tsx`, admins), after Editor in the Settings menu (`components/settings/SettingsNav.tsx`,
+  shared with General, whose in-page links it keeps): Moderation, Display and Privacy (`PrivacyPageField`, the Front
+  page's option rules), the General page's unsaved-changes bar, and Off shows the switch alone. Rules and wording:
+  `lib/discussionSettings.ts` (tested); its checks (ranges, word lists, the notice) are the API's, pinned by
+  `lib/discussionSettingsVectors.json` (Go runs it too), so the form refuses before any request; an unpredicted 400
+  lands on its field (`apiFieldError`). **The site switch is hidden until the moderation queue ships**
+  (`COMMENTS_SWITCH_READY = false`; #526 sets it true): until then the page shows a note in its place, and the
+  switch only while the API already has comments on (to turn them off). Post types: Posts and Pages open in the
+  panel with every field locked but **Comments** (`canChangeField`, `builtInSupports`,
+  `updateBuiltInPostTypeSupports`: `supports` alone). The editor's **Discussion** section ends the Post tab
+  (`components/editor/ui/PostDiscussion.tsx`, rules `lib/postDiscussion.ts`): Default · Open · Closed · Off
+  (`ui/SegmentedControl.tsx`, native radios), what applies now from the shared rule ("Default · Open · closes on
+  Dec 3"), a status line; it saves at once (`lib/api/postDiscussion.ts`, `PUT /posts/:id/discussion`) and never
+  calls `onSettingsSaved`, so no "Changes not published". Editors and admins only (`PostSidebar`'s `discussion`,
+  from `PostForm`; the API is `requireContentEditor`, decision 3). The counts linking to the queue wait for #526.
 - **Global styles (#485, `src/lib/globalStyles.ts`, design `docs/design/theme-builder.md`
   section 6):** the override grammar, validator, contrast (`CONTRAST_PAIRS`, which the
   default theme's `tokens.test.ts` checks) and groups, the same rules as the API's

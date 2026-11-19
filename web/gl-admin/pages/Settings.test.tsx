@@ -26,6 +26,7 @@ const redirects = vi.hoisted(() => ({ listRedirects: vi.fn(), createRedirect: vi
 vi.mock("@gl-admin/lib/api/redirects", () => redirects)
 vi.mock("@gl-admin/lib/editorSettings", () => editorSettings)
 
+import { MemoryRouter } from "react-router-dom"
 import Settings from "./Settings"
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -56,7 +57,14 @@ const settle = () =>
   })
 
 async function render() {
-  await act(async () => root.render(<Settings />))
+  // The menu's Discussion entry (#527) is a router link to its own page.
+  await act(async () =>
+    root.render(
+      <MemoryRouter initialEntries={["/settings"]}>
+        <Settings />
+      </MemoryRouter>
+    )
+  )
   // The settings request, then Input's lazily loaded mask.
   await settle()
 }
@@ -246,6 +254,8 @@ describe("General and Editor (#330)", () => {
     expect([...nav.querySelectorAll("a")].map((a) => [a.textContent, a.getAttribute("href")])).toEqual([
       ["General", "#gl-settings-general"],
       ["Editor", "#gl-settings-editor"],
+      // Its own page after Editor (#527).
+      ["Discussion", "/settings/discussion"],
       ["Accounts", "#gl-settings-accounts"],
       ["URLs & redirects", "#gl-settings-urls"],
     ])

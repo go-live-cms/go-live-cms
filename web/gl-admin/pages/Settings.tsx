@@ -17,6 +17,7 @@ import UnsavedChangesBar from "@gl-admin/components/ui/UnsavedChangesBar"
 import FrontPageField from "@gl-admin/components/settings/FrontPageField"
 import SiteLogoField from "@gl-admin/components/settings/SiteLogoField"
 import RedirectsSection from "@gl-admin/components/settings/RedirectsSection"
+import SettingsNav, { SETTINGS_SECTIONS } from "@gl-admin/components/settings/SettingsNav"
 import { CheckIcon, ExternalIcon, WarningIcon } from "@gl-admin/components/ui/icons"
 import { errorMessage } from "@gl-admin/lib/api/errors"
 import {
@@ -54,12 +55,8 @@ import "@gl-admin/assets/styles/pages/workspace.scss"
 // The domain is deploy config, not a setting: "Change domain" opens the runbook.
 const CHANGE_DOMAIN_URL = "https://github.com/go-live-cms/go-live-cms/blob/main/docs/operations/deploy.md#change-the-domain"
 
-const SECTIONS = [
-  { id: "general", label: "General" },
-  { id: "editor", label: "Editor" },
-  { id: "accounts", label: "Accounts" },
-  { id: "urls", label: "URLs & redirects" },
-]
+// Discussion (#527) is its own page, after Editor in the menu: pages/SettingsDiscussion.tsx.
+const SECTIONS = SETTINGS_SECTIONS
 
 const URL_OPTIONS = URL_STRUCTURES.map((s) => ({
   value: s.value,
@@ -76,7 +73,7 @@ const SettingsPage: React.FC = () => {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   // The section the nav marks current: the one in the URL's hash, then the one scrolled to.
-  const [section, setSection] = useState(() =>
+  const [section, setSection] = useState<string>(() =>
     SECTIONS.find((s) => window.location.hash === `#gl-settings-${s.id}`)?.id ?? "general"
   )
 
@@ -88,6 +85,12 @@ const SettingsPage: React.FC = () => {
   }, [])
 
   const loaded = Boolean(draft && settings)
+  // Back from Discussion's menu ("/settings#gl-settings-editor"): the browser doesn't
+  // scroll to a section that renders after the load, so scroll once it's there.
+  useEffect(() => {
+    if (!loaded || !window.location.hash.startsWith("#gl-settings-")) return
+    document.getElementById(window.location.hash.slice(1))?.scrollIntoView?.()
+  }, [loaded])
   useEffect(() => {
     if (!loaded || typeof IntersectionObserver === "undefined") return
     const observer = new IntersectionObserver(
@@ -217,18 +220,7 @@ const SettingsPage: React.FC = () => {
         {header}
 
         <div className="gl-settings__layout">
-          <nav className="gl-settings__nav" aria-label="Settings sections">
-            {SECTIONS.map((s) => (
-              <a
-                key={s.id}
-                href={`#gl-settings-${s.id}`}
-                aria-current={section === s.id ? "true" : undefined}
-                onClick={() => setSection(s.id)}
-              >
-                {s.label}
-              </a>
-            ))}
-          </nav>
+          <SettingsNav page="general" current={section} onPick={setSection} />
 
           <div className="gl-settings__content">
             <form

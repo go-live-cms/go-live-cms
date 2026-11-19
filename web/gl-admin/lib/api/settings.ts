@@ -32,8 +32,9 @@ export interface Settings {
   site_logo?: SiteLogo | null
   // PUBLIC_BASE_URL, read-only ("" when not configured): the domain is deploy config.
   site_address: string
-  // Settings › Discussion (#522, docs/design/reader-comments.md 12.1), optional until the form
-  // uses them. Off by default; the admin shows no switch until the moderation screens ship (#527).
+  // Settings › Discussion (#522, docs/design/reader-comments.md 12.1; the form is #527's
+  // pages/SettingsDiscussion.tsx). Off by default; its switch stays hidden until the moderation
+  // queue ships (#526, lib/discussionSettings.ts COMMENTS_SWITCH_READY).
   comments_enabled?: boolean
   comments_moderation?: "all" | "first" | "none"
   comments_max_links?: number

@@ -8,11 +8,14 @@ import Table, { type TableColumnWithRender } from "@gl-admin/components/ui/Table
 import EmptyState from "@gl-admin/components/ui/EmptyState"
 import { toast } from "@gl-admin/components/ui/Toast"
 import { PlusIcon } from "@gl-admin/components/ui/icons"
-import { createPostType, getPostTypes, updatePostType } from "@gl-admin/lib/api/postTypes"
+import { createPostType, getPostTypes, updateBuiltInPostTypeSupports, updatePostType } from "@gl-admin/lib/api/postTypes"
 import type { PostType } from "@gl-admin/lib/api/types"
 import { errorMessage } from "@gl-admin/lib/api/errors"
 import {
+  BUILT_IN_EDITABLE_FIELD,
   SUPPORT_FIELDS,
+  builtInSupports,
+  canChangeField,
   draftFromPostType,
   isBuiltInPostType,
   nameFromLabel,
@@ -27,7 +30,8 @@ import "@gl-admin/assets/styles/pages/workspace.scss"
 
 // Post types (#343, the Post types board): the list, and a panel beside it that
 // creates a type or edits one. Admin only (requireSiteAdmin on POST and PUT).
-// Posts and Pages are built in: the API refuses changes to them, so they only list.
+// Posts and Pages are built in: their panel ("Post types · Posts", #527) shows every
+// field locked but Comments, the one change the API accepts for them (#522).
 //
 // Not here: an icon picker (the API accepts `icon` on create but doesn't store it, and
 // PUT refuses it), the item counts (no endpoint counts every type at once), separate
@@ -68,19 +72,15 @@ export default function PostTypes() {
       render: (_, row) =>
         row ? (
           <span className="gl-post-type-label">
-            {isBuiltInPostType(row.name) ? (
-              <span className="gl-post-type-label__text">{row.label}</span>
-            ) : (
-              <button
-                type="button"
-                className="gl-row-link"
-                aria-label={`Edit ${row.label}`}
-                aria-current={row.name === open ? "true" : undefined}
-                onClick={() => setOpen(row.name)}
-              >
-                {row.label}
-              </button>
-            )}
+            <button
+              type="button"
+              className="gl-row-link"
+              aria-label={`Edit ${row.label}`}
+              aria-current={row.name === open ? "true" : undefined}
+              onClick={() => setOpen(row.name)}
+            >
+              {row.label}
+            </button>
             {isBuiltInPostType(row.name) && <span className="gl-workspace__badge">Built-in</span>}
           </span>
         ) : (
@@ -126,7 +126,7 @@ export default function PostTypes() {
         aria-label="Post types"
         rowKey={(row) => row.name}
         rowClassName={(row) => (row.name === open ? "is-current" : undefined)}
-        onRowDoubleClick={(row) => !isBuiltInPostType(row.name) && setOpen(row.name)}
+        onRowDoubleClick={(row) => setOpen(row.name)}
       />
     )
   }
@@ -175,6 +175,8 @@ type FormProps = {
 
 function PostTypeForm({ postType, takenNames, onCancel, onSaved }: FormProps) {
   const creating = !postType
+  // Posts and Pages: only Comments may change (canChangeField).
+  const builtIn = !!postType && isBuiltInPostType(postType.name)
   const [draft, setDraft] = useState<PostTypeDraft>(() => (postType ? draftFromPostType(postType) : newPostTypeDraft()))
   // Until the name is typed, it follows the label.
   const [nameTouched, setNameTouched] = useState(false)
@@ -194,6 +196,20 @@ function PostTypeForm({ postType, takenNames, onCancel, onSaved }: FormProps) {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (builtIn && postType) {
+      setSaving(true)
+      try {
+        const supports = builtInSupports(postType.supports ?? [], draft.supports.includes(BUILT_IN_EDITABLE_FIELD))
+        const { post_type } = await updateBuiltInPostTypeSupports(postType.name, supports)
+        toast.success(`${post_type.label} saved`)
+        onSaved(post_type)
+      } catch (err) {
+        setError(errorMessage(err))
+      } finally {
+        setSaving(false)
+      }
+      return
+    }
     const invalid = validatePostTypeDraft(draft, creating, takenNames)
     if (invalid) {
       setError(invalid)
@@ -214,7 +230,8 @@ function PostTypeForm({ postType, takenNames, onCancel, onSaved }: FormProps) {
 
   return (
     <form className="gl-workspace__panel" onSubmit={submit} noValidate aria-labelledby="gl-post-type-form-title">
-      <h2 id="gl-post-type-form-title">{creating ? "New post type" : `Edit “${postType.label}”`}</h2>
+      <h2 id="gl-post-type-form-title">{!postType ? "New post type" : builtIn ? postType.label : `Edit “${postType.label}”`}</h2>
+      {builtIn && <Notice tone="info">A built-in type. Only Comments can change here; the rest is fixed.</Notice>}
 
       <Input
         title="Label"
@@ -223,6 +240,7 @@ function PostTypeForm({ postType, takenNames, onCancel, onSaved }: FormProps) {
         id="gl-post-type-label"
         placeholder="Case studies"
         hint="What people see in the sidebar and lists."
+        readOnly={builtIn}
         value={draft.label}
         onChange={(e) => {
           const label = e.target.value
@@ -251,7 +269,7 @@ function PostTypeForm({ postType, takenNames, onCancel, onSaved }: FormProps) {
         </div>
       )}
 
-      <fieldset className="gl-post-types__group">
+      <fieldset className="gl-post-types__group" disabled={builtIn}>
         <legend className="gl-workspace-field__label">Behaviour</legend>
         <Checkbox
           label="Public"
@@ -282,6 +300,7 @@ function PostTypeForm({ postType, takenNames, onCancel, onSaved }: FormProps) {
         inputMode="numeric"
         containerClassName="gl-post-types__position"
         hint="Lower numbers come first in the sidebar: Posts are 5, Pages 20. Empty counts as 0, the top."
+        readOnly={builtIn}
         value={draft.menu_position}
         onChange={(e) => set({ menu_position: e.target.value.trim() })}
       />
@@ -295,11 +314,18 @@ function PostTypeForm({ postType, takenNames, onCancel, onSaved }: FormProps) {
               label={f.label}
               description={f.note}
               checked={draft.supports.includes(f.value)}
+              disabled={!canChangeField(postType?.name, f.value)}
               onChange={(on) => toggleField(f.value, on)}
             />
           ))}
           {otherFields.map((value) => (
-            <Checkbox key={value} label={value} checked onChange={(on) => toggleField(value, on)} />
+            <Checkbox
+              key={value}
+              label={value}
+              checked
+              disabled={!canChangeField(postType?.name, value)}
+              onChange={(on) => toggleField(value, on)}
+            />
           ))}
         </div>
       </fieldset>
