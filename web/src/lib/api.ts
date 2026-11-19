@@ -2,6 +2,7 @@ import type { PostSeo } from "./seo"
 import type { Post, PostSortOption, SortOrder, PaginationParams, ApiResponse, TaxonomyTerm, TaxonomyType } from "../../gl-admin/lib/api/types"
 import { SERVER_API_URL, SERVER_MEDIA_URL } from "../../gl-admin/lib/server-api-url"
 import type { Pagination } from "./pagination"
+import type { DiscussionSetting } from "./discussion"
 import { requestIdHeaders } from "./log"
 
 const API_BASE = typeof window === "undefined" ? SERVER_API_URL : "/api/v1"
@@ -212,6 +213,8 @@ export interface PublicPost {
   taxonomy_terms: TaxonomyTerm[]
   // The published SEO settings (#357); absent from an older API.
   seo?: PostSeo
+  // Reader comments (#523): whether to render the section; absent from an older API.
+  discussion?: PublicDiscussion
 }
 
 export async function getPublicPost(idOrSlug: string | number): Promise<PublicPost | null> {
@@ -222,7 +225,92 @@ export async function getPublicPost(idOrSlug: string | number): Promise<PublicPo
   if (!response.ok) throw Object.assign(new Error(`HTTP ${response.status} loading a post`), { status: response.status })
   const body = await response.json()
   if (!body?.post) return null
-  return { post: body.post, featured_image: body.featured_image ?? null, taxonomy_terms: body.taxonomy_terms ?? [], seo: body.seo ?? undefined }
+  return {
+    post: body.post,
+    featured_image: body.featured_image ?? null,
+    taxonomy_terms: body.taxonomy_terms ?? [],
+    seo: body.seo ?? undefined,
+    discussion: body.discussion ?? undefined,
+  }
+}
+
+// --- Reader comments (#523, design docs/design/reader-comments.md 9.1) ---------------
+//
+// Cached /public reads, so they carry no clock: `state` is the rule without the timer and
+// `closes_at` when an open discussion closes. Apply it with `discussionState(discussion,
+// now)` (src/lib/discussion.ts) before showing the form. Only approved comments come back;
+// nothing in them is an address or an id of the commenter.
+
+/** A post's discussion as the public reads carry it. `off` always counts 0. */
+export interface PublicDiscussion extends DiscussionSetting {
+  count: number
+}
+
+/** A comment as the site shows it. */
+export interface PublicReaderComment {
+  id: number
+  parent_id: number | null
+  root_id: number | null
+  /** As posted, or a member's current name; "" when removed. */
+  name: string
+  badge: "author" | "staff" | null
+  /** A member's avatar path: render it through `safeAvatarSrc`. null: initials. */
+  avatar: string | null
+  /** Plain text: render as text, never as HTML. */
+  body: string
+  created_at: string
+  edited: boolean
+  /** "This comment was removed": a hidden comment that keeps its replies, or a tombstone. */
+  removed: boolean
+  /** "Replying to Ana" on a reply to a reply, when that comment is shown. */
+  replying_to: string | null
+}
+
+/** A thread: its first 100 replies on a page; `reply_count` above that means "Show more replies". */
+export interface PublicReaderCommentThread {
+  comment: PublicReaderComment
+  replies: PublicReaderComment[]
+  reply_count: number
+}
+
+export interface PublicComments {
+  discussion: PublicDiscussion
+  threads: PublicReaderCommentThread[]
+  pagination: Pagination
+}
+
+export interface PublicCommentThread {
+  discussion: PublicDiscussion
+  thread: PublicReaderCommentThread
+}
+
+async function readPublicComments(path: string): Promise<any | null> {
+  const response = await fetch(`${SERVER_MEDIA_URL}/public${path}`, {
+    headers: requestIdHeaders(),
+    signal: AbortSignal.timeout(PUBLIC_EXTRAS_TIMEOUT_MS),
+  })
+  if (response.status === 404) return null
+  if (!response.ok) throw Object.assign(new Error(`HTTP ${response.status} loading comments`), { status: response.status })
+  return response.json()
+}
+
+/**
+ * Page `page` of a post's threads (GET /public/posts/:id/comments?page=N). null when the
+ * site doesn't serve the post or the page is past the end; other failures throw, with the
+ * status (the post route renders the post without the section then).
+ */
+export async function getPublicPostComments(postId: number | string, page = 1): Promise<PublicComments | null> {
+  const query = page > 1 ? `?page=${page}` : ""
+  const body = await readPublicComments(`/posts/${encodeURIComponent(String(postId))}/comments${query}`)
+  if (!body?.discussion) return null
+  return { discussion: body.discussion, threads: body.threads ?? [], pagination: body.pagination }
+}
+
+/** One thread with every reply (`?thread=<root id>`, "Show more replies"), or null. */
+export async function getPublicCommentThread(postId: number | string, rootId: number): Promise<PublicCommentThread | null> {
+  const body = await readPublicComments(`/posts/${encodeURIComponent(String(postId))}/comments?thread=${rootId}`)
+  if (!body?.thread) return null
+  return { discussion: body.discussion, thread: body.thread }
 }
 
 // The page the site shows at / (#336, GET /public/front-page), as getPublicPost answers
@@ -235,7 +323,13 @@ export async function getPublicFrontPage(): Promise<PublicPost | null> {
   if (!response.ok) throw Object.assign(new Error(`HTTP ${response.status} loading the front page`), { status: response.status })
   const body = await response.json()
   if (!body?.post) return null
-  return { post: body.post, featured_image: body.featured_image ?? null, taxonomy_terms: body.taxonomy_terms ?? [], seo: body.seo ?? undefined }
+  return {
+    post: body.post,
+    featured_image: body.featured_image ?? null,
+    taxonomy_terms: body.taxonomy_terms ?? [],
+    seo: body.seo ?? undefined,
+    discussion: body.discussion ?? undefined,
+  }
 }
 
 // A public type's published posts with their published titles and excerpts (#358,

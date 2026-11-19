@@ -8,7 +8,8 @@
 // state rule (this file), the text rules (discussion_text.go), PUT /posts/:id/discussion
 // (posts_discussion.go) and the retention job (discussion_maintenance.go).
 // settings.comments_enabled starts off and its switch stays hidden until the moderation
-// screens (#526, #527) ship; nothing under /public reads or writes comments yet.
+// screens (#526, #527) ship. /public reads them since #523 (discussion_public.go, with its
+// purges in discussion_purge.go); nothing writes them there yet (#524).
 package api
 
 import (

@@ -90,6 +90,9 @@ var publicCacheRoutes = map[string]publicCacheRoute{
 	"/public/posts/:id/related":  {},
 	"/public/posts/type/:type":   {},
 	"/public/posts/:id/authors":  {},
+	// Reader comments (#523): approved ones, clock-free (closes_at, never a computed
+	// closed); comment writes purge through purgeDiscussion (discussion_purge.go).
+	"/public/posts/:id/comments": {},
 	"/public/front-page":         {notFound: true},
 	// Author and term pages (#350, #348).
 	"/public/authors":                                {},

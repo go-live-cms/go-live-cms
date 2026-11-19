@@ -89,6 +89,9 @@ type publicPostView struct {
 	FeaturedImage *publicFeaturedImage   `json:"featured_image"`
 	TaxonomyTerms []TaxonomyTermResponse `json:"taxonomy_terms"`
 	SEO           publicPostSEO          `json:"seo"`
+	// Reader comments (#523, design 9.1): whether to render the section, before fetching
+	// the thread. The state without the clock and closes_at (cached: problem 8).
+	Discussion PublicDiscussion `json:"discussion"`
 }
 
 type publicFeaturedImage struct {
@@ -158,6 +161,11 @@ func (server *Server) publicPostView(ctx context.Context, post db.Post) (publicP
 	// Embeds the site no longer allows (#425) and inline nodes (#320: names and current URLs, never ids).
 	server.publicizeBlockDocs(ctx, resp.PublishedBlocks)
 	view := publicPostView{Post: resp, TaxonomyTerms: []TaxonomyTermResponse{}}
+	discussion, err := server.readPublicDiscussion(ctx, post)
+	if err != nil {
+		return view, err
+	}
+	view.Discussion = discussion.discussion
 
 	if published {
 		seo, err := server.publicSEO(ctx, settings)

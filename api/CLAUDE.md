@@ -1290,8 +1290,8 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
 
 ## Reader comments: storage, settings, the state rule, retention (#522, `000061`, `discussion*.go`)
 
-- Design: `docs/design/reader-comments.md` (#499; decisions in its section 18). Phase 1 only:
-  **nothing under `/public` reads or writes comments yet** (C3 #523 reads, C4 #524 writes), and
+- Design: `docs/design/reader-comments.md` (#499; decisions in its section 18). `/public` reads
+  them since C3 (#523, below); nothing writes them there yet (C4 #524), and
   `settings.comments_enabled` starts off with its switch hidden until #526/#527. Never #192's
   names: `reader_comment*`, `commenter*`, `discussion*`.
 - **Tables (6.1):** `commenters` (one per address, `email_lower` UNIQUE; never public, never
@@ -1349,6 +1349,35 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
 - Tests: `discussion_db_test.go` (real DB: lifecycle, tombstones, constraints, first publish, the
   snapshot rule, every retention rule, the routes, settings, post types) and `discussion_test.go`
   (vectors, network hash, word lists).
+- **Public thread reads (#523, `discussion_public.go`, `db/query/discussion_public.sql`, design 6.2,
+  9.1):** `GET /public/posts/:id/comments?page=N` → `{discussion, threads: [{comment, replies,
+  reply_count}], pagination}` (`comments_per_page` threads, each with its first 100 replies;
+  `comments_order` orders threads, replies always oldest first; `comments_threading: flat` = every
+  shown comment on its own, no `replying_to`); `?thread=<root id>` → `{discussion, thread}` with every
+  reply (`page` and `thread` together: 400). 404 for a post `/public` doesn't serve (not published,
+  or its type isn't public and active), past the last page, and for anything but a shown root of
+  that post. **Only approved comments**: "shown" = approved and not a tombstone; a hidden root or
+  reply that a shown comment answers is listed as a placeholder (`removed: true`, empty name and
+  body: the SQL blanks them), so unapproving never hides replies. `replying_to` = the shown parent's
+  name on a reply to a reply. A member's comment: current name, avatar, badge `author` (on the
+  **published** byline) or `staff`. `GET /public/posts/:id`, `/slug/:slug` and the front page carry
+  `discussion: {state, closes_at, count}` (`publicPostView`; `off` counts 0 and lists nothing).
+  **Cached and clock-free:** `state` never applies `closes_at` (the renderer and the write path
+  do). `PublicReaderComment` is built field by field; no email, commenter id, status, hash or token
+  (7.1: `TestPublicCommentAnswersHoldNoAddress` in `route_auth_test.go`, which also lists every
+  `/public` comment route in `publicReaderCommentRoutes`). Mock tests of the post reads call
+  `expectDiscussionOff(store)` after their own expectations.
+- **Purges (#523, `discussion_purge.go`, design 10):** comment writes call
+  **`server.purgeDiscussion(ctx, log, postID, event)` after their commit**, never inside a
+  transaction; `discussionEventPurges` decides (published, hidden, removed, edited, bulk purge;
+  unconfirmed, pending, unseen don't), `discussionStatusEvent(from, to)` names a status change
+  (`""` = a new row), and a post known not to be published skips it (`postID` 0 = several posts:
+  purge once per bulk request). Such routes go in **`publicCacheDiscussionRoutes`** (neither purge
+  list: the purge depends on the outcome). The Discussion choice and Settings saves purge through
+  the middleware; publish/unpublish/trash/delete cover the thread; the retention job never changes
+  a public thread and doesn't purge. Tests: `discussion_public_db_test.go`,
+  `discussion_purge_db_test.go` (miniredis + DB: each event, pending-only doesn't purge, after
+  commit via `purgeWatch`), `discussion_public_test.go`, `discussion_purge_test.go`.
 
 ## Per-block "Last edited by" (#328, `000049`, `post_block_edits.go`)
 

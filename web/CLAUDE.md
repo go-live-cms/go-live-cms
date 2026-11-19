@@ -385,7 +385,11 @@ are the most fragile part of the codebase. **Before editing anything under
   text rules (`normalizeReaderCommentBody`, `readerCommentLength` in code points, as the API
   counts) for the form's counter. Pinned by `src/lib/discussionStateVectors.json` and
   `src/lib/discussionTextVectors.json` (both suites; `JSON.parse`). Nothing renders comments yet
-  (C5 #525), and `comments_enabled` stays off with no switch until #527.
+  (C5 #525), and `comments_enabled` stays off with no switch until #527. **The reads (#523):**
+  `getPublicPost`/`getPublicFrontPage` carry `discussion` (`{state, closes_at, count}`, cached and
+  clock-free: apply `discussionState(discussion, now)` before showing a form), and
+  `getPublicPostComments(id, page)` / `getPublicCommentThread(id, rootId)` in `src/lib/api.ts` read
+  the threads (null on a 404; types `PublicReaderComment`, `PublicReaderCommentThread`).
 - **Global styles (#485, `src/lib/globalStyles.ts`, design `docs/design/theme-builder.md`
   section 6):** the override grammar, validator, contrast (`CONTRAST_PAIRS`, which the
   default theme's `tokens.test.ts` checks) and groups, the same rules as the API's

@@ -115,6 +115,7 @@ func TestGetPublicPost(t *testing.T) {
 		// The working featured image and terms are never read.
 		store.EXPECT().GetPostMetaByKey(gomock.Any(), gomock.Any()).Times(0)
 		store.EXPECT().GetPostTaxonomyTerms(gomock.Any(), gomock.Any()).Times(0)
+		expectDiscussionOff(store)
 
 		recorder := serveSettingsGET(t, newTestServer(t, store), "/public/posts/7")
 		require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
@@ -136,6 +137,7 @@ func TestGetPublicPost(t *testing.T) {
 		store.EXPECT().GetPostBySlug(gomock.Any(), "the-post").Times(1).Return(editedPublishedPost(), nil)
 		store.EXPECT().GetMediaByIDs(gomock.Any(), []int64{5}).Times(1).Return(nil, nil)
 		store.EXPECT().GetPublishedPostTaxonomyTerms(gomock.Any(), int64(7)).Times(1).Return(nil, nil)
+		expectDiscussionOff(store)
 
 		recorder := serveSettingsGET(t, newTestServer(t, store), "/public/posts/slug/the-post")
 		require.Equal(t, http.StatusOK, recorder.Code)
@@ -160,6 +162,7 @@ func TestGetPublicPost(t *testing.T) {
 			Return(db.PostMetum{MetaValue: sql.NullString{String: stored, Valid: true}}, nil)
 		store.EXPECT().GetPostTaxonomyTerms(gomock.Any(), int64(7)).Times(1).
 			Return([]db.GetPostTaxonomyTermsRow{db.GetPostTaxonomyTermsRow(publishedTerm)}, nil)
+		expectDiscussionOff(store)
 
 		recorder := serveSettingsGET(t, server, "/public/posts/7")
 		require.Equal(t, http.StatusOK, recorder.Code)
@@ -197,6 +200,7 @@ func TestGetPublicPost(t *testing.T) {
 		store.EXPECT().GetPost(gomock.Any(), int64(7)).Times(1).Return(editedPublishedPost(), nil)
 		store.EXPECT().GetMediaByIDs(gomock.Any(), []int64{5}).Times(1).Return(nil, nil)
 		store.EXPECT().GetPublishedPostTaxonomyTerms(gomock.Any(), int64(7)).Times(1).Return(nil, fmt.Errorf("db down"))
+		expectDiscussionOff(store)
 		recorder := serveSettingsGET(t, newTestServer(t, store), "/public/posts/7")
 		require.Equal(t, http.StatusInternalServerError, recorder.Code)
 	})

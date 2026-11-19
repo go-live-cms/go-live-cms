@@ -27,9 +27,19 @@ func TestMutatingRoutesDeclarePublicCachePurge(t *testing.T) {
 		registered[key] = true
 		_, purges := publicCachePurgeRoutes[key]
 		_, keeps := publicCacheNoPurgeRoutes[key]
-		require.True(t, purges || keeps,
-			"%s writes but isn't in publicCachePurgeRoutes or publicCacheNoPurgeRoutes (public_cache.go): can it change what the public site shows?", key)
-		require.False(t, purges && keeps, "%s is in both publicCachePurgeRoutes and publicCacheNoPurgeRoutes", key)
+		// Comment writes purge themselves by outcome (#523, discussion_purge.go).
+		_, self := publicCacheDiscussionRoutes[key]
+		declared := 0
+		for _, in := range []bool{purges, keeps, self} {
+			if in {
+				declared++
+			}
+		}
+		require.Equal(t, 1, declared,
+			"%s writes: it must be in exactly one of publicCachePurgeRoutes, publicCacheNoPurgeRoutes (public_cache.go) or publicCacheDiscussionRoutes (discussion_purge.go): can it change what the public site shows?", key)
+	}
+	for key := range publicCacheDiscussionRoutes {
+		require.True(t, registered[key], "publicCacheDiscussionRoutes lists %s, which is no longer a route", key)
 	}
 	for key := range publicCachePurgeRoutes {
 		require.True(t, registered[key], "publicCachePurgeRoutes lists %s, which is no longer a route", key)
