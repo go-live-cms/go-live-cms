@@ -36,6 +36,14 @@
 //   - Edit access requests (#321): POST /posts/:id/access-requests, per member
 //     and client (RATE_LIMIT_ACCESS_REQUEST_PER_MINUTE): each one emails the
 //     post's reviewers.
+//   - Reader comments (#524, discussion_write.go): POST /public/posts/:id/comments
+//     per client (RATE_LIMIT_COMMENT_POST_PER_MINUTE) and, once the body is bound,
+//     per client and typed address (RATE_LIMIT_COMMENT_ADDRESS_PER_MINUTE); a
+//     confirmation mail at most every 10 minutes per address, silently; the
+//     confirmation routes are emailed-token endpoints. The client is the browser:
+//     the web's endpoint forwards its address in X-Forwarded-For, which the API
+//     reads from TRUSTED_PROXIES only. These limits skip no exempt CIDR: they are
+//     never reached by the web's own SSR reads.
 //
 // The internal listener (/internal/*) is not limited: only the collab WS server
 // can reach it, it calls once per connection for every editor, and its
@@ -277,6 +285,19 @@ func newCooldownLimiter(name string, enabled bool) *rateLimiter {
 	return newRateLimiter(name, 1)
 }
 
+// newIntervalLimiter returns a limiter of one request per every per key (a cooldown
+// longer than a minute), or nil (disabled) when enabled is false.
+func newIntervalLimiter(name string, every time.Duration, enabled bool) *rateLimiter {
+	if !enabled {
+		return nil
+	}
+	store := newMemoryRateLimitStore(1)
+	store.limit = rate.Every(every)
+	// A bucket idle this long has refilled: identical to a new one.
+	store.idleTTL = every
+	return &rateLimiter{name: name, store: store}
+}
+
 // perIP returns middleware limiting each client (clientKey). exempt client
 // IPs skip it.
 func (l *rateLimiter) perIP(exempt ...netip.Prefix) gin.HandlerFunc {
@@ -348,6 +369,14 @@ type rateLimits struct {
 	// accessRequest limits edit access requests (#321) per member and client
 	// IP: each one emails the post's reviewers.
 	accessRequest *rateLimiter
+	// Reader comments (#524, design 5.3): commentPost per client (middleware),
+	// commentAddress per client and typed address (after binding), commentMail the
+	// silent one-confirmation-mail-per-10-minutes cooldown per address, commentConfirm
+	// the confirmation endpoints per client (the account-token limit).
+	commentPost    *rateLimiter
+	commentAddress *rateLimiter
+	commentMail    *rateLimiter
+	commentConfirm *rateLimiter
 	// generalExempt client IPs skip the general limit only.
 	generalExempt []netip.Prefix
 }
@@ -371,6 +400,10 @@ func newRateLimits(config util.Config) (rateLimits, error) {
 		passwordForgot: newRateLimiter("password-forgot", config.RateLimitPasswordForgotPerMinute),
 		accountToken:   newRateLimiter("account-token", config.RateLimitAccountTokenPerMinute),
 		accessRequest:  newRateLimiter("access-request", config.RateLimitAccessRequestPerMinute),
+		commentPost:    newRateLimiter("comment-post", config.RateLimitCommentPostPerMinute),
+		commentAddress: newRateLimiter("comment-address", config.RateLimitCommentAddressPerMinute),
+		commentMail:    newIntervalLimiter("comment-mail", readerCommentMailCooldown, config.RateLimitCommentPostPerMinute > 0),
+		commentConfirm: newRateLimiter("comment-confirm", config.RateLimitAccountTokenPerMinute),
 		generalExempt:  exempt,
 	}, nil
 }

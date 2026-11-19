@@ -1,0 +1,53 @@
+{
+  "_comment": "Reader comments' word lists and links (#524, docs/design/reader-comments.md 4.2, 5.4, 11.4). The API applies them (api/discussion_rules.go: matchDiscussionWord, readerCommentLinks, matchesMemberName); the admin's preview and the renderer use the twins in web/src/lib/discussion.ts. Both suites run every case. `words` cases give the list and the text, and `match` is the entry found (null for none). `links` cases give the text and the links as the renderer links them. `member_names` cases give a guest name, the members, and whether it matches one.",
+  "words": [
+    { "name": "a plain word", "words": ["casino"], "text": "Best casino in town", "match": "casino" },
+    { "name": "case is ignored", "words": ["Casino"], "text": "best CASINO deals", "match": "Casino" },
+    { "name": "accents are dropped in the text", "words": ["acao"], "text": "Uma ação rápida", "match": "acao" },
+    { "name": "accents are dropped in the entry", "words": ["ação"], "text": "uma acao rapida", "match": "ação" },
+    { "name": "only whole words", "words": ["ass"], "text": "a first class post", "match": null },
+    { "name": "a word at the start", "words": ["spam"], "text": "spam everywhere", "match": "spam" },
+    { "name": "a word at the end", "words": ["spam"], "text": "this is spam", "match": "spam" },
+    { "name": "punctuation is a boundary", "words": ["spam"], "text": "(spam), again", "match": "spam" },
+    { "name": "an underscore is a boundary", "words": ["spam"], "text": "a_spam_b", "match": "spam" },
+    { "name": "digits are word characters", "words": ["win"], "text": "win2026 now", "match": null },
+    { "name": "an accented letter still joins the word", "words": ["sale"], "text": "saleé", "match": null },
+    { "name": "letters of other scripts are word characters", "words": ["sale"], "text": "saleд", "match": null },
+    { "name": "several words in an entry", "words": ["buy now"], "text": "Click here and BUY NOW!", "match": "buy now" },
+    { "name": "an entry of symbols needs no boundary", "words": ["$$$"], "text": "make $$$ fast", "match": "$$$" },
+    { "name": "an entry of symbols inside a word", "words": ["$$$"], "text": "win$$$now", "match": "$$$" },
+    { "name": "a later occurrence can match", "words": ["cat"], "text": "concatenate the cat", "match": "cat" },
+    { "name": "the first entry that matches is reported", "words": ["nothing", "viagra", "pills"], "text": "pills and viagra", "match": "viagra" },
+    { "name": "no entry matches", "words": ["casino", "pills"], "text": "A thoughtful reply", "match": null },
+    { "name": "an empty list", "words": [], "text": "anything", "match": null },
+    { "name": "a blank entry never matches", "words": ["  "], "text": "anything at all", "match": null },
+    { "name": "an entry is trimmed", "words": ["  crypto "], "text": "crypto tips", "match": "  crypto " },
+    { "name": "line breaks are boundaries", "words": ["spam"], "text": "first line\nspam\nlast", "match": "spam" }
+  ],
+  "links": [
+    { "name": "no link", "text": "Just words here.", "links": [] },
+    { "name": "an https link", "text": "See https://example.com/a for more", "links": ["https://example.com/a"] },
+    { "name": "an http link", "text": "http://example.com", "links": ["http://example.com"] },
+    { "name": "the scheme in any case", "text": "HTTPS://Example.com/X", "links": ["HTTPS://Example.com/X"] },
+    { "name": "a final full stop is sentence punctuation", "text": "Read https://example.com/post.", "links": ["https://example.com/post"] },
+    { "name": "several punctuation marks", "text": "Really https://example.com/?!", "links": ["https://example.com/"] },
+    { "name": "a closing bracket it doesn't open", "text": "(see https://example.com/a)", "links": ["https://example.com/a"] },
+    { "name": "a closing bracket it opens", "text": "https://en.wikipedia.org/wiki/Go_(game)", "links": ["https://en.wikipedia.org/wiki/Go_(game)"] },
+    { "name": "two links", "text": "https://a.example and https://b.example/x", "links": ["https://a.example", "https://b.example/x"] },
+    { "name": "a link ends at a quote or angle bracket", "text": "<https://example.com/a>", "links": ["https://example.com/a"] },
+    { "name": "no other scheme", "text": "ftp://example.com javascript:alert(1) mailto:a@example.com", "links": [] },
+    { "name": "no bare domain", "text": "www.example.com and example.com", "links": [] },
+    { "name": "a scheme alone is no link", "text": "https:// nothing", "links": [] },
+    { "name": "not inside a word", "text": "xhttps://example.com", "links": [] },
+    { "name": "query and fragment are kept", "text": "https://example.com/p?q=1&r=2#top", "links": ["https://example.com/p?q=1&r=2#top"] }
+  ],
+  "member_names": [
+    { "name": "a member's full name", "guest": "Ana Costa", "members": [{ "username": "ana", "full_name": "Ana Costa" }], "match": true },
+    { "name": "case and accents are ignored", "guest": "ana côsta", "members": [{ "username": "ana", "full_name": "Ana Costa" }], "match": true },
+    { "name": "spaces are collapsed", "guest": "  Ana   Costa ", "members": [{ "username": "ana", "full_name": "Ana Costa" }], "match": true },
+    { "name": "a member's username", "guest": "Luan", "members": [{ "username": "luan", "full_name": "Luan K." }], "match": true },
+    { "name": "part of a name doesn't match", "guest": "Ana", "members": [{ "username": "acosta", "full_name": "Ana Costa" }], "match": false },
+    { "name": "another name", "guest": "Maya Lin", "members": [{ "username": "ana", "full_name": "Ana Costa" }], "match": false },
+    { "name": "no members", "guest": "Anyone", "members": [], "match": false }
+  ]
+}

@@ -95,6 +95,8 @@ type Store interface {
 	DeletePostCommentTx(ctx context.Context, commentID, threadID int64) (DeletePostCommentTxResult, error)
 	// reader comments (#522): delete, or tombstone one with approved replies
 	DeleteReaderCommentTx(ctx context.Context, id int64) (DeleteReaderCommentTxResult, error)
+	CreateReaderCommentTx(ctx context.Context, arg CreateReaderCommentTxParams) (ReaderComment, error)
+	PublishReaderCommentTx(ctx context.Context, arg PublishReaderCommentTxParams) (ReaderComment, error)
 	TransferPostOwnerTx(ctx context.Context, arg TransferPostOwnerTxParams) (TransferPostOwnerTxResult, error)
 
 	SaveMenuTx(ctx context.Context, arg SaveMenuTxParams) (Menu, error)

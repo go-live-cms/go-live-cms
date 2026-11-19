@@ -45,6 +45,21 @@ export const CACHEABLE_PAGE_ROUTES: ReadonlySet<string> = new Set([
 // rendered with it is never cached, whether or not the preview was accepted, design 11).
 const SESSION_COOKIES = ["__Host-refresh_token", "refresh_token", "auth_token", ...DESIGN_PREVIEW_COOKIES]
 
+// Reader comments (#524, docs/design/reader-comments.md 9.4, 10, 11.6): the write
+// endpoints and the reader pages (confirm, unsubscribe, your data) answer one reader, and
+// a post page with a `commented` notice shows that reader's outcome. All never cached,
+// whatever the route.
+export const NO_STORE_PATH_PREFIXES = ["/gl-comments/", "/comments/confirm", "/comments/unsubscribe", "/comments/your-data"]
+export const NO_STORE_QUERY_PARAMS = ["commented"]
+
+/** Whether the URL is one of a reader's own pages (above), never cacheable. */
+export function isPerReaderUrl(url: URL): boolean {
+  return (
+    NO_STORE_PATH_PREFIXES.some((prefix) => url.pathname === prefix.replace(/\/$/, "") || url.pathname.startsWith(prefix)) ||
+    NO_STORE_QUERY_PARAMS.some((param) => url.searchParams.has(param))
+  )
+}
+
 export function hasSessionCookie(cookieHeader: string | null): boolean {
   if (!cookieHeader) return false
   return cookieHeader.split(";").some((part) => {
@@ -90,8 +105,19 @@ export function withPageCacheControl(
   const cookie = request.headers.get("cookie")
   const setsCookie = response.headers.has("set-cookie")
   const own = response.headers.get("cache-control")
-  if (own && !hasSessionCookie(cookie) && !setsCookie) return response
-  const value = own && own.includes("no-store") ? own : pageCacheControl({ routePattern, status: response.status, cookie, setsCookie, siteUrlConfigured })
+  let perReader = false
+  try {
+    perReader = isPerReaderUrl(new URL(request.url))
+  } catch {
+    // A request without a full URL: the route decides.
+  }
+  if (own && !hasSessionCookie(cookie) && !setsCookie && !perReader) return response
+  const value =
+    own && own.includes("no-store")
+      ? own
+      : perReader
+        ? PRIVATE_NO_STORE
+        : pageCacheControl({ routePattern, status: response.status, cookie, setsCookie, siteUrlConfigured })
   try {
     response.headers.set("Cache-Control", value)
     return response

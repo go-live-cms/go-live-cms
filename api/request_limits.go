@@ -21,6 +21,11 @@ const (
 	// (mediaId/src; the editor disables data: URLs), so real documents are a
 	// few hundred KB at most.
 	blockDocBodyLimit int64 = 4 << 20 // 4 MiB
+
+	// discussionBodyLimit is for the public comment writes (#524), the API's anonymous
+	// writes outside /auth. The design's 16 KiB is too tight: 4000 characters of text
+	// can be 16,000 bytes of UTF-8 (emoji), before the name, address and JSON.
+	discussionBodyLimit int64 = 24 << 10 // 24 KiB
 )
 
 // bodyLimitOverrides maps "METHOD route-template" to its body limit; 0 means
@@ -32,6 +37,10 @@ var bodyLimitOverrides = map[string]int64{
 	"POST /api/v1/media/bulk":        0,
 	"POST /api/v1/media/:id/replace": 0,
 	"PUT /api/v1/users/me/avatar":    0, // avatarMaxBytes (#334)
+	// Reader comments' anonymous writes (#524).
+	"POST /public/posts/:id/comments":         discussionBodyLimit,
+	"POST /public/discussion/confirm":         discussionBodyLimit,
+	"POST /public/discussion/unconfirmed/:id": discussionBodyLimit,
 }
 
 // bodyLimitMiddleware caps the request body for the matched route. It runs as

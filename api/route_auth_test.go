@@ -1,6 +1,9 @@
 package api
 
 import (
+	"fmt"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -82,6 +85,70 @@ func TestGETRoutesRequireAuth(t *testing.T) {
 	}
 }
 
+// publicPOSTRoutes are the writes anyone may send without a token (reader comments design
+// 15.1, #524): every POST, PUT, PATCH or DELETE that doesn't answer 401 anonymously must
+// be listed with its reason, so a new anonymous write gets a look (its limits, what it
+// reveals, its cache). Until #524 they were /api/v1/auth only.
+var publicPOSTRoutes = map[string]string{
+	"POST /api/v1/auth/login":                "sign-in: per-IP and per IP+username limits, origin guard, same answer for a wrong name or password",
+	"POST /api/v1/auth/refresh":              "the refresh cookie is the credential; origin guard, per-IP limit",
+	"POST /api/v1/auth/password/forgot":      "same 200 for any address, work after the response, per-IP limit and a silent per-user cooldown",
+	"POST /api/v1/auth/password/reset":       "the emailed token is the credential (account-token limit)",
+	"POST /api/v1/auth/invitations/preview":  "the emailed token is the credential (account-token limit)",
+	"POST /api/v1/auth/invitations/accept":   "the emailed token is the credential (account-token limit)",
+	"POST /api/v1/auth/email-change/confirm": "the emailed token is the credential (account-token limit)",
+	"POST /api/v1/auth/register":             "open signup (#191): off by default, same 202 for any address, limits and a silent cooldown",
+	"POST /api/v1/auth/register/verify":      "the emailed token is the credential (account-token limit)",
+	// Reader comments (#524, discussion_write.go). /public is server-side only: the web's
+	// /gl-comments endpoints (origin check) are the callers.
+	"POST /public/posts/:id/comments":         "a reader's comment: same 202 for any address without its browser key, limits per browser and per browser+address, a silent mail cooldown, caps, honeypot, rules",
+	"POST /public/discussion/confirm":         "the emailed token is the credential, spent by the confirm page's button (account-token limit)",
+	"POST /public/discussion/unconfirmed/:id": "the browser key of the comment's address is the credential (account-token limit)",
+}
+
+// stopOnStoreCall is a gomock reporter that turns any store call into a panic, which the
+// recovery middleware answers 500: an anonymous request that got that far answered
+// without a token.
+type stopOnStoreCall struct{}
+
+func (stopOnStoreCall) Errorf(format string, args ...any) { panic(fmt.Sprintf(format, args...)) }
+func (stopOnStoreCall) Fatalf(format string, args ...any) { panic(fmt.Sprintf(format, args...)) }
+
+func TestAnonymousWritesAreListed(t *testing.T) {
+	store := mockdb.NewMockStore(gomock.NewController(stopOnStoreCall{}))
+	server := newTestServer(t, store)
+	server.logger = slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	registered := map[string]bool{}
+	for _, route := range server.router.Routes() {
+		switch route.Method {
+		case http.MethodGet, http.MethodHead, http.MethodOptions:
+			continue
+		}
+		key := route.Method + " " + route.Path
+		registered[key] = true
+		t.Run(key, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			request := httptest.NewRequest(route.Method, routeExample(route.Path), strings.NewReader(`{}`))
+			request.Header.Set("Content-Type", "application/json")
+			server.router.ServeHTTP(recorder, request)
+			_, listed := publicPOSTRoutes[key]
+			if strings.HasPrefix(route.Path, "/public/") {
+				require.True(t, listed, "%s is an anonymous write under /public: list it in publicPOSTRoutes with its reason", key)
+			}
+			if listed {
+				require.NotEqual(t, http.StatusUnauthorized, recorder.Code, "%s is listed in publicPOSTRoutes but needs a token", key)
+				return
+			}
+			require.Equal(t, http.StatusUnauthorized, recorder.Code,
+				"%s answers without a token: add authMiddleware, or list it in publicPOSTRoutes with the reason it may be anonymous", key)
+		})
+	}
+	for key := range publicPOSTRoutes {
+		require.True(t, registered[key], "publicPOSTRoutes lists %s, which is no longer a route", key)
+	}
+}
+
 // commentRoutes are the block comment routes (#192), every method: none is public, and
 // TestCommentRoutesRequireAuth fails when a comment route is added without being listed
 // here (so its rule gets a look) or answers an anonymous request.
@@ -105,10 +172,17 @@ func TestCommentRoutesRequireAuth(t *testing.T) {
 			continue
 		}
 		key := route.Method + " " + route.Path
+		if strings.HasPrefix(route.Path, "/public/") {
+			// Reader comments (#499), never #192's: the public discussion. Their writes
+			// are audited by TestAnonymousWritesAreListed, and no /public route reads
+			// post_comments.
+			_, reader := publicPOSTRoutes[key]
+			require.True(t, reader || route.Method == http.MethodGet, "%s: a /public comment route must be a reader comment route", key)
+			continue
+		}
 		registered[key] = true
 		_, listed := commentRoutes[key]
 		require.True(t, listed, "%s is a comment route missing from commentRoutes", key)
-		require.False(t, strings.HasPrefix(route.Path, "/public"), "comments never reach the public site: %s", key)
 
 		t.Run(key, func(t *testing.T) {
 			recorder := httptest.NewRecorder()

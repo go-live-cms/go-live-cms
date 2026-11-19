@@ -558,6 +558,15 @@ var publicCachePurgeRoutes = map[string]string{
 	"PUT /api/v1/users/:id/role":             "conservative: who is listed as an author",
 }
 
+// publicCacheHandlerPurgeRoutes are the mutating routes whose effect on the public site
+// depends on the outcome, so their handler purges (purgeAfterDiscussionChange, after the
+// commit) only when it changed what readers see. /public has no purge middleware.
+var publicCacheHandlerPurgeRoutes = map[string]string{
+	"POST /public/posts/:id/comments":         "only a keyed comment the rules publish; an unconfirmed or held one changes nothing public (#524)",
+	"POST /public/discussion/confirm":         "only when the confirmed comment is published, not held (#524)",
+	"POST /public/discussion/unconfirmed/:id": "only a Publish the rules approve; a discard or a hold changes nothing public (#524)",
+}
+
 // publicCacheNoPurgeRoutes are the mutating routes that change nothing the public site
 // shows, with why.
 var publicCacheNoPurgeRoutes = map[string]string{

@@ -80,6 +80,8 @@ type Querier interface {
 	ClearOldReaderCommentNetworkHashes(ctx context.Context, before time.Time) (int64, error)
 	// After a publish: rows the published body doesn't use aren't on the site.
 	ClearPublishedHTMLSnippetsExcept(ctx context.Context, arg ClearPublishedHTMLSnippetsExceptParams) error
+	// 4.2 first_comment: whether a moderator (or the rules) approved one of theirs before.
+	CommenterHasApprovedReaderComment(ctx context.Context, commenterID sql.NullInt64) (bool, error)
 	// The source's category terms (taxonomy "category"), the template's saved
 	// category. Tags and other taxonomies describe one post, not a kind of post.
 	CopyPostCategoryTermsToTemplate(ctx context.Context, arg CopyPostCategoryTermsToTemplateParams) error
@@ -107,6 +109,8 @@ type Querier interface {
 	// published posts use at least one of them through post_media.
 	CountMissingAltMedia(ctx context.Context) (CountMissingAltMediaRow, error)
 	CountPasswordResetTokensSince(ctx context.Context, arg CountPasswordResetTokensSinceParams) (int64, error)
+	// 5.3's cap: comments waiting for review on one post.
+	CountPendingReaderCommentsForPost(ctx context.Context, postID int64) (int64, error)
 	// The admin list's status tabs (#340): one count per status, with the list's
 	// type and owner filters. unpublished_changes: how many of them have changes
 	// not published (#326; only published posts can).
@@ -128,6 +132,8 @@ type Querier interface {
 	CountTotalPosts(ctx context.Context) (int64, error)
 	CountTotalSessions(ctx context.Context) (int64, error)
 	CountTotalUsers(ctx context.Context) (int64, error)
+	// 5.3's cap: unconfirmed comments of an address still waiting (not expired).
+	CountUnconfirmedReaderComments(ctx context.Context, arg CountUnconfirmedReaderCommentsParams) (int64, error)
 	// Activity log (#324, 000036). Written by the API's write paths (api/activity.go)
 	// and the collab store (StorePostCollabTx); read by GET /activity and Home.
 	// An actor that no longer exists is stored as NULL rather than failing on the
@@ -274,6 +280,9 @@ type Querier interface {
 	// A tombstone's subscription ends with its text, as DeleteReaderCommentTx does for the
 	// ones it makes.
 	DeleteTombstoneUnsubscribeTokens(ctx context.Context) (int64, error)
+	// 3.3 step 5's Discard. An unconfirmed comment has no replies (a reply needs an approved
+	// parent), so deleting it takes nothing else.
+	DeleteUnconfirmedReaderComment(ctx context.Context, arg DeleteUnconfirmedReaderCommentParams) (int64, error)
 	// Delete (section 9) removes only a row with no published override; its versions and Yjs
 	// state cascade. 0 rows: gone, or published (by a publish that got there first).
 	DeleteUnpublishedSiteTemplate(ctx context.Context, id int64) (int64, error)
@@ -288,6 +297,10 @@ type Querier interface {
 	DisablePlugin(ctx context.Context, slug string) (Plugin, error)
 	// No row when the plugin isn't installed and compatible, or is already enabled.
 	EnablePlugin(ctx context.Context, arg EnablePluginParams) (Plugin, error)
+	// The commenter of a typed address, created when new. An existing row is returned as it
+	// is: whoever typed the address hasn't shown they own it, so their name and spelling of
+	// the address don't replace the owner's (a confirmation or a key does that).
+	EnsureCommenter(ctx context.Context, arg EnsureCommenterParams) (Commenter, error)
 	// A post of type "post" without a category gets the default one (Uncategorized). The
 	// other types may have none. Called by every writer of a post's terms.
 	EnsureDefaultCategory(ctx context.Context, postIds []int64) (int64, error)
@@ -311,6 +324,10 @@ type Querier interface {
 	GetActiveThemeWithSettings(ctx context.Context) (GetActiveThemeWithSettingsRow, error)
 	GetAnySessionByRefreshTokenHash(ctx context.Context, refreshTokenHash []byte) (Session, error)
 	GetCommenter(ctx context.Context, id int64) (Commenter, error)
+	// 3.3: the commenter one of the browser's keys belongs to, when that is the typed address.
+	// A key for another address, an expired one or an unknown one matches nothing, so the
+	// answer never says anything about an address.
+	GetCommenterByKeys(ctx context.Context, arg GetCommenterByKeysParams) (Commenter, error)
 	// The editor's review notice: the post's latest request when it is open, or when a
 	// reviewer asked for changes and nothing was published since (the note still
 	// applies). Names are joined now; NULL for a member removed since.
@@ -424,6 +441,11 @@ type Querier interface {
 	// shape of GetPostTaxonomyTerms.
 	GetPublishedPostTaxonomyTerms(ctx context.Context, postID int64) ([]GetPublishedPostTaxonomyTermsRow, error)
 	GetReaderComment(ctx context.Context, id int64) (ReaderComment, error)
+	// ---------------------------------------------------------------------------------
+	// The public write path (#524, api/discussion_write.go, design 3.3, 4.2, 5, 9.2).
+	// What the write path reads of the post a comment is for: its state's inputs (12.4) and
+	// what its link needs (the published title and category, as the public site shows them).
+	GetReaderCommentPost(ctx context.Context, id int64) (GetReaderCommentPostRow, error)
 	GetRedirect(ctx context.Context, id int64) (Redirect, error)
 	GetRedirectByFromPath(ctx context.Context, fromPath string) (Redirect, error)
 	GetReviewRequest(ctx context.Context, id int64) (ReviewRequest, error)
@@ -459,6 +481,10 @@ type Querier interface {
 	GetThemeExtensionSetting(ctx context.Context, key string) (ExtensionSetting, error)
 	// Theme Settings Queries
 	GetThemeSetting(ctx context.Context, arg GetThemeSettingParams) (ThemeSetting, error)
+	// 3.3: the comment a confirmation link names, while it waits (48 hours).
+	GetUnconfirmedReaderCommentByToken(ctx context.Context, arg GetUnconfirmedReaderCommentByTokenParams) (ReaderComment, error)
+	// 3.3 step 5: an unconfirmed comment of one of the browser's commenters.
+	GetUnconfirmedReaderCommentForCommenters(ctx context.Context, arg GetUnconfirmedReaderCommentForCommentersParams) (ReaderComment, error)
 	GetUser(ctx context.Context, id int64) (User, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	// Ignoring case: emails are stored lowercased by the API, but an account created
@@ -540,6 +566,9 @@ type Querier interface {
 	// (canEditAsCollaborator: someone else's published post), for the posts lists'
 	// Edit / "Can edit" (#321).
 	ListCollaboratorPostIDs(ctx context.Context, userID int64) ([]int64, error)
+	// The commenters the browser's valid keys belong to (the confirm page's Publish and
+	// Discard, 3.3 step 5).
+	ListCommenterIDsByKeys(ctx context.Context, keyHashes [][]byte) ([]int64, error)
 	// The posts content links point at, for the public API: what their current URL is built
 	// from (the published category, #331) and whether they're shown at all (published, of a
 	// public and active type).
@@ -588,6 +617,8 @@ type Querier interface {
 	// Which of the given media_path values some media row uses (the dev seed
 	// restores only sample files a row still references).
 	ListMediaPathsIn(ctx context.Context, paths []string) ([]string, error)
+	// 3.4: a guest name equal to a member's full name or username is held.
+	ListMemberNames(ctx context.Context) ([]ListMemberNamesRow, error)
 	// The Users screen (#333): ListUsers' sorts, plus a search (pattern: an ILIKE pattern
 	// the API escapes, '' = all) over name, username and email, a role filter ('' = all),
 	// and each member's posts owned (posts.user_id, every type and status), counted in the
@@ -774,6 +805,9 @@ type Querier interface {
 	ListThemeExtensionSettings(ctx context.Context) ([]ExtensionSetting, error)
 	ListThemeSettings(ctx context.Context, themeID int64) ([]ThemeSetting, error)
 	ListThemes(ctx context.Context) ([]Theme, error)
+	// 3.3 step 5: the address's other unconfirmed comments, for the person holding the link:
+	// the post's title and link, and the first 100 characters.
+	ListUnconfirmedReaderCommentsForCommenter(ctx context.Context, arg ListUnconfirmedReaderCommentsForCommenterParams) ([]ListUnconfirmedReaderCommentsForCommenterRow, error)
 	ListUsers(ctx context.Context, arg ListUsersParams) ([]User, error)
 	// Row-locks every admin so concurrent admin-removing transactions serialize
 	// (COUNT(*) cannot be combined with FOR UPDATE). Ordered by id so lockers
@@ -805,6 +839,9 @@ type Querier interface {
 	// its status under the lock.
 	LockPostStatusForUpdate(ctx context.Context, id int64) (string, error)
 	LockReaderComment(ctx context.Context, id int64) (ReaderComment, error)
+	// A reply's root and parent while it is inserted or published (6.4): the retention job
+	// (SKIP LOCKED) and a delete (FOR UPDATE) wait instead of cascading it away.
+	LockReaderCommentForShare(ctx context.Context, id int64) (ReaderComment, error)
 	// The statuses of the rows that answer the comment or sit in the thread it roots, locked:
 	// whether deleting it would take approved replies with it (6.4). The lock makes a
 	// moderator's approval of one of them wait (or be waited on) instead of racing the
@@ -829,6 +866,7 @@ type Querier interface {
 	// PublishSiteDesignTx's lock on every row of the theme, in id order (one order for every
 	// locker), so the rows it validated can't change under it.
 	LockSiteTemplatesByTheme(ctx context.Context, themeSlug string) ([]SiteTemplate, error)
+	LockUnconfirmedReaderComment(ctx context.Context, arg LockUnconfirmedReaderCommentParams) (ReaderComment, error)
 	// Taken by refresh-token rotation so it cannot interleave with a password
 	// change on the same user (which holds the row FOR UPDATE).
 	LockUserForShare(ctx context.Context, id int64) error
@@ -856,6 +894,9 @@ type Querier interface {
 	// Deletes the rows of blocks that aren't in the post's new block_doc (keep_ids: every
 	// key of its "blocks", hidden blocks included).
 	PrunePostBlockEdits(ctx context.Context, arg PrunePostBlockEditsParams) error
+	// An unconfirmed comment leaves unconfirmed with what the rules decided (4.2); its
+	// confirm token is spent with it.
+	PublishUnconfirmedReaderComment(ctx context.Context, arg PublishUnconfirmedReaderCommentParams) (ReaderComment, error)
 	// The old owner's byline (user_posts, #319) on the posts that just moved goes to the
 	// new owner, unless they are already credited there (then DeletePostBylineCredits drops
 	// it). Used by a removal (#333) and by a transfer that replaces the old owner (#353).
@@ -1189,6 +1230,9 @@ type Querier interface {
 	// A last_editor_id that no longer exists is stored as NULL rather than failing the store.
 	UpsertSiteTemplateYdocState(ctx context.Context, arg UpsertSiteTemplateYdocStateParams) error
 	UpsertThemeSetting(ctx context.Context, arg UpsertThemeSettingParams) (ThemeSetting, error)
+	// A confirmation or a key proved the address (3.3): verified, the name used now becomes
+	// the commenter's, and last_seen_at moves.
+	VerifyCommenter(ctx context.Context, arg VerifyCommenterParams) (Commenter, error)
 }
 
 var _ Querier = (*Queries)(nil)

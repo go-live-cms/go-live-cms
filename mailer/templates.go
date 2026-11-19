@@ -39,6 +39,9 @@ const (
 	// @ mentions and date reminders (#320).
 	TemplateMention  = "mention"
 	TemplateReminder = "reminder"
+
+	// Reader comments (#524).
+	TemplateReaderCommentConfirm = "reader-comment-confirm"
 )
 
 // SignupVerify is the data for the open signup confirmation link (#191), sent to
@@ -152,6 +155,8 @@ type templateData struct {
 	Assigned bool
 	// Reminders (#320): the chip's day and time, as the email says it.
 	When string
+	// Reader comment confirmation (#524): the post's public URL.
+	PostURL string
 }
 
 // RenderAccessRequest renders the edit access request email to a reviewer.
@@ -374,4 +379,28 @@ func HumanDuration(d time.Duration) string {
 	default:
 		return plural(max(1, int64(d/time.Minute)), "minute")
 	}
+}
+
+// ReaderCommentConfirm is the data for "Confirm your comment" (#524, reader comments
+// design 3.3, 8.1), sent to the address a reader typed. It holds nothing the sender
+// typed: no name and no text, only the site's own words, the post's title and URL and
+// the link, so the comment form can't be used to send someone a message (problem 3).
+type ReaderCommentConfirm struct {
+	SiteTitle string
+	PostTitle string
+	PostURL   string
+	Link      string
+	ExpiresIn time.Duration
+}
+
+// RenderReaderCommentConfirm renders the comment confirmation email to to.
+func RenderReaderCommentConfirm(to string, d ReaderCommentConfirm) (Message, error) {
+	data := templateData{
+		SiteTitle: siteTitle(d.SiteTitle),
+		PostTitle: postTitle(d.PostTitle),
+		PostURL:   d.PostURL,
+		Link:      d.Link,
+		ExpiresIn: HumanDuration(d.ExpiresIn),
+	}
+	return render(to, TemplateReaderCommentConfirm, fmt.Sprintf("Confirm your comment on %s", data.SiteTitle), "reader_comment_confirm", data)
 }

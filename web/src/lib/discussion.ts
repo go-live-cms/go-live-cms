@@ -150,3 +150,96 @@ export function normalizeReaderCommentName(raw: string): ReaderCommentTextResult
   if (length > READER_COMMENT_LIMITS.name_max) return { ok: false, code: "name_too_long" }
   return { ok: true, text: name }
 }
+
+// --- Word lists, links and member names (4.2, 5.4, 11.4; #524) -----------------------
+// The twins of api/discussion_rules.go, pinned by discussionRulesVectors.json: the
+// admin's preview of the word lists (#527) and the renderer's links (#525). The API
+// applies the rules; these only show what it will do.
+
+/** How the rules compare text: accents dropped, then lower-cased. */
+export function foldDiscussionText(text: string): string {
+  return text.normalize("NFD").replace(/\p{Mn}/gu, "").toLowerCase()
+}
+
+const WORD_CHAR = /[\p{L}\p{N}]/u
+
+function isWordChar(char: string | undefined): boolean {
+  return char !== undefined && WORD_CHAR.test(char)
+}
+
+function containsWord(text: string, entry: string): boolean {
+  const chars = Array.from(entry)
+  const firstIsWord = isWordChar(chars[0])
+  const lastIsWord = isWordChar(chars[chars.length - 1])
+  for (let from = 0; from <= text.length; ) {
+    const start = text.indexOf(entry, from)
+    if (start < 0) return false
+    const end = start + entry.length
+    const before = Array.from(text.slice(0, start)).pop()
+    const after = Array.from(text.slice(end))[0]
+    const okBefore = start === 0 || !firstIsWord || !isWordChar(before)
+    const okAfter = end === text.length || !lastIsWord || !isWordChar(after)
+    if (okBefore && okAfter) return true
+    from = start + (text.codePointAt(start)! > 0xffff ? 2 : 1)
+  }
+  return false
+}
+
+/**
+ * The first entry of `words` found in `text`, or null: case-insensitively, accents
+ * dropped, on word boundaries ("ass" isn't in "class"; "$$$" is in "win$$$").
+ */
+export function matchDiscussionWord(text: string, words: readonly string[]): string | null {
+  const folded = foldDiscussionText(text)
+  for (const word of words) {
+    const entry = foldDiscussionText(goTrimSpace(word))
+    if (entry !== "" && containsWord(folded, entry)) return word
+  }
+  return null
+}
+
+// Go's \b is ASCII, as JavaScript's is without the u flag's \p classes.
+const LINK_PATTERN = /\bhttps?:\/\/[^\s<>"'`]+/gi
+const CLOSERS: Record<string, string> = { ")": "(", "]": "[", "}": "{" }
+
+function trimLinkPunctuation(link: string): string {
+  while (link !== "") {
+    const last = link[link.length - 1]
+    if (".,;:!?".includes(last)) {
+      link = link.slice(0, -1)
+      continue
+    }
+    const open = CLOSERS[last]
+    if (open && link.split(open).length - 1 < link.split(last).length - 1) {
+      link = link.slice(0, -1)
+      continue
+    }
+    return link
+  }
+  return link
+}
+
+/**
+ * The links of a comment's text, as the renderer links them (5.4): http and https URLs
+ * only, up to the next space, without the sentence punctuation after them. The API's
+ * "links" rule counts these (comments_max_links).
+ */
+export function readerCommentLinks(text: string): string[] {
+  const links: string[] = []
+  for (const match of text.match(LINK_PATTERN) ?? []) {
+    const link = trimLinkPunctuation(match)
+    if (link.length > link.indexOf("://") + 3) links.push(link)
+  }
+  return links
+}
+
+function foldMemberName(name: string): string {
+  return foldDiscussionText(name).split(/\s+/u).filter(Boolean).join(" ")
+}
+
+/** Whether a guest's name is a member's full name or username (3.4), accents and case ignored. */
+export function matchesMemberName(name: string, members: readonly { username: string; full_name: string }[]): boolean {
+  const folded = foldMemberName(name)
+  if (folded === "") return false
+  return members.some((m) => folded === foldMemberName(m.full_name) || folded === foldMemberName(m.username))
+}

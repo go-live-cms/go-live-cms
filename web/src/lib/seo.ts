@@ -289,7 +289,8 @@ const ACCOUNT_PATHS = ["/login", "/forgot-password", "/reset-password", "/accept
 // admin SPA, the account pages, search results (#145; never in the sitemap
 // either) and the old demo pages. Error responses are handled by status in
 // shouldNoindex.
-const NOINDEX_PREFIXES = ["/gl-admin", ...ACCOUNT_PATHS, "/search", "/users", "/taxonomies", "/test-theme"]
+// /gl-comments: the comment write endpoints (#524) answer one reader, never a page to index.
+const NOINDEX_PREFIXES = ["/gl-admin", ...ACCOUNT_PATHS, "/search", "/users", "/taxonomies", "/test-theme", "/gl-comments"]
 
 export function isNonPublicPath(pathname: string): boolean {
   return NOINDEX_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
@@ -307,6 +308,7 @@ export function buildRobotsTxt(siteUrl: string): string {
     "Disallow: /gl-admin",
     ...ACCOUNT_PATHS.map((path) => `Disallow: ${path}`),
     "Disallow: /api/",
+    "Disallow: /gl-comments/",
     "",
     `Sitemap: ${absoluteUrl(siteUrl, "/sitemap.xml")}`,
     "",

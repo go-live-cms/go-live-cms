@@ -398,9 +398,12 @@ func TestPostComments_NotPublicAndNotCopied(t *testing.T) {
 		rec := f.do(t, nil, http.MethodGet, path, nil)
 		require.NotContains(t, rec.Body.String(), "Internal note", path)
 	}
+	// The only /public routes about comments are reader comments' (#499, reader_comments),
+	// which never read post_comments: the writes of #524 are in publicPOSTRoutes.
 	for _, route := range f.server.router.Routes() {
-		if strings.HasPrefix(route.Path, "/public") {
-			require.NotContains(t, route.Path, "comment", route.Path)
+		if strings.HasPrefix(route.Path, "/public") && strings.Contains(route.Path, "comment") {
+			_, reader := publicPOSTRoutes[route.Method+" "+route.Path]
+			require.True(t, reader || route.Method == http.MethodGet, "%s %s: block comments are never public", route.Method, route.Path)
 		}
 	}
 

@@ -81,6 +81,22 @@ describe("withPageCacheControl", () => {
     expect(withPageCacheControl(html(200, { "Cache-Control": "no-store" }), request("refresh_token=x"), "/", true).headers.get("Cache-Control")).toBe("no-store")
   })
 
+  it("never caches a reader's own pages: a comment notice, the endpoints, the reader pages (#524)", () => {
+    const at = (url: string) => new Request(url)
+    const post = "/[post_type]/[id]"
+    expect(withPageCacheControl(html(), at("https://site.example/post/hello"), post, true).headers.get("Cache-Control")).toBe(PUBLIC_PAGE_CACHE_CONTROL)
+    expect(withPageCacheControl(html(), at("https://site.example/post/hello?comments=2"), post, true).headers.get("Cache-Control")).toBe(PUBLIC_PAGE_CACHE_CONTROL)
+    for (const url of ["https://site.example/post/hello?commented=pending", "https://site.example/post/hello?comments=2&commented=confirm"]) {
+      expect(withPageCacheControl(html(), at(url), post, true).headers.get("Cache-Control")).toBe(PRIVATE_NO_STORE)
+      // Even over a page's own public header.
+      expect(withPageCacheControl(html(200, { "Cache-Control": PUBLIC_PAGE_CACHE_CONTROL }), at(url), post, true).headers.get("Cache-Control")).toBe(PRIVATE_NO_STORE)
+    }
+    for (const path of ["/gl-comments/posts/4", "/comments/confirm", "/comments/unsubscribe", "/comments/your-data"]) {
+      expect(withPageCacheControl(html(422), at(`https://site.example${path}`), post, true).headers.get("Cache-Control")).toBe(PRIVATE_NO_STORE)
+      expect(withPageCacheControl(html(), at(`https://site.example${path}`), post, true).headers.get("Cache-Control")).toBe(PRIVATE_NO_STORE)
+    }
+  })
+
   it("leaves non-HTML responses alone", () => {
     const json = new Response("{}", { headers: { "Content-Type": "application/json" } })
     expect(withPageCacheControl(json, request(), "/", true).headers.get("Cache-Control")).toBeNull()

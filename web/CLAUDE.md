@@ -385,7 +385,29 @@ are the most fragile part of the codebase. **Before editing anything under
   text rules (`normalizeReaderCommentBody`, `readerCommentLength` in code points, as the API
   counts) for the form's counter. Pinned by `src/lib/discussionStateVectors.json` and
   `src/lib/discussionTextVectors.json` (both suites; `JSON.parse`). Nothing renders comments yet
-  (C5 #525), and `comments_enabled` stays off with no switch until #527.
+  (C5 #525), and `comments_enabled` stays off with no switch until #527. #524 adds the word-list,
+  link and member-name twins (`matchDiscussionWord`, `readerCommentLinks`, `matchesMemberName`,
+  `src/lib/discussionRulesVectors.json`).
+- **Comment write endpoints (#524, `src/lib/commentWrites.ts`, design 9.4):** the API's comment
+  writes are under `/public` (never proxied), so the form posts to the site:
+  `POST /gl-comments/posts/:id` (`src/pages/gl-comments/posts/[id].astro`), `/gl-comments/confirm`
+  and `/gl-comments/unconfirmed/:id` (`.ts`, the confirm page's buttons; #525 builds the page).
+  Each refuses a cross-origin request (`isSameOriginPost`), maps the form (`COMMENT_FORM_FIELDS`:
+  `comment`, `name`, `email`, `notify_replies`, `website` = the honeypot, `parent_id`, `return_to`)
+  to JSON, forwards the browser's address (`appendForwardedFor`, shared with the API proxy), the
+  request id and the `gl_commenter` cookie's keys as `GoLive-Commenter-Key`. The cookie
+  (`commenterSetCookie`): up to five keys, `.`-separated, **`Path=/gl-comments`** (no page request
+  carries it, so pages stay cacheable), HttpOnly, SameSite=Lax, a year, Secure except in plain-HTTP
+  dev; set only from a confirmation's `set_key`, which never reaches the page's script
+  (`jsonAnswer` drops it). Without scripts: 303 back to `return_to` (else the API's `post_url`)
+  with `?commented=confirm|pending|published#comment-form`, or the refusal page
+  (`src/components/comments/CommentRefused.astro`: 422/429/503, the reason, the typed text in a
+  read-only textarea, Back to the post); `Accept: application/json` gets the API's JSON. A
+  refused confirmation without scripts goes to `/comments/confirm?error=<code>`. Everything is
+  `private, no-store`; `httpCache.ts` `isPerReaderUrl` also makes any `?commented=` page and the
+  reader pages no-store. `/gl-comments` is noindex and in robots.txt. Logs: route pattern and
+  status only. Tests: `src/lib/commentWrites.test.ts`, `src/pages/gl-comments/confirm.test.ts` and
+  the container test `src/pages/gl-comments/commentEndpoint.astro.test.ts` (the no-script flow).
 - **Global styles (#485, `src/lib/globalStyles.ts`, design `docs/design/theme-builder.md`
   section 6):** the override grammar, validator, contrast (`CONTRAST_PAIRS`, which the
   default theme's `tokens.test.ts` checks) and groups, the same rules as the API's
