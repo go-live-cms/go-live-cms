@@ -20,6 +20,11 @@ vi.mock("./PostOwner", () => ({ default: () => null }))
 vi.mock("./PostSeoPanel", () => ({ default: () => null }))
 vi.mock("./PageTemplateField", () => ({ default: () => null }))
 vi.mock("./BlockSettingsPanel", () => ({ default: () => null }))
+vi.mock("./PostDiscussion", () => ({
+  default: ({ postId, postType, published }: { postId: number; postType: string; published: boolean }) => (
+    <section data-testid="post-discussion" data-post={`${postId}:${postType}:${published ? "published" : "draft"}`} />
+  ),
+}))
 
 import PostSidebar, { type SettingsTab } from "./PostSidebar"
 
@@ -55,6 +60,43 @@ describe("PostSidebar", () => {
     expect(onCaughtError.mock.calls.flat().join(" ")).not.toContain("must not return anything besides a function")
 
     onCaughtError.mockRestore()
+    container.remove()
+  })
+
+  // #527: the Post tab ends with Discussion for editors and admins (PostForm passes
+  // `discussion` only for them, decision 3), and only once the post exists.
+  it.each([
+    ["an editor's post", true, "edit", 1, true],
+    ["a contributor's view", false, "edit", 1, false],
+    ["a new post", true, "create", 0, false],
+  ] as const)("Discussion section: %s", (_, discussion, mode, id, shown) => {
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    act(() => {
+      root.render(
+        <PostSidebar
+          post={{ id, title: "T", post_type: "post", post_status: "published", description: "" } as Post}
+          onUpdate={() => {}}
+          isVisible
+          onToggle={() => {}}
+          sidebarWidth="320px"
+          onResize={() => {}}
+          urlStructure="id"
+          mode={mode}
+          discussion={discussion}
+        />
+      )
+    })
+    const section = container.querySelector("[data-testid='post-discussion']")
+    expect(section !== null).toBe(shown)
+    if (shown) {
+      // Last in the Post tab's fieldset, so a read-only panel disables it with the rest.
+      const fieldset = container.querySelector("fieldset.post-settings__fieldset")!
+      expect(fieldset.lastElementChild).toBe(section)
+      expect(section!.getAttribute("data-post")).toBe("1:post:published")
+    }
+    act(() => root.unmount())
     container.remove()
   })
 })

@@ -959,8 +959,11 @@ and "12 comments · 2 waiting" linking to Discussion filtered by the post.
 **It applies at once, outside the publish snapshot.** It is not in `golive_post_settings()`,
 not versioned, and doesn't make a post "Changes not published". Closing a thread that turned
 nasty has to work now, not on the next Update, and comments aren't the post's content.
-Restoring a version leaves it alone. Who may change it: anyone who may edit the post's
-details. Activity: `post_discussion_changed` (15.2).
+Restoring a version leaves it alone. Who may change it: editors and admins, on any post they
+may edit the details of (not in the trash). Contributors have no access to Discussion in v1
+(decision 3), so they don't see the section and `GET`/`PUT /posts/:id/discussion` are
+`requireContentEditor` (#527; #522 had allowed a contributor's own draft). Activity:
+`post_discussion_changed` (15.2).
 
 ### 12.4 The state, one rule
 

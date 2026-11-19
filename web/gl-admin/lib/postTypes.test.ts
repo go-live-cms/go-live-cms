@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
+  builtInSupports,
+  canChangeField,
   draftFromPostType,
   isBuiltInPostType,
   nameFromLabel,
@@ -96,7 +98,23 @@ it("nameFromLabel follows the API's identifier rule", () => {
   expect(nameFromLabel("  Café & Bar! ")).toBe("cafe_bar")
 })
 
-it("supportsSummary counts the known fields only", () => {
-  expect(supportsSummary(caseStudy.supports)).toBe("2 of 4")
-  expect(supportsSummary(null)).toBe("0 of 4")
+it("supportsSummary counts the known fields only, Comments included (#527)", () => {
+  expect(supportsSummary(caseStudy.supports)).toBe("2 of 5")
+  expect(supportsSummary(null)).toBe("0 of 5")
+  expect(supportsSummary(["title", "comments"])).toBe("2 of 5")
+})
+
+describe("built-in types (#527)", () => {
+  it("change Comments alone", () => {
+    expect(canChangeField("post", "comments")).toBe(true)
+    expect(canChangeField("page", "title")).toBe(false)
+    expect(canChangeField("event", "title")).toBe(true)
+    expect(canChangeField(undefined, "title")).toBe(true)
+  })
+
+  it("send the stored fields with Comments on or off", () => {
+    expect(builtInSupports(["title", "comments", "content"], false)).toEqual(["title", "content"])
+    expect(builtInSupports(["title", "content"], true)).toEqual(["title", "content", "comments"])
+    expect(builtInSupports(["title", "comments"], true)).toEqual(["title", "comments"])
+  })
 })

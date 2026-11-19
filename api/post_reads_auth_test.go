@@ -158,6 +158,8 @@ var postReadRouteTemplates = []string{
 var moderatorPostRoutes = []string{
 	"/api/v1/posts/:id/versions",
 	"/api/v1/posts/:id/versions/:version_no",
+	// The editor's Discussion section (#527): contributors have no access (decision 3).
+	"/api/v1/posts/:id/discussion",
 }
 
 // postReadRoutes are postReadRouteTemplates for post.

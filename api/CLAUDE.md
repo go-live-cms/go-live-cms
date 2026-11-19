@@ -1314,9 +1314,13 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   retention job (`SKIP LOCKED`) can't cascade a reply being approved.
 - **`posts.discussion`** (`default|open|closed|off`) is **not in `golive_post_settings()`**: it
   applies at once and never shows "changes not published"; `UpdatePostDiscussion` doesn't touch
-  `changed_at` (no `post.saved` event). `PUT /posts/:id/discussion` (`posts_discussion.go`):
-  `canEditPostDetails` (409 trashed), activity `post_discussion_changed {from, to}`, purges when
-  published (`publicCachePostDetailRoutes`), answers `{post_id, discussion, state, closes_at}`.
+  `changed_at` (no `post.saved` event). `GET` and `PUT /posts/:id/discussion` (`posts_discussion.go`):
+  **editors and admins only** (`requireContentEditor`: contributors have no access to Discussion,
+  decision 3, #527), PUT 409 on a trashed post, activity `post_discussion_changed {from, to}`, purges
+  when published (`publicCachePostDetailRoutes`), both answer `{post_id, discussion, state, closes_at,
+  first_published_at}` (the last is the rule's input, so the editor's section applies the TS twin).
+  The settings' checks are pinned by `web/gl-admin/lib/discussionSettingsVectors.json`
+  (`TestDiscussionSettingsVectors`; the admin's form refuses the same values, #527).
 - **`posts.first_published_at`**: the `posts_first_published` trigger sets it when `post_status`
   first becomes published (insert or update) and keeps it forever after (unpublish, Update, trash,
   restore, even a direct write). Backfilled from the earliest `post_versions` row.

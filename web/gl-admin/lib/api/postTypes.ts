@@ -39,3 +39,9 @@ export async function createPostType(data: PostTypeInput & { name: string }): Pr
 export async function updatePostType(name: string, data: PostTypeInput): Promise<{ post_type: PostType }> {
   return changed(await apiCall(`/post-types/${encodeURIComponent(name)}`, { method: "PUT", body: data }))
 }
+
+// Posts and Pages (#522, #527, design 12.2): PUT takes `supports` alone, differing from
+// the stored list only by "comments" (409 `system_post_type` otherwise).
+export async function updateBuiltInPostTypeSupports(name: string, supports: string[]): Promise<{ post_type: PostType }> {
+  return changed(await apiCall(`/post-types/${encodeURIComponent(name)}`, { method: "PUT", body: { supports } }))
+}

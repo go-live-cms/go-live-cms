@@ -2,13 +2,14 @@ import { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-// Post types (#343): Posts and Pages are built in and only listed; others open in the
-// panel, which sends every field so PUT doesn't reset what it isn't given.
+// Post types (#343): types open in the panel, which sends every field so PUT doesn't
+// reset what it isn't given. Posts and Pages are built in: only Comments changes (#527).
 
 const api = vi.hoisted(() => ({
   getPostTypes: vi.fn(),
   createPostType: vi.fn(),
   updatePostType: vi.fn(),
+  updateBuiltInPostTypeSupports: vi.fn(),
 }))
 
 vi.mock("@gl-admin/lib/api/postTypes", () => api)
@@ -35,7 +36,12 @@ const type = (name: string, label: string, over: Record<string, unknown> = {}) =
   ...over,
 })
 
-const TYPES = [type("post", "Posts"), type("page", "Pages", { hierarchical: true }), type("event", "Events", { description: "Meetups", menu_position: 30 })]
+const TYPES = [
+  // Posts take comments since #522's migration.
+  type("post", "Posts", { supports: ["title", "content", "comments"] }),
+  type("page", "Pages", { hierarchical: true }),
+  type("event", "Events", { description: "Meetups", menu_position: 30 }),
+]
 
 let container: HTMLDivElement
 let root: Root
@@ -57,6 +63,7 @@ beforeEach(async () => {
   api.getPostTypes.mockReset().mockResolvedValue({ data: TYPES })
   api.createPostType.mockReset()
   api.updatePostType.mockReset()
+  api.updateBuiltInPostTypeSupports.mockReset()
   await act(async () => root.render(<PostTypes />))
   await settle()
 })
@@ -66,14 +73,62 @@ afterEach(() => {
   container.remove()
 })
 
-describe("built-in types", () => {
-  it("are marked and can't be opened for editing", () => {
+const checkbox = (label: string) =>
+  Array.from(container.querySelectorAll(".gl-workspace__panel label")).find((l) => l.textContent?.startsWith(label))?.querySelector("input") as
+    | HTMLInputElement
+    | undefined
+
+describe("built-in types (#527: the Post types · Posts board)", () => {
+  it("are marked and open with every field locked but Comments", async () => {
     const rows = Array.from(container.querySelectorAll("tbody tr"))
     expect(rows.map((r) => r.querySelector(".gl-post-type-label")?.textContent)).toEqual(["PostsBuilt-in", "PagesBuilt-in", "Events"])
-    expect(button("Edit Posts")).toBeUndefined()
-    expect(button("Edit Pages")).toBeUndefined()
-    expect(button("Edit Events")).toBeDefined()
+    await act(async () => button("Edit Posts")!.click())
+    await settle()
+    const panel = container.querySelector(".gl-workspace__panel")!
+    expect(panel.querySelector("h2")?.textContent).toBe("Posts")
+    expect(panel.textContent).toContain("A built-in type. Only Comments can change here; the rest is fixed.")
+    expect(panel.querySelector<HTMLInputElement>("#gl-post-type-label")!.readOnly).toBe(true)
+    expect(panel.querySelector<HTMLInputElement>("#gl-post-type-position")!.readOnly).toBe(true)
+    // Disabled itself, or by its fieldset (Behaviour).
+    for (const locked of ["Title", "Content", "Excerpt", "Featured image", "Public", "Hierarchical", "Archive page"]) {
+      expect(checkbox(locked)!.matches(":disabled"), locked).toBe(true)
+    }
+    expect(checkbox("Comments")!.matches(":disabled")).toBe(false)
+    expect(checkbox("Comments")!.closest("label")!.textContent).toContain("Readers can comment on published items")
   })
+
+  it("saves Comments alone: `supports` with the stored fields as they are", async () => {
+    api.updateBuiltInPostTypeSupports.mockImplementation(async (name, supports) => ({ post_type: { ...TYPES[0], name, supports } }))
+    await act(async () => button("Edit Posts")!.click())
+    await settle()
+    expect(checkbox("Comments")!.checked).toBe(true)
+    await act(async () => checkbox("Comments")!.click())
+    await act(async () => button("Save")!.click())
+    await settle()
+    expect(api.updateBuiltInPostTypeSupports).toHaveBeenCalledWith("post", ["title", "content"])
+    expect(api.updatePostType).not.toHaveBeenCalled()
+
+    // And back on: the field joins the stored list.
+    await act(async () => checkbox("Comments")!.click())
+    await act(async () => button("Save")!.click())
+    await settle()
+    expect(api.updateBuiltInPostTypeSupports).toHaveBeenLastCalledWith("post", ["title", "content", "comments"])
+  })
+
+  it("shows the API's refusal", async () => {
+    api.updateBuiltInPostTypeSupports.mockRejectedValue(new Error("cannot modify system post types"))
+    await act(async () => button("Edit Pages")!.click())
+    await settle()
+    await act(async () => checkbox("Comments")!.click())
+    await act(async () => button("Save")!.click())
+    await settle()
+    expect(container.querySelector(".gl-workspace__panel [role='alert']")?.textContent).toContain("cannot modify system post types")
+  })
+})
+
+it("counts Comments among the fields (5 of them)", () => {
+  const fields = Array.from(container.querySelectorAll("tbody tr")).map((r) => r.querySelectorAll("td")[2]?.textContent)
+  expect(fields).toEqual(["3 of 5", "2 of 5", "2 of 5"])
 })
 
 it("saves an edit with every field, keeping the description and the name", async () => {

@@ -1,0 +1,84 @@
+@use "@gl-admin/assets/styles/mixins";
+
+// SegmentedControl (#527): native radios drawn as the boards' segmented control, the
+// Tree / List toggle's look (`.gl-segmented` in content-list.scss).
+.gl-segmented-control {
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  min-width: 0;
+  padding: 0;
+
+  &__legend {
+    color: var(--text-primary);
+    font-size: var(--type-label);
+    font-weight: 500;
+    line-height: var(--type-label-lh);
+    margin-bottom: 6px;
+    padding: 0;
+
+    &.is-hidden {
+      @include mixins.visually-hidden;
+    }
+  }
+
+  &__options {
+    align-self: flex-start;
+    background: var(--background-hover);
+    border-radius: var(--radius-lg);
+    display: inline-flex;
+    gap: 2px;
+    padding: 2px;
+  }
+
+  &.is-block &__options {
+    align-self: stretch;
+    display: flex;
+  }
+
+  &__option {
+    align-items: center;
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    font-size: var(--type-label);
+    font-weight: 500;
+    height: 28px;
+    justify-content: center;
+    padding: 0 var(--space-3);
+    position: relative;
+    white-space: nowrap;
+
+    input {
+      @include mixins.visually-hidden;
+    }
+
+    &:hover {
+      color: var(--text-primary);
+    }
+
+    &.is-checked {
+      background: var(--background);
+      box-shadow: var(--card-shadow), 0 0 0 1px var(--border-color);
+      color: var(--text-primary);
+    }
+
+    &:has(input:focus-visible) {
+      outline: 2px solid var(--focus-ring);
+      outline-offset: 1px;
+    }
+  }
+
+  &.is-block &__option {
+    flex: 1;
+    padding: 0 var(--space-2);
+  }
+
+  &:disabled &__option {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+}

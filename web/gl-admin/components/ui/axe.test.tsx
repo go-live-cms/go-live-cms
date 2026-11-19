@@ -11,6 +11,7 @@ import Pagination from "./Pagination"
 import Select from "./Select"
 import Switch from "./Switch"
 import Tabs from "./Tabs"
+import SegmentedControl from "./SegmentedControl"
 import BubbleMenu from "@gl-admin/components/editor/ui/BubbleMenu"
 import CommandSelect from "@gl-admin/components/editor/ui/CommandSelect"
 import FeaturedImage from "@gl-admin/components/editor/ui/FeaturedImage"
@@ -205,6 +206,40 @@ describe("axe: forms, feedback and structure (#479, #480)", () => {
   })
 
   // The page Template field's list (#494): named groups of options, a tag on some.
+  it("SegmentedControl: a fieldset of native radios, with a hidden legend too (#527)", async () => {
+    await render(
+      <div>
+        <SegmentedControl
+          legend="Replies"
+          options={[
+            { value: "replies", label: "Threaded" },
+            { value: "flat", label: "Flat" },
+          ]}
+          value="replies"
+          onChange={() => {}}
+          hint="Threaded shows a reply under its comment."
+        />
+        <h3 id="axe-discussion-h">Discussion</h3>
+        <SegmentedControl
+          legend="Discussion"
+          hideLegend
+          block
+          options={[
+            { value: "default", label: "Default" },
+            { value: "open", label: "Open" },
+          ]}
+          value="open"
+          onChange={() => {}}
+        />
+      </div>
+    )
+    const groups = container.querySelectorAll("fieldset")
+    expect(groups).toHaveLength(2)
+    expect(groups[0].querySelectorAll("input[type='radio']")).toHaveLength(2)
+    expect(groups[1].querySelector<HTMLInputElement>("input[value='open']")!.checked).toBe(true)
+    expect(await violations(container)).toEqual([])
+  })
+
   it("Select with grouped, tagged options, open", async () => {
     await render(
       <Select
