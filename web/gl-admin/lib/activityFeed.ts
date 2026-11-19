@@ -38,6 +38,8 @@ function postNoun(event: ActivityEvent): string {
 
 const POST_VERBS: Record<string, string> = {
   created: "created",
+  // The importer (#150): a post it made, credited to the admin who ran it.
+  imported: "imported",
   updated: "updated the settings of",
   edited: "edited",
   html_edited: "edited the custom HTML of",
@@ -161,6 +163,17 @@ function objectPart(event: ActivityEvent): { verb: string; what: string; href: s
       if (event.verb === "plugin_data_deleted") return { verb: "deleted the data of", what: name, href }
       if (event.verb === "plugin_missing") return { verb: "found", what: `${name} missing from the build`, href }
       return { verb: verb ?? fallbackVerb, what: name, href }
+    }
+    // Imports (#150): admins only. finished carries the counts.
+    case "import": {
+      const href = `/import?id=${event.object_id}`
+      if (event.verb === "import_started") return { verb: "started", what: "an import", href }
+      if (event.verb === "import_finished") {
+        const imported = typeof event.payload.imported === "number" ? event.payload.imported : null
+        const what = imported === null ? "an import" : `an import (${plural(imported, "item", "items")} imported)`
+        return { verb: event.payload.status === "cancelled" ? "stopped" : "finished", what, href }
+      }
+      return { verb: fallbackVerb, what: "an import", href }
     }
     case "redirect":
       if (event.verb === "redirect_created") return { verb: "added", what: "a redirect", href: "/settings#gl-settings-urls" }

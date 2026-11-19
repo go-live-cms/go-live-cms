@@ -687,6 +687,20 @@ are the most fragile part of the codebase. **Before editing anything under
   After it the Authors field reloads if the byline changed (a published post then shows
   "Settings changed"), and `PostForm` updates the owner its access rules read; the collab
   server's re-check makes a contributor who lost the post read-only.
+- **Import (#150; the canvas's "Posts · Import" board):** `pages/Import.tsx` at `/import` (admins,
+  `AdminOnly`), opened from the Posts list's **Import** button and its empty state's "Import posts"
+  (admins). Without `?id=`: the drop zone / Choose file (a WordPress `.xml` or a Markdown `.zip`;
+  a refused file shows the API's reason) and Recent imports. With `?id=`: the import's step:
+  **mapping** (each author → a member with a content role or "You, the importer", the suggestion
+  first; each export post type → a GoLive type or Don't import; "What will be imported" follows the
+  choices, with what is skipped or not imported), then **progress** (polled every 1.5 s, "You can
+  leave this page", Stop import), then the **report** (All / Imported / With dropped blocks /
+  Skipped / Failed, each row's notes and redirects, dropped blocks with "Copy the original as
+  text", the images that couldn't be added). Rules and wording: `lib/imports.ts` (tested); the
+  client: `lib/api/imports.ts`. In the editor, `components/editor/ui/ImportNotice.tsx` (editors and
+  admins, mounted by `PostForm`) shows an imported post's left-out blocks and failed images until
+  dismissed (the API keeps it). Home's feed reads `imported` (a post), `import_started` and
+  `import_finished` (`lib/activityFeed.ts`).
 - **Posts list filters, bulk actions and trash (#327):** Author / Category / Tag filters
   (`?author=` `?category=` `?tag=`, `FilterMenu`; options from `GET /posts/authors` and the
   `category` / `tag` terms) combine with the tabs, sort and search (`author_id`, `terms`).

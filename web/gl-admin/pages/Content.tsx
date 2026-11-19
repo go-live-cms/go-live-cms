@@ -16,7 +16,7 @@ import Modal from "@gl-admin/components/ui/Modal"
 import { toast } from "@gl-admin/components/ui/Toast"
 import Skeleton from "@gl-admin/components/ui/Skeleton"
 import EmptyState from "@gl-admin/components/ui/EmptyState"
-import { DocumentIcon, PlusIcon, SearchIcon } from "@gl-admin/components/ui/icons"
+import { DocumentIcon, PlusIcon, SearchIcon, UploadIcon } from "@gl-admin/components/ui/icons"
 import { Byline, LastEdited } from "@gl-admin/components/content/PostMeta"
 import ReviewRequestedPill from "@gl-admin/components/content/ReviewRequestedPill"
 import { useNewPostChooser } from "@gl-admin/components/content/NewPostDialog"
@@ -33,7 +33,7 @@ import {
 import Pages from "@gl-admin/pages/Pages"
 import NotFound from "@gl-admin/pages/NotFound"
 import { errorMessage } from "@gl-admin/lib/api/errors"
-import { canCreateContent, isContentModerator, isTrashed, type PermissionUser } from "@gl-admin/lib/roles"
+import { canCreateContent, isContentModerator, isSiteAdmin, isTrashed, type PermissionUser } from "@gl-admin/lib/roles"
 import { useAuthUser } from "@gl-admin/lib/hooks/useAuthUser"
 import { useSiteSettings } from "@gl-admin/lib/hooks/useSiteSettings"
 import { useListParams } from "@gl-admin/lib/hooks/useListParams"
@@ -74,7 +74,8 @@ import "@gl-admin/assets/styles/pages/content-list.scss"
 // #327: the Author (byline) / Category / Tag filters (?author= ?category= ?tag=, with
 // the tabs, sort and search), bulk selection with the tab's actions (bulkActions) and a
 // report of the posts the API refused, and the Trash tab (restore, delete permanently).
-// Hidden until their issues land: Import (#150), the Category column, the byline bulk
+// Import (#150, pages/Import.tsx): admins get it in the header and the empty state of the
+// Posts and Pages lists. Hidden until their issues land: the Category column, the byline bulk
 // action (#319) and the design's bulk Archive.
 
 type ContentProps = { title?: string }
@@ -373,11 +374,26 @@ function PostsList({ typeName, postType, title }: ListProps) {
       {moderator ? `New ${singular}` : "New draft"}
     </Button>
   )
+  // Import (#150): admins, on the lists an import fills.
+  const canImport = isSiteAdmin(user?.role) && (newType === "post" || newType === "page")
+  const importButton = canImport && (
+    <Button variant="secondary" icon={<UploadIcon />} onClick={() => navigate("/import")}>
+      Import
+    </Button>
+  )
+  const headerActions = importButton ? (
+    <>
+      {importButton}
+      {newButton}
+    </>
+  ) : (
+    newButton
+  )
 
   if (total === 0) {
     return (
       <section className="gl-content-list">
-        <ListHeader title={plural} actions={newButton} />
+        <ListHeader title={plural} actions={headerActions} />
         {newPost.dialog}
         <EmptyState
           className="gl-content-list__empty"
@@ -385,14 +401,23 @@ function PostsList({ typeName, postType, title }: ListProps) {
           title={`No ${plural.toLowerCase()} yet`}
           description={
             canCreate
-              ? `Write your first ${singular}.`
+              ? canImport
+                ? `Write your first ${singular}, or bring existing ones over from WordPress or a Markdown export.`
+                : `Write your first ${singular}.`
               : "Nothing has been written here yet. Your role can't create content; ask an administrator."
           }
           action={
             canCreate && (
-              <Button variant="primary" size="lg" onClick={newPost.start}>
-                Write a {singular}
-              </Button>
+              <div className="gl-content-list__empty-actions">
+                <Button variant="primary" size="lg" onClick={newPost.start}>
+                  Write a {singular}
+                </Button>
+                {canImport && (
+                  <Button variant="secondary" size="lg" onClick={() => navigate("/import")}>
+                    Import {plural.toLowerCase()}
+                  </Button>
+                )}
+              </div>
             )
           }
         />
@@ -404,7 +429,7 @@ function PostsList({ typeName, postType, title }: ListProps) {
 
   return (
     <section className={`gl-content-list${moderator ? "" : " gl-content-list--contributor"}`}>
-      <ListHeader title={plural} actions={newButton} />
+      <ListHeader title={plural} actions={headerActions} />
       {newPost.dialog}
 
       {!moderator && (

@@ -44,6 +44,7 @@ const Settings = lazy(() => import("@gl-admin/pages/Settings"))
 const SettingsDiscussion = lazy(() => import("@gl-admin/pages/SettingsDiscussion"))
 const Themes = lazy(() => import("@gl-admin/pages/Themes"))
 const Plugins = lazy(() => import("@gl-admin/pages/Plugins"))
+const Import = lazy(() => import("@gl-admin/pages/Import"))
 const Menus = lazy(() => import("@gl-admin/pages/Menus"))
 const Profile = lazy(() => import("@gl-admin/pages/Profile"))
 const PostTypes = lazy(() => import("@gl-admin/pages/PostTypes"))
@@ -142,6 +143,7 @@ function AppLayout() {
                 <Route path="/settings/discussion" element={<AdminOnly area="Settings"><SettingsDiscussion /></AdminOnly>} />
                 <Route path="/post-types" element={<AdminOnly area="Post types"><PostTypes /></AdminOnly>} />
                 <Route path="/plugins" element={<AdminOnly area="Plugins"><Plugins /></AdminOnly>} />
+                <Route path="/import" element={<AdminOnly area="Import"><Import /></AdminOnly>} />
                 {UiGallery && <Route path="/dev/ui" element={<UiGallery />} />}
               </Routes>
             </Suspense>

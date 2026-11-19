@@ -85,6 +85,18 @@ describe("describeActivity", () => {
     expect(line({ object_type: "settings", verb: "settings_updated", post: undefined, payload: { fields: ["site_title"] } })).toBe("Ana Costa updated the site settings")
   })
 
+  // #150: imported posts name the post; the import's own events link to its report.
+  it("reads imports", () => {
+    expect(line({ verb: "imported", payload: { post_type: "post", import_id: 3 } })).toMatch(/^Ana Costa imported /)
+    const started = describeActivity(event({ object_type: "import", verb: "import_started", object_id: 3, post: undefined, payload: { source: "wxr" } }), 99, now)
+    expect(`${started.who} ${started.verb} ${started.what}`).toBe("Ana Costa started an import")
+    expect(started.href).toBe("/import?id=3")
+    expect(line({ object_type: "import", verb: "import_finished", object_id: 3, post: undefined, payload: { status: "done", imported: 44 } })).toBe(
+      "Ana Costa finished an import (44 items imported)"
+    )
+    expect(line({ object_type: "import", verb: "import_finished", object_id: 3, post: undefined, payload: {} })).toBe("Ana Costa finished an import")
+  })
+
   // #331: no title join for terms and redirects, so generic lines.
   it("reads tag merges and redirects", () => {
     const merged = describeActivity(

@@ -36,6 +36,7 @@ import {
 } from "@gl-admin/lib/schedule"
 import ScheduledUpdateNotice from "@gl-admin/components/editor/ui/ScheduledUpdateNotice"
 import ReviewRequestNotice from "@gl-admin/components/editor/ui/ReviewRequestNotice"
+import ImportNotice from "@gl-admin/components/editor/ui/ImportNotice"
 import { RequestChangesDialog, RequestReviewDialog } from "@gl-admin/components/editor/ui/ReviewDialogs"
 import {
   dismissReviewRequest,
@@ -1377,6 +1378,8 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
               {roleVerified && contentReadOnly && !(scheduled && me?.id === initialData?.user_id) && initialData?.id && (
                 <ViewOnlyNotice postId={initialData.id} access={postAccess} onChanged={reloadAccess} />
               )}
+              {/* What an import left out of the post (#150), for editors and admins. */}
+              {roleVerified && initialData?.id && isContentModerator(me?.role) && <ImportNotice postId={initialData.id} />}
               {/* The open requests, for the owner, editors and admins (#321). */}
               {roleVerified && initialData?.id && postAccess?.can_review && postAccess.pending && (
                 <AccessRequestsNotice postId={initialData.id} pending={postAccess.pending} onChanged={reloadAccess} />
