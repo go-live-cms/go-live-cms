@@ -90,6 +90,9 @@ var publicCacheRoutes = map[string]publicCacheRoute{
 	"/public/posts/:id/related":  {},
 	"/public/posts/type/:type":   {},
 	"/public/posts/:id/authors":  {},
+	// Reader comments (#523): approved ones, clock-free (closes_at, never a computed
+	// closed); comment writes purge through purgeDiscussion (discussion_purge.go).
+	"/public/posts/:id/comments": {},
 	"/public/front-page":         {notFound: true},
 	// Author and term pages (#350, #348).
 	"/public/authors":                                {},
@@ -621,6 +624,7 @@ var publicCacheNoPurgeRoutes = map[string]string{
 	"POST /api/v1/media":                                           "a new upload is on no published page",
 	"POST /api/v1/media/batch":                                     "a new upload is on no published page",
 	"POST /api/v1/media/bulk":                                      "a new upload is on no published page",
+	"POST /api/v1/media/import":                                    "a new import (#29) is on no published page",
 	"POST /api/v1/redirects":                                       "redirect lookups aren't cached; the web caches its own 301s",
 	"DELETE /api/v1/redirects/:id":                                 "redirect lookups aren't cached; the web caches its own 301s",
 	// Internal listener.

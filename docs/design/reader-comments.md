@@ -730,6 +730,16 @@ edited, removed, replying_to}`: `badge` is `author`, `staff` or null; `avatar` a
 answered by a reply to a reply; `removed` a tombstone with empty `name` and `body`. Nothing
 else: no email, no commenter id, no status (everything served is approved).
 
+**As built (C3, #523).** A thread is `{comment, replies, reply_count}`: `reply_count` above the
+replies listed (100 on a page) is "Show more replies". `?thread=` answers `{discussion, thread}`,
+and `page` with `thread` is a 400. `removed` also marks the placeholder of 6.4 (a hidden comment
+an approved one answers), and `replying_to` is null when the comment answered is shown as
+removed. With `comments_threading: flat` every approved comment is its own entry, paged by
+comment, with no placeholders and no `replying_to` (6.2 A). `count` is the approved comments
+shown (no placeholders or tombstones), 0 when `off`. Comment writes purge through one entry
+point, `purgeDiscussion(post, event)` in `api/discussion_purge.go`, after their commit; the
+mapping of section 10 is its `discussionEventPurges`.
+
 ### 9.2 Writes
 
 These are the first POSTs under `/public`, and the first anonymous writes outside

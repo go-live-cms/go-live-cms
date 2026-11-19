@@ -21,6 +21,7 @@
 //	GET    /media/:id     → Auth Required (fetch by ID)
 //	PUT    /media/:id     → Auth Required (update metadata; admin/editor: any media)
 //	POST   /media/:id/replace → Auth Required (swap the file; same policy as PUT)
+//	POST   /media/import  → Auth Required (download files from URLs into the library, #29)
 //	DELETE /media/:id     → Auth Required (delete; admin/editor: any media)
 //	GET    /media/user/:id → Auth Required (user's media)
 //	GET    /media/post/:id → Auth Required (post's media; canReadPost)
@@ -59,6 +60,7 @@ func (server *Server) registerMediaRoutes(v1 *gin.RouterGroup) {
 	media.POST("/bulk", server.createMediaBulk)     // Batch upload (alias for compatibility)
 	media.PUT("/:id", server.updateMedia)           // Update metadata
 	media.POST("/:id/replace", server.replaceMedia) // Swap the file, keep id/metadata
+	media.POST("/import", server.importMedia)       // Add from URL: download into the library (#29)
 	media.DELETE("/:id", server.deleteMedia)        // Delete (admin/editor: any media)
 
 	// The admin home's "N images have no alt text" count (#325).

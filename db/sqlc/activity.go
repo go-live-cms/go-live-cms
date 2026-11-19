@@ -74,6 +74,9 @@ const (
 	// Media (ActivityDeleted too).
 	ActivityUploaded = "uploaded"
 	ActivityReplaced = "replaced"
+	// ActivityImported: a file added from a URL (#29). Payload: mime_type and the
+	// link's host only, never the URL (its path or query may hold a token).
+	ActivityImported = "imported"
 
 	// Members and invitations (ActivityCreated too: an admin adding a member).
 	ActivityInvited           = "invited"

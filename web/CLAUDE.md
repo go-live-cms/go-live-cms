@@ -332,7 +332,13 @@ are the most fragile part of the codebase. **Before editing anything under
   (`lib/mediaPaste.ts`, tested): ignored in text fields and dialogs, other clipboard
   content ignored. Copied files keep their names; the clipboard's unnamed picture (or
   Chrome/Firefox's generic `image.png`) is uploaded once, in its first format, as
-  `pasted-YYYYMMDD-HHMMSS.<ext>`.
+  `pasted-YYYYMMDD-HHMMSS.<ext>`. **Add from URL (#29, the canvas's "Media · Add from URL"
+  board):** beside Upload, a dialog (`components/media/AddFromURL.tsx`) with one link per line
+  (≤ 10); the API's `POST /media/import` downloads each into the library like an upload (copy
+  only, never a hotlink) and answers per link: added, or the API's reason; "Try failed again"
+  puts the failed links back. The media picker shows the same form in place (it's already a
+  dialog) and picks what was added, if it is of the picker's kind. Rules and wording:
+  `lib/mediaImport.ts` (tested). Home's feed: "added hero from images.example.com".
 - **Video captions (#507):** a video's detail page and side panel have **Captions (VTT)**
   (`components/media/CaptionsField.tsx`, rules `lib/mediaCaptions.ts`): the shared `MediaPicker` with
   the `captions` kind (`text/vtt`, the API's `type=captions`; also a library filter), Remove, and the
@@ -385,7 +391,11 @@ are the most fragile part of the codebase. **Before editing anything under
   text rules (`normalizeReaderCommentBody`, `readerCommentLength` in code points, as the API
   counts) for the form's counter. Pinned by `src/lib/discussionStateVectors.json` and
   `src/lib/discussionTextVectors.json` (both suites; `JSON.parse`). Nothing renders comments yet
-  (C5 #525).
+  (C5 #525), and `comments_enabled` stays off, its switch hidden until #526 (#527, below). **The reads (#523):**
+  `getPublicPost`/`getPublicFrontPage` carry `discussion` (`{state, closes_at, count}`, cached and
+  clock-free: apply `discussionState(discussion, now)` before showing a form), and
+  `getPublicPostComments(id, page)` / `getPublicCommentThread(id, rootId)` in `src/lib/api.ts` read
+  the threads (null on a 404; types `PublicReaderComment`, `PublicReaderCommentThread`).
 - **Discussion settings screens (#527, design 12.1–12.3; the canvas's "Settings · Discussion", "Post types ·
   Posts" and "Discussion settings…" boards):** Settings › Discussion is its own page, `/settings/discussion`
   (`pages/SettingsDiscussion.tsx`, admins), after Editor in the Settings menu (`components/settings/SettingsNav.tsx`,

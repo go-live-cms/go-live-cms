@@ -433,6 +433,7 @@ func TestPublicPostPageTemplate(t *testing.T) {
 			store.EXPECT().GetPublishedPostTaxonomyTerms(gomock.Any(), int64(7)).Return(nil, nil).AnyTimes()
 			store.EXPECT().GetPostMetaByKey(gomock.Any(), gomock.Any()).Return(db.PostMetum{}, sql.ErrNoRows).AnyTimes()
 			store.EXPECT().GetPostTaxonomyTerms(gomock.Any(), int64(7)).Return(nil, nil).AnyTimes()
+			expectDiscussionOff(store)
 			recorder := serveSettingsGET(t, newTestServer(t, store), "/public/posts/7")
 			require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 			var view publicPostView

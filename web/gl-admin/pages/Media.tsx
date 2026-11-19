@@ -3,10 +3,11 @@ import { useSearchParams } from "react-router-dom"
 import MediaGrid, { type UploadingFile } from "@gl-admin/components/media/MediaGrid"
 import MediaPanel from "@gl-admin/components/media/MediaPanel"
 import { DeleteMediaDialog } from "@gl-admin/components/media/mediaActions"
+import { AddFromURLDialog } from "@gl-admin/components/media/AddFromURL"
 import Button from "@gl-admin/components/ui/Button"
 import EmptyState from "@gl-admin/components/ui/EmptyState"
 import FilterSelect from "@gl-admin/components/ui/FilterSelect"
-import { CheckIcon, PlusIcon, SearchIcon, UploadIcon } from "@gl-admin/components/ui/icons"
+import { CheckIcon, LinkIcon, PlusIcon, SearchIcon, UploadIcon } from "@gl-admin/components/ui/icons"
 import { toast } from "@gl-admin/components/ui/Toast"
 import { getMedia, getMediaById } from "@gl-admin/lib/api/media"
 import { uploadMediaFile } from "@gl-admin/lib/mediaLookup"
@@ -25,7 +26,8 @@ import "@gl-admin/assets/styles/pages/media.scss"
 
 // The media library (#342): the grid with variant previews, search, the type filter, the
 // "Missing alt text" filter (#325, ?alt=missing) and sort (all in the URL), bulk select
-// and delete, uploads by button, drop or paste (#28), and a side panel for the open file (?file=id)
+// and delete, uploads by button, drop or paste (#28), "Add from URL" (#29: the API
+// downloads each link into the library, never a hotlink), and a side panel for the open file (?file=id)
 // with "Edit details" for the detail page.
 //
 // The board's "1.2 GB" total has no API (the count line shows files only).
@@ -59,6 +61,7 @@ export default function Media() {
   const [selecting, setSelecting] = useState(false)
   const [selected, setSelected] = useState<MediaItem[]>([])
   const [toDelete, setToDelete] = useState<MediaItem[]>([])
+  const [addingFromURL, setAddingFromURL] = useState(false)
   // The search box's text; the URL (and the request) follow it after a pause.
   const [searchText, setSearchText] = useState(search)
   const fileInput = useRef<HTMLInputElement>(null)
@@ -292,6 +295,11 @@ export default function Media() {
           <div className="gl-media__spacer" />
           {canUpload && !libraryEmpty && <span className="gl-media__paste-hint">Paste or drop images to upload</span>}
           {canUpload && (
+            <Button variant="secondary" icon={<LinkIcon />} onClick={() => setAddingFromURL(true)}>
+              Add from URL
+            </Button>
+          )}
+          {canUpload && (
             <Button variant="primary" icon={<UploadIcon />} onClick={chooseFiles}>
               Upload
             </Button>
@@ -425,6 +433,15 @@ export default function Media() {
           onDelete={(media) => setToDelete([media])}
         />
       )}
+
+      <AddFromURLDialog
+        isOpen={addingFromURL}
+        onClose={() => setAddingFromURL(false)}
+        onAdded={(added) => {
+          toast.success(`Added ${added.length} file${added.length === 1 ? "" : "s"} from links`)
+          setReload((n) => n + 1)
+        }}
+      />
 
       <DeleteMediaDialog
         media={toDelete}

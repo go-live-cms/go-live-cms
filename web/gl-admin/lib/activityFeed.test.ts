@@ -69,6 +69,10 @@ describe("describeActivity", () => {
     expect(line({ object_type: "media", verb: "uploaded", post: undefined, media: { id: 4, name: "hero.jpg" } })).toBe("Ana Costa uploaded hero.jpg")
     expect(describeActivity(event({ object_type: "media", verb: "replaced", post: undefined, media: { id: 4, name: "hero.jpg" } }), 1, now).href).toBe("/media/4")
     expect(line({ object_type: "media", verb: "deleted", post: undefined })).toBe("Ana Costa deleted a file")
+    // Added from a link (#29): the host, never the link.
+    expect(line({ object_type: "media", verb: "imported", post: undefined, media: { id: 5, name: "hero" }, payload: { mime_type: "image/jpeg", host: "images.example.com" } })).toBe(
+      "Ana Costa added hero from images.example.com"
+    )
     expect(line({ object_type: "invitation", verb: "invited", post: undefined, payload: { role: "contributor" } })).toBe("Ana Costa invited a contributor")
     expect(line({ object_type: "invitation", verb: "invited", post: undefined, payload: { role: "admin" } })).toBe("Ana Costa invited an administrator")
     expect(line({ object_type: "invitation", verb: "invitation_revoked", post: undefined })).toBe("Ana Costa revoked an invitation")
