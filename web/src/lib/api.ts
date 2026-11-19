@@ -213,8 +213,9 @@ export interface PublicPost {
   taxonomy_terms: TaxonomyTerm[]
   // The published SEO settings (#357); absent from an older API.
   seo?: PostSeo
-  // Reader comments (#523): whether to render the section; absent from an older API.
-  discussion?: PublicDiscussion
+  // Reader comments (#523): whether to render the section. null when the API couldn't read
+  // it (render no section); absent from an older API.
+  discussion?: PublicDiscussion | null
 }
 
 export async function getPublicPost(idOrSlug: string | number): Promise<PublicPost | null> {
@@ -230,7 +231,7 @@ export async function getPublicPost(idOrSlug: string | number): Promise<PublicPo
     featured_image: body.featured_image ?? null,
     taxonomy_terms: body.taxonomy_terms ?? [],
     seo: body.seo ?? undefined,
-    discussion: body.discussion ?? undefined,
+    discussion: body.discussion,
   }
 }
 
@@ -328,7 +329,7 @@ export async function getPublicFrontPage(): Promise<PublicPost | null> {
     featured_image: body.featured_image ?? null,
     taxonomy_terms: body.taxonomy_terms ?? [],
     seo: body.seo ?? undefined,
-    discussion: body.discussion ?? undefined,
+    discussion: body.discussion,
   }
 }
 

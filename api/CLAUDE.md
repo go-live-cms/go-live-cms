@@ -1361,7 +1361,9 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   body: the SQL blanks them), so unapproving never hides replies. `replying_to` = the shown parent's
   name on a reply to a reply. A member's comment: current name, avatar, badge `author` (on the
   **published** byline) or `staff`. `GET /public/posts/:id`, `/slug/:slug` and the front page carry
-  `discussion: {state, closes_at, count}` (`publicPostView`; `off` counts 0 and lists nothing).
+  `discussion: {state, closes_at, count}` (`publicPostView`; `off` counts 0 and lists nothing; a
+  failed read is `null` with `Cache-Control: no-store`, never a failed post; with comments off for
+  the site they read the settings only).
   **Cached and clock-free:** `state` never applies `closes_at` (the renderer and the write path
   do). `PublicReaderComment` is built field by field; no email, commenter id, status, hash or token
   (7.1: `TestPublicCommentAnswersHoldNoAddress` in `route_auth_test.go`, which also lists every
