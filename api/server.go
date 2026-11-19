@@ -560,6 +560,9 @@ func (server *Server) setupRoutes() error {
 	// Embeds: which provider a pasted link belongs to, and its title (#425, embeds_resolve.go)
 	server.registerEmbedRoutes(v1)
 
+	// Posts › Import: WordPress and Markdown imports (#150, imports.go; admins)
+	server.registerImportRoutes(v1)
+
 	// Public API routes for SSR/public content
 	server.registerPublicRoutes(public)
 

@@ -626,7 +626,14 @@ var publicCacheNoPurgeRoutes = map[string]string{
 	"POST /api/v1/media/bulk":                                      "a new upload is on no published page",
 	"POST /api/v1/media/import":                                    "a new import (#29) is on no published page",
 	"POST /api/v1/redirects":                                       "redirect lookups aren't cached; the web caches its own 301s",
-	"DELETE /api/v1/redirects/:id":                                 "redirect lookups aren't cached; the web caches its own 301s",
+	// The importer (#150): reading a file and the mapping change nothing public; the job purges
+	// after each post it publishes (import_worker.go), like the scheduler.
+	"POST /api/v1/imports":                         "an import job, not public",
+	"POST /api/v1/imports/:id/start":               "queues the job, which purges as it publishes",
+	"POST /api/v1/imports/:id/cancel":              "stops the job",
+	"DELETE /api/v1/imports/:id":                   "an import's report, not public",
+	"POST /api/v1/posts/:id/import-notice/dismiss": "the editor's notice, not public",
+	"DELETE /api/v1/redirects/:id":                 "redirect lookups aren't cached; the web caches its own 301s",
 	// Internal listener.
 	"PUT /internal/posts/:id/collab": "the working copy; publish purges",
 	// A template's or part's working copy (#490): never public; publishing the design purges (#492).

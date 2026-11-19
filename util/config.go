@@ -253,6 +253,15 @@ type Config struct {
 	// (another replica may still run them). Events are still written while it is off.
 	PluginHooksInterval time.Duration `mapstructure:"PLUGIN_HOOKS_INTERVAL"`
 
+	// ImportInterval is how often the API looks for an import job to run (#150,
+	// api/import_worker.go). 2s by default; 0 turns the importer off in this process
+	// (another replica may still run it). A job, once claimed, runs to its end.
+	ImportInterval time.Duration `mapstructure:"IMPORT_INTERVAL"`
+
+	// ImportMaxSize caps an uploaded export (a WordPress XML file or a Markdown zip,
+	// #150), like MAX_UPLOAD_SIZE ("100MB" by default).
+	ImportMaxSize string `mapstructure:"IMPORT_MAX_SIZE"`
+
 	// PluginWebhooksAllowInsecure lets plugin webhooks (#460, api/plugin_webhooks.go)
 	// use http:// and reach private and loopback addresses, so a receiver can run on a
 	// developer's machine or in the dev compose network. Development only: LoadConfig
@@ -395,6 +404,8 @@ func LoadConfig(path string) (config Config, err error) {
 	viper.SetDefault("PASSWORD_RESET_TTL", "1h")
 	viper.SetDefault("SCHEDULED_PUBLISH_INTERVAL", "30s")
 	viper.SetDefault("PLUGIN_HOOKS_INTERVAL", "1s")
+	viper.SetDefault("IMPORT_INTERVAL", "2s")
+	viper.SetDefault("IMPORT_MAX_SIZE", "100MB")
 	viper.SetDefault("PLUGIN_WEBHOOKS_ALLOW_INSECURE", false)
 
 	// The public read cache (#185) is optional: no URL, no cache.
@@ -481,6 +492,13 @@ func LoadConfig(path string) (config Config, err error) {
 		return config, fmt.Errorf("PLUGIN_HOOKS_INTERVAL must be 0 (off) or a positive duration")
 	}
 
+	if config.ImportInterval < 0 {
+		return config, fmt.Errorf("IMPORT_INTERVAL must be 0 (off) or a positive duration")
+	}
+	if _, err := config.ImportMaxBytes(); err != nil {
+		return config, err
+	}
+
 	// The webhook SSRF allowance would let a plugin's settings reach the internal
 	// network: never outside development.
 	if config.PluginWebhooksAllowInsecure && !config.IsDebugMode() {
@@ -533,9 +551,22 @@ const DefaultMaxUploadBytes int64 = 10 << 20
 // it is empty (a zero Config in tests), an error when it doesn't parse or
 // isn't positive.
 func (c Config) MaxUploadBytes() (int64, error) {
-	s := strings.ToUpper(strings.TrimSpace(c.MaxUploadSize))
+	return parseByteSize("MAX_UPLOAD_SIZE", c.MaxUploadSize, DefaultMaxUploadBytes)
+}
+
+// DefaultImportMaxBytes is the import limit used when IMPORT_MAX_SIZE is empty.
+const DefaultImportMaxBytes int64 = 100 << 20
+
+// ImportMaxBytes returns ImportMaxSize in bytes (DefaultImportMaxBytes when empty).
+func (c Config) ImportMaxBytes() (int64, error) {
+	return parseByteSize("IMPORT_MAX_SIZE", c.ImportMaxSize, DefaultImportMaxBytes)
+}
+
+// parseByteSize reads a size such as 10MB, 512KB or 1GB; empty is fallback.
+func parseByteSize(name, raw string, fallback int64) (int64, error) {
+	s := strings.ToUpper(strings.TrimSpace(raw))
 	if s == "" {
-		return DefaultMaxUploadBytes, nil
+		return fallback, nil
 	}
 
 	multiplier := int64(1)
@@ -552,7 +583,7 @@ func (c Config) MaxUploadBytes() (int64, error) {
 
 	n, err := strconv.ParseInt(s, 10, 64)
 	if err != nil || n <= 0 || n > (1<<62)/multiplier {
-		return 0, fmt.Errorf("invalid MAX_UPLOAD_SIZE %q: want a positive size such as 10MB, 512KB or 1GB", c.MaxUploadSize)
+		return 0, fmt.Errorf("invalid %s %q: want a positive size such as 10MB, 512KB or 1GB", name, raw)
 	}
 	return n * multiplier, nil
 }

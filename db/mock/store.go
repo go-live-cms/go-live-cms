@@ -170,6 +170,21 @@ func (mr *MockStoreMockRecorder) BlockSession(arg0, arg1 interface{}) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BlockSession", reflect.TypeOf((*MockStore)(nil).BlockSession), arg0, arg1)
 }
 
+// CancelImportJob mocks base method.
+func (m *MockStore) CancelImportJob(arg0 context.Context, arg1 int64) (db.ImportJob, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CancelImportJob", arg0, arg1)
+	ret0, _ := ret[0].(db.ImportJob)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CancelImportJob indicates an expected call of CancelImportJob.
+func (mr *MockStoreMockRecorder) CancelImportJob(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CancelImportJob", reflect.TypeOf((*MockStore)(nil).CancelImportJob), arg0, arg1)
+}
+
 // CancelPostSchedule mocks base method.
 func (m *MockStore) CancelPostSchedule(arg0 context.Context, arg1 int64) (db.Post, error) {
 	m.ctrl.T.Helper()
@@ -318,6 +333,21 @@ func (m *MockStore) ClaimEmailChangeToken(arg0 context.Context, arg1 []byte) (db
 func (mr *MockStoreMockRecorder) ClaimEmailChangeToken(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClaimEmailChangeToken", reflect.TypeOf((*MockStore)(nil).ClaimEmailChangeToken), arg0, arg1)
+}
+
+// ClaimImportJob mocks base method.
+func (m *MockStore) ClaimImportJob(arg0 context.Context) (db.ImportJob, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ClaimImportJob", arg0)
+	ret0, _ := ret[0].(db.ImportJob)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ClaimImportJob indicates an expected call of ClaimImportJob.
+func (mr *MockStoreMockRecorder) ClaimImportJob(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClaimImportJob", reflect.TypeOf((*MockStore)(nil).ClaimImportJob), arg0)
 }
 
 // ClaimPasswordResetToken mocks base method.
@@ -566,6 +596,36 @@ func (m *MockStore) CountFilteredPosts(arg0 context.Context, arg1 db.CountFilter
 func (mr *MockStoreMockRecorder) CountFilteredPosts(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountFilteredPosts", reflect.TypeOf((*MockStore)(nil).CountFilteredPosts), arg0, arg1)
+}
+
+// CountImportItemsByStatus mocks base method.
+func (m *MockStore) CountImportItemsByStatus(arg0 context.Context, arg1 int64) ([]db.CountImportItemsByStatusRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CountImportItemsByStatus", arg0, arg1)
+	ret0, _ := ret[0].([]db.CountImportItemsByStatusRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CountImportItemsByStatus indicates an expected call of CountImportItemsByStatus.
+func (mr *MockStoreMockRecorder) CountImportItemsByStatus(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountImportItemsByStatus", reflect.TypeOf((*MockStore)(nil).CountImportItemsByStatus), arg0, arg1)
+}
+
+// CountImportedBefore mocks base method.
+func (m *MockStore) CountImportedBefore(arg0 context.Context, arg1 int64) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CountImportedBefore", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CountImportedBefore indicates an expected call of CountImportedBefore.
+func (mr *MockStoreMockRecorder) CountImportedBefore(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountImportedBefore", reflect.TypeOf((*MockStore)(nil).CountImportedBefore), arg0, arg1)
 }
 
 // CountLivePostComments mocks base method.
@@ -971,6 +1031,63 @@ func (m *MockStore) CreateGlobalStyleVersion(arg0 context.Context, arg1 db.Creat
 func (mr *MockStoreMockRecorder) CreateGlobalStyleVersion(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateGlobalStyleVersion", reflect.TypeOf((*MockStore)(nil).CreateGlobalStyleVersion), arg0, arg1)
+}
+
+// CreateImportFile mocks base method.
+func (m *MockStore) CreateImportFile(arg0 context.Context, arg1 db.CreateImportFileParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateImportFile", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateImportFile indicates an expected call of CreateImportFile.
+func (mr *MockStoreMockRecorder) CreateImportFile(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateImportFile", reflect.TypeOf((*MockStore)(nil).CreateImportFile), arg0, arg1)
+}
+
+// CreateImportItem mocks base method.
+func (m *MockStore) CreateImportItem(arg0 context.Context, arg1 db.CreateImportItemParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateImportItem", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateImportItem indicates an expected call of CreateImportItem.
+func (mr *MockStoreMockRecorder) CreateImportItem(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateImportItem", reflect.TypeOf((*MockStore)(nil).CreateImportItem), arg0, arg1)
+}
+
+// CreateImportJob mocks base method.
+func (m *MockStore) CreateImportJob(arg0 context.Context, arg1 db.CreateImportJobParams) (db.ImportJob, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateImportJob", arg0, arg1)
+	ret0, _ := ret[0].(db.ImportJob)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateImportJob indicates an expected call of CreateImportJob.
+func (mr *MockStoreMockRecorder) CreateImportJob(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateImportJob", reflect.TypeOf((*MockStore)(nil).CreateImportJob), arg0, arg1)
+}
+
+// CreateImportMedia mocks base method.
+func (m *MockStore) CreateImportMedia(arg0 context.Context, arg1 db.CreateImportMediaParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateImportMedia", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateImportMedia indicates an expected call of CreateImportMedia.
+func (mr *MockStoreMockRecorder) CreateImportMedia(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateImportMedia", reflect.TypeOf((*MockStore)(nil).CreateImportMedia), arg0, arg1)
 }
 
 // CreateMedia mocks base method.
@@ -1658,6 +1775,35 @@ func (mr *MockStoreMockRecorder) DeleteFinishedPluginHookRuns(arg0, arg1 interfa
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteFinishedPluginHookRuns", reflect.TypeOf((*MockStore)(nil).DeleteFinishedPluginHookRuns), arg0, arg1)
 }
 
+// DeleteImportFiles mocks base method.
+func (m *MockStore) DeleteImportFiles(arg0 context.Context, arg1 int64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteImportFiles", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteImportFiles indicates an expected call of DeleteImportFiles.
+func (mr *MockStoreMockRecorder) DeleteImportFiles(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteImportFiles", reflect.TypeOf((*MockStore)(nil).DeleteImportFiles), arg0, arg1)
+}
+
+// DeleteImportJob mocks base method.
+func (m *MockStore) DeleteImportJob(arg0 context.Context, arg1 int64) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteImportJob", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DeleteImportJob indicates an expected call of DeleteImportJob.
+func (mr *MockStoreMockRecorder) DeleteImportJob(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteImportJob", reflect.TypeOf((*MockStore)(nil).DeleteImportJob), arg0, arg1)
+}
+
 // DeleteMedia mocks base method.
 func (m *MockStore) DeleteMedia(arg0 context.Context, arg1 int64) error {
 	m.ctrl.T.Helper()
@@ -2322,6 +2468,21 @@ func (mr *MockStoreMockRecorder) DisablePlugin(arg0, arg1 interface{}) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DisablePlugin", reflect.TypeOf((*MockStore)(nil).DisablePlugin), arg0, arg1)
 }
 
+// DismissImportNotice mocks base method.
+func (m *MockStore) DismissImportNotice(arg0 context.Context, arg1 db.DismissImportNoticeParams) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DismissImportNotice", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DismissImportNotice indicates an expected call of DismissImportNotice.
+func (mr *MockStoreMockRecorder) DismissImportNotice(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DismissImportNotice", reflect.TypeOf((*MockStore)(nil).DismissImportNotice), arg0, arg1)
+}
+
 // DuplicatePostTx mocks base method.
 func (m *MockStore) DuplicatePostTx(arg0 context.Context, arg1 db.DuplicatePostTxParams) (db.Post, error) {
 	m.ctrl.T.Helper()
@@ -2423,6 +2584,36 @@ func (m *MockStore) FanOutPluginEvents(arg0 context.Context, arg1 int32) (db.Fan
 func (mr *MockStoreMockRecorder) FanOutPluginEvents(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FanOutPluginEvents", reflect.TypeOf((*MockStore)(nil).FanOutPluginEvents), arg0, arg1)
+}
+
+// FinishImportItem mocks base method.
+func (m *MockStore) FinishImportItem(arg0 context.Context, arg1 db.FinishImportItemParams) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FinishImportItem", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FinishImportItem indicates an expected call of FinishImportItem.
+func (mr *MockStoreMockRecorder) FinishImportItem(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FinishImportItem", reflect.TypeOf((*MockStore)(nil).FinishImportItem), arg0, arg1)
+}
+
+// FinishImportJob mocks base method.
+func (m *MockStore) FinishImportJob(arg0 context.Context, arg1 db.FinishImportJobParams) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FinishImportJob", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FinishImportJob indicates an expected call of FinishImportJob.
+func (mr *MockStoreMockRecorder) FinishImportJob(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FinishImportJob", reflect.TypeOf((*MockStore)(nil).FinishImportJob), arg0, arg1)
 }
 
 // FinishReminder mocks base method.
@@ -2588,6 +2779,96 @@ func (m *MockStore) GetGlobalStylesForUpdate(arg0 context.Context, arg1 string) 
 func (mr *MockStoreMockRecorder) GetGlobalStylesForUpdate(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetGlobalStylesForUpdate", reflect.TypeOf((*MockStore)(nil).GetGlobalStylesForUpdate), arg0, arg1)
+}
+
+// GetImportFile mocks base method.
+func (m *MockStore) GetImportFile(arg0 context.Context, arg1 db.GetImportFileParams) ([]byte, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetImportFile", arg0, arg1)
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetImportFile indicates an expected call of GetImportFile.
+func (mr *MockStoreMockRecorder) GetImportFile(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetImportFile", reflect.TypeOf((*MockStore)(nil).GetImportFile), arg0, arg1)
+}
+
+// GetImportJob mocks base method.
+func (m *MockStore) GetImportJob(arg0 context.Context, arg1 int64) (db.ImportJob, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetImportJob", arg0, arg1)
+	ret0, _ := ret[0].(db.ImportJob)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetImportJob indicates an expected call of GetImportJob.
+func (mr *MockStoreMockRecorder) GetImportJob(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetImportJob", reflect.TypeOf((*MockStore)(nil).GetImportJob), arg0, arg1)
+}
+
+// GetImportMedia mocks base method.
+func (m *MockStore) GetImportMedia(arg0 context.Context, arg1 string) (db.Medium, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetImportMedia", arg0, arg1)
+	ret0, _ := ret[0].(db.Medium)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetImportMedia indicates an expected call of GetImportMedia.
+func (mr *MockStoreMockRecorder) GetImportMedia(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetImportMedia", reflect.TypeOf((*MockStore)(nil).GetImportMedia), arg0, arg1)
+}
+
+// GetImportNoticeForPost mocks base method.
+func (m *MockStore) GetImportNoticeForPost(arg0 context.Context, arg1 sql.NullInt64) (db.GetImportNoticeForPostRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetImportNoticeForPost", arg0, arg1)
+	ret0, _ := ret[0].(db.GetImportNoticeForPostRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetImportNoticeForPost indicates an expected call of GetImportNoticeForPost.
+func (mr *MockStoreMockRecorder) GetImportNoticeForPost(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetImportNoticeForPost", reflect.TypeOf((*MockStore)(nil).GetImportNoticeForPost), arg0, arg1)
+}
+
+// GetImportedPostBySourceKey mocks base method.
+func (m *MockStore) GetImportedPostBySourceKey(arg0 context.Context, arg1 string) (db.GetImportedPostBySourceKeyRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetImportedPostBySourceKey", arg0, arg1)
+	ret0, _ := ret[0].(db.GetImportedPostBySourceKeyRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetImportedPostBySourceKey indicates an expected call of GetImportedPostBySourceKey.
+func (mr *MockStoreMockRecorder) GetImportedPostBySourceKey(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetImportedPostBySourceKey", reflect.TypeOf((*MockStore)(nil).GetImportedPostBySourceKey), arg0, arg1)
+}
+
+// GetImportedPostByWpID mocks base method.
+func (m *MockStore) GetImportedPostByWpID(arg0 context.Context, arg1 db.GetImportedPostByWpIDParams) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetImportedPostByWpID", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetImportedPostByWpID indicates an expected call of GetImportedPostByWpID.
+func (mr *MockStoreMockRecorder) GetImportedPostByWpID(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetImportedPostByWpID", reflect.TypeOf((*MockStore)(nil).GetImportedPostByWpID), arg0, arg1)
 }
 
 // GetLatestPostAccessRequest mocks base method.
@@ -3969,6 +4250,21 @@ func (mr *MockStoreMockRecorder) HasPublishedSiteTemplate(arg0, arg1 interface{}
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasPublishedSiteTemplate", reflect.TypeOf((*MockStore)(nil).HasPublishedSiteTemplate), arg0, arg1)
 }
 
+// ImportPostTx mocks base method.
+func (m *MockStore) ImportPostTx(arg0 context.Context, arg1 db.ImportPostTxParams) (db.ImportPostTxResult, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ImportPostTx", arg0, arg1)
+	ret0, _ := ret[0].(db.ImportPostTxResult)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ImportPostTx indicates an expected call of ImportPostTx.
+func (mr *MockStoreMockRecorder) ImportPostTx(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ImportPostTx", reflect.TypeOf((*MockStore)(nil).ImportPostTx), arg0, arg1)
+}
+
 // InsertDiscoveredPlugin mocks base method.
 func (m *MockStore) InsertDiscoveredPlugin(arg0 context.Context, arg1 db.InsertDiscoveredPluginParams) (db.Plugin, error) {
 	m.ctrl.T.Helper()
@@ -4398,6 +4694,36 @@ func (m *MockStore) ListImageMediaAfter(arg0 context.Context, arg1 db.ListImageM
 func (mr *MockStoreMockRecorder) ListImageMediaAfter(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListImageMediaAfter", reflect.TypeOf((*MockStore)(nil).ListImageMediaAfter), arg0, arg1)
+}
+
+// ListImportItems mocks base method.
+func (m *MockStore) ListImportItems(arg0 context.Context, arg1 db.ListImportItemsParams) ([]db.ListImportItemsRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListImportItems", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListImportItemsRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListImportItems indicates an expected call of ListImportItems.
+func (mr *MockStoreMockRecorder) ListImportItems(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListImportItems", reflect.TypeOf((*MockStore)(nil).ListImportItems), arg0, arg1)
+}
+
+// ListImportJobs mocks base method.
+func (m *MockStore) ListImportJobs(arg0 context.Context, arg1 int32) ([]db.ListImportJobsRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListImportJobs", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListImportJobsRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListImportJobs indicates an expected call of ListImportJobs.
+func (mr *MockStoreMockRecorder) ListImportJobs(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListImportJobs", reflect.TypeOf((*MockStore)(nil).ListImportJobs), arg0, arg1)
 }
 
 // ListMedia mocks base method.
@@ -5375,6 +5701,20 @@ func (mr *MockStoreMockRecorder) LockAdminUserIDs(arg0 interface{}) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockAdminUserIDs", reflect.TypeOf((*MockStore)(nil).LockAdminUserIDs), arg0)
 }
 
+// LockImportSourceKey mocks base method.
+func (m *MockStore) LockImportSourceKey(arg0 context.Context, arg1 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LockImportSourceKey", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// LockImportSourceKey indicates an expected call of LockImportSourceKey.
+func (mr *MockStoreMockRecorder) LockImportSourceKey(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockImportSourceKey", reflect.TypeOf((*MockStore)(nil).LockImportSourceKey), arg0, arg1)
+}
+
 // LockNewPostOwner mocks base method.
 func (m *MockStore) LockNewPostOwner(arg0 context.Context, arg1 int64) (db.LockNewPostOwnerRow, error) {
 	m.ctrl.T.Helper()
@@ -5759,6 +6099,21 @@ func (m *MockStore) NextGlobalStyleVersionNo(arg0 context.Context, arg1 string) 
 func (mr *MockStoreMockRecorder) NextGlobalStyleVersionNo(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NextGlobalStyleVersionNo", reflect.TypeOf((*MockStore)(nil).NextGlobalStyleVersionNo), arg0, arg1)
+}
+
+// NextPendingImportItem mocks base method.
+func (m *MockStore) NextPendingImportItem(arg0 context.Context, arg1 int64) (db.ImportItem, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NextPendingImportItem", arg0, arg1)
+	ret0, _ := ret[0].(db.ImportItem)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// NextPendingImportItem indicates an expected call of NextPendingImportItem.
+func (mr *MockStoreMockRecorder) NextPendingImportItem(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NextPendingImportItem", reflect.TypeOf((*MockStore)(nil).NextPendingImportItem), arg0, arg1)
 }
 
 // NextSiteTemplateVersionNo mocks base method.
@@ -6156,6 +6511,21 @@ func (m *MockStore) RenamePostTemplate(arg0 context.Context, arg1 db.RenamePostT
 func (mr *MockStoreMockRecorder) RenamePostTemplate(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RenamePostTemplate", reflect.TypeOf((*MockStore)(nil).RenamePostTemplate), arg0, arg1)
+}
+
+// RenewImportJobLease mocks base method.
+func (m *MockStore) RenewImportJobLease(arg0 context.Context, arg1 db.RenewImportJobLeaseParams) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RenewImportJobLease", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RenewImportJobLease indicates an expected call of RenewImportJobLease.
+func (mr *MockStoreMockRecorder) RenewImportJobLease(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RenewImportJobLease", reflect.TypeOf((*MockStore)(nil).RenewImportJobLease), arg0, arg1)
 }
 
 // RenewUserInvitation mocks base method.
@@ -6662,6 +7032,50 @@ func (m *MockStore) SetCommenterBlocked(arg0 context.Context, arg1 db.SetComment
 func (mr *MockStoreMockRecorder) SetCommenterBlocked(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetCommenterBlocked", reflect.TypeOf((*MockStore)(nil).SetCommenterBlocked), arg0, arg1)
+}
+
+// SetImportJobMapping mocks base method.
+func (m *MockStore) SetImportJobMapping(arg0 context.Context, arg1 db.SetImportJobMappingParams) (db.ImportJob, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetImportJobMapping", arg0, arg1)
+	ret0, _ := ret[0].(db.ImportJob)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SetImportJobMapping indicates an expected call of SetImportJobMapping.
+func (mr *MockStoreMockRecorder) SetImportJobMapping(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetImportJobMapping", reflect.TypeOf((*MockStore)(nil).SetImportJobMapping), arg0, arg1)
+}
+
+// SetImportJobTermIDs mocks base method.
+func (m *MockStore) SetImportJobTermIDs(arg0 context.Context, arg1 db.SetImportJobTermIDsParams) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetImportJobTermIDs", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SetImportJobTermIDs indicates an expected call of SetImportJobTermIDs.
+func (mr *MockStoreMockRecorder) SetImportJobTermIDs(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetImportJobTermIDs", reflect.TypeOf((*MockStore)(nil).SetImportJobTermIDs), arg0, arg1)
+}
+
+// SetImportedPostDates mocks base method.
+func (m *MockStore) SetImportedPostDates(arg0 context.Context, arg1 db.SetImportedPostDatesParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetImportedPostDates", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetImportedPostDates indicates an expected call of SetImportedPostDates.
+func (mr *MockStoreMockRecorder) SetImportedPostDates(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetImportedPostDates", reflect.TypeOf((*MockStore)(nil).SetImportedPostDates), arg0, arg1)
 }
 
 // SetMediaVariants mocks base method.

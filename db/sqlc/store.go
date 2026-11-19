@@ -40,6 +40,8 @@ type Store interface {
 	Querier
 	CreatePostTx(ctx context.Context, arg CreatePostTxParams) (CreatePostTxResult, error)
 	DuplicatePostTx(ctx context.Context, arg DuplicatePostTxParams) (Post, error)
+	// the importer (#150)
+	ImportPostTx(ctx context.Context, arg ImportPostTxParams) (ImportPostTxResult, error)
 	// post templates (#322)
 	CreatePostTemplateTx(ctx context.Context, arg CreatePostTemplateTxParams) (PostTemplate, error)
 	CreatePostFromTemplateTx(ctx context.Context, arg CreatePostFromTemplateTxParams) (Post, error)

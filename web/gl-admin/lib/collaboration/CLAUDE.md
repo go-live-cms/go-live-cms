@@ -236,7 +236,9 @@ kept so references in code stay valid.
    /posts/:id/duplicate` (#354: a copy with new block ids and no Yjs state, seeded like
    any new post; `duplicatePost.collab.test.ts`) and `POST /post-templates/:id/posts`
    (#322: a template's content with new block ids, the same Go function, no Yjs state;
-   `postFromTemplate.collab.test.ts`). Post templates (#322) live in their own table and
+   `postFromTemplate.collab.test.ts`) and the importer (#150, `ImportPostTx`: each imported post
+   is created with its converted body and no Yjs state; `importedDocs.test.ts` seeds the
+   converter's outputs with this bridge and fails on a drop). Post templates (#322) live in their own table and
    never reach the collab server. **Block templates and parts (#490)** do: `site_templates.block_doc`
    is written by `POST /site-design/templates` when a row is created (Customize from the theme default,
    a starter or blank; no Yjs state yet, like `POST /posts`) and by the collab store after that. Reset

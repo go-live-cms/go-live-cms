@@ -30,6 +30,8 @@ type Querier interface {
 	// Signs a user out everywhere but one session (#334).
 	BlockOtherSessionsForUser(ctx context.Context, arg BlockOtherSessionsForUserParams) (int64, error)
 	BlockSession(ctx context.Context, id uuid.UUID) error
+	// Stop: what's imported stays; the worker's next fenced write fails and it moves on.
+	CancelImportJob(ctx context.Context, id int64) (ImportJob, error)
 	// Unscheduling: back to draft, the time cleared. No row: not scheduled (or missing).
 	CancelPostSchedule(ctx context.Context, id int64) (Post, error)
 	// "Cancel update": the snapshot is dropped, the live post and the working copy stay
@@ -64,6 +66,9 @@ type Querier interface {
 	ClaimDueScheduledUpdates(ctx context.Context, arg ClaimDueScheduledUpdatesParams) ([]ClaimDueScheduledUpdatesRow, error)
 	// Single-use: like ClaimPasswordResetToken, only one claim can match.
 	ClaimEmailChangeToken(ctx context.Context, tokenHash []byte) (EmailChangeToken, error)
+	// One runnable job (queued, or running with its lease run out), oldest first, SKIP LOCKED so
+	// replicas take different ones. The new token fences every write of this claim.
+	ClaimImportJob(ctx context.Context) (ImportJob, error)
 	// Single-use: like ClaimUserInvitation, only one claim can match.
 	ClaimPasswordResetToken(ctx context.Context, tokenHash []byte) (PasswordResetToken, error)
 	// Single use: the claim deletes the row, so only one claim can match (a second
@@ -99,6 +104,10 @@ type Querier interface {
 	CountCategoryTerms(ctx context.Context, termIds []int64) (int64, error)
 	CountEmailChangeTokensSince(ctx context.Context, arg CountEmailChangeTokensSinceParams) (int64, error)
 	CountFilteredPosts(ctx context.Context, arg CountFilteredPostsParams) (int64, error)
+	CountImportItemsByStatus(ctx context.Context, jobID int64) ([]CountImportItemsByStatusRow, error)
+	// Items of this job whose key an earlier job imported, its post still there: the mapping
+	// step's "imported before, will be skipped".
+	CountImportedBefore(ctx context.Context, jobID int64) (int64, error)
 	CountLivePostComments(ctx context.Context, threadID int64) (int64, error)
 	// The total for GET /media: the rows ListMedia pages through, same filters.
 	CountMedia(ctx context.Context, arg CountMediaParams) (int64, error)
@@ -168,6 +177,12 @@ type Querier interface {
 	// happens only when it is redeemed (ConfirmEmailChangeTx).
 	CreateEmailChangeToken(ctx context.Context, arg CreateEmailChangeTokenParams) (EmailChangeToken, error)
 	CreateGlobalStyleVersion(ctx context.Context, arg CreateGlobalStyleVersionParams) (GlobalStyleVersion, error)
+	CreateImportFile(ctx context.Context, arg CreateImportFileParams) error
+	CreateImportItem(ctx context.Context, arg CreateImportItemParams) error
+	// The importer (#150, 000065). Jobs, their items, a Markdown zip's files and the media an
+	// import added. Every write of a running job is fenced by its lease_token.
+	CreateImportJob(ctx context.Context, arg CreateImportJobParams) (ImportJob, error)
+	CreateImportMedia(ctx context.Context, arg CreateImportMediaParams) error
 	// variants is NULL for media without generated variants, stored as {}.
 	CreateMedia(ctx context.Context, arg CreateMediaParams) (Medium, error)
 	CreateMenu(ctx context.Context, arg CreateMenuParams) (Menu, error)
@@ -238,6 +253,10 @@ type Querier interface {
 	DeleteExtensionSettingsByExtension(ctx context.Context, arg DeleteExtensionSettingsByExtensionParams) error
 	// Retention: up to batch_size runs with this status that finished before cutoff.
 	DeleteFinishedPluginHookRuns(ctx context.Context, arg DeleteFinishedPluginHookRunsParams) (int64, error)
+	DeleteImportFiles(ctx context.Context, jobID int64) error
+	// Only a job that isn't queued or running; its items, files and report go with it (the
+	// posts and media stay).
+	DeleteImportJob(ctx context.Context, id int64) (int64, error)
 	DeleteMedia(ctx context.Context, id int64) error
 	DeleteMediaByUserID(ctx context.Context, userID int64) error
 	DeleteMediaPosts(ctx context.Context, mediaID int64) error
@@ -313,6 +332,7 @@ type Querier interface {
 	// Allowed in any status: disabling is how an admin stops a misbehaving plugin, and
 	// a missing one may come back. No row when it is already disabled.
 	DisablePlugin(ctx context.Context, slug string) (Plugin, error)
+	DismissImportNotice(ctx context.Context, arg DismissImportNoticeParams) (int64, error)
 	// No row when the plugin isn't installed and compatible, or is already enabled.
 	EnablePlugin(ctx context.Context, arg EnablePluginParams) (Plugin, error)
 	// The commenter of a typed address, created when new. An existing row is returned as it
@@ -334,6 +354,9 @@ type Querier interface {
 	// round), so events are fanned out in id order and a later event's run never exists
 	// before an earlier one's for the same post. locked = false: another replica holds it.
 	FanOutPluginEvents(ctx context.Context, maxEvents int32) (FanOutPluginEventsRow, error)
+	// A skipped or failed item (an imported one is ImportPostTx's), fenced by the job's claim.
+	FinishImportItem(ctx context.Context, arg FinishImportItemParams) (int64, error)
+	FinishImportJob(ctx context.Context, arg FinishImportJobParams) (int64, error)
 	// Ends a claimed reminder (sent, skipped, or failed for good), only under this claim.
 	FinishReminder(ctx context.Context, arg FinishReminderParams) (int64, error)
 	GetActiveTheme(ctx context.Context) (Theme, error)
@@ -356,6 +379,16 @@ type Querier interface {
 	// site design routes (api/site_design_handlers.go); values are validated there first.
 	GetGlobalStyles(ctx context.Context, themeSlug string) (GlobalStyle, error)
 	GetGlobalStylesForUpdate(ctx context.Context, themeSlug string) (GlobalStyle, error)
+	GetImportFile(ctx context.Context, arg GetImportFileParams) ([]byte, error)
+	GetImportJob(ctx context.Context, id int64) (ImportJob, error)
+	GetImportMedia(ctx context.Context, sourceKey string) (Medium, error)
+	// The editor's "blocks couldn't be kept" notice: the latest import of the post with dropped
+	// blocks, not dismissed.
+	GetImportNoticeForPost(ctx context.Context, postID sql.NullInt64) (GetImportNoticeForPostRow, error)
+	// The post an earlier import made from this key, if it still exists.
+	GetImportedPostBySourceKey(ctx context.Context, sourceKey string) (GetImportedPostBySourceKeyRow, error)
+	// A page's parent: the post this job (or an earlier one, by key) made from WordPress id.
+	GetImportedPostByWpID(ctx context.Context, arg GetImportedPostByWpIDParams) (int64, error)
 	// The member's newest request for the post (the view-only notice's state).
 	GetLatestPostAccessRequest(ctx context.Context, arg GetLatestPostAccessRequestParams) (PostAccessRequest, error)
 	GetLatestPublishedVersion(ctx context.Context, postID int64) (GetLatestPublishedVersionRow, error)
@@ -629,6 +662,11 @@ type Querier interface {
 	// {} is their final state, not "not processed yet"). Rows with variants but no
 	// social crop (made before #357) count as missing.
 	ListImageMediaAfter(ctx context.Context, arg ListImageMediaAfterParams) ([]Medium, error)
+	// The report's rows (no payload). status '' = every status; dropped_only = imported posts
+	// with dropped blocks.
+	ListImportItems(ctx context.Context, arg ListImportItemsParams) ([]ListImportItemsRow, error)
+	// The Import page's recent imports, newest first, without the parsed data.
+	ListImportJobs(ctx context.Context, limit int32) ([]ListImportJobsRow, error)
 	// published_post_count is how many of the posts using it (post_media) are
 	// published. $7 keeps only images missing their alt text (#325): not
 	// decorative, and alt empty or only whitespace. CountMedia and
@@ -843,6 +881,8 @@ type Querier interface {
 	// (COUNT(*) cannot be combined with FOR UPDATE). Ordered by id so lockers
 	// acquire in the same order and cannot deadlock each other.
 	LockAdminUserIDs(ctx context.Context) ([]int64, error)
+	// Two jobs importing the same key at once: one at a time, so the second sees the first's.
+	LockImportSourceKey(ctx context.Context, sourceKey string) error
 	// Post ownership (#353): TransferPostOwnerTx and the reassignment it shares with a
 	// member's removal (RemoveUserTx, #333). See db/sqlc/post_owner_tx.go.
 	// The member about to own a post (#353), FOR KEY SHARE: a concurrent removal (#333,
@@ -920,6 +960,7 @@ type Querier interface {
 	// these files.
 	MarkPluginInvalid(ctx context.Context, arg MarkPluginInvalidParams) (MarkPluginInvalidRow, error)
 	NextGlobalStyleVersionNo(ctx context.Context, themeSlug string) (int32, error)
+	NextPendingImportItem(ctx context.Context, jobID int64) (ImportItem, error)
 	NextSiteTemplateVersionNo(ctx context.Context, templateID int64) (int32, error)
 	// Deletes the rows of blocks that aren't in the post's new block_doc (keep_ids: every
 	// key of its "blocks", hidden blocks included).
@@ -973,6 +1014,7 @@ type Querier interface {
 	RemovePostCategoriesExcept(ctx context.Context, arg RemovePostCategoriesExceptParams) ([]int64, error)
 	RemovePostFromTaxonomyTerm(ctx context.Context, arg RemovePostFromTaxonomyTermParams) error
 	RenamePostTemplate(ctx context.Context, arg RenamePostTemplateParams) (PostTemplate, error)
+	RenewImportJobLease(ctx context.Context, arg RenewImportJobLeaseParams) (int64, error)
 	// Resend: a new token (the old link stops working) and a new expiry.
 	RenewUserInvitation(ctx context.Context, arg RenewUserInvitationParams) (UserInvitation, error)
 	// File-only update used by POST /media/:id/replace: swaps the columns that
@@ -1072,6 +1114,13 @@ type Querier interface {
 	SearchTermsAcrossTaxonomies(ctx context.Context, arg SearchTermsAcrossTaxonomiesParams) ([]SearchTermsAcrossTaxonomiesRow, error)
 	// 5.5: blocking is a flag, undoable.
 	SetCommenterBlocked(ctx context.Context, arg SetCommenterBlockedParams) (Commenter, error)
+	// Start: the mapping is saved and the job queued, only from 'mapping'.
+	SetImportJobMapping(ctx context.Context, arg SetImportJobMappingParams) (ImportJob, error)
+	SetImportJobTermIDs(ctx context.Context, arg SetImportJobTermIDsParams) (int64, error)
+	// The export's dates, before the post is published: first_published_at can only be set
+	// while it is NULL (000061's trigger keeps the first value), so a published import keeps
+	// its original date for "close comments after N days" too.
+	SetImportedPostDates(ctx context.Context, arg SetImportedPostDatesParams) error
 	// Used by the variant backfill. changed_at is left alone: nothing the user
 	// edited changed.
 	SetMediaVariants(ctx context.Context, arg SetMediaVariantsParams) (Medium, error)
