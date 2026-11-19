@@ -119,5 +119,5 @@ func (server *Server) getPublicFrontPage(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get the front page"})
 		return
 	}
-	c.JSON(http.StatusOK, view)
+	server.respondPublicView(c, view)
 }

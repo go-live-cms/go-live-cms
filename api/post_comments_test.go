@@ -394,11 +394,16 @@ func TestPostComments_NotPublicAndNotCopied(t *testing.T) {
 	for _, path := range []string{
 		fmt.Sprintf("/public/posts/%d", f.published.ID),
 		fmt.Sprintf("/public/posts/%d/blocks", f.published.ID),
+		// Reader comments (#523) are another table: never #192's notes.
+		fmt.Sprintf("/public/posts/%d/comments", f.published.ID),
 	} {
 		rec := f.do(t, nil, http.MethodGet, path, nil)
 		require.NotContains(t, rec.Body.String(), "Internal note", path)
 	}
 	for _, route := range f.server.router.Routes() {
+		if _, reader := publicReaderCommentRoutes[route.Method+" "+route.Path]; reader {
+			continue
+		}
 		if strings.HasPrefix(route.Path, "/public") {
 			require.NotContains(t, route.Path, "comment", route.Path)
 		}

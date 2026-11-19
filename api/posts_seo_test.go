@@ -186,6 +186,7 @@ func seoPublishedPost(socialImageID string) db.Post {
 func TestGetPublicPostSEO(t *testing.T) {
 	getView := func(t *testing.T, store *mockdb.MockStore, server *Server) publicPostView {
 		t.Helper()
+		expectDiscussionOff(store)
 		recorder := serveSettingsGET(t, server, "/public/posts/7")
 		require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 		require.NotContains(t, recorder.Body.String(), "Working SEO", "the working SEO waits for Update")
@@ -265,6 +266,7 @@ func TestGetPublicPostSEO(t *testing.T) {
 		store := mockdb.NewMockStore(gomock.NewController(t))
 		store.EXPECT().GetPost(gomock.Any(), int64(7)).Return(seoPublishedPost("12"), nil)
 		store.EXPECT().GetMediaByIDs(gomock.Any(), gomock.Any()).Return(nil, fmt.Errorf("db down"))
+		expectDiscussionOff(store)
 		require.Equal(t, http.StatusInternalServerError, serveSettingsGET(t, newTestServer(t, store), "/public/posts/7").Code)
 	})
 }
