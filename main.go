@@ -77,6 +77,14 @@ func main() {
 		server.RunPluginHooks(ctx, config.PluginHooksInterval)
 	}()
 
+	// The importer (#150): every replica looks for import jobs; claims keep them apart, and
+	// shutdown waits for the post in flight (a stopped job resumes from it).
+	importsDone := make(chan struct{})
+	go func() {
+		defer close(importsDone)
+		server.RunImports(ctx, config.ImportInterval)
+	}()
+
 	// Activity log retention (#324): every replica prunes; deleting is idempotent.
 	go server.RunActivityRetention(ctx, config.ActivityRetention)
 
@@ -102,6 +110,7 @@ func main() {
 	}
 	<-schedulerDone
 	<-hooksDone
+	<-importsDone
 	_ = server.Cache().Close()
 	slog.Info("API stopped")
 }

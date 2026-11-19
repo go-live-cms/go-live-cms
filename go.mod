@@ -19,11 +19,13 @@ require (
 	github.com/spf13/viper v1.20.1
 	github.com/sqlc-dev/pqtype v0.3.0
 	github.com/stretchr/testify v1.10.0
+	github.com/yuin/goldmark v1.7.8
 	golang.org/x/crypto v0.42.0
 	golang.org/x/image v0.28.0
 	golang.org/x/sync v0.17.0
 	golang.org/x/text v0.29.0
 	golang.org/x/time v0.12.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -67,5 +69,4 @@ require (
 	golang.org/x/net v0.43.0 // indirect
 	golang.org/x/sys v0.36.0 // indirect
 	google.golang.org/protobuf v1.36.6 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

@@ -37,6 +37,7 @@ var bodyLimitOverrides = map[string]int64{
 	"POST /api/v1/media/bulk":        0,
 	"POST /api/v1/media/:id/replace": 0,
 	"PUT /api/v1/users/me/avatar":    0, // avatarMaxBytes (#334)
+	"POST /api/v1/imports":           0, // IMPORT_MAX_SIZE (#150)
 	// Reader comments' anonymous writes (#524).
 	"POST /public/posts/:id/comments":         discussionBodyLimit,
 	"POST /public/discussion/confirm":         discussionBodyLimit,

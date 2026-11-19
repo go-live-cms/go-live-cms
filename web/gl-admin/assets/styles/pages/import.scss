@@ -1,0 +1,329 @@
+// Posts › Import (#150; the canvas's "Posts · Import" board). Design tokens only.
+
+.gl-import {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  margin: 0 auto;
+  max-width: 760px;
+  padding: 32px 40px 48px;
+
+  @media (max-width: 768px) {
+    padding: var(--space-6) var(--space-4) 40px;
+  }
+
+  &__header {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+
+    h1 {
+      font-size: 24px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      line-height: 32px;
+      margin: 0;
+    }
+
+    p {
+      color: var(--text-secondary);
+      margin: 0;
+    }
+
+    &--row {
+      align-items: center;
+      flex-direction: row;
+      flex-wrap: wrap;
+      gap: var(--space-3);
+
+      > div:first-child {
+        flex: 1 1 280px;
+        min-width: 0;
+      }
+    }
+  }
+
+  &__header-actions,
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  &__actions {
+    justify-content: flex-end;
+  }
+
+  &__drop {
+    align-items: center;
+    background: var(--background-subtle);
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius-xl);
+    color: var(--text-secondary);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    padding: var(--space-8) var(--space-6);
+    text-align: center;
+
+    &.is-dragging {
+      background: var(--accent-subtle);
+      border-color: var(--accent-border);
+    }
+  }
+
+  &__drop-title {
+    color: var(--text-primary);
+    font-weight: 500;
+  }
+
+  &__file {
+    height: 1px;
+    opacity: 0;
+    position: absolute;
+    width: 1px;
+  }
+
+  &__hint {
+    font-size: 12px;
+    line-height: 16px;
+    max-width: 440px;
+  }
+
+  &__mono {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    overflow-wrap: anywhere;
+  }
+
+  &__muted {
+    color: var(--text-secondary);
+    font-size: 13px;
+  }
+
+  &__danger {
+    color: var(--danger-text);
+  }
+
+  &__recent,
+  &__media,
+  &__preview {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+
+    h2 {
+      font-size: 13px;
+      font-weight: 600;
+      margin: 0;
+    }
+
+    p {
+      margin: 0;
+    }
+  }
+
+  &__preview {
+    background: var(--background-subtle);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
+  }
+
+  &__list,
+  &__report {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    display: flex;
+    flex-direction: column;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+
+    > li {
+      align-items: center;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      gap: var(--space-3);
+      padding: var(--space-3);
+
+      &:last-child {
+        border-bottom: 0;
+      }
+    }
+  }
+
+  &__list-main {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+
+    a {
+      color: var(--text-primary);
+      font-weight: 500;
+      overflow: hidden;
+      text-decoration: none;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+
+      &:hover {
+        text-decoration: underline;
+      }
+    }
+  }
+
+  &__fieldset {
+    border: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin: 0;
+    padding: 0;
+
+    legend {
+      font-size: 15px;
+      font-weight: 600;
+      padding: 0 0 var(--space-1);
+    }
+  }
+
+  &__row {
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+    display: grid;
+    gap: var(--space-3);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: var(--space-2) 0;
+
+    // The select's own label is for screen readers: the row's left side shows it.
+    .gl-field__label {
+      clip: rect(0 0 0 0);
+      height: 1px;
+      overflow: hidden;
+      position: absolute;
+      width: 1px;
+    }
+
+    @media (max-width: 560px) {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  &__row-label {
+    display: flex;
+    flex-direction: column;
+
+    > span:first-child {
+      font-weight: 500;
+    }
+  }
+
+  &__progress {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  &__progress-line {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    justify-content: space-between;
+
+    > span:first-child {
+      font-weight: 500;
+    }
+  }
+
+  &__bar {
+    background: var(--background-active);
+    border-radius: var(--radius-full);
+    height: 8px;
+    overflow: hidden;
+
+    > div {
+      background: var(--accent-solid);
+      border-radius: var(--radius-full);
+      height: 100%;
+      transition: width 0.3s ease;
+    }
+  }
+
+  &__summary {
+    font-weight: 500;
+    margin: 0;
+  }
+
+  &__report > li {
+    align-items: stretch;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  &__item-line {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+  }
+
+  &__item-title {
+    color: var(--text-primary);
+    flex: 1 1 200px;
+    font-weight: 500;
+    min-width: 0;
+  }
+
+  &__icon--success {
+    color: var(--success-text);
+    flex: none;
+  }
+
+  &__icon--danger {
+    color: var(--danger-text);
+    flex: none;
+  }
+
+  &__icon--dash {
+    background: var(--text-secondary);
+    border-radius: 1px;
+    flex: none;
+    height: 2px;
+    margin: 0 3px;
+    width: 10px;
+  }
+
+  &__notes {
+    color: var(--text-secondary);
+    font-size: 13px;
+    margin: 0 0 0 28px;
+    padding: 0 0 0 var(--space-4);
+  }
+
+  &__dropped {
+    background: var(--warning-bg);
+    border-radius: var(--radius-lg);
+    color: var(--warning-label);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    margin-left: 28px;
+    padding: var(--space-3);
+
+    ul {
+      margin: 0;
+      padding: 0 0 0 var(--space-4);
+    }
+
+    .gl-button {
+      align-self: flex-start;
+      color: inherit;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+  }
+
+  &__dropped-where {
+    opacity: 0.85;
+  }
+}

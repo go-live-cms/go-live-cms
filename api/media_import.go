@@ -208,9 +208,17 @@ func (im *mediaImporter) download(ctx context.Context, u *url.URL, uploadPath st
 	if resp.ContentLength > maxBytes {
 		return importedFile{}, tooLarge
 	}
+	return saveImportBody(resp.Body, importFileName(resp), uploadPath, maxBytes, tooLarge)
+}
 
+// saveImportBody validates a file's content like an upload (the type its bytes identify
+// must agree with its name, else the name gets the extension they identify) and streams it
+// into uploadPath under a fresh unguessable name, cut off one byte past maxBytes. A read
+// error is the source's (requestFailure); nothing is left behind on any failure. Shared by
+// "Add from URL" and the importer (#150: a zip's images, the export's downloads).
+func saveImportBody(src io.Reader, name, uploadPath string, maxBytes int64, tooLarge importFailure) (importedFile, error) {
 	head := make([]byte, sniffLen)
-	n, err := io.ReadFull(resp.Body, head)
+	n, err := io.ReadFull(src, head)
 	if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) && !errors.Is(err, io.EOF) {
 		return importedFile{}, requestFailure(err)
 	}
@@ -219,7 +227,6 @@ func (im *mediaImporter) download(ctx context.Context, u *url.URL, uploadPath st
 		return importedFile{}, importEmpty
 	}
 
-	name := importFileName(resp)
 	ext, err := importExtension(name, head)
 	if err != nil {
 		return importedFile{}, err
@@ -232,7 +239,7 @@ func (im *mediaImporter) download(ctx context.Context, u *url.URL, uploadPath st
 
 	// One byte past the limit is read, so a body that is too long is told apart from one
 	// exactly at it.
-	body := &readErrorTracker{r: io.MultiReader(bytes.NewReader(head), io.LimitReader(resp.Body, maxBytes-int64(n)+1))}
+	body := &readErrorTracker{r: io.MultiReader(bytes.NewReader(head), io.LimitReader(src, maxBytes-int64(n)+1))}
 	mediaPath, err := saveUploadedFile(body, originalFilename, uploadPath)
 	if err != nil {
 		// saveUploadedFile leaves nothing behind on a failed write. A failed read is the
@@ -485,27 +492,45 @@ func (server *Server) importOne(ctx context.Context, log *slog.Logger, raw strin
 		}
 		return db.Medium{}, host, err
 	}
+	// No alt text (#325): the link says nothing about the image.
+	media, err := server.createImportedMedia(ctx, log, file, importedMediaDetails{Description: "Imported from " + host, UserID: userID})
+	return media, host, err
+}
 
+// importedMediaDetails are what a media row made from a download or a zip's file says.
+type importedMediaDetails struct {
+	// Name; "" = the file's readable name without its extension.
+	Name        string
+	Description string
+	Alt         string
+	UserID      int64
+}
+
+// createImportedMedia makes the media row for a file saveImportBody stored: metadata
+// stripped and variants generated as for an upload (#255). On failure the file and its
+// variants are removed and importSaveFailed returned.
+func (server *Server) createImportedMedia(ctx context.Context, log *slog.Logger, file importedFile, details importedMediaDetails) (db.Medium, error) {
 	var width, height int32
 	if isImageFile(file.mediaPath) {
 		if w, h, err := getImageDimensions(file.mediaPath); err == nil {
 			width, height = w, h
 		}
 	}
-	// Metadata stripped and variants generated, as for an upload (#255).
 	fileSize, staged := prepareStoredImage(log, server.config.UploadPath, file.mediaPath, file.mimeType, file.size, nil)
-
+	name := details.Name
+	if strings.TrimSpace(name) == "" {
+		name = strings.TrimSuffix(file.originalFilename, filepath.Ext(file.originalFilename))
+	}
 	media, err := server.store.CreateMedia(ctx, db.CreateMediaParams{
-		Name:        strings.TrimSuffix(file.originalFilename, filepath.Ext(file.originalFilename)),
-		Description: "Imported from " + host,
-		// No alt text (#325): the link says nothing about the image.
-		Alt:              "",
+		Name:             name,
+		Description:      details.Description,
+		Alt:              details.Alt,
 		MediaPath:        file.mediaPath,
 		FileSize:         fileSize,
 		MimeType:         file.mimeType,
 		Width:            width,
 		Height:           height,
-		UserID:           userID,
+		UserID:           details.UserID,
 		OriginalFilename: file.originalFilename,
 		Variants:         staged.commitForNewRow(log),
 	})
@@ -515,7 +540,7 @@ func (server *Server) importOne(ctx context.Context, log *slog.Logger, raw strin
 			log.Warn("media not created but variants not removed", "media_path", file.mediaPath, "error", rmErr)
 		}
 		log.Warn("media_import_failed", "reason", "create_media", "error", err)
-		return db.Medium{}, host, importSaveFailed
+		return db.Medium{}, importSaveFailed
 	}
-	return media, host, nil
+	return media, nil
 }

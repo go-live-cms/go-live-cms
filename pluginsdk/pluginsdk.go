@@ -110,6 +110,9 @@ const (
 	// makes no new version: the body that goes live is the post's current published
 	// body (empty when it has none).
 	PublishViaStatus = "status"
+	// PublishViaImport: the importer (#150) publishing a post that was published in the
+	// export it reads. A refusal imports the post as a draft.
+	PublishViaImport = "import"
 )
 
 // PublishCandidate is a publish a guard is asked about.

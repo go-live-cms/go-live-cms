@@ -296,6 +296,9 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
 - **`POST /post-templates/:id/posts`** (#322) is the third: a post made from a template,
   built by the same `newPostCopy` (fresh block ids, unique slug and url) and seeded by the
   collab server like any new post. See "Post templates" below.
+- **The importer** (#150, `ImportPostTx`) is the fourth: each imported post is created with
+  its converted `block_doc` (through `prepareForStore`) and no Yjs state, so the collab server
+  seeds it on first open. See "The importer" below.
 - **Tickets:** `POST /collab/tickets` uses `canReadPost` (moderators any post, contributors
   their own and published ones, #393): contributors get a read-only live view of others'
   published posts, never their drafts. The ticket
@@ -883,6 +886,88 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   chain collapse), `api/redirects_test.go` (mock: routes, validation, codes, roles),
   `api/taxonomies_redirects_db_test.go` (real DB: slug changes answer the public lookup,
   category URLs, the rules through the routes, merge).
+
+## The importer (#150, `000065`, `imports.go`, `import_*.go`, `importer/`, `db/sqlc/import_tx.go`)
+
+- **Admins only** (`requireSiteAdmin`): `POST /imports` (multipart `file`, `IMPORT_MAX_SIZE`,
+  100MB, its own cap: `bodyLimitOverrides` 0), `GET /imports[/:id[/items?status=&dropped=true]]`,
+  `POST /imports/:id/start {authors: {login: member id, 0 = you}, types: {wp type: GoLive type, "" =
+  skip}}` (members need a content role, types must be active; 409 once started), `POST
+  .../cancel`, `DELETE /imports/:id` (not while queued/running; posts and media stay). The
+  editor's notice: `GET /posts/:id/import-notice` + `POST .../dismiss {item_id}`
+  (`requireContentEditor` + `canReadPost`).
+- **Reading** (`importer/`, no DB, no network): the upload is read at once into a job
+  (`import_jobs` `mapping`, one `import_items` row per post/page, a zip's images in
+  `import_files`). WXR is an `encoding/xml` token stream, strict, **a DOCTYPE (so any entity)
+  is refused** (`unsafe_xml`), nesting ≤ 64, UTF-8 only, ≤ 20,000 items. A Markdown zip is read
+  from its central directory: every name checked first (no absolute paths, `..`, backslashes,
+  drive letters, control characters; **a symlink refuses the whole zip**), ≤ 5,000 entries,
+  `.md` ≤ 2 MiB, images ≤ `MAX_UPLOAD_SIZE`, total ≤ 4 × the cap, an entry expanding > 200× (past
+  1 MiB) or whose header lies is a zip bomb; every read is cut off at its cap. Front matter is
+  YAML (title, date, lastmod, slug, tags, categories, description, draft, type, author, image,
+  aliases, id); goldmark (GFM) renders the body with raw HTML passed to the converter (which
+  never outputs HTML). Refusals are 422 with a fixed `code` + message (`importer.Error`).
+- **The job** (`import_worker.go`, `RunImports` from `main.go`, `IMPORT_INTERVAL` 2s, 0 = off,
+  every replica): `ClaimImportJob` (`FOR UPDATE SKIP LOCKED`, 2-minute lease renewed per item, a
+  new `lease_token` per claim = the fencing value every write checks), terms once (`term_ids`),
+  then one item at a time in position order (a page's parent first). **Each post is one
+  transaction** (`ImportPostTx`): advisory lock on the item's key, "imported before?" (any job's
+  `imported` row with that `source_key` and its post still there → skipped
+  `imported_before`), renew the lease (lost → `ErrImportLeaseLost`, nothing written), the post
+  (draft), byline, terms + `EnsureDefaultCategory`, featured image (post_media 0 +
+  `_thumbnail_*` meta), custom HTML snippets, `SyncPostContentMedia`, the export's dates
+  (`created_at`, `changed_at`, `first_published_at` before publishing: 000061's trigger keeps the
+  first value), `publishLockedPost` when it was published, the redirects, and the item's
+  result. A crash leaves the item pending; a stopped job's next fenced write fails.
+  Publishing runs `runPublishGuards` first (`PublishViaImport`): a refusal imports a draft with
+  the reason in the report.
+- **Mapping:** publish → published; draft, pending, future, private → draft (noted); trash and
+  auto-drafts → skipped at upload. Authors → the chosen member (removed/demoted since → the
+  importer). Categories: one per post, the first the export lists (`extra_categories` noted);
+  deeper WordPress categories go under their top-level ancestor; a slug another taxonomy has
+  gets `-2`…, a reserved category slug `-category`; a same-taxonomy same-slug term is reused.
+  Other taxonomies, comments, menus, attachments nobody uses aren't imported (counted in the
+  summary). Excerpt → description, slug kept (`-2` when taken, reported). **Redirects:** the
+  old permalink's path (and Markdown `aliases`) → the new public path under the current URL
+  structure, 301, source `import` (000065 widens `redirects_source`); `?p=12` links have no path.
+- **Converter** (`import_convert.go`, `import_gutenberg.go`, `import_shortcodes.go`): block
+  editor content is parsed like `parse_blocks`; classic content gets wpautop's rule (blank line =
+  paragraph, newline = hard break) and the shortcode pass ([caption] → figure, [gallery ids] →
+  gallery, [embed]/[youtube]/[vimeo]/a bare provider URL line → embed, [video]/[audio] → media;
+  any other shortcode **alone on its line** → dropped; inside a sentence it stays text). It
+  builds exactly the bridge's shapes (`pmNodeToBlock`): marks per #418 (code excludes the
+  others), lists with nested lists in their item's pm, quotes (`cite`), pull quotes, code
+  (language), tables (header row, spans), images (v2: `mediaId`, `src`, alt, caption runs,
+  wide/full), galleries (#424, 2–4 columns), embeds (#425; another provider → a link
+  paragraph), video/audio/file, buttons (unsafe hrefs left out), spacer (nearest step),
+  columns (33-67/67-33), group (tinted, wide/full), details, cover, media & text, custom HTML
+  (`wp:html` → a snippet through `customhtml.Sanitize`: admins import), reusable blocks inlined.
+  `fit` applies the nesting table (a container its parent can't hold, or with too few/many
+  children, gives its children). What has no equivalent is **dropped and reported**
+  (`importDropped`: label, the text it followed, the original ≤ 8 KB for "Copy the original as
+  text"): scripts, styles, forms, objects, SVG, frames from other hosts, dynamic core blocks
+  (latest posts, query, navigation…), plugin blocks without saved HTML, unknown shortcodes.
+  The doc then goes through `prepareForStore`; `import_convert_test.go` asserts the sanitizer
+  has nothing left to remove and writes `web/gl-admin/lib/collaboration/importedDocs.vectors.json`
+  (`UPDATE_IMPORT_VECTORS=1`), which `importedDocs.test.ts` seeds with the real bridge: no drops.
+- **Media** (`import_media.go`): #29's path, never a hotlink. WordPress: only the export's own
+  host (with or without `www.`), through `outbound_http.go`, **redirects only on that host**
+  (`siteImporter`), the attachment's original URL (a `-300x200` copy is mapped back), alt from
+  the post or the attachment, the attachment's title as the name; `saveImportBody` (sniffed
+  type, `MAX_UPLOAD_SIZE`, unguessable names) + `createImportedMedia` (metadata stripped,
+  variants). Markdown: only the zip's files, found from the post's folder (root paths also
+  under `static/`, `public/`); remote images aren't fetched. The kind must fit the block
+  (`wrong_kind`). `import_media` (source URL or `sha256:` of a zip file → media) makes resumed and
+  repeated imports reuse files; deleting the media drops the row. Failures are fixed codes in the
+  item's `media_failed` (URL shown without its query), never fatal, never logged with the URL.
+- **Activity:** `imported` per post (object post, payload `post_type`, `import_id`,
+  `published`; not in "Continue editing"), `import_started` / `import_finished` (object `import`,
+  admin-only in the feed; finished has the counts).
+- Tests: `importer/importer_test.go` (the real-world fixture `importer/testdata/
+  wordpress-export.xml`: classic and block posts, pages, two authors, nested categories,
+  galleries, shortcodes; the refusals), `import_convert_test.go` (both posts and Markdown, the
+  rules), `imports_db_test.go` (real DB: upload, summary, mapping, the job, media from a local
+  site, redirects, report, notice, idempotent re-run, Markdown, stop and fencing, roles).
 
 ## Public term archives (#348)
 

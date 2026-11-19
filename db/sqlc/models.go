@@ -94,6 +94,57 @@ type GlobalStyleVersion struct {
 	CreatedAt time.Time       `json:"created_at"`
 }
 
+type ImportFile struct {
+	JobID int64  `json:"job_id"`
+	Path  string `json:"path"`
+	Data  []byte `json:"data"`
+}
+
+type ImportItem struct {
+	ID                int64           `json:"id"`
+	JobID             int64           `json:"job_id"`
+	Position          int32           `json:"position"`
+	SourceKey         string          `json:"source_key"`
+	WpID              int64           `json:"wp_id"`
+	WpType            string          `json:"wp_type"`
+	Title             string          `json:"title"`
+	Payload           json.RawMessage `json:"payload"`
+	Status            string          `json:"status"`
+	Reason            string          `json:"reason"`
+	PostID            sql.NullInt64   `json:"post_id"`
+	Result            json.RawMessage `json:"result"`
+	ProcessedAt       sql.NullTime    `json:"processed_at"`
+	NoticeDismissedAt sql.NullTime    `json:"notice_dismissed_at"`
+}
+
+type ImportJob struct {
+	ID          int64                 `json:"id"`
+	CreatedBy   sql.NullInt64         `json:"created_by"`
+	Source      string                `json:"source"`
+	FileName    string                `json:"file_name"`
+	SiteUrl     string                `json:"site_url"`
+	Status      string                `json:"status"`
+	Summary     json.RawMessage       `json:"summary"`
+	Terms       json.RawMessage       `json:"terms"`
+	Attachments json.RawMessage       `json:"attachments"`
+	Blocks      json.RawMessage       `json:"blocks"`
+	Mapping     json.RawMessage       `json:"mapping"`
+	TermIds     pqtype.NullRawMessage `json:"term_ids"`
+	LeaseUntil  sql.NullTime          `json:"lease_until"`
+	LeaseToken  int64                 `json:"lease_token"`
+	Error       string                `json:"error"`
+	CreatedAt   time.Time             `json:"created_at"`
+	StartedAt   sql.NullTime          `json:"started_at"`
+	FinishedAt  sql.NullTime          `json:"finished_at"`
+}
+
+type ImportMedium struct {
+	SourceKey string        `json:"source_key"`
+	MediaID   int64         `json:"media_id"`
+	JobID     sql.NullInt64 `json:"job_id"`
+	CreatedAt time.Time     `json:"created_at"`
+}
+
 type Medium struct {
 	ID               int64           `json:"id"`
 	Name             string          `json:"name"`

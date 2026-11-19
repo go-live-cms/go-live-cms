@@ -173,6 +173,14 @@
     padding: 96px var(--space-6);
   }
 
+  // Write a post, and for admins Import posts (#150).
+  &__empty-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    justify-content: center;
+  }
+
   &__sr {
     @include mixins.visually-hidden;
   }

@@ -20,6 +20,8 @@ const (
 	// feed. object_id is the theme's id (global_styles_updated), the release's
 	// (site_design_published) or the template's (site_template_*, #490).
 	ActivityObjectSiteDesign = "site_design"
+	// Imports (#150): admin-only in the feed; object_id is import_jobs.id.
+	ActivityObjectImport = "import"
 )
 
 const (
@@ -77,6 +79,12 @@ const (
 	// ActivityImported: a file added from a URL (#29). Payload: mime_type and the
 	// link's host only, never the URL (its path or query may hold a token).
 	ActivityImported = "imported"
+
+	// Imports (#150), on the import: started (payload source: wxr or markdown) and finished
+	// (payload status, imported, skipped, failed: counts). Each imported post is also
+	// "created" (payload post_type, import_id), by the member who started the import.
+	ActivityImportStarted  = "import_started"
+	ActivityImportFinished = "import_finished"
 
 	// Members and invitations (ActivityCreated too: an admin adding a member).
 	ActivityInvited           = "invited"
