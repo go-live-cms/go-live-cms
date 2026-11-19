@@ -221,7 +221,8 @@ func TestPublicThreadsServeOnlyApproved(t *testing.T) {
 	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 	var view publicPostView
 	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &view))
-	require.Equal(t, PublicDiscussion{State: discussionStateOpen, Count: 8}, view.Discussion)
+	require.NotNil(t, view.Discussion)
+	require.Equal(t, PublicDiscussion{State: discussionStateOpen, Count: 8}, *view.Discussion)
 	recorder = f.read(t, "/public/posts/slug/"+post.Slug)
 	require.Contains(t, recorder.Body.String(), `"discussion":{"state":"open","closes_at":null,"count":8}`)
 }
@@ -329,6 +330,13 @@ func TestPublicThreadsNotServed(t *testing.T) {
 	private := f.publishedPost(t)
 	_, err = f.conn.Exec(`UPDATE posts SET post_type = $2 WHERE id = $1`, private.ID, typeName)
 	require.NoError(t, err)
+	t.Cleanup(func() {
+		// The database is shared: leave no custom type behind.
+		_, err := f.conn.Exec(`UPDATE posts SET post_type = 'post' WHERE id = $1`, private.ID)
+		require.NoError(t, err)
+		_, err = f.conn.Exec(`DELETE FROM post_types WHERE name = $1`, typeName)
+		require.NoError(t, err)
+	})
 	require.Equal(t, http.StatusNotFound, f.read(t, commentsPath(private, "")).Code, "not a public type")
 
 	// Off: the post's choice, then the site's switch.

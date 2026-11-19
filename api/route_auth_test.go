@@ -109,8 +109,9 @@ func TestCommentRoutesRequireAuth(t *testing.T) {
 			continue
 		}
 		key := route.Method + " " + route.Path
-		if _, reader := publicReaderCommentRoutes[key]; reader {
+		if _, reader := publicReaderCommentRoutes[key]; reader && strings.HasPrefix(route.Path, "/public/") {
 			// Reader comments (#499) are another feature: TestPublicReaderCommentRoutes.
+			// Only on /public: anything else named "comment" still answers 401 here.
 			continue
 		}
 		registered[key] = true
@@ -155,6 +156,8 @@ func TestPublicReaderCommentRoutes(t *testing.T) {
 	}
 	for key := range publicReaderCommentRoutes {
 		require.True(t, registered[key], "publicReaderCommentRoutes lists %s, which is no longer a route", key)
+		_, path, _ := strings.Cut(key, " ")
+		require.True(t, strings.HasPrefix(path, "/public/"), "publicReaderCommentRoutes is for /public routes only: %s", key)
 	}
 }
 

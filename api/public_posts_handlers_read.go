@@ -90,8 +90,22 @@ type publicPostView struct {
 	TaxonomyTerms []TaxonomyTermResponse `json:"taxonomy_terms"`
 	SEO           publicPostSEO          `json:"seo"`
 	// Reader comments (#523, design 9.1): whether to render the section, before fetching
-	// the thread. The state without the clock and closes_at (cached: problem 8).
-	Discussion PublicDiscussion `json:"discussion"`
+	// the thread. The state without the clock and closes_at (cached: problem 8). null when
+	// it couldn't be read: the post renders without the section, and that answer isn't
+	// cached (discussionFailed).
+	Discussion *PublicDiscussion `json:"discussion"`
+	// discussionFailed: the discussion read failed; respondPublicView marks the answer
+	// no-store so the cache doesn't keep a post without its comments section.
+	discussionFailed error
+}
+
+// respondPublicView answers a post view (the post page, the front page).
+func (server *Server) respondPublicView(c *gin.Context, view publicPostView) {
+	if view.discussionFailed != nil {
+		server.requestLog(c).Warn("discussion_read_failed", "post_id", view.Post.ID, "error", view.discussionFailed)
+		c.Header("Cache-Control", "no-store")
+	}
+	c.JSON(http.StatusOK, view)
 }
 
 type publicFeaturedImage struct {
@@ -146,7 +160,7 @@ func (server *Server) respondPublicPost(c *gin.Context, post db.Post, err error)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get post"})
 		return
 	}
-	c.JSON(http.StatusOK, view)
+	server.respondPublicView(c, view)
 }
 
 func (server *Server) publicPostView(ctx context.Context, post db.Post) (publicPostView, error) {
@@ -161,11 +175,12 @@ func (server *Server) publicPostView(ctx context.Context, post db.Post) (publicP
 	// Embeds the site no longer allows (#425) and inline nodes (#320: names and current URLs, never ids).
 	server.publicizeBlockDocs(ctx, resp.PublishedBlocks)
 	view := publicPostView{Post: resp, TaxonomyTerms: []TaxonomyTermResponse{}}
-	discussion, err := server.readPublicDiscussion(ctx, post)
-	if err != nil {
-		return view, err
+	// Optional on the page: a failure leaves it null rather than failing the post.
+	if discussion, err := server.readPublicDiscussion(ctx, post, false); err != nil {
+		view.discussionFailed = err
+	} else {
+		view.Discussion = &discussion.discussion
 	}
-	view.Discussion = discussion.discussion
 
 	if published {
 		seo, err := server.publicSEO(ctx, settings)

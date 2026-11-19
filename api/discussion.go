@@ -131,16 +131,36 @@ func discussionInputs(settings db.Setting, postType db.PostType, post db.Post) (
 // postDiscussionSetting reads the site settings and the post's type and applies the rule
 // to post. A type that no longer exists is not public: off.
 func (server *Server) postDiscussionSetting(ctx context.Context, post db.Post) (DiscussionSetting, error) {
+	rule, err := server.readDiscussionRule(ctx, post, false)
+	return rule.setting, err
+}
+
+// discussionRule is the rule applied to one post, with what it read.
+type discussionRule struct {
+	setting  DiscussionSetting
+	settings db.Setting
+	// served: the post's type is public and active (read only when asked for, or when
+	// comments are on for the site).
+	served bool
+}
+
+// readDiscussionRule reads the settings and the post's type and applies the rule without
+// the clock. A missing settings row is the defaults (comments off). With comments off for
+// the site the rule is off whatever the type, so the type is read only when needType asks
+// for served (the thread route's 404 for a type the site doesn't serve).
+func (server *Server) readDiscussionRule(ctx context.Context, post db.Post, needType bool) (discussionRule, error) {
 	settings, err := server.store.GetSettings(ctx)
-	if err != nil {
-		return DiscussionSetting{}, err
-	}
-	postType, err := server.store.GetPostType(ctx, post.PostType)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return DiscussionSetting{}, err
+		return discussionRule{}, err
+	}
+	var postType db.PostType
+	if settings.CommentsEnabled || needType {
+		if postType, err = server.store.GetPostType(ctx, post.PostType); err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return discussionRule{}, err
+		}
 	}
 	site, typ, p := discussionInputs(settings, postType, post)
-	return discussionSetting(site, typ, p), nil
+	return discussionRule{setting: discussionSetting(site, typ, p), settings: settings, served: typ.Public}, nil
 }
 
 // discussionNetworkLabel is the HKDF label of the network hash key (7.2).

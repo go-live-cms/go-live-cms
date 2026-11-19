@@ -110,24 +110,20 @@ type publicDiscussionRead struct {
 	served bool
 }
 
-// readPublicDiscussion reads the settings, the post's type and (unless off) the count,
-// and applies the rule without the clock (12.4). A missing settings row is the defaults:
-// comments off.
-func (server *Server) readPublicDiscussion(ctx context.Context, post db.Post) (publicDiscussionRead, error) {
-	settings, err := server.store.GetSettings(ctx)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+// readPublicDiscussion applies the rule without the clock (12.4, readDiscussionRule) and,
+// unless off, counts the shown comments. needType: the caller needs served (the thread
+// route); the post reads don't, so with comments off for the site they read the settings
+// only.
+func (server *Server) readPublicDiscussion(ctx context.Context, post db.Post, needType bool) (publicDiscussionRead, error) {
+	rule, err := server.readDiscussionRule(ctx, post, needType)
+	if err != nil {
 		return publicDiscussionRead{}, err
 	}
-	postType, err := server.store.GetPostType(ctx, post.PostType)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return publicDiscussionRead{}, err
-	}
-	site, typ, p := discussionInputs(settings, postType, post)
-	setting := discussionSetting(site, typ, p)
+	setting := rule.setting
 	read := publicDiscussionRead{
 		discussion: PublicDiscussion{State: setting.State, ClosesAt: setting.ClosesAt},
-		settings:   settings,
-		served:     typ.Public,
+		settings:   rule.settings,
+		served:     rule.served,
 	}
 	if setting.State != discussionStateOff {
 		if read.discussion.Count, err = server.store.CountShownReaderComments(ctx, post.ID); err != nil {
@@ -179,7 +175,7 @@ func (server *Server) getPublicPostComments(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
 		return
 	}
-	read, err := server.readPublicDiscussion(ctx, post)
+	read, err := server.readPublicDiscussion(ctx, post, true)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read the discussion"})
 		return
