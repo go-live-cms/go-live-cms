@@ -30,6 +30,19 @@
 //        200 {"connections": n}  how many it reached (0: not loaded, nobody to tell)
 //        400  not a collab doc name
 //        401  missing or wrong secret
+//   POST /internal/documents/:doc/restore  → put a stored version into a post's working
+//        {"block_doc": …, "user_id": "7"}    copy, loaded or not (#286; the API's POST
+//                                            /posts/:id/versions/:no/restore calls it after
+//                                            its own access check). Answers once it is in
+//                                            the live doc AND stored; otherwise nothing
+//                                            changed (server.ts `restore`).
+//        200 {"restored":true,"revision":n,"block_doc":"written"|"unchanged","dropped":n}
+//        400  not a post's doc name, bad JSON, no user id, not a Block Spec v1 version
+//        401  missing or wrong secret
+//        404  the post doesn't exist
+//        413  body over RESTORE_BODY_LIMIT
+//        422  the restored doc wouldn't pass the store's validation
+//        503  the doc couldn't be loaded or the store failed (retry later)
 //
 // Must NOT import yjs.
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http"
@@ -44,6 +57,22 @@ export interface FlushResult {
   error?: string
 }
 
+/**
+ * What a server-side restore (#286, server.ts `restore`) did. `ok: true` means the version
+ * is in the live doc AND stored (block_doc and the Yjs state); anything else means neither
+ * changed.
+ *   - `not-a-post`: only post-<id> docs are restored here (templates keep the editor path);
+ *   - `invalid-version`: the version isn't a Block Spec v1 document;
+ *   - `not-found`: the post doesn't exist;
+ *   - `unstorable`: the restored doc would fail the store's validation (it would be
+ *     kept-invalid, so block_doc would never get it);
+ *   - `unavailable`: the doc couldn't be loaded or the store failed (retry later).
+ * Defined here, not in server.ts, so this file needs nothing that imports yjs.
+ */
+export type RestoreResult =
+  | { ok: true; revision: number | null; block_doc: "written" | "unchanged"; dropped: number }
+  | { ok: false; reason: "not-a-post" | "invalid-version" | "not-found" | "unstorable" | "unavailable"; error: string }
+
 export interface InternalServerOptions {
   secret: string
   flush(docName: string): Promise<FlushResult>
@@ -53,6 +82,40 @@ export interface InternalServerOptions {
   recheckDoc(docName: string): number
   /** Broadcasts the comments nudge to the doc's connections (#192); returns how many. */
   notifyComments(docName: string): number
+  /** Restores a version into a post's working copy (#286). */
+  restore(docName: string, version: unknown, opts: { userId: string; requestId?: string }): Promise<RestoreResult>
+}
+
+/**
+ * The largest restore body read. The API stores block_doc up to 4 MiB
+ * (`collabStoreBodyLimit` allows 16 MiB for the whole store); a version is one of those
+ * plus a user id.
+ */
+export const RESTORE_BODY_LIMIT = 8 << 20
+
+class BodyTooLargeError extends Error {}
+
+/** The request body as text, refusing more than `limit` bytes. */
+async function readBody(req: IncomingMessage, limit: number): Promise<string> {
+  const declared = Number(req.headers["content-length"])
+  if (Number.isFinite(declared) && declared > limit) throw new BodyTooLargeError()
+  const chunks: Buffer[] = []
+  let size = 0
+  for await (const chunk of req) {
+    size += (chunk as Buffer).length
+    if (size > limit) throw new BodyTooLargeError()
+    chunks.push(chunk as Buffer)
+  }
+  return Buffer.concat(chunks).toString("utf8")
+}
+
+/** Each refusal's status and the message sent with it (the detail stays in the log). */
+const RESTORE_REFUSALS: Record<Exclude<RestoreResult, { ok: true }>["reason"], { status: number; error: string }> = {
+  "not-a-post": { status: 400, error: "only posts are restored here" },
+  "invalid-version": { status: 400, error: "the version is not a Block Spec v1 document" },
+  "not-found": { status: 404, error: "post not found" },
+  unstorable: { status: 422, error: "the restored document would not pass validation" },
+  unavailable: { status: 503, error: "restore failed" },
 }
 
 /** Constant-time "Authorization: Bearer <secret>" check. An empty secret rejects everything. */
@@ -67,13 +130,14 @@ const FLUSH_PATH = /^\/internal\/documents\/([^/]+)\/flush$/
 const RECHECK_PATH = /^\/internal\/users\/([^/]+)\/recheck$/
 const DOC_RECHECK_PATH = /^\/internal\/documents\/([^/]+)\/recheck$/
 const COMMENTS_PATH = /^\/internal\/documents\/([^/]+)\/comments$/
+const RESTORE_PATH = /^\/internal\/documents\/([^/]+)\/restore$/
 
 function send(res: ServerResponse, status: number, body: unknown) {
   res.writeHead(status, { "Content-Type": "application/json", "Cache-Control": "no-store" })
   res.end(JSON.stringify(body))
 }
 
-export function createInternalHandler({ secret, flush, recheckUser, recheckDoc, notifyComments }: InternalServerOptions) {
+export function createInternalHandler({ secret, flush, recheckUser, recheckDoc, notifyComments, restore }: InternalServerOptions) {
   return async (req: IncomingMessage, res: ServerResponse) => {
     const requestId = requestIdFrom(req.headers["x-request-id"])
     res.setHeader("X-Request-ID", requestId)
@@ -134,6 +198,52 @@ export function createInternalHandler({ secret, flush, recheckUser, recheckDoc, 
       const connections = notifyComments(docName)
       logEvent("info", "collab_comments_nudge", { request_id: requestId, doc: docNameForLog(docName), connections })
       return send(res, 200, { connections })
+    }
+
+    const restorePath = RESTORE_PATH.exec(path)
+    if (restorePath) {
+      if (req.method !== "POST") return send(res, 405, { error: "method not allowed" })
+      if (!bearerMatches(req.headers.authorization, secret)) {
+        logEvent("warn", "collab_restore_denied", { request_id: requestId })
+        return send(res, 401, { error: "unauthorized" })
+      }
+      let docName: string
+      try {
+        docName = decodeURIComponent(restorePath[1])
+      } catch {
+        return send(res, 400, { error: "invalid document name" })
+      }
+      if (!isCollabDocName(docName)) return send(res, 400, { error: "invalid document name" })
+      let body: { block_doc?: unknown; user_id?: unknown }
+      try {
+        const parsed: unknown = JSON.parse(await readBody(req, RESTORE_BODY_LIMIT))
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("not an object")
+        body = parsed as typeof body
+      } catch (error) {
+        if (error instanceof BodyTooLargeError) return send(res, 413, { error: "body too large" })
+        return send(res, 400, { error: "invalid JSON body" })
+      }
+      const userId = typeof body.user_id === "number" ? String(body.user_id) : body.user_id
+      if (typeof userId !== "string" || !/^[1-9][0-9]{0,18}$/.test(userId)) return send(res, 400, { error: "invalid user id" })
+      if (!("block_doc" in body)) return send(res, 400, { error: "block_doc is required" })
+
+      const started = Date.now()
+      const result = await restore(docName, body.block_doc, { userId, requestId }).catch(
+        (error: unknown): RestoreResult => ({ ok: false, reason: "unavailable", error: error instanceof Error ? error.message : String(error) }),
+      )
+      logEvent("info", "collab_restore_request", {
+        request_id: requestId,
+        doc: docNameForLog(docName),
+        user_id: userId,
+        ok: result.ok,
+        reason: result.ok ? undefined : result.reason,
+        duration_ms: Date.now() - started,
+      })
+      if (!result.ok) {
+        const refusal = RESTORE_REFUSALS[result.reason]
+        return send(res, refusal.status, { error: refusal.error, reason: result.reason })
+      }
+      return send(res, 200, { restored: true, revision: result.revision, block_doc: result.block_doc, dropped: result.dropped })
     }
 
     const match = FLUSH_PATH.exec(path)

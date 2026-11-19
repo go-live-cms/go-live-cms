@@ -43,6 +43,7 @@ vi.mock("@gl-admin/lib/api/blockAPI", () => {
         return { versionId: 2, versionNo: 2 }
       }),
       unpublishPost: vi.fn(),
+      restoreVersion: vi.fn(),
       restoreVersionSettings: vi.fn(),
     },
   }

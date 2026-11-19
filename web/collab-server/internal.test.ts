@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest"
 import type { AddressInfo } from "node:net"
-import type { Server } from "node:http"
-import { bearerMatches, createInternalServer, type FlushResult } from "./internal"
+import { request, type Server } from "node:http"
+import { bearerMatches, createInternalServer, RESTORE_BODY_LIMIT, type FlushResult, type RestoreResult } from "./internal"
 
 const SECRET = "flush-secret"
 let server: Server
@@ -10,12 +10,20 @@ const flush = vi.fn(async (_doc: string): Promise<FlushResult> => ({ ok: true, s
 const recheckUser = vi.fn((_userId: string) => 2)
 const recheckDoc = vi.fn((_docName: string) => 3)
 const notifyComments = vi.fn((_docName: string) => 4)
+const restore = vi.fn(
+  async (_doc: string, _version: unknown, _opts: { userId: string; requestId?: string }): Promise<RestoreResult> => ({
+    ok: true,
+    revision: 5,
+    block_doc: "written",
+    dropped: 1,
+  }),
+)
 
 beforeAll(async () => {
   vi.spyOn(console, "log").mockImplementation(() => {})
   vi.spyOn(console, "warn").mockImplementation(() => {})
   vi.spyOn(console, "error").mockImplementation(() => {})
-  server = createInternalServer({ secret: SECRET, flush, recheckUser, recheckDoc, notifyComments })
+  server = createInternalServer({ secret: SECRET, flush, recheckUser, recheckDoc, notifyComments, restore })
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()))
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
 })
@@ -107,6 +115,84 @@ describe("internal listener", () => {
     }
     expect((await fetch(`${base}/internal/users/7/recheck`, { headers: { Authorization: `Bearer ${SECRET}` } })).status).toBe(405)
     expect(recheckUser).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("restore (#286)", () => {
+  const version = { doc_version: 1, blocks_order: [], blocks: {} }
+  const restoreRequest = (path: string, body: unknown, auth: string | null = `Bearer ${SECRET}`) =>
+    fetch(`${base}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Request-ID": "restore-req-1", ...(auth !== null ? { Authorization: auth } : {}) },
+      body: typeof body === "string" ? body : JSON.stringify(body),
+    })
+
+  it("needs the secret, a post's doc name, a user id and a block_doc", async () => {
+    restore.mockClear()
+    expect((await restoreRequest("/internal/documents/post-12/restore", { block_doc: version, user_id: "7" }, null)).status).toBe(401)
+    expect((await restoreRequest("/internal/documents/post-12/restore", { block_doc: version, user_id: "7" }, "Bearer wrong")).status).toBe(401)
+    for (const bad of ["post-0", "settings", "%E0%A4%A"]) {
+      expect((await restoreRequest(`/internal/documents/${bad}/restore`, { block_doc: version, user_id: "7" })).status).toBe(400)
+    }
+    expect((await restoreRequest("/internal/documents/post-12/restore", "{not json")).status).toBe(400)
+    expect((await restoreRequest("/internal/documents/post-12/restore", "[]")).status).toBe(400)
+    expect((await restoreRequest("/internal/documents/post-12/restore", { block_doc: version })).status).toBe(400)
+    expect((await restoreRequest("/internal/documents/post-12/restore", { block_doc: version, user_id: "0" })).status).toBe(400)
+    expect((await restoreRequest("/internal/documents/post-12/restore", { user_id: "7" })).status).toBe(400)
+    expect((await fetch(`${base}/internal/documents/post-12/restore`, { headers: { Authorization: `Bearer ${SECRET}` } })).status).toBe(405)
+    expect(restore).not.toHaveBeenCalled()
+  })
+
+  it("restores and answers what it did", async () => {
+    restore.mockClear()
+    const res = await restoreRequest("/internal/documents/post-12/restore", { block_doc: version, user_id: 7 })
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ restored: true, revision: 5, block_doc: "written", dropped: 1 })
+    expect(restore).toHaveBeenCalledWith("post-12", version, { userId: "7", requestId: "restore-req-1" })
+  })
+
+  it("maps each refusal to its status, and a throw to 503", async () => {
+    for (const [reason, status] of [
+      ["not-a-post", 400],
+      ["invalid-version", 400],
+      ["not-found", 404],
+      ["unstorable", 422],
+      ["unavailable", 503],
+    ] as const) {
+      restore.mockResolvedValueOnce({ ok: false, reason, error: "internal detail" })
+      const res = await restoreRequest("/internal/documents/post-12/restore", { block_doc: version, user_id: "7" })
+      expect(res.status).toBe(status)
+      const body = (await res.json()) as { reason: string; error: string }
+      expect(body.reason).toBe(reason)
+      // The internal error stays in the collab log.
+      expect(body.error).not.toContain("internal detail")
+    }
+    restore.mockRejectedValueOnce(new Error("boom"))
+    expect((await restoreRequest("/internal/documents/post-12/restore", { block_doc: version, user_id: "7" })).status).toBe(503)
+  })
+
+  it("refuses a body over the limit without calling restore", async () => {
+    restore.mockClear()
+    // A declared length over the limit is refused before the body is read; send only a
+    // little of it, so the answer always arrives (a real oversized upload could be reset).
+    const status = await new Promise<number>((resolve, reject) => {
+      const req = request(
+        `${base}/internal/documents/post-12/restore`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${SECRET}`, "Content-Type": "application/json", "Content-Length": String(RESTORE_BODY_LIMIT + 1) },
+        },
+        (res) => {
+          res.resume()
+          resolve(res.statusCode ?? 0)
+          req.destroy()
+        },
+      )
+      req.on("error", reject)
+      req.write("{")
+    })
+    expect(status).toBe(413)
+    expect(restore).not.toHaveBeenCalled()
   })
 })
 

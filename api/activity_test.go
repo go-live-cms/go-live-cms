@@ -106,7 +106,7 @@ func TestActivityRecordedOnPostWritePaths(t *testing.T) {
 	requireStatus(t, as(t, server, editor, http.MethodPut, path+"/schedule", gin.H{"publish_at": publishAt.Format(time.RFC3339)}), http.StatusOK)
 	requireStatus(t, as(t, server, editor, http.MethodDelete, path+"/schedule", nil), http.StatusOK)
 	requireStatus(t, as(t, server, editor, http.MethodPost, path+"/publish", nil), http.StatusOK)
-	requireStatus(t, as(t, server, editor, http.MethodPost, path+"/versions/1/restore-settings", nil), http.StatusOK)
+	requireStatus(t, as(t, server, editor, http.MethodPost, path+"/versions/1/restore", nil), http.StatusOK)
 	requireStatus(t, as(t, server, editor, http.MethodPost, path+"/unpublish", nil), http.StatusOK)
 	// A status set through PUT is its own event, whatever was saved just before.
 	requireStatus(t, as(t, server, editor, http.MethodPut, path, gin.H{"title": "Editor's " + word}), http.StatusOK)

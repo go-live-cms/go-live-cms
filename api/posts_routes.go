@@ -91,10 +91,12 @@ func (server *Server) RegisterPostRoutes(rg *gin.RouterGroup) {
 		posts.PUT("/:id/scheduled-update", auth, requireContentEditor(server), server.scheduleUpdate)
 		posts.DELETE("/:id/scheduled-update", auth, requireContentEditor(server), server.cancelScheduledUpdate)
 
-		// Revisions (#136): published snapshots; restoring the blocks happens in the
-		// editor, the settings (#358) come back through restore-settings
+		// Revisions (#136): published snapshots. Restore (#286) puts a version's blocks
+		// in through the collab server and its settings (#358) into the working copy;
+		// restore-settings is the settings alone, for editor tabs from before #286.
 		posts.GET("/:id/versions", auth, requireContentEditor(server), server.listPostVersions)
 		posts.GET("/:id/versions/:version_no", auth, requireContentEditor(server), server.getPostVersion)
+		posts.POST("/:id/versions/:version_no/restore", auth, requireContentEditor(server), server.restorePostVersion)
 		posts.POST("/:id/versions/:version_no/restore-settings", auth, requireContentEditor(server), server.restorePostVersionSettings)
 
 		// SEO settings (#357): editors and admins; contributors see them read-only

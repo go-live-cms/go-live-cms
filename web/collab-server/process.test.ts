@@ -274,6 +274,33 @@ describe("the bundled server process", () => {
     expect((await flush("templates-7")).status).toBe(400)
   })
 
+  it("restores a version through the internal listener (#286), loaded or not, live to an open editor", async () => {
+    api.addPost("14", canonical(paragraphDoc("before")), 3)
+    const restore = (name: string, body: unknown, auth = `Bearer ${FLUSH_SECRET}`) =>
+      fetch(`${internalUrl}/internal/documents/${name}/restore`, {
+        method: "POST",
+        headers: { Authorization: auth, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      })
+    const version = canonical(paragraphDoc("restored one", "restored two"))
+    expect((await restore("post-14", { block_doc: version, user_id: "2" }, "Bearer nope")).status).toBe(401)
+
+    // Nobody has post-14 open: the bundle loads it, restores it, stores it.
+    const res = await restore("post-14", { block_doc: version, user_id: "2" })
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ restored: true, revision: 4, block_doc: "written", dropped: 0 })
+    expect(api.posts.get("14")!.block_doc!.blocks_order).toEqual(version.blocks_order)
+
+    // An editor that has it open gets the next one live.
+    const editor = open("2", { doc: "post-14" })
+    expect(await editor.outcome).toEqual({ synced: true, readOnly: false })
+    expect(paragraphs(editor.doc)).toEqual(["restored one", "restored two"])
+    expect((await restore("post-14", { block_doc: canonical(paragraphDoc("again")), user_id: "2" })).status).toBe(200)
+    await waitFor(() => paragraphs(editor.doc).join("|") === "again", { what: "the live restore" })
+    expect(stdout).toMatch(/"event":"collab_restore","request_id":"[^"]+","doc":"post-14","user_id":"2","block_doc":"written"/)
+    expect(stdout + stderr).not.toContain(YJS_WARNING)
+  })
+
   it("never logs a ticket or the shared secrets", async () => {
     const t = await ticket("3")
     await open("3", { token: () => t }).outcome

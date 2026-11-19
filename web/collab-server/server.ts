@@ -15,9 +15,11 @@ import { docKind, TicketReplayGuard, type CollabDocRef, type TicketClaims } from
 import type { CollabBlockEdit, CollabRecord, CollabStoreBody, CollabStoreResult, InternalApi } from "./api"
 import { AuthRejection, createAuthenticate, DENY, type CollabContext } from "./auth"
 import { BlockChangeTracker, blockEditsFor, type BlockEditCapture } from "./blockEdits"
-import { loadIntoDoc, readMeta } from "./load"
+import type { RestoreResult } from "./internal"
+import { loadIntoDoc, readMeta, SERVER_ORIGIN } from "./load"
 import { docNameForLog, errorMessage, logEvent } from "./logsafe"
 import { createAccessRecheck, type AccessRecheckOptions } from "./recheck"
+import { applyRestore, InvalidVersionError, planRestore, type RestorePlan } from "./restore"
 import { prepareStore } from "./store"
 
 export interface CollabServerOptions {
@@ -59,6 +61,17 @@ export type StoreMessage =
 export type CommentsMessage = { type: "comments" }
 
 export type StoreResult = { ok: true; skipped: boolean } | { ok: false; error: string }
+
+/** What a server-side restore (#286) did: internal.ts (no yjs there) defines it. */
+export type { RestoreResult }
+
+/**
+ * Origin of the restore's update when it is applied to the live doc. A string: no
+ * Connection context, so the block change tracker and onChange ignore it (the restore's
+ * attribution went with its own store), and Hocuspocus still broadcasts it to every
+ * connection and schedules the usual debounced store (skipped when nothing else changed).
+ */
+export const RESTORE_ORIGIN = "golive-collab-restore"
 
 interface Session {
   /** Which document this is (#490): a post, or a template or part (`template-<id>`). */
@@ -443,7 +456,10 @@ export function createCollabServer(options: CollabServerOptions) {
       })
     },
 
-    async onDisconnect({ documentName, context }) {
+    async onDisconnect({ documentName, context, socketId }) {
+      // The restore's direct connection (#286, socketId "server") isn't a WebSocket client:
+      // it never logged a ws_connect either.
+      if (socketId === "server") return
       const ctx = contextOf(context) as Partial<CollabContext> & { connectedAt?: number }
       logEvent("info", "ws_close", {
         request_id: ctx.requestId,
@@ -467,12 +483,159 @@ export function createCollabServer(options: CollabServerOptions) {
     return { ...result, loaded: true }
   }
 
+  /**
+   * Restores a stored version into a post's working copy (#286), loaded or not: the API's
+   * POST /posts/:id/versions/:no/restore calls it through the internal listener, after its
+   * own access check. It replaces the "default" fragment's content in one Yjs transaction
+   * (restore.ts) and stores it, under the doc's saveMutex, so no debounced store runs in
+   * between.
+   *
+   * All or nothing: the restore is applied to a SCRATCH copy of the live doc first, which
+   * goes through the store pipeline (repairs, ids, validation, block_doc) and is PUT to the
+   * API. Only once the API stored it is the same update applied to the live doc, which
+   * broadcasts it to every connection as an ordinary remote change, followed by the
+   * `stored` message. A load that fails, a doc that wouldn't validate (kept-invalid) or a
+   * failed PUT leave the live doc, its state and block_doc as they were.
+   *
+   * Edits that arrive while the PUT is in flight land in the live doc and merge with the
+   * restore like any concurrent edit (CRDT); the usual debounced store then stores them.
+   * The restore's blocks are attributed to `userId` (#328) in the store that writes them.
+   */
+  async function restore(docName: string, version: unknown, { userId, requestId }: { userId: string; requestId?: string }): Promise<RestoreResult> {
+    const doc = docNameForLog(docName)
+    const refuse = (reason: Exclude<RestoreResult, { ok: true }>["reason"], error: string): RestoreResult => {
+      logEvent(reason === "unavailable" ? "error" : "warn", "collab_restore_failed", { request_id: requestId, doc, user_id: userId, reason, error })
+      return { ok: false, reason, error }
+    }
+    // Templates and parts (#492) keep the editor path: their restore records working_state
+    // and a Start over's source once the store lands, and a reset item must be unlocked first.
+    const ref = docKind(docName)
+    if (!ref || ref.kind !== "post") return refuse("not-a-post", "only posts are restored on the server")
+
+    let plan: RestorePlan
+    try {
+      plan = planRestore(version, schema)
+    } catch (error) {
+      return refuse("invalid-version", error instanceof InvalidVersionError ? error.message : errorMessage(error))
+    }
+
+    let connection: Awaited<ReturnType<Hocuspocus["openDirectConnection"]>>
+    try {
+      // Loads the doc (seeding it if it has no usable state, rule 11) and keeps it loaded
+      // until disconnect, which unloads it again if nobody else is connected.
+      connection = await hocuspocus.openDirectConnection(docName, { requestId })
+    } catch (error) {
+      if (error instanceof DocNotFoundError) return refuse("not-found", "post not found")
+      return refuse("unavailable", `load failed: ${errorMessage(error)}`)
+    }
+    try {
+      const document = connection.document
+      if (!document) return refuse("unavailable", "the document closed")
+      const result = await document.saveMutex.runExclusive(() => restoreLoaded(docName, document, plan, userId, requestId))
+      return result.ok ? result : refuse(result.reason, result.error)
+    } catch (error) {
+      // Anything before the live doc was touched (it's only touched after the PUT).
+      return refuse("unavailable", errorMessage(error))
+    } finally {
+      await connection.disconnect().catch(() => {})
+    }
+  }
+
+  async function restoreLoaded(
+    docName: string,
+    document: Document,
+    plan: RestorePlan,
+    userId: string,
+    requestId: string | undefined,
+  ): Promise<RestoreResult> {
+    const session = sessions.get(docName)
+    if (!session) return { ok: false, reason: "unavailable", error: "the document is not loaded" }
+
+    // The live doc as it is now, copied; the restore is written there first.
+    const before = Y.encodeStateVector(document)
+    const scratch = new Y.Doc()
+    let tracker: BlockChangeTracker | null = null
+    try {
+      Y.applyUpdate(scratch, Y.encodeStateAsUpdate(document), SERVER_ORIGIN)
+      // Who changed which block (#328), on the copy: the restore's transaction carries the
+      // restoring user as a Connection's context would, so every block it changes is theirs.
+      tracker = session.tracker ? new BlockChangeTracker(scratch.getXmlFragment(EDITOR_FRAGMENT)) : null
+      applyRestore(scratch, plan, { context: { userId } })
+
+      let prepared: ReturnType<typeof prepareStore>
+      try {
+        prepared = prepareStore(scratch, schema, { previous: session.previous, clientEdited: true, lastEditorId: userId, kind: session.kind })
+      } catch (error) {
+        return { ok: false, reason: "unstorable", error: errorMessage(error) }
+      }
+      const { body, decision } = prepared
+      // A restore the store would keep out of block_doc is refused instead: applying it
+      // would put content in the editor that never reaches block_doc, publish or History.
+      if (!decision.write && decision.reason === "invalid") return { ok: false, reason: "unstorable", error: decision.error }
+      withBaseRevision(body, session)
+      let edits: CollabBlockEdit[] = []
+      if (decision.write && tracker) {
+        try {
+          edits = blockEditsFor(decision.blockDoc, session.previous, tracker.capture(), { userId, at: Date.now() })
+          if (edits.length > 0) body.block_edits = edits
+        } catch (error) {
+          edits = []
+          logEvent("warn", "collab_block_edits_failed", { doc: docNameForLog(docName), error: errorMessage(error) })
+        }
+      }
+
+      let stored: CollabStoreResult
+      try {
+        stored = await putRecord(session.doc, body, { requestId })
+      } catch (error) {
+        return { ok: false, reason: "unavailable", error: `store failed: ${errorMessage(error)}` }
+      }
+
+      // Stored: the live doc gets exactly the structs that were stored (the restore, plus
+      // the ids and repairs the store pipeline wrote), and every connection with it.
+      Y.applyUpdate(document, Y.encodeStateAsUpdate(scratch, before), RESTORE_ORIGIN)
+      if (decision.write) session.previous = decision.blockDoc
+      if (stored.block_revision !== null) session.revision = stored.block_revision
+      // Equal to the live doc unless edits arrived during the PUT; then the next store runs.
+      session.storedSnapshot = Y.snapshot(scratch)
+      session.clientEdited = true
+      session.lastEditorId = userId
+      session.failed = false
+      session.retryDelay = storeRetryMs
+      if (session.retryTimer) clearTimeout(session.retryTimer)
+      session.retryTimer = null
+      const kept = decision.write ? "written" : "unchanged"
+      logEvent("info", "collab_restore", {
+        request_id: requestId,
+        doc: docNameForLog(docName),
+        user_id: userId,
+        block_doc: kept,
+        revision: session.revision,
+        dropped_blocks: plan.dropped.entries.length || undefined,
+        block_edits: edits.length || undefined,
+        connections: document.getConnectionsCount(),
+      })
+      broadcast(document, {
+        type: "stored",
+        revision: session.revision,
+        block_doc: kept,
+        ...(decision.write && edits.length > 0 ? { edits } : {}),
+      })
+      return { ok: true, revision: session.revision, block_doc: kept, dropped: plan.dropped.entries.length }
+    } finally {
+      tracker?.destroy()
+      scratch.destroy()
+    }
+  }
+
   return {
     server,
     get hocuspocus() {
       return hocuspocus
     },
     flush,
+    /** Restores a version into a post's working copy, open or not (#286; internal listener). */
+    restore,
     /** The schema fingerprint clients must send (#416). */
     schemaFingerprint: fingerprint,
     /** Re-checks a user's open connections now (internal listener, #333). */

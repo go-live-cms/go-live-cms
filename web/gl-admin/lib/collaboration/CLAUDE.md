@@ -77,7 +77,8 @@ every server boot — **read process logs from the very top**.
   "saving"; `kept-invalid` is an error), `waitForStored` (waits for the provider to have
   no unsynced changes, then the next `stored`), and `meta.dropped` for the hidden-blocks
   notice.
-- `liveRestore.ts`: rule 9. `setEditorBlockDoc`, then the version's dropped record into
+- `liveRestore.ts`: rule 9 for templates and parts (posts restore on the server since #286,
+  `collab-server/restore.ts`). `setEditorBlockDoc`, then the version's dropped record into
   `meta.dropped`, then await `stored`.
 - `templateRestore.ts` (#492): rule 9 for a template or part (`template-<id>`): History's Restore
   (`restoreTemplateVersion`), Discard changes (the published version's restore; after a
@@ -181,14 +182,40 @@ kept so references in code stay valid.
    too. Check with `npm ls yjs y-protocols` (one deduped copy each) after touching any
    yjs-family dependency. Never add a dependency that brings its own yjs.
 
-9. **Restoring a version (#136) goes through the editor, never around it.**
-   `restoreVersionLive` (`liveRestore.ts`) applies the doc with `setEditorBlockDoc`,
-   which the ySyncPlugin mirrors to every peer as an ordinary edit, adopts the version's
-   dropped-block record into `meta.dropped`, and waits for the server's next `stored`.
-   Writing `posts.block_doc` behind the live doc would be undone by the next store (rule
-   11). A version's settings (title, excerpt, featured image, terms; #358) aren't in the
-   Yjs doc: after `restoreVersionLive`, `PostForm` calls the API's restore-settings route,
-   which writes them into the working copy (the live post waits for Update).
+9. **Restoring a version (#136) goes through the live doc, never around it.** Writing
+   `posts.block_doc` behind the live doc would be undone by the next store (rule 11).
+   - **A post (#286): on the server.** History's Restore calls `EditorRef.restoreVersion(no)`:
+     it waits until the server has every edit of this tab (`whenAcknowledged`, so none lands
+     on top of the version afterwards), then `POST /posts/:id/versions/:no/restore`. The API
+     calls the collab server's internal restore (`collab-server/restore.ts`, `server.ts`
+     `restore`), which opens the doc with `openDirectConnection` (it doesn't matter whether
+     anyone has it open), converts the version with **its own schema and no stand-ins**
+     (what every connected editor builds, by the fingerprint guard, rule 10; blocks it can't
+     build, an uninstalled theme's or plugin's (#453), go to `meta.dropped`, hidden and kept),
+     writes it into the `"default"` fragment in **one Yjs transaction** with y-tiptap's own
+     diff (`prosemirrorToYXmlFragment` on the existing fragment = `updateYFragment`, what the
+     ySyncPlugin runs; unchanged nodes keep their Y elements, so a peer typing in a block the
+     version doesn't change keeps those keystrokes) and replaces `meta.dropped` with the
+     version's record. **All or nothing:** that happens on a scratch copy first, which goes
+     through the store pipeline (validated; a doc that would be `kept-invalid` is refused,
+     422) and is PUT; only once it is stored is the same update applied to the live doc,
+     broadcast to every connection as a remote change, then `stored`. A collab server that is
+     down, a failed load or a failed PUT: 503 and nothing changed, settings included. The API
+     writes the version's settings (#358) only after the blocks landed, and records
+     `version_restored`. The restored blocks are attributed to the restoring user (#328).
+     Concurrent typing: keystrokes inside text or blocks the version replaces go with them
+     (as with any concurrent delete); Yjs orders concurrent inserts at one spot by client
+     id. Pinned by `serverRestore.hocuspocus.test.ts` (nobody connected, two editors typing,
+     a restart, a stale epoch, every failure) and `Editor.test.tsx`.
+   - **A template or part (#492): through the editor, still.** `restoreVersionLive`
+     (`liveRestore.ts`, via `templateRestore.ts`) applies the doc with `setEditorBlockDoc`,
+     which the ySyncPlugin mirrors to every peer as an ordinary edit, adopts the version's
+     dropped-block record into `meta.dropped`, and waits for the server's next `stored`; then
+     the API records it. Not moved to the server in #286: those flows record working_state
+     and a Start over's source after the store, a reset item must be unlocked first, and only
+     an admin in the Site editor (who has it open) can restore. The collab restore refuses
+     `template-<id>` (400). Editor tabs from before #286 also restore posts this way, then
+     call `restore-settings`, which stays for them.
    Comparing a version with the working copy ("Highlight changes", #355,
    `lib/history/`) is read-only and goes around the editor on purpose: it reads the
    stored `block_doc` over REST (re-read on `stored`), never the Yjs doc or the editor's
@@ -241,9 +268,9 @@ kept so references in code stay valid.
    is written by `POST /site-design/templates` when a row is created (Customize from the theme default,
    a starter or blank; no Yjs state yet, like `POST /posts`) and by the collab store after that. Reset
    (#492) sets `working_state` and never writes `block_doc`; "Start over" and restoring a version go
-   through the editor (rule 9). A server-side
-   restore, import or migration tool would have to go through the collab server
-   (`openDirectConnection`, #286), not `UPDATE posts`.
+   through the editor (rule 9). A post's version restore goes through the collab server
+   (`openDirectConnection`, #286, rule 9), and so would an import or migration tool, never
+   `UPDATE posts`.
 
 12. **The revision and epoch guards stay.** `post_ydoc_state` (and `site_template_ydoc_state` for
    `template-<id>`, #490; both start at `block_revision` 1) records the
@@ -1006,7 +1033,6 @@ is a real block type for the editor, the collab server, the API and the public p
 
 ## Open follow-ups (don't "fix" silently)
 
-- Server-side restore through `openDirectConnection` (#286).
 - Block-keyed features: decided in `docs/design/block-map-yjs-schema.md` (#315). The
   `"default"` fragment stays the only source of content; no block-map binding. Block comments
   (#192) are built that way: Postgres rows keyed by block id, and the only collab part is the

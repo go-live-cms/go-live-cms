@@ -1,13 +1,12 @@
 import { useEffect, useId, useMemo, useRef, useState, forwardRef, useImperativeHandle, useCallback } from "react"
 import { EditorContent, useEditor } from "@tiptap/react"
 import type { Editor as TiptapEditor } from "@tiptap/core"
-import { blockAPIClient } from "@gl-admin/lib/api/blockAPI"
+import { blockAPIClient, type RestoredVersion } from "@gl-admin/lib/api/blockAPI"
 import { authManager } from "@gl-admin/lib/auth"
 import { pmToBlockDoc, setEditorBlockDoc } from "@gl-admin/lib/collaboration/blockBridge"
 import type { BlockDocV1 } from "@gl-admin/lib/blocks-spec"
 import { CollabSaveStatus, type SaveState } from "@gl-admin/lib/collaboration/CollabSaveStatus"
 import type { CollabAccess, HocuspocusCollaboration } from "@gl-admin/lib/collaboration/HocuspocusCollaboration"
-import { restoreVersionLive } from "@gl-admin/lib/collaboration/liveRestore"
 import { acquirePostCollab, releasePostCollab } from "@gl-admin/lib/collaboration/postCollab"
 import { getSiteTemplate } from "@gl-admin/lib/api/siteDesign"
 import type * as Y from "yjs"
@@ -151,8 +150,14 @@ export interface EditorRef {
   whenAcknowledged: () => Promise<void>
   // Custom HTML blocks read the post's markup again (#428: a restore put a version's back).
   refreshHtmlSnippets: () => void
-  // Load a stored version into the working copy through the editor (#136)
-  restoreVersion: (doc: BlockDocV1) => Promise<{ saved: boolean }>
+  /**
+   * Restore stored version `versionNo` into the working copy (#136), its blocks and its
+   * settings (#358), through the API's server-side restore (#286): the collab server puts
+   * the version into the live doc and stores it, and this editor gets it like any remote
+   * change. Waits first until the server has every edit typed here, so none lands on top
+   * of the restored version afterwards. Resolves once the restore is stored.
+   */
+  restoreVersion: (versionNo: number) => Promise<RestoredVersion>
   /**
    * A new post's body (no collab doc yet) as Block Spec, for `POST /posts`: the collab
    * server's own bridge (pmToBlockDoc), so marks, attrs and theme blocks reach the seed as
@@ -435,11 +440,16 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
         await saveStatus?.whenAcknowledged()
       },
       refreshHtmlSnippets: () => htmlSnippets?.refreshIfStarted(),
-      restoreVersion: async (doc) => {
+      restoreVersion: async (versionNo) => {
         if (unbuildable) throw blockedError()
-        if (!collab || !saveStatus || !editor || readOnly) throw new Error("Restoring needs the collaborative editor")
-        const { saved } = await restoreVersionLive(editor, doc, collab.doc, saveStatus)
-        return { saved }
+        if (!postId || !collab || !saveStatus || readOnly) throw new Error("Restoring needs the collaborative editor")
+        // The restore replaces the content on the server: edits of this tab the server
+        // doesn't have yet would arrive after it and land on the restored version.
+        await htmlSnippets?.flush()
+        await saveStatus.whenAcknowledged()
+        const token = authManager.getAccessToken()
+        if (token) blockAPIClient.setAuthToken(token)
+        return blockAPIClient.restoreVersion(postId, versionNo)
       },
       getBlockDoc: () => {
         // An existing post's body (bound, or the static view) is the server's.

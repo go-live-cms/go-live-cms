@@ -175,8 +175,8 @@ are the most fragile part of the codebase. **Before editing anything under
   `getPublishedPosts(type, …)` (`/public/posts`); the other `/public` lists already answer with
   published settings. On a published post a settings edit reaches the site on Update; the
   slug changes at once. The editor shows "settings go live on Update" from
-  `GET /posts/:id/settings`, and restoring a version restores its settings too
-  (`blockAPI.restoreVersionSettings`).
+  `GET /posts/:id/settings`, and restoring a version restores its settings too (`blockAPI.restoreVersion`,
+  #286: the API's one call for the blocks, through the collab server, and the settings).
 - **Changes not published (#326):** a published post whose body or settings differ from the
   live ones (the API's `has_unpublished_changes`; `api/CLAUDE.md`). `PostStatusPill` takes
   `unpublishedChanges` (accent pill, `UNPUBLISHED_CHANGES_LABEL`); the posts list and Pages
@@ -286,7 +286,7 @@ are the most fragile part of the codebase. **Before editing anything under
   makes `VersionPreview` compare the version with the working copy **as the collab server
   last stored it** (`GET /posts/:id/blocks`, plus `GET /posts/:id/settings` for the title and
   settings), re-read when `Editor`'s `onStored` fires (`workingKey`). It never reads the live
-  editor or the Yjs doc, and writes nothing; Restore is unchanged (rule 9). The diff is
+  editor or the Yjs doc, and writes nothing; Restore is the server-side restore (#286, rule 9). The diff is
   `lib/history/blockDiff.ts` (blocks by id, moves = outside the LIS of kept order, list items
   and nested lists by their ids, attrs compared on their own, theme blocks' declared attrs)
   over `wordDiff.ts` (word tokens with marks, capped Myers); both pure. It runs in

@@ -5,7 +5,7 @@
 // Environment:
 //   PORT                      WebSocket listener (default 1235)
 //   HOST                      bind address (default 0.0.0.0)
-//   INTERNAL_PORT             internal listener: /healthz, flush, user re-check (default 1236;
+//   INTERNAL_PORT             internal listener: /healthz, flush, re-checks, restore (default 1236;
 //                             never publish it)
 //   INTERNAL_API_URL          the API's internal listener, e.g. http://api:8081 (required)
 //   ROLE_LOOKUP_SECRET        bearer secret for INTERNAL_API_URL (required; same as the API's)
@@ -100,6 +100,7 @@ const internal = createInternalServer({
   recheckUser: (userId) => collab.recheckUser(userId),
   recheckDoc: (docName) => collab.recheckDoc(docName),
   notifyComments: (docName) => collab.notifyComments(docName),
+  restore: (docName, version, opts) => collab.restore(docName, version, opts),
 })
 
 const port = await collab.listen()
