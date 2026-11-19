@@ -131,6 +131,25 @@ the collab server.
   `sanitizeFileAttrs`, allowlists). Ids the lookup didn't find are listed in **`media_missing`**
   (sorted): the media was deleted, and the renderer leaves those blocks out, the image's too. A
   failed lookup adds neither key, so an image still renders from its `src`.
+- **Add from URL (#29, `media_import.go`):** `POST /media/import {urls}` (any content role,
+  1-10 links of ≤ 2048 characters) downloads each file and stores it **like an upload**
+  (copy only, never a hotlink): `saveUploadedFile` names, `prepareStoredImage`, no alt,
+  description "Imported from <host>". It is the API's third outbound request on a user's behalf
+  (with embeds and plugin webhooks), so treat it as SSRF surface: it dials through
+  `outbound_http.go` (every connection, each redirect's too, refused unless public after DNS),
+  http(s) only, no userinfo, ≤ 5 redirects (`checkImportRedirect`), 5s connect / 15s headers /
+  60s per link, 64 KB headers, no proxy or cookies, a `Content-Length` over `MAX_UPLOAD_SIZE`
+  refused and the body cut off one byte past it (nothing left behind). **The type is sniffed:**
+  an allowed extension on the name (Content-Disposition, else the final URL's path) must match
+  the content as for uploads; any other name gets the extension its bytes identify
+  (`sniffedImportExtension`; plain text, DOCX and MKV need theirs). 200 `{results: [{url,
+  status: added|failed, media | code+error}], meta}`, one per link in order (a repeated link
+  shares one fetch); every failure is a fixed `importFailure` (code + message, never the URL or
+  Go's error text, which holds it). Rate limit `RATE_LIMIT_MEDIA_IMPORT_PER_MINUTE` (6, per
+  member+IP). Activity: `imported` per file, payload `{mime_type, host}` only. Tests reach a
+  local `httptest` server through `newMediaImporter(allowAddress)`, a test-only allowance for
+  that one address and port (`outboundTransportOptions.allowAddress`, never from config); every
+  other address, a second local server included, gets the real policy.
 - **Missing alt text (#325, `000026`):** alt is optional on upload (no file-name fallback;
   bulk uploads store `""`), `PUT /media/:id` `alt: ""` clears it (absent keeps; name and
   description still treat `""` as keep), and `media.decorative` marks an image whose empty
@@ -697,7 +716,7 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   checked against its provider's pattern, a title is plain text (`normalizeEmbedTitle`: one holding
   a tag is dropped, `a < b` isn't). `embedVectors.json` (web) is shared with `embeds_test.go`.
 - **`POST /embeds/resolve {url}` (`requireContentEditor`) is an outbound request made on a user's
-  behalf (plugin webhooks, #460, are the other; both dial through `outbound_http.go`), so treat
+  behalf (plugin webhooks, #460, and media import, #29, are the others; all dial through `outbound_http.go`), so treat
   every line of it as SSRF surface.** The pasted URL only ever yields a
   ref; what is fetched is `embedProviderTable[id].oEmbed`, a literal per provider, asked about the
   URL rebuilt from the ref. HTTPS only, `embedFetchTimeout` 3s for the whole exchange,
@@ -1598,7 +1617,7 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   `GoLive-Event-Id` (the idempotency key), `GoLive-Event`, `GoLive-Timestamp`, `GoLive-Signature:
   v1=<hex>`; body `pluginsdk.WebhookPayload`. `VerifyWebhook` = the receiver's side (5-minute
   window, any `v1` in a comma list). Rotation = saving a new secret setting.
-- **SSRF:** `outbound_http.go` is the one guard, shared with `POST /embeds/resolve`: the dialer's
+- **SSRF:** `outbound_http.go` is the one guard, shared with `POST /embeds/resolve` and `POST /media/import` (#29): the dialer's
   `Control` refuses every non-public range (`nonPublicPrefixes`: private, loopback, link-local,
   CGNAT, multicast, reserved, documentation, metadata, NAT64/6to4/Teredo/IPv4-compatible; mapped
   addresses unmapped) **at connect time**, so DNS answers and rebinding are covered; no proxy, no

@@ -36,6 +36,9 @@
 //   - Edit access requests (#321): POST /posts/:id/access-requests, per member
 //     and client (RATE_LIMIT_ACCESS_REQUEST_PER_MINUTE): each one emails the
 //     post's reviewers.
+//   - Media import (#29): POST /media/import, per member and client
+//     (RATE_LIMIT_MEDIA_IMPORT_PER_MINUTE): each request downloads up to 10 files
+//     on the member's behalf.
 //
 // The internal listener (/internal/*) is not limited: only the collab WS server
 // can reach it, it calls once per connection for every editor, and its
@@ -348,6 +351,9 @@ type rateLimits struct {
 	// accessRequest limits edit access requests (#321) per member and client
 	// IP: each one emails the post's reviewers.
 	accessRequest *rateLimiter
+	// mediaImport limits "Add from URL" (#29) per member and client IP: each request
+	// makes outbound downloads.
+	mediaImport *rateLimiter
 	// generalExempt client IPs skip the general limit only.
 	generalExempt []netip.Prefix
 }
@@ -371,6 +377,7 @@ func newRateLimits(config util.Config) (rateLimits, error) {
 		passwordForgot: newRateLimiter("password-forgot", config.RateLimitPasswordForgotPerMinute),
 		accountToken:   newRateLimiter("account-token", config.RateLimitAccountTokenPerMinute),
 		accessRequest:  newRateLimiter("access-request", config.RateLimitAccessRequestPerMinute),
+		mediaImport:    newRateLimiter("media-import", config.RateLimitMediaImportPerMinute),
 		generalExempt:  exempt,
 	}, nil
 }

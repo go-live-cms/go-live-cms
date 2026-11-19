@@ -332,7 +332,13 @@ are the most fragile part of the codebase. **Before editing anything under
   (`lib/mediaPaste.ts`, tested): ignored in text fields and dialogs, other clipboard
   content ignored. Copied files keep their names; the clipboard's unnamed picture (or
   Chrome/Firefox's generic `image.png`) is uploaded once, in its first format, as
-  `pasted-YYYYMMDD-HHMMSS.<ext>`.
+  `pasted-YYYYMMDD-HHMMSS.<ext>`. **Add from URL (#29, the canvas's "Media · Add from URL"
+  board):** beside Upload, a dialog (`components/media/AddFromURL.tsx`) with one link per line
+  (≤ 10); the API's `POST /media/import` downloads each into the library like an upload (copy
+  only, never a hotlink) and answers per link: added, or the API's reason; "Try failed again"
+  puts the failed links back. The media picker shows the same form in place (it's already a
+  dialog) and picks what was added, if it is of the picker's kind. Rules and wording:
+  `lib/mediaImport.ts` (tested). Home's feed: "added hero from images.example.com".
 - **Video captions (#507):** a video's detail page and side panel have **Captions (VTT)**
   (`components/media/CaptionsField.tsx`, rules `lib/mediaCaptions.ts`): the shared `MediaPicker` with
   the `captions` kind (`text/vtt`, the API's `type=captions`; also a library filter), Remove, and the

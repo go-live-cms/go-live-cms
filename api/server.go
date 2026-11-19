@@ -73,6 +73,9 @@ type Server struct {
 	// webhooks delivers plugin webhooks (plugin_webhooks.go, #460): the HTTP client and
 	// the URL policy it enforces. A field so tests can point it at a local receiver.
 	webhooks *webhookSender
+	// mediaImport downloads "Add from URL" files (media_import.go, #29) under the shared
+	// outbound guard. A field so tests can let a local httptest server through.
+	mediaImport *mediaImporter
 
 	// themeBlocks is web/themes/blocks.manifest.json (theme_blocks.go, #376): the
 	// installed theme blocks prepareForStore validates. Empty in test mode.
@@ -211,6 +214,7 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 		collabFlushTimeout: collabFlushTimeout,
 		embedClient:        newEmbedClient(newEmbedTransport(), embedFetchTimeout),
 		webhooks:           newWebhookSender(config.PluginWebhooksAllowInsecure, nil),
+		mediaImport:        newMediaImporter(nil),
 		rateLimits:         limits,
 
 		mailer:    mail,

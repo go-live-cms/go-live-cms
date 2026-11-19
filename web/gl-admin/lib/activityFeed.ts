@@ -92,6 +92,7 @@ function statusPart(title: string, status: unknown): { verb: string; what: strin
 
 const MEDIA_VERBS: Record<string, string> = {
   uploaded: "uploaded",
+  imported: "added",
   replaced: "replaced",
   deleted: "deleted",
 }
@@ -122,8 +123,10 @@ function objectPart(event: ActivityEvent): { verb: string; what: string; href: s
     }
     case "media": {
       const verb = MEDIA_VERBS[event.verb] ?? fallbackVerb
-      if (!event.media) return { verb, what: "a file", href: null }
-      return { verb, what: event.media.name || "a file", href: `/media/${event.media.id}` }
+      // Added from a link (#29): the payload keeps the host only, never the link.
+      const host = event.verb === "imported" && typeof event.payload.host === "string" && event.payload.host ? ` from ${event.payload.host}` : ""
+      if (!event.media) return { verb, what: `a file${host}`, href: null }
+      return { verb, what: `${event.media.name || "a file"}${host}`, href: `/media/${event.media.id}` }
     }
     case "invitation":
       if (event.verb === "invited") return { verb: "invited", what: withArticle(role(event.payload.role)), href: "/users" }

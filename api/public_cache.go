@@ -621,6 +621,7 @@ var publicCacheNoPurgeRoutes = map[string]string{
 	"POST /api/v1/media":                                           "a new upload is on no published page",
 	"POST /api/v1/media/batch":                                     "a new upload is on no published page",
 	"POST /api/v1/media/bulk":                                      "a new upload is on no published page",
+	"POST /api/v1/media/import":                                    "a new import (#29) is on no published page",
 	"POST /api/v1/redirects":                                       "redirect lookups aren't cached; the web caches its own 301s",
 	"DELETE /api/v1/redirects/:id":                                 "redirect lookups aren't cached; the web caches its own 301s",
 	// Internal listener.

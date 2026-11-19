@@ -5,6 +5,7 @@ import { getMedia, getMediaVariantPreviewURL } from "@gl-admin/lib/api/media"
 import { errorMessage } from "@gl-admin/lib/api/errors"
 import { formatTag, isRasterImage, mediaKind, mediaMetaLine, missingAlt, TYPE_FILTERS } from "@gl-admin/lib/mediaLibrary"
 import { uploadMediaFile } from "@gl-admin/lib/mediaLookup"
+import { AddFromURLForm } from "@gl-admin/components/media/AddFromURL"
 import { MEDIA_KIND_ACCEPT, mimeMatchesKind, type MediaPickerKind } from "@gl-admin/lib/blocks-spec"
 import type { Media } from "@gl-admin/lib/api/types"
 import "@gl-admin/assets/styles/components/media/media-picker.scss"
@@ -14,7 +15,9 @@ import "@gl-admin/assets/styles/components/media/media-picker.scss"
 // block (image, video, audio, file; gallery's several at once later). A `kind` limits it
 // to one of the library's kinds (the API's `type`); without one, the library's own kind
 // filter shows. Upload adds files to the library from here, as the library's Upload does,
-// and (choosing one) picks what was uploaded. Images without alt text say so (#325).
+// and (choosing one) picks what was uploaded. "Add from URL" (#29) does the same with
+// links the API downloads into the library (AddFromURLForm, in place: the picker is
+// already a dialog). Images without alt text say so (#325).
 //
 // Keyboard: every tile is a button (Tab reaches the grid, then the arrow keys, Home and
 // End move between tiles; Enter or Space picks). Escape closes (Modal).
@@ -69,6 +72,7 @@ export default function MediaPicker({
   const [selected, setSelected] = useState<Media[]>([])
   const [uploading, setUploading] = useState<string | null>(null)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const [fromURL, setFromURL] = useState(false)
   const request = useRef(0)
   // One per opening: an upload that ends after the picker closed (or reopened for another
   // block) picks nothing.
@@ -122,6 +126,7 @@ export default function MediaPicker({
     setSelected([])
     setUploadError(null)
     setUploading(null)
+    setFromURL(false)
     setSearch("")
     setFilter(kind ?? "")
   }, [isOpen, kind])
@@ -170,9 +175,27 @@ export default function MediaPicker({
     }
     // Closed meanwhile: the file is in the library, but nothing is picked.
     if (uploaded.length === 0 || started !== session.current) return
-    setItems((prev) => [...uploaded, ...prev.filter((m) => !uploaded.some((u) => u.id === m.id))])
-    if (multiple) setSelected((prev) => [...prev, ...uploaded.filter((u) => !prev.some((m) => m.id === u.id))])
-    else pick(uploaded[0])
+    addToChoice(uploaded)
+  }
+
+  // New files in the library (uploaded or added from links): shown first, then picked (or
+  // added to the choice).
+  const addToChoice = (added: Media[]) => {
+    setItems((prev) => [...added, ...prev.filter((m) => !added.some((u) => u.id === m.id))])
+    if (multiple) setSelected((prev) => [...prev, ...added.filter((u) => !prev.some((m) => m.id === u.id))])
+    else pick(added[0])
+  }
+
+  // Links added from URL: the API takes any allowed file, so only those of this kind are
+  // offered; the others stay in the library.
+  const addedFromURL = (added: Media[]) => {
+    const fitting = activeKind ? added.filter((m) => mimeMatchesKind(m.mime_type, activeKind)) : added
+    if (fitting.length === 0) {
+      setUploadError(`None of the added files is ${noun.a}. They're in the library.`)
+      return
+    }
+    setUploadError(null)
+    addToChoice(fitting)
   }
 
   // Arrow keys, Home and End between tiles (each tile is a button, so Tab and Enter work too).
@@ -230,6 +253,9 @@ export default function MediaPicker({
             />
           </div>
           <div className="gl-media-picker__actions">
+            <Button variant="secondary" onClick={() => setFromURL((open) => !open)} aria-expanded={fromURL}>
+              Add from URL
+            </Button>
             <Button variant="secondary" onClick={() => fileInput.current?.click()} loading={uploading !== null}>
               Upload
             </Button>
@@ -254,6 +280,8 @@ export default function MediaPicker({
             )}
           </div>
         </div>
+
+        {fromURL && <AddFromURLForm onAdded={addedFromURL} onClose={() => setFromURL(false)} />}
 
         {!kind && (
           <div className="gl-media-picker__filters" role="radiogroup" aria-label="Kind of file">
