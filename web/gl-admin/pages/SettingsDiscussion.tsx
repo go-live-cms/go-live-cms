@@ -92,7 +92,13 @@ export default function SettingsDiscussion({ switchReady = COMMENTS_SWITCH_READY
     setSaveError(null)
   }
 
-  const focusInvalid = () => requestAnimationFrame(() => formRef.current && focusFirstInvalid(formRef.current))
+  // Focus the first invalid field once React has drawn the errors: an effect after that
+  // commit, not a frame later (a frame raced the errors under load).
+  const [focusRequest, setFocusRequest] = useState(0)
+  const focusInvalid = () => setFocusRequest((n) => n + 1)
+  useEffect(() => {
+    if (focusRequest > 0 && formRef.current) focusFirstInvalid(formRef.current)
+  }, [focusRequest])
 
   const handleSave = async (e?: React.FormEvent) => {
     e?.preventDefault()
