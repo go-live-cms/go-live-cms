@@ -60,7 +60,7 @@ import {
   useBeforeUnloadWarning,
   useConnectionView,
 } from "@gl-admin/components/editor/utils/connectionState"
-import { postEditorAccess, type PermissionUser } from "@gl-admin/lib/roles"
+import { isContentModerator, postEditorAccess, type PermissionUser } from "@gl-admin/lib/roles"
 import { getPostAccess, type PostAccess } from "@gl-admin/lib/api/postAccess"
 import { AccessRequestsNotice, PostCollaborators, ViewOnlyNotice } from "@gl-admin/components/editor/ui/PostEditAccess"
 import { canTransferPost } from "@gl-admin/lib/postOwner"
@@ -1500,6 +1500,8 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
           blockEditor={blockEditor}
           tabRequest={settingsTabRequest}
           onTabChange={(tab) => (settingsTab.current = tab)}
+          // Discussion (#527): editors and admins, once the role is verified (decision 3).
+          discussion={mode === "edit" && roleVerified && isContentModerator(me?.role)}
           sidebarWidth={sidebarWidth}
           onResize={handleSidebarResize}
           slug={formData.slug}

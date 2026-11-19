@@ -1346,3 +1346,40 @@
     }
   }
 }
+// The post's Discussion section (#527, design 12.3): the last section of the Post tab.
+// The four-way choice, what applies now, why, and the status line after a change.
+.post-discussion {
+  &__title {
+    font-weight: 600;
+    margin: 0;
+  }
+
+  &__now {
+    color: var(--text-primary);
+    font-size: var(--type-label);
+    line-height: var(--type-label-lh);
+    margin: 0;
+  }
+
+  &__status,
+  &__error {
+    font-size: var(--type-footnote);
+    line-height: var(--type-footnote-lh);
+    margin: 0;
+  }
+
+  &__status {
+    color: var(--text-secondary);
+  }
+
+  &__error {
+    color: var(--danger-text);
+  }
+
+  &__failed {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+}

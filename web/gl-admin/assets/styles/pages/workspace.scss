@@ -287,7 +287,8 @@
         color: var(--text-primary);
       }
 
-      &[aria-current="true"] {
+      &[aria-current="true"],
+      &[aria-current="page"] {
         background: var(--background-active);
         color: var(--text-primary);
         font-weight: 500;
@@ -322,6 +323,15 @@
   &__label {
     font-size: var(--type-footnote);
     font-weight: 500;
+  }
+
+  // Settings › Discussion's groups (#527): Moderation, Display, Privacy.
+  &__group-title {
+    color: var(--text-secondary);
+    font-size: var(--type-label);
+    font-weight: 600;
+    line-height: var(--type-label-lh);
+    margin: 0;
   }
 
   &__address-field {

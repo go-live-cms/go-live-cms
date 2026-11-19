@@ -4,7 +4,8 @@ import type { PostTypeInput } from "@gl-admin/lib/api/postTypes"
 // The Post types screen (#343): the form's fields, what it sends, and which types it
 // may change. The rules mirror api/post_types.go, which has the last word.
 
-// Built in, and refused by POST and PUT /post-types (409).
+// Built in: POST refuses them, and PUT accepts a change of Comments alone (409 for
+// anything else, #522; the "Post types · Posts" board).
 export const BUILT_IN_POST_TYPES = ["post", "page"]
 
 export function isBuiltInPostType(name: string): boolean {
@@ -18,7 +19,26 @@ export const SUPPORT_FIELDS: { value: string; label: string; note?: string }[] =
   { value: "content", label: "Content", note: "The block editor" },
   { value: "description", label: "Excerpt" },
   { value: "featured_image", label: "Featured image" },
+  // Reader comments (#527, design 12.2): the post's Discussion section's Default follows it.
+  { value: "comments", label: "Comments", note: "Readers can comment on published items" },
 ]
+
+// The one field a built-in type may change (#522: PUT /post-types/post|page).
+export const BUILT_IN_EDITABLE_FIELD = "comments"
+
+/** Whether the form lets this field change: every field on a custom type, Comments alone on Posts and Pages. */
+export function canChangeField(typeName: string | undefined, field: string): boolean {
+  return !typeName || !isBuiltInPostType(typeName) || field === BUILT_IN_EDITABLE_FIELD
+}
+
+/**
+ * A built-in type's PUT body (`supports` alone): the stored list with Comments on or off,
+ * the rest exactly as stored, since the API refuses any other difference.
+ */
+export function builtInSupports(stored: readonly string[], commentsOn: boolean): string[] {
+  const rest = stored.filter((s) => s !== BUILT_IN_EDITABLE_FIELD)
+  return commentsOn ? [...rest, BUILT_IN_EDITABLE_FIELD] : rest
+}
 
 // What the API stores when a create sends no `supports`.
 const DEFAULT_SUPPORTS = ["title", "content", "description"]

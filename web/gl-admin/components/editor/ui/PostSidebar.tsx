@@ -12,6 +12,7 @@ import type { TransferPostResult } from "@gl-admin/lib/api/posts"
 import PostSeoPanel from "./PostSeoPanel"
 import PageTemplateField from "./PageTemplateField"
 import BlockSettingsPanel from "./BlockSettingsPanel"
+import PostDiscussion from "./PostDiscussion"
 import type { Editor as TiptapEditor } from "@tiptap/core"
 import Tabs from "@gl-admin/components/ui/Tabs"
 import type { PostSEOSettings } from "@gl-admin/lib/api/types"
@@ -30,7 +31,8 @@ import "@gl-admin/assets/styles/components/editor/post-settings.scss"
 // Owner (#353) is who the post belongs to (access), with Transfer for admins; Authors
 // (#319) is the byline, separate from the owner. A page has its Template (#336,
 // PageTemplateField). Block (#417) shows the selected block, nested or not, with its
-// settings (BlockSettingsPanel), while the editor is editable. Not built yet, so not shown:
+// settings (BlockSettingsPanel), while the editor is editable. Discussion (#527,
+// PostDiscussion) ends the Post tab for editors and admins. Not built yet, so not shown:
 // move to trash (#327).
 
 export type SettingsTab = "post" | "block" | "seo" | "history"
@@ -94,6 +96,8 @@ interface PostSidebarProps {
   tabRequest?: { tab: SettingsTab; key: number } | null
   // The tab shown changed (so ⌘⇧, knows whether it closes the panel or switches to Block).
   onTabChange?: (tab: SettingsTab) => void
+  // The Discussion section (#527): editors and admins only (decision 3).
+  discussion?: boolean
 }
 
 const STATUS_HINT: Record<string, string> = {
@@ -127,6 +131,7 @@ export default function PostSidebar({
   blockEditor,
   tabRequest,
   onTabChange,
+  discussion = false,
 }: PostSidebarProps) {
   const dateSettings = useSiteDateSettings()
   const [activeTab, setActiveTab] = useState<SettingsTab>("post")
@@ -335,6 +340,9 @@ export default function PostSidebar({
           Shown in lists and previews. Without one, the first paragraph is used.
         </small>
       </div>
+
+      {/* #527: the last section, editors and admins only; it saves at once, outside the snapshot. */}
+      {discussion && mode === "edit" && post.id ? <PostDiscussion postId={post.id} postType={type} published={status === "published"} /> : null}
     </fieldset>
   )
 

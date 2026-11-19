@@ -1,0 +1,54 @@
+{
+  "_comment": "Settings › Discussion's checks (#527, docs/design/reader-comments.md 12.1, 4.2, 7.5). The API has the last word (api/discussion_settings.go); the form (web/gl-admin/lib/discussionSettings.ts) refuses the same values before saving. Both suites run every case: TestDiscussionSettingsVectors and discussionSettings.test.ts. A word list case gives the lines as typed and either `normalized` (what the API stores) or `code` with `line` (the 1-based line the form names). A range case gives a field and a value and `ok`. A notice case gives `normalized` or `code`. A string given as `repeat` is `repeat.text` repeated `repeat.times` times; a list item `numbered: N` stands for the N lines word1 … wordN.",
+  "limits": {
+    "comments_max_links": [0, 10],
+    "comments_close_after_days": [0, 3650],
+    "comments_per_page": [10, 100],
+    "word_list_max": 500,
+    "word_max": 64,
+    "notice_max": 400
+  },
+  "ranges": [
+    { "field": "comments_max_links", "value": 0, "ok": true },
+    { "field": "comments_max_links", "value": 10, "ok": true },
+    { "field": "comments_max_links", "value": 11, "ok": false },
+    { "field": "comments_max_links", "value": -1, "ok": false },
+    { "field": "comments_close_after_days", "value": 0, "ok": true },
+    { "field": "comments_close_after_days", "value": 3650, "ok": true },
+    { "field": "comments_close_after_days", "value": 3651, "ok": false },
+    { "field": "comments_close_after_days", "value": -1, "ok": false },
+    { "field": "comments_per_page", "value": 10, "ok": true },
+    { "field": "comments_per_page", "value": 100, "ok": true },
+    { "field": "comments_per_page", "value": 9, "ok": false },
+    { "field": "comments_per_page", "value": 101, "ok": false }
+  ],
+  "words": [
+    { "name": "empty", "input": [], "normalized": [] },
+    { "name": "one per line", "input": ["refund", "casino"], "normalized": ["refund", "casino"] },
+    { "name": "entries are trimmed", "input": ["  refund  ", "\tcasino"], "normalized": ["refund", "casino"] },
+    { "name": "blank lines go", "input": ["refund", "", "   ", "casino", ""], "normalized": ["refund", "casino"] },
+    { "name": "duplicates ignoring case keep the first", "input": ["Refund", "casino", "REFUND", "refund"], "normalized": ["Refund", "casino"] },
+    { "name": "a phrase is one entry", "input": ["free money"], "normalized": ["free money"] },
+    { "name": "64 characters", "input": [{ "repeat": { "text": "a", "times": 64 } }], "normalized": [{ "repeat": { "text": "a", "times": 64 } }] },
+    { "name": "65 characters", "input": ["ok", { "repeat": { "text": "a", "times": 65 } }], "code": "entry_too_long", "line": 2 },
+    { "name": "characters are code points", "input": [{ "repeat": { "text": "é", "times": 64 } }], "normalized": [{ "repeat": { "text": "é", "times": 64 } }] },
+    { "name": "spaces around don't count towards 64", "input": [{ "repeat": { "text": "a", "times": 64 } }, "  x  "], "normalized": [{ "repeat": { "text": "a", "times": 64 } }, "x"] },
+    { "name": "a tab inside is refused", "input": ["ok", "a\tb"], "code": "entry_invalid", "line": 2 },
+    { "name": "a control character is refused", "input": ["a\u0007b"], "code": "entry_invalid", "line": 1 },
+    { "name": "a bidi override is refused", "input": ["ok", "", "ab‮cd"], "code": "entry_invalid", "line": 3 },
+    { "name": "the first problem is reported", "input": ["a\u0007b", { "repeat": { "text": "x", "times": 65 } }], "code": "entry_invalid", "line": 1 },
+    { "name": "500 entries", "input": [{ "numbered": 500 }], "normalized": [{ "numbered": 500 }] },
+    { "name": "501 entries", "input": [{ "numbered": 501 }], "code": "too_many" },
+    { "name": "501 lines with a duplicate are 500 entries", "input": [{ "numbered": 500 }, "word1"], "normalized": [{ "numbered": 500 }] }
+  ],
+  "notice": [
+    { "name": "empty restores core's text", "input": "", "normalized": "" },
+    { "name": "plain text", "input": "Your email is never shown.", "normalized": "Your email is never shown." },
+    { "name": "trimmed", "input": "  Be kind.\n", "normalized": "Be kind." },
+    { "name": "400 characters", "input": { "repeat": { "text": "n", "times": 400 } }, "normalized": { "repeat": { "text": "n", "times": 400 } } },
+    { "name": "401 characters", "input": { "repeat": { "text": "n", "times": 401 } }, "code": "too_long" },
+    { "name": "two lines", "input": "One line.\nAnother.", "code": "not_one_line" },
+    { "name": "a tab inside", "input": "a\tb", "code": "not_one_line" },
+    { "name": "a bidi override", "input": "ab‮cd", "code": "not_one_line" }
+  ]
+}
