@@ -10,9 +10,10 @@ import (
 	"time"
 )
 
-// The API's outbound HTTP guard (SSRF), shared by its two outbound requests: the embed
-// title lookup (embeds_resolve.go, #425) and plugin webhook delivery
-// (plugin_webhooks.go, #460). Both dial through newPublicOnlyTransport:
+// The API's outbound HTTP guard (SSRF), shared by its three outbound requests: the embed
+// title lookup (embeds_resolve.go, #425), plugin webhook delivery (plugin_webhooks.go,
+// #460) and media import from a URL (media_import.go, #29). All dial through
+// newPublicOnlyTransport:
 //
 //   - The address check runs in the dialer's Control hook, on the address actually being
 //     connected to, after DNS. A name that resolves to an internal address is refused
@@ -112,6 +113,10 @@ type outboundTransportOptions struct {
 	// allowPrivate skips the address check: development only
 	// (PLUGIN_WEBHOOKS_ALLOW_INSECURE), never for embeds.
 	allowPrivate bool
+	// allowAddress, tests only, lets the given address and port through although it
+	// isn't public (a local httptest server standing in for a public host), while every
+	// other address still gets the real check. Never set from configuration.
+	allowAddress func(netip.AddrPort) bool
 	// tls, when set, replaces the default TLS config (tests: a test server's root).
 	tls *tls.Config
 }
@@ -119,7 +124,16 @@ type outboundTransportOptions struct {
 // newPublicOnlyTransport dials public addresses only, with no proxy and no keep-alives.
 func newPublicOnlyTransport(opts outboundTransportOptions) *http.Transport {
 	dialer := &net.Dialer{Timeout: opts.connectTimeout}
-	if !opts.allowPrivate {
+	switch {
+	case opts.allowPrivate:
+	case opts.allowAddress != nil:
+		dialer.Control = func(network, address string, conn syscall.RawConn) error {
+			if addrPort, err := netip.ParseAddrPort(address); err == nil && opts.allowAddress(addrPort) {
+				return nil
+			}
+			return refuseNonPublicAddress(network, address, conn)
+		}
+	default:
 		dialer.Control = refuseNonPublicAddress
 	}
 	tlsConfig := opts.tls

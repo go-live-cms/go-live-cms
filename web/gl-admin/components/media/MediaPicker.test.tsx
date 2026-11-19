@@ -163,7 +163,7 @@ describe("MediaPicker", () => {
     const onSelectMany = vi.fn()
     const onClose = vi.fn()
     await render(<MediaPicker isOpen multiple onClose={onClose} onSelect={() => {}} onSelectMany={onSelectMany} kind="image" />)
-    expect(button(/^Add/).disabled).toBe(true)
+    expect(button(/^Add( \d+)? images?$/).disabled).toBe(true)
     await click(tile("photo-12.jpg"))
     await click(tile("photo-10.jpg"))
     expect(tile("photo-12.jpg").getAttribute("aria-pressed")).toBe("true")

@@ -652,7 +652,8 @@ the first two. **Rotation:** the receiver accepts the old and new secret for a w
 saves the new one, the receiver drops the old one. The version prefix lets the scheme change later.
 
 **SSRF policy.** The plugin's settings choose where the API connects, so the call is guarded like
-`POST /embeds/resolve` and through the same code (`api/outbound_http.go`):
+`POST /embeds/resolve` and through the same code (`api/outbound_http.go`, also used since #29 by
+`POST /media/import`, the media library's "Add from URL"):
 
 - **https only.** `PLUGIN_WEBHOOKS_ALLOW_INSECURE` allows http and private addresses for a
   receiver on a developer's machine; the API refuses to start with it outside `GIN_MODE=debug`.
