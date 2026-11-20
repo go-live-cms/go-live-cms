@@ -13,6 +13,9 @@ import (
 var testQueries *Queries
 var testStore Store
 
+// testDBSource is DB_SOURCE, for isolatedStore.
+var testDBSource string
+
 func TestMain(m *testing.M) {
 	config, err := util.LoadConfig("../..")
 	if err != nil {
@@ -23,6 +26,7 @@ func TestMain(m *testing.M) {
 		log.Fatal("cannot connect to db:", err)
 	}
 
+	testDBSource = config.DBSource
 	testQueries = New(conn)
 	testStore = NewStore(conn)
 
