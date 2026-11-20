@@ -729,6 +729,19 @@ kept so references in code stay valid.
   - Tests: `extensions/SiteBlocks.test.ts`, `SiteBlocks.collab.test.tsx` (the six written into a post's doc on the
     relay; two people on navigation's overlay and layout, then a restart), `ui/SiteBlocksIVSettings.test.tsx`,
     `src/components/blocks/siteBlocksIV.test.tsx`, the parity check in `themes/default/theme.astro.test.ts`.
+- **The comments block (#500, the same files).** One more flow atom, `comments` (Block Spec `comments`), with one
+  attr, `title` (plain text, trimmed, ≤ 60 code points, "Comments" left out). Everything else is #488's (a node attr,
+  last writer wins, no parse rules, inert in a post, offered in templates only, never parts). Its placement rules
+  are `post_content`'s kind (`siteBlockKindIssues`, Go `checkSiteBlockPlacement`, the vectors): never in a part,
+  never inside a `query` at any depth, at most one per template; two people adding one at once make that store
+  `kept-invalid` until one is removed, as with `post_content`. The view's "Discussion settings" button only
+  navigates (rule 7).
+  - **Stale clients:** the node and its attr change the fingerprint (`schemaFingerprint.test.ts`), so open tabs
+    reload once after the deploy.
+  - Tests: `extensions/SiteBlocks.test.ts` (bridge, views, the Site editor's notes, the offer rule),
+    `SiteBlocks.collab.test.tsx` (two written into a post's doc on the relay: the stored doc, nothing rendered, a
+    restart), `src/components/blocks/commentsBlock.test.tsx`, `src/lib/siteRenderContext.test.ts`, the parity check
+    in `themes/default/theme.astro.test.ts`, the vectors, Go `post_blocks_site_test.go`.
 - **Inline nodes (#320, `components/editor/extensions/InlineNodes.ts`, rules in
   `blocks-spec/inlineNodes.ts`): `mention` {userId, label}, `contentLink` {postId, label},
   `dateChip` {date, time, reminder}.** Inline **atoms** in the `inline` group, so they live in a

@@ -25,6 +25,7 @@ import {
   AuthorCards,
   ColorSchemeSwitch,
   AuthorAvatar,
+  CommentsBlock,
   GoliveCredit,
   PostFacts,
   QueryTotal,
@@ -217,6 +218,9 @@ export function schemaExtensions({ collaborating }: { collaborating: boolean }) 
     postFacts: PostFacts,
     siteCopyright: SiteCopyright,
     goliveCredit: GoliveCredit,
+    // #500: the post's reader comments (reader-comments 11.1). A new node type and a wider doc and
+    // containers, so it changes the fingerprint (#416): open tabs reload once after the deploy.
+    comments: CommentsBlock,
     siteBlockCommands: SiteBlockCommands,
     blockId: BlockIdExtension,
   }

@@ -426,8 +426,8 @@ are the most fragile part of the codebase. **Before editing anything under
   render `src/components/comments/PostComments.astro` from the **`comments` layout prop**, which `PostPage.astro`
   reads with `loadPostComments` (`src/lib/postCommentsLoader.ts`) while the code layout loads: no read when off,
   closed with none or open with none; a failure is `comments_fetch_failed` and no section. **Block templates
-  have no comments until #500** puts the comments block in `single*` (a listed parity difference,
-  `templateParity.ts`). Comment text is text: never `set:html`/`dangerouslySetInnerHTML` (a test scans the
+  render it with the comments block** (#500, below), which the default theme's `single*` and `page*` templates
+  hold where the code layouts put the section. Comment text is text: never `set:html`/`dangerouslySetInnerHTML` (a test scans the
   sources), links `rel="nofollow ugc noopener"` (`readerCommentRuns`, `discussion.ts`). Nothing per reader on a
   post page: the notice is `?commented=` (no-store). `public/gl-comments.js` (plain, a `<script src defer>` after
   the section; copies of the link rule, avatar colours and reasons, compared in `PostComments.astro.test.ts`)
@@ -571,6 +571,18 @@ are the most fragile part of the codebase. **Before editing anything under
   (`siteBlockTitleIds`, reserved by the outermost renderer). The switch has no script: `theme-init.js` drives it,
   and `:root:not([data-js]) .color-scheme-switch` hides it without one. Reading time and the byline's names
   are core's (`src/lib/readingTime.ts`, `src/lib/bylines.ts`), re-exported by the theme.
+- **The comments block (#500, design `docs/design/theme-builder.md` 4.5's "As built (T18)", reader-comments
+  11.1):** `comments` (attr `title`, ≤ 60, "Comments" left out), the same chain as #488's (renderer
+  `src/components/blocks/utils/commentsBlock.tsx`). It renders **core's `PostCommentsSection`** from the context's
+  `comments` (`SiteComments`: the thread, the URL, the clock, Settings › Discussion), the same view `PostComments.astro`
+  builds, so a block template and a code layout give the same HTML (the parity check in
+  `themes/default/theme.astro.test.ts`). `collectTemplateNeeds` sees the template's own one (never a part's or one in a
+  query) and `loadSiteRenderContext` reads the thread with `loadPostComments` from the `discussion` `PostPage.astro`
+  passes `BlockTemplateLayout` (`comments` option); not one of the four. Placement is the store's (never in a part,
+  never in a query, once per template); which templates may hold it (`commentsAllowedInTemplate`: single and page
+  ones, `custom-*`) is the inserter's (`offeredOnce`, `SiteEditorBridge.allowsComments`). The placeholder says when
+  comments are off for the site (`commentsEnabled`, read by `SiteTemplateEditor` from `GET /settings`) and has a
+  "Discussion settings" button. Nothing per reader; comment text never through `set:html`.
 - **Template rendering (#491, design `docs/design/theme-builder.md` 3.2–3.4, 3.7):** every public route file makes one
   call, `resolveTemplate(Astro.locals, route)` (`src/lib/siteTemplates.ts`): the route's ranked slugs (`templateRanks`:
   `single-{type}`/`single-{variant}`/`single`, `page-{template}`/`page-{variant}`/`page` (#498: the type's

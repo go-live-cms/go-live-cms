@@ -15,7 +15,7 @@
  * never inline, so the public CSP is untouched.
  */
 import { PostCommentsSection } from './PostCommentsSection'
-import { commentsView, COMMENTS_SCRIPT_SRC, COMMENTS_TITLE, type CommentsView, type PostCommentsData } from '@/lib/postComments'
+import { commentsView, COMMENTS_SCRIPT_SRC, COMMENTS_TITLE, DEFAULT_COMMENTS_SETTINGS, type CommentsView, type PostCommentsData } from '@/lib/postComments'
 import { getSiteSettings } from '@/lib/siteSettings'
 import { DEFAULT_DATE_SETTINGS } from '@/lib/siteDates'
 
@@ -31,7 +31,7 @@ const { post, comments = null, title = COMMENTS_TITLE, class: className } = Astr
 let view: CommentsView | null = null
 if (comments) {
   const site = await getSiteSettings(Astro.locals)
-  const settings = site.comments ?? { threading: 'replies' as const, notice: '', privacyHref: null }
+  const settings = site.comments ?? DEFAULT_COMMENTS_SETTINGS
   view = commentsView(
     comments,
     post.id,

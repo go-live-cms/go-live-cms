@@ -15,6 +15,8 @@ const SITE_BLOCK_TYPES_488 = ["site_title", "site_tagline", "site_logo", "naviga
 const SITE_BLOCK_TYPES_497 = ["related_posts", "author_cards", "table_of_contents", "color_scheme_switch"] as const
 // The site blocks of #498, as they shipped.
 const SITE_BLOCK_TYPES_498 = ["query_total", "author_avatar", "search_results", "post_facts", "site_copyright", "golive_credit"] as const
+// The comments block of #500.
+const SITE_BLOCK_TYPES_500 = ["comments"] as const
 // The attrs #498 added to existing site blocks (node name, attr).
 const SITE_BLOCK_ATTRS_498 = [
   ["search", "variant"],
@@ -404,7 +406,7 @@ describe("schemaFingerprint (#416)", () => {
     it("site blocks II (#489) changed it: fourteen node types, the query loop named by the doc and a group", () => {
       // The schema as it was before #489: none of the fourteen, and no content expression naming them.
       const after = getCoreSchema()
-      const types = SITE_BLOCK_TYPES.filter((type) => !([...SITE_BLOCK_TYPES_488, ...SITE_BLOCK_TYPES_497, ...SITE_BLOCK_TYPES_498] as readonly string[]).includes(type))
+      const types = SITE_BLOCK_TYPES.filter((type) => !([...SITE_BLOCK_TYPES_488, ...SITE_BLOCK_TYPES_497, ...SITE_BLOCK_TYPES_498, ...SITE_BLOCK_TYPES_500] as readonly string[]).includes(type))
       expect(types).toHaveLength(14)
       const names = types.map((type) => SITE_BLOCK_NODE_NAMES[type])
       const unnamed = (content: string | undefined) => (content ?? "").replace(new RegExp(` \\| (${names.join("|")})\\b`, "g"), "")
@@ -521,6 +523,36 @@ describe("schemaFingerprint (#416)", () => {
       // The new values of attrs that were there already (navigation's layout and overlay, the switch's
       // variant) are values, not schema: an older tab keeps them as it would any string.
       expect(after.nodes.navigation.spec.attrs).toHaveProperty("overlay")
+    })
+    it("the comments block (#500) changed it: one node type named by every flow holder, with its title", () => {
+      // The schema as it was before #500: no `comments` node, and no content expression naming it.
+      const after = getCoreSchema()
+      const names = SITE_BLOCK_TYPES_500.map((type) => SITE_BLOCK_NODE_NAMES[type])
+      expect(names).toEqual(["comments"])
+      const unnamed = (content: string | undefined) => (content ?? "").replace(new RegExp(` \\| (${names.join("|")})\\b`, "g"), "")
+      let nodes = after.spec.nodes
+      for (const name of names) nodes = nodes.remove(name)
+      nodes.forEach((name, spec) => {
+        if (spec.content && unnamed(spec.content) !== spec.content) nodes = nodes.update(name, { ...spec, content: unnamed(spec.content) })
+      })
+      const before = new Schema({ nodes, marks: after.spec.marks, topNode: after.spec.topNode })
+      expect(before.nodes.comments).toBeUndefined()
+      expect(after.nodes.comments).toBeDefined()
+      expect(describeSchemaForFingerprint(after)).toContain("comments")
+      // A flow atom: wherever flow may sit (the store, not the schema, keeps it out of a part and a query).
+      for (const holder of ["doc", "group", "column", "details", "postTemplate", "queryNoResults"]) {
+        expect(after.nodes[holder].spec.content, `${holder} holds comments`).toContain("comments")
+      }
+      expect(after.nodes.comments.isAtom).toBe(true)
+      // No parse rules (design 4.4): paste can't make one.
+      expect(after.nodes.comments.spec.parseDOM ?? []).toEqual([])
+      expect(schemaFingerprint(before)).not.toBe(core)
+      // Its one attr: a tab without it would rewrite the element and lose the title.
+      expect(after.nodes.comments.spec.attrs).toHaveProperty("title")
+      const spec = after.spec.nodes.get("comments")!
+      const { title: _title, ...attrs } = spec.attrs as Record<string, unknown>
+      const without = new Schema({ nodes: after.spec.nodes.update("comments", { ...spec, attrs: attrs as NonNullable<typeof spec.attrs> }), marks: after.spec.marks, topNode: after.spec.topNode })
+      expect(schemaFingerprint(without)).not.toBe(core)
     })
     it("the video, audio and file blocks (#423) changed it: three node types, named by the doc and a group", () => {
       // The schema as it was before #423 (and #421): no media nodes, no details, and the doc and the group name

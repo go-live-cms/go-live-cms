@@ -64,8 +64,8 @@ describe("site blocks in the Block Spec", () => {
       expect(isFlowType(type), type).toBe(false)
       expect(BLOCK_NODE_NAMES[type]).toBe(SITE_BLOCK_NODE_NAMES[type])
     }
-    // #488's six, #489's fourteen, #497's four, #498's six.
-    expect(SITE_BLOCK_TYPES).toHaveLength(30)
+    // #488's six, #489's fourteen, #497's four, #498's six, #500's comments.
+    expect(SITE_BLOCK_TYPES).toHaveLength(31)
   })
 
   it("validateBlockDoc defaults to a post, where nothing about a site block is an error", () => {

@@ -262,6 +262,51 @@ describe("site blocks on the relay (#488)", () => {
     expect(html).not.toMatch(/golive-credit|post-facts|search-results|avatar|©/)
   }, 20_000)
 
+  it("#500: comments blocks written into a post's doc reach every peer, store with their title only, render nothing, and survive a restart", async () => {
+    const pa = relay.client("1")
+    const pb = relay.client("2")
+    await Promise.all([pa.whenSynced(), pb.whenSynced()])
+    const b = makeEditor(pb.doc)
+    await waitFor(() => b.getText().includes("after"), { what: "b to load" })
+    const FIRST = "blk-0500-comments-001"
+    const SECOND = "blk-0500-comments-002"
+    pa.doc.transact(() => {
+      const first = new Y.XmlElement("comments")
+      first.setAttribute("data-block-id", FIRST)
+      // What no comments block keeps: markup in its title, a thread, a post of the client's.
+      first.setAttribute("title", "  <b>Responses</b>  ")
+      first.setAttribute("threads", "[{\"body\":\"hi\"}]")
+      first.setAttribute("postId", "99")
+      const second = new Y.XmlElement("comments")
+      second.setAttribute("data-block-id", SECOND)
+      second.setAttribute("title", "Comments")
+      // Two in a post: inert there, never refused (a template holds one).
+      pa.doc.getXmlFragment("default").insert(0, [first, second])
+    })
+    await waitFor(() => b.state.doc.child(0).type.name === "comments" && b.state.doc.child(1).type.name === "comments", { what: "b to see them" })
+    await waitFor(() => !!stored().blocks[SECOND], { what: "the store" })
+    // Plain text, as typed but trimmed: the title is text on the page, never markup.
+    expect(stored().blocks[FIRST]).toEqual({ id: FIRST, type: "comments", version: 1, attrs: { title: "<b>Responses</b>" } })
+    expect(stored().blocks[SECOND]).toEqual({ id: SECOND, type: "comments", version: 1, attrs: {} })
+    expect(JSON.stringify(stored())).not.toMatch(/threads|postId|"hi"/)
+    expect(() => validateBlockDoc(stored())).not.toThrow()
+    expect(() => validateBlockDoc(stored(), { kind: "template" })).toThrow(/at most one comments block/)
+    expect(() => validateBlockDoc(stored(), { kind: "part" })).toThrow(/can't be in a part/)
+    // The post's page: its body has no site context, so neither renders a section or the script.
+    const html = renderToStaticMarkup(<BlockRenderer doc={stored()} />)
+    expect(html).toContain("after")
+    expect(html).not.toMatch(/comments|comment-form|gl-comments/)
+
+    await relay.restart()
+    const pc = relay.client("3")
+    await pc.whenSynced()
+    const c = makeEditor(pc.doc)
+    await waitFor(() => c.getText().includes("after"), { what: "c to load after the restart" })
+    // The shared doc keeps the attr as written; the bridge trims it on every store.
+    expect(c.state.doc.child(0).attrs["data-block-id"]).toBe(FIRST)
+    expect(String(c.state.doc.child(0).attrs.title).trim()).toBe("<b>Responses</b>")
+  }, 20_000)
+
   it("#498: two people changing a navigation's layout and phone menu converge, and a restart keeps the new attrs", async () => {
     const pa = relay.client("1")
     const pb = relay.client("2")

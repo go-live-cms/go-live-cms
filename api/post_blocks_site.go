@@ -11,7 +11,7 @@ package api
 // "columns" and overlay "menu", search variant "icon", query feature and layout "links",
 // query_title label, query_pagination end, post_content and post_featured_image width,
 // post_byline date, post_terms all, related_posts layout "list", color_scheme_switch variant
-// "popover", post_facts fallback). They hold no text of their own: what they show is the
+// "popover", post_facts fallback). #500: comments (its title), the post's reader comments. They hold no text of their own: what they show is the
 // site's, read on the page. In a post they are inert, never refused (refusing one would make every later
 // store of that post fail).
 //
@@ -54,6 +54,8 @@ var siteBlockTypes = map[string]bool{
 	// #498
 	"query_total": true, "author_avatar": true, "search_results": true, "post_facts": true,
 	"site_copyright": true, "golive_credit": true,
+	// #500
+	"comments": true,
 }
 
 const (
@@ -85,6 +87,10 @@ const (
 	relatedPostsMinCount     = 1
 	relatedPostsMaxCount     = 6
 	relatedPostsDefaultCount = 3
+
+	// #500: the comments block's title (reader-comments 11.1), "Comments" when absent.
+	commentsTitleMaxRunes    = 60
+	commentsBlockDefaultName = "Comments"
 )
 
 var (
@@ -229,6 +235,13 @@ func sanitizeSiteBlockAttrs(blockType string, attrs map[string]interface{}) {
 	case "post_facts":
 		keepOnlyAttrs(attrs, "fallback")
 		keepOnlyTrue(attrs, "fallback")
+	case "comments":
+		// #500: plain text, capped, the default left out.
+		keepOnlyAttrs(attrs, "title")
+		sanitizePlainText(attrs, "title", commentsTitleMaxRunes)
+		if attrs["title"] == commentsBlockDefaultName {
+			delete(attrs, "title")
+		}
 	case "term_description", "post_navigation", "post_template", "query_no_results",
 		"author_cards", "table_of_contents",
 		"query_total", "author_avatar", "search_results", "site_copyright", "golive_credit":
@@ -359,7 +372,9 @@ func roundHalfUp(v float64) float64 {
 // is refused. In a part, a template part never sits (at any depth or unreferenced, so parts
 // are never recursive), nor a post_content (#489: a header holding the post would render it
 // twice). In a template, a post_content never sits inside a query's post_template at any
-// depth (it would render the route's post once per item), and there is at most one.
+// depth (it would render the route's post once per item), and there is at most one. #500: a
+// comments block the same way: never in a part, never inside a query at any depth (the section is
+// the route's post's, once per page), at most one per template.
 func (doc *BlockDocV1) checkSiteBlockPlacement(kind blockDocKind) error {
 	if kind == blockDocKindPost {
 		return nil
@@ -386,17 +401,17 @@ func (doc *BlockDocV1) checkSiteBlockPlacement(kind blockDocKind) error {
 			}
 		}
 	}
-	inPostTemplate := func(id string) bool {
+	inside := func(id, container string) bool {
 		seen := map[string]bool{id: true}
 		for at, ok := parent[id]; ok && !seen[at]; at, ok = parent[at] {
-			if typeOf(at) == "post_template" {
+			if typeOf(at) == container {
 				return true
 			}
 			seen[at] = true
 		}
 		return false
 	}
-	contents := 0
+	contents, comments := 0, 0
 	for _, id := range ids {
 		switch typeOf(id) {
 		case "template_part":
@@ -408,11 +423,22 @@ func (doc *BlockDocV1) checkSiteBlockPlacement(kind blockDocKind) error {
 			if kind == blockDocKindPart {
 				return fmt.Errorf("block %s: a post_content can't be in a part", id)
 			}
-			if inPostTemplate(id) {
+			if inside(id, "post_template") {
 				return fmt.Errorf("block %s: a post_content can't be in a post_template", id)
 			}
 			if contents > 1 {
 				return fmt.Errorf("block %s: a template holds at most one post_content", id)
+			}
+		case "comments":
+			comments++
+			if kind == blockDocKindPart {
+				return fmt.Errorf("block %s: a comments block can't be in a part", id)
+			}
+			if inside(id, "query") {
+				return fmt.Errorf("block %s: a comments block can't be in a query", id)
+			}
+			if comments > 1 {
+				return fmt.Errorf("block %s: a template holds at most one comments block", id)
 			}
 		}
 	}

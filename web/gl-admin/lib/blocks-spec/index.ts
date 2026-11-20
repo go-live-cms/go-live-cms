@@ -16,6 +16,8 @@ import {
 import { EMBED_PROVIDERS, isValidEmbedRef, normalizeEmbedTitle, type EmbedProvider } from "./embeds"
 import { isSnippetId } from "./customHtml"
 import {
+  COMMENTS_BLOCK_DEFAULT_TITLE,
+  COMMENTS_BLOCK_TITLE_MAX_LENGTH,
   isBlockDocKind,
   isContentName,
   isMenuId,
@@ -135,6 +137,8 @@ export type KnownBlockType =
   | "post_facts"
   | "site_copyright"
   | "golive_credit"
+  // #500
+  | "comments"
   | "query_pagination"
   | "query"
   | "post_template"
@@ -1292,6 +1296,13 @@ export const zSearchResults = zBase.extend({ type: z.literal("search_results"), 
 export const zPostFacts = zBase.extend({ type: z.literal("post_facts"), attrs: z.object({ fallback: z.literal(true).optional() }).strict() })
 export const zSiteCopyright = zBase.extend({ type: z.literal("site_copyright"), attrs: zNoAttrs })
 export const zGoliveCredit = zBase.extend({ type: z.literal("golive_credit"), attrs: zNoAttrs })
+// #500
+export const zComments = zBase.extend({
+  type: z.literal("comments"),
+  attrs: z
+    .object({ title: zSiteText(COMMENTS_BLOCK_TITLE_MAX_LENGTH).refine((t) => t !== "" && t !== COMMENTS_BLOCK_DEFAULT_TITLE, "the default title is left out").optional() })
+    .strict(),
+})
 
 /**
  * Catch-all for theme/custom block types not in the known set. Any version: a theme
@@ -1362,6 +1373,7 @@ const knownBlockSchemas: Record<KnownBlockType, z.ZodTypeAny> = {
   post_facts: zPostFacts,
   site_copyright: zSiteCopyright,
   golive_credit: zGoliveCredit,
+  comments: zComments,
   query_pagination: zQueryPagination,
   query: zQuery,
   post_template: zPostTemplate,

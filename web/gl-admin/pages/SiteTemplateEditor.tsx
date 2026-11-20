@@ -39,6 +39,8 @@ import {
 import { getPostsByType } from "@gl-admin/lib/api/posts"
 import { getAllTaxonomyTerms } from "@gl-admin/lib/api/taxonomies"
 import { errorMessage } from "@gl-admin/lib/api/errors"
+import { getSettings } from "@gl-admin/lib/api/settings"
+import { commentsAllowedInTemplate } from "@gl-admin/lib/blocks-spec"
 import {
   NeverPublishedError,
   ResetVersionError,
@@ -265,6 +267,22 @@ function LoadedEditor({
   openPartRef.current = openPart
   const contextRef = useRef(context)
   contextRef.current = context
+  // #500 (reader-comments 16.1): whether comments are on for the site, for the comments block's
+  // placeholder; read once when the editor opens (null until then, or when the read fails).
+  const commentsEnabledRef = useRef<boolean | null>(null)
+  useEffect(() => {
+    let live = true
+    void getSettings()
+      .then((settings) => {
+        if (live) commentsEnabledRef.current = settings.comments_enabled ?? false
+      })
+      .catch(() => undefined)
+    return () => {
+      live = false
+    }
+  }, [])
+  const navigateRef = useRef(navigate)
+  navigateRef.current = navigate
   const bridge = useMemo<SiteEditorBridge>(
     () => ({
       openPart: (slug) => void openPartRef.current(slug),
@@ -282,6 +300,10 @@ function LoadedEditor({
         }
       },
       routeHasList: routeHasList(row.kind, row.slug),
+      // #500: single and page templates only (reader-comments 11.1).
+      allowsComments: row.kind === "template" && commentsAllowedInTemplate(row.slug),
+      commentsEnabled: () => commentsEnabledRef.current,
+      openDiscussionSettings: () => navigateRef.current("/settings/discussion"),
     }),
     // One row per mount (the page is keyed by id): its kind and slug never change.
     // eslint-disable-next-line react-hooks/exhaustive-deps

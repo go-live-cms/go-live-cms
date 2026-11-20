@@ -9,7 +9,8 @@
  * `golive_credit`, and the attrs that let the others render each piece of the default theme's
  * layouts (the header's phone menu and theme popover, the footer's columns, the home page's
  * featured post, the list end, the bylines with dates), so its block templates render what its
- * code layouts did.
+ * code layouts did. #500: `comments`, the post's reader comments (`docs/design/reader-comments.md`
+ * 11.1), which renders core's `PostCommentsSection` from the context.
  *
  * They are **core** Block Spec types (not namespaced, not a theme's). Most are flow atoms
  * that hold no text of their own; the query loop's three containers are rows of the nesting
@@ -62,6 +63,8 @@ export const SITE_FLOW_BLOCK_TYPES = [
   "post_facts",
   "site_copyright",
   "golive_credit",
+  // #500
+  "comments",
 ] as const
 
 /** An atom that only lives in a query (#489): neither flow nor a container, like a `footnote` in its list. */
@@ -107,6 +110,7 @@ export const SITE_BLOCK_NODE_NAMES: Readonly<Record<SiteBlockType, string>> = {
   post_facts: "postFacts",
   site_copyright: "siteCopyright",
   golive_credit: "goliveCredit",
+  comments: "comments",
   query_pagination: "queryPagination",
   query: "query",
   post_template: "postTemplate",
@@ -172,6 +176,7 @@ export const SITE_BLOCK_LABELS: Readonly<Record<SiteBlockType, string>> = {
   post_facts: "Post details",
   site_copyright: "Copyright",
   golive_credit: "GoLive credit",
+  comments: "Comments",
   query_pagination: "Pagination",
   query: "Query loop",
   post_template: "Post template",
@@ -206,6 +211,7 @@ export const SITE_BLOCK_ICONS: Readonly<Record<SiteBlockType, string>> = {
   post_facts: "M4 5h6M4 9h10M4 14h6M4 18h10M17 4v16",
   site_copyright: "M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M15 9.5a3.5 3.5 0 1 0 0 5",
   golive_credit: "M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6L3.3 9.3l6.1-.7z",
+  comments: "M4 5h16v11H9l-5 4zM8 9h8M8 12h5",
   query_pagination: "M4 12h.01M9 12h.01M15 12h.01M20 12h.01M3 7h18M3 17h18",
   query: "M4 4h16v4H4zM4 10h16v4H4zM4 16h16v4H4z",
   post_template: "M4 4h16v16H4zM8 9h8M8 13h5",
@@ -258,6 +264,8 @@ export const SITE_BLOCK_CONTEXTS: Readonly<Record<SiteBlockType, readonly BlockD
   post_facts: ["template", "part"],
   site_copyright: ["template", "part"],
   golive_credit: ["template", "part"],
+  // #500: the post's reader comments, in a template only (never in a part: design 11.1).
+  comments: ["template"],
   query_pagination: ["template", "part"],
   query: ["template", "part"],
   post_template: ["template", "part"],
@@ -283,6 +291,12 @@ export interface SiteBlockKindIssue {
  *   twice), the same way, **nor inside a query's `post_template`**, at any depth (a list item
  *   carries no body, and the block would render the route's post once per item; `post_excerpt`
  *   is the list's block), **and at most one per template**, referenced or not.
+ * - **`comments` (#500, reader-comments 11.1) the same way**: never in a part, never inside a
+ *   `query` at any depth (its post template or its "no results": the section is the route's
+ *   post's, once per page, with the ids `#comments` and `#comment-form`), and at most one per
+ *   template. Which templates may hold it (single and page ones, `commentsAllowedInTemplate`) is
+ *   the editor's and the renderer's rule: the store doesn't know the template's slug, and on a
+ *   route without a post the block renders nothing.
  */
 export function siteBlockKindIssues(doc: unknown, kind: BlockDocKind): SiteBlockKindIssue[] {
   if (kind === "post") return []
@@ -302,15 +316,16 @@ export function siteBlockKindIssues(doc: unknown, kind: BlockDocKind): SiteBlock
     if (!Array.isArray(children)) continue
     for (const child of children) if (typeof child === "string" && !parentOf.has(child)) parentOf.set(child, key)
   }
-  const inPostTemplate = (id: string) => {
+  const inside = (id: string, container: string) => {
     const seen = new Set<string>([id])
     for (let at = parentOf.get(id); at !== undefined && !seen.has(at); at = parentOf.get(at)) {
-      if (typeOf(at) === "post_template") return true
+      if (typeOf(at) === container) return true
       seen.add(at)
     }
     return false
   }
   const contents: string[] = []
+  const comments: string[] = []
   for (const key of Object.keys(map).sort()) {
     const type = typeOf(key)
     if (kind === "part" && type === "template_part") {
@@ -318,11 +333,19 @@ export function siteBlockKindIssues(doc: unknown, kind: BlockDocKind): SiteBlock
     } else if (type === "post_content") {
       contents.push(key)
       if (kind === "part") issues.push({ path: ["blocks", key], message: "a post_content can't be in a part" })
-      else if (inPostTemplate(key)) issues.push({ path: ["blocks", key], message: "a post_content can't be in a post_template" })
+      else if (inside(key, "post_template")) issues.push({ path: ["blocks", key], message: "a post_content can't be in a post_template" })
+    } else if (type === "comments") {
+      // #500
+      comments.push(key)
+      if (kind === "part") issues.push({ path: ["blocks", key], message: "a comments block can't be in a part" })
+      else if (inside(key, "query")) issues.push({ path: ["blocks", key], message: "a comments block can't be in a query" })
     }
   }
   if (kind === "template" && contents.length > 1) {
     issues.push({ path: ["blocks", contents[1]], message: "a template holds at most one post_content" })
+  }
+  if (kind === "template" && comments.length > 1) {
+    issues.push({ path: ["blocks", comments[1]], message: "a template holds at most one comments block" })
   }
   return issues
 }
@@ -617,6 +640,30 @@ export interface PostFactsAttrs {
   fallback?: true
 }
 
+// ── #500: the comments block ────────────────────────────────────────────────────────
+
+/** The comments block's title (reader-comments 11.1): "Comments" when absent, at most 60 code points. */
+export const COMMENTS_BLOCK_DEFAULT_TITLE = "Comments"
+export const COMMENTS_BLOCK_TITLE_MAX_LENGTH = 60
+
+export interface CommentsAttrs {
+  /** The section's heading (its count follows it, "Responses 4"); absent: "Comments". */
+  title?: string
+}
+
+/**
+ * Whether a block template may hold the comments block (reader-comments 11.1: single and page
+ * templates). `single`, `single-<type|variant>`, `page`, `page-<template|variant>`, and the Site
+ * editor's own page templates, `custom-<name>` (#494, the pages' "Made in the Site editor").
+ * Never a part, a list or the 404: no post to comment on. The editor's inserter and Block tab read
+ * it; the store can't (it doesn't know the slug), and on a route without a post the block renders
+ * nothing.
+ */
+export function commentsAllowedInTemplate(slug: string | null | undefined): boolean {
+  if (typeof slug !== "string") return false
+  return slug === "single" || slug === "page" || /^(single|page|custom)-[a-z0-9]/.test(slug)
+}
+
 /**
  * A site block's attrs as stored: only the attrs its type has, each valid, defaults left
  * out. From anything (a node's attrs, a stored block's, a client's Yjs update), so the
@@ -648,6 +695,7 @@ export interface PostFactsAttrs {
  *   `width` "wide" or "full"; `post_byline`'s `date: true`; `post_terms`' `all: true` (which
  *   leaves `taxonomy` out); `related_posts`' `layout: "list"`; `color_scheme_switch`'s
  *   `variant: "popover"`; `post_facts`' `fallback: true`.
+ * - `comments` (#500): `title` as plain text, at most 60 code points ("Comments" is the default).
  * - `term_description`, `post_navigation`, `post_template`, `query_no_results`,
  *   `author_cards`, `table_of_contents`, `query_total`, `author_avatar`, `search_results`,
  *   `site_copyright`, `golive_credit`: none.
@@ -765,6 +813,12 @@ export function normalizeSiteBlockAttrs(type: SiteBlockType, attrs: unknown): Re
     case "post_facts":
       if (a.fallback === true) out.fallback = true
       break
+    case "comments": {
+      // #500: plain text, capped; "Comments" is the default, left out.
+      const title = normalizeSiteText(a.title, COMMENTS_BLOCK_TITLE_MAX_LENGTH)
+      if (title !== null && title !== COMMENTS_BLOCK_DEFAULT_TITLE) out.title = title
+      break
+    }
     case "term_description":
     case "post_navigation":
     case "post_template":
@@ -843,6 +897,8 @@ export function siteBlockNodeAttrs(type: SiteBlockType, attrs: unknown): Record<
       return { taxonomy: stored.taxonomy ?? POST_TERMS_DEFAULT_TAXONOMY, all: stored.all === true }
     case "post_facts":
       return { fallback: stored.fallback === true }
+    case "comments":
+      return { title: stored.title ?? null }
     case "term_description":
     case "post_navigation":
     case "post_template":
