@@ -25,9 +25,10 @@ import (
 // blocked recipients, members' own comments, preferences, moderation mail, and no
 // address in any log line.
 //
-// The sender drains every due row, so each fixture starts the outbox clean (nothing but
-// these tests reads it; no sender runs in tests) and turns moderation mail off for every
-// member but its own moderator, so a round mails only this test's people.
+// The sender drains every due row, everyone's: CI runs other packages against the same
+// database at the same time, so a fixture never updates rows that aren't its own (a bulk
+// UPDATE of users deadlocked with them). Assertions filter by recipient and template, and
+// due moves only the rows about this fixture's posts.
 
 type mailFixture struct {
 	commentsFixture
@@ -49,9 +50,9 @@ func newMailFixture(t *testing.T) mailFixture {
 	f.ana = f.commenter(t)
 	f.bea = f.commenter(t)
 	f.post = f.publishedPost(t)
-	_, err := f.conn.Exec(`UPDATE discussion_mail SET done_at = now(), outcome = 'dropped', claimed_until = NULL WHERE done_at IS NULL`)
-	require.NoError(t, err)
-	_, err = f.conn.Exec(`UPDATE users SET notify_comment_moderation = 'off' WHERE id <> $1 AND notify_comment_moderation <> 'off'`, f.other.ID)
+	// Only f.other gets moderation mail among the fixture's members.
+	_, err := f.conn.Exec(`UPDATE users SET notify_comment_moderation = 'off' WHERE id = ANY($1::bigint[])`,
+		fmt.Sprintf("{%d,%d}", f.editor.ID, f.admin.ID))
 	require.NoError(t, err)
 	return f
 }
@@ -76,10 +77,14 @@ func ofKind(rows []mailRow, kind string) []mailRow {
 	return out
 }
 
-// due makes every open row due now, as five minutes (or the digest) passing would.
+// fixtureRows is the SQL condition for the outbox rows about this fixture's posts (all of
+// them are f.editor's).
+const fixtureRows = `comment_ids && ARRAY(SELECT rc.id FROM reader_comments rc JOIN posts p ON p.id = rc.post_id WHERE p.user_id = $1)`
+
+// due makes this fixture's open rows due now, as five minutes (or the digest) passing would.
 func (f mailFixture) due(t *testing.T) {
 	t.Helper()
-	_, err := f.conn.Exec(`UPDATE discussion_mail SET due_at = now() - interval '1 second' WHERE done_at IS NULL AND attempts = 0`)
+	_, err := f.conn.Exec(`UPDATE discussion_mail SET due_at = now() - interval '1 second' WHERE done_at IS NULL AND attempts = 0 AND `+fixtureRows, f.editor.ID)
 	require.NoError(t, err)
 }
 
@@ -87,7 +92,7 @@ func (f mailFixture) due(t *testing.T) {
 func (f mailFixture) drain(t *testing.T) []mailer.Message {
 	t.Helper()
 	before := len(f.mail.messages())
-	for i := 0; i < 50; i++ {
+	for i := 0; i < 400; i++ {
 		f.server.sendDiscussionMailRound(context.Background())
 		var due int
 		require.NoError(t, f.conn.QueryRow(`SELECT count(*) FROM discussion_mail WHERE done_at IS NULL AND due_at <= now()
@@ -505,7 +510,7 @@ func TestDiscussionMailLogsHoldNoAddress(t *testing.T) {
 	f.due(t)
 	f.server.sendDiscussionMailRound(context.Background())
 	f.mail.err = nil
-	_, err := f.conn.Exec(`UPDATE discussion_mail SET claimed_until = NULL, due_at = now() - interval '1 second' WHERE done_at IS NULL`)
+	_, err := f.conn.Exec(`UPDATE discussion_mail SET claimed_until = NULL, due_at = now() - interval '1 second' WHERE done_at IS NULL AND (`+fixtureRows+` OR user_id = $2)`, f.editor.ID, f.other.ID)
 	require.NoError(t, err)
 	sent := mailsTo(f.drain(t), f.ana.Email)
 	require.Len(t, sent, 1)
