@@ -118,6 +118,9 @@ type Querier interface {
 	// images missing their alt text (the rule in ListMedia), and how many
 	// published posts use at least one of them through post_media.
 	CountMissingAltMedia(ctx context.Context) (CountMissingAltMediaRow, error)
+	// The queue's tab counts (GET /discussion/counts), following the same filters as the
+	// list, so "Pending 2 · Approved 12 on this post" (16.1). Tombstones aren't counted.
+	CountModerationComments(ctx context.Context, arg CountModerationCommentsParams) ([]CountModerationCommentsRow, error)
 	CountPasswordResetTokensSince(ctx context.Context, arg CountPasswordResetTokensSinceParams) (int64, error)
 	// 5.3's cap: comments waiting for review on one post.
 	CountPendingReaderCommentsForPost(ctx context.Context, postID int64) (int64, error)
@@ -370,6 +373,12 @@ type Querier interface {
 	// A key for another address, an expired one or an unknown one matches nothing, so the
 	// answer never says anything about an address.
 	GetCommenterByKeys(ctx context.Context, arg GetCommenterByKeysParams) (Commenter, error)
+	// Find a commenter (16.1): by the whole address only, so the queue can't be fished.
+	GetCommenterIDByEmail(ctx context.Context, emailLower string) (int64, error)
+	// A commenter's page (13.1, 16.1): the row, who blocked them, the counts by status, how
+	// many comments ask for reply mail, the names used, and how many other commenters
+	// posted from one of their networks (7.2: the hashes live 30 days).
+	GetCommenterModeration(ctx context.Context, id int64) (GetCommenterModerationRow, error)
 	// The editor's review notice: the post's latest request when it is open, or when a
 	// reviewer asked for changes and nothing was published since (the note still
 	// applies). Names are joined now; NULL for a member removed since.
@@ -406,6 +415,9 @@ type Querier interface {
 	GetMenuByLocation(ctx context.Context, location sql.NullString) (Menu, error)
 	GetMenuForUpdate(ctx context.Context, id int64) (Menu, error)
 	GetNextVersionNoForPost(ctx context.Context, postID int64) (int32, error)
+	// Home's Needs attention (4.4, 16.1): "4 comments await moderation", on how many posts
+	// and how old the oldest is. oldest_at is now() when nothing waits.
+	GetPendingReaderCommentsSummary(ctx context.Context) (GetPendingReaderCommentsSummaryRow, error)
 	GetPluginBySlug(ctx context.Context, slug string) (Plugin, error)
 	GetPopularMedia(ctx context.Context, limit int32) ([]GetPopularMediaRow, error)
 	GetPopularTaxonomyTerms(ctx context.Context, arg GetPopularTaxonomyTermsParams) ([]GetPopularTaxonomyTermsRow, error)
@@ -601,9 +613,12 @@ type Querier interface {
 	//     else's published post only when they are about the viewer (the actor or
 	//     payload.user_id): who asked for or lost access isn't every contributor's
 	//     business.
+	//   - moderators also see Discussion's reader_comment and commenter events (#526).
 	// Member, invitation, settings and plugin events are admin-only. Names and titles are
 	// joined now, never stored. object_type/object_id narrow it to one object.
 	// subject_* is the member an access event is about (payload.user_id).
+	// A reader comment's event (#526) names its post in payload.post_id, which the feed
+	// titles ("approved a comment on <post>"); the comment itself may be gone.
 	// CASE, not AND: Postgres may evaluate the cast before a sibling condition.
 	ListActivity(ctx context.Context, arg ListActivityParams) ([]ListActivityRow, error)
 	// Older/newer and related posts for the public post page (#351).
@@ -703,6 +718,19 @@ type Querier interface {
 	// settings come along: readers see its published title (#358, resolveMenuItem).
 	ListMenuItemsWithTargets(ctx context.Context, menuID int64) ([]ListMenuItemsWithTargetsRow, error)
 	ListMenus(ctx context.Context) ([]ListMenusRow, error)
+	// Discussion in the admin (#526, C6; docs/design/reader-comments.md 3.4, 4.4, 7.1, 9.3).
+	//
+	// What moderators (editors and admins) read and write: the queue, a comment's thread,
+	// commenters, and members' own comments. Unconfirmed comments are never here (they
+	// aren't moderated, 4.1). A commenter's address is selected for moderators only
+	// (decision 6): the handlers answer it to /discussion callers and never log it.
+	// One query for the queue (a status, newest first), a thread (root_id, every status,
+	// oldest first, tombstones included), a commenter's comments and one comment (id).
+	// "New commenter" = a reader with nothing approved yet. A member's comment carries their
+	// current name and avatar and whether they are on the post's published byline (the
+	// Author badge, 3.4); a removed member's has neither (author_user_id is NULL).
+	// pattern is an ILIKE pattern ('' = no search) over the text and the name.
+	ListModerationComments(ctx context.Context, arg ListModerationCommentsParams) ([]ListModerationCommentsRow, error)
 	// The posts list's "Review requested" indicator, for one page of rows.
 	ListOpenReviewRequestsForPosts(ctx context.Context, postIds []int64) ([]ListOpenReviewRequestsForPostsRow, error)
 	// What the admin Users page shows. Invitations that expired over 30 days ago
@@ -953,6 +981,9 @@ type Querier interface {
 	// Row-locks the given users in id order (RemoveUserTx: the member and the one who
 	// receives their posts), so two removals that name each other can't deadlock.
 	LockUsersForUpdate(ctx context.Context, ids []int64) ([]LockUsersForUpdateRow, error)
+	// 4.2 previous_spam: a moderator's Spam holds the commenter's comments for 90 days
+	// (the rules themselves never set it, 16.2).
+	MarkCommenterSpammed(ctx context.Context, id int64) error
 	// The ledger rows whose email went out.
 	MarkMentionsEmailed(ctx context.Context, arg MarkMentionsEmailedParams) error
 	// Every plugin whose directory is gone from the build. Never a delete: the row keeps
@@ -962,6 +993,10 @@ type Querier interface {
 	// incompatible, with the last valid manifest kept. No row when it already was, for
 	// these files.
 	MarkPluginInvalid(ctx context.Context, arg MarkPluginInvalidParams) (MarkPluginInvalidRow, error)
+	// A moderator's status change (approve, unapprove, spam, not spam): from one of
+	// from_statuses only, never on a tombstone. held_reason is what the queue shows next
+	// (moderator for a moderator's Spam, previous_spam for Not spam, 16.1; NULL otherwise).
+	ModerateReaderComment(ctx context.Context, arg ModerateReaderCommentParams) (ReaderComment, error)
 	NextGlobalStyleVersionNo(ctx context.Context, themeSlug string) (int32, error)
 	NextPendingImportItem(ctx context.Context, jobID int64) (ImportItem, error)
 	NextSiteTemplateVersionNo(ctx context.Context, templateID int64) (int32, error)
@@ -1115,7 +1150,8 @@ type Querier interface {
 	// Taxonomies page lists show_ui types only) whose name or slug matches @pattern (an ILIKE
 	// pattern the API escapes), by name.
 	SearchTermsAcrossTaxonomies(ctx context.Context, arg SearchTermsAcrossTaxonomiesParams) ([]SearchTermsAcrossTaxonomiesRow, error)
-	// 5.5: blocking is a flag, undoable.
+	// 5.5: blocking is a flag, undoable. blocked_by is who blocked (16.1, 000066); blocking an
+	// address that is already blocked keeps the first block's date and member.
 	SetCommenterBlocked(ctx context.Context, arg SetCommenterBlockedParams) (Commenter, error)
 	// Start: the mapping is saved and the job queued, only from 'mapping'.
 	SetImportJobMapping(ctx context.Context, arg SetImportJobMappingParams) (ImportJob, error)
@@ -1246,6 +1282,8 @@ type Querier interface {
 	// deliberately not writable here. NULL args keep the current value; an alt of
 	// '' clears it (#325).
 	UpdateMediaMetadata(ctx context.Context, arg UpdateMediaMetadataParams) (Medium, error)
+	// 6.4: a member edits their own comment only; it shows "Edited".
+	UpdateMemberReaderComment(ctx context.Context, arg UpdateMemberReaderCommentParams) (ReaderComment, error)
 	UpdateMenu(ctx context.Context, arg UpdateMenuParams) (Menu, error)
 	UpdatePost(ctx context.Context, arg UpdatePostParams) (Post, error)
 	// changed_at is the post's "last modified" (admin list and sort, sitemap

@@ -22,6 +22,32 @@ const (
 	ActivityObjectSiteDesign = "site_design"
 	// Imports (#150): admin-only in the feed; object_id is import_jobs.id.
 	ActivityObjectImport = "import"
+	// Discussion (#526, docs/design/reader-comments.md 15.2): seen by moderators (editors
+	// and admins), never contributors. A reader_comment event's payload names its post_id,
+	// which the feed titles; object_id is the comment (0 for a bulk action over several
+	// posts). commenter events are on commenters.id, with counts only, never an address.
+	ActivityObjectReaderComment = "reader_comment"
+	ActivityObjectCommenter     = "commenter"
+)
+
+// Discussion's verbs (#526, 15.2). #192 owns commented and comment_*, so these all say
+// reader_comment. Payloads: post_id on every reader_comment_* verb; status (what it had)
+// on deleted; parent_id on posted and edited (0 = a top-level comment); action and count
+// on the bulk one (post_id when every comment was on one post); comment_count on the
+// commenter verbs. Never names, addresses or text.
+const (
+	ActivityReaderCommentApproved       = "reader_comment_approved"
+	ActivityReaderCommentUnapproved     = "reader_comment_unapproved"
+	ActivityReaderCommentSpammed        = "reader_comment_spammed"
+	ActivityReaderCommentNotSpam        = "reader_comment_not_spam"
+	ActivityReaderCommentTrashed        = "reader_comment_trashed"
+	ActivityReaderCommentRestored       = "reader_comment_restored"
+	ActivityReaderCommentDeleted        = "reader_comment_deleted"
+	ActivityReaderCommentPosted         = "reader_comment_posted"
+	ActivityReaderCommentEdited         = "reader_comment_edited"
+	ActivityReaderCommentsBulkModerated = "reader_comments_bulk_moderated"
+	ActivityCommenterBlocked            = "commenter_blocked"
+	ActivityCommenterUnblocked          = "commenter_unblocked"
 )
 
 const (

@@ -38,9 +38,13 @@ RETURNING *;
 SELECT * FROM commenters WHERE id = $1;
 
 -- name: SetCommenterBlocked :one
--- 5.5: blocking is a flag, undoable.
+-- 5.5: blocking is a flag, undoable. blocked_by is who blocked (16.1, 000066); blocking an
+-- address that is already blocked keeps the first block's date and member.
 UPDATE commenters
-SET blocked_at = CASE WHEN sqlc.arg('blocked')::boolean THEN coalesce(blocked_at, now()) END
+SET blocked_at = CASE WHEN sqlc.arg('blocked')::boolean THEN coalesce(blocked_at, now()) END,
+    blocked_by = CASE WHEN sqlc.arg('blocked')::boolean THEN
+        CASE WHEN blocked_at IS NULL THEN sqlc.narg('blocked_by')::bigint ELSE blocked_by END
+      END
 WHERE id = sqlc.arg('id')
 RETURNING *;
 

@@ -34,6 +34,7 @@ type Commenter struct {
 	UserID      sql.NullInt64 `json:"user_id"`
 	CreatedAt   time.Time     `json:"created_at"`
 	LastSeenAt  time.Time     `json:"last_seen_at"`
+	BlockedBy   sql.NullInt64 `json:"blocked_by"`
 }
 
 type CommenterKey struct {

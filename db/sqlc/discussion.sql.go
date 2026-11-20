@@ -351,7 +351,7 @@ const ensureCommenter = `-- name: EnsureCommenter :one
 INSERT INTO commenters (email, email_lower, display_name)
 VALUES ($1, $2, $3)
 ON CONFLICT (email_lower) DO UPDATE SET email_lower = commenters.email_lower
-RETURNING id, email, email_lower, display_name, verified_at, blocked_at, last_spam_at, user_id, created_at, last_seen_at
+RETURNING id, email, email_lower, display_name, verified_at, blocked_at, last_spam_at, user_id, created_at, last_seen_at, blocked_by
 `
 
 type EnsureCommenterParams struct {
@@ -377,12 +377,13 @@ func (q *Queries) EnsureCommenter(ctx context.Context, arg EnsureCommenterParams
 		&i.UserID,
 		&i.CreatedAt,
 		&i.LastSeenAt,
+		&i.BlockedBy,
 	)
 	return i, err
 }
 
 const getCommenter = `-- name: GetCommenter :one
-SELECT id, email, email_lower, display_name, verified_at, blocked_at, last_spam_at, user_id, created_at, last_seen_at FROM commenters WHERE id = $1
+SELECT id, email, email_lower, display_name, verified_at, blocked_at, last_spam_at, user_id, created_at, last_seen_at, blocked_by FROM commenters WHERE id = $1
 `
 
 func (q *Queries) GetCommenter(ctx context.Context, id int64) (Commenter, error) {
@@ -399,12 +400,13 @@ func (q *Queries) GetCommenter(ctx context.Context, id int64) (Commenter, error)
 		&i.UserID,
 		&i.CreatedAt,
 		&i.LastSeenAt,
+		&i.BlockedBy,
 	)
 	return i, err
 }
 
 const getCommenterByKeys = `-- name: GetCommenterByKeys :one
-SELECT c.id, c.email, c.email_lower, c.display_name, c.verified_at, c.blocked_at, c.last_spam_at, c.user_id, c.created_at, c.last_seen_at FROM commenter_keys k
+SELECT c.id, c.email, c.email_lower, c.display_name, c.verified_at, c.blocked_at, c.last_spam_at, c.user_id, c.created_at, c.last_seen_at, c.blocked_by FROM commenter_keys k
 JOIN commenters c ON c.id = k.commenter_id
 WHERE k.key_hash = ANY($1::bytea[])
   AND k.expires_at > now()
@@ -435,6 +437,7 @@ func (q *Queries) GetCommenterByKeys(ctx context.Context, arg GetCommenterByKeys
 		&i.UserID,
 		&i.CreatedAt,
 		&i.LastSeenAt,
+		&i.BlockedBy,
 	)
 	return i, err
 }
@@ -973,19 +976,24 @@ func (q *Queries) RestoreReaderComment(ctx context.Context, arg RestoreReaderCom
 
 const setCommenterBlocked = `-- name: SetCommenterBlocked :one
 UPDATE commenters
-SET blocked_at = CASE WHEN $1::boolean THEN coalesce(blocked_at, now()) END
-WHERE id = $2
-RETURNING id, email, email_lower, display_name, verified_at, blocked_at, last_spam_at, user_id, created_at, last_seen_at
+SET blocked_at = CASE WHEN $1::boolean THEN coalesce(blocked_at, now()) END,
+    blocked_by = CASE WHEN $1::boolean THEN
+        CASE WHEN blocked_at IS NULL THEN $2::bigint ELSE blocked_by END
+      END
+WHERE id = $3
+RETURNING id, email, email_lower, display_name, verified_at, blocked_at, last_spam_at, user_id, created_at, last_seen_at, blocked_by
 `
 
 type SetCommenterBlockedParams struct {
-	Blocked bool  `json:"blocked"`
-	ID      int64 `json:"id"`
+	Blocked   bool          `json:"blocked"`
+	BlockedBy sql.NullInt64 `json:"blocked_by"`
+	ID        int64         `json:"id"`
 }
 
-// 5.5: blocking is a flag, undoable.
+// 5.5: blocking is a flag, undoable. blocked_by is who blocked (16.1, 000066); blocking an
+// address that is already blocked keeps the first block's date and member.
 func (q *Queries) SetCommenterBlocked(ctx context.Context, arg SetCommenterBlockedParams) (Commenter, error) {
-	row := q.db.QueryRowContext(ctx, setCommenterBlocked, arg.Blocked, arg.ID)
+	row := q.db.QueryRowContext(ctx, setCommenterBlocked, arg.Blocked, arg.BlockedBy, arg.ID)
 	var i Commenter
 	err := row.Scan(
 		&i.ID,
@@ -998,6 +1006,7 @@ func (q *Queries) SetCommenterBlocked(ctx context.Context, arg SetCommenterBlock
 		&i.UserID,
 		&i.CreatedAt,
 		&i.LastSeenAt,
+		&i.BlockedBy,
 	)
 	return i, err
 }
@@ -1264,7 +1273,7 @@ ON CONFLICT (email_lower) DO UPDATE
 SET email = EXCLUDED.email,
     display_name = EXCLUDED.display_name,
     last_seen_at = now()
-RETURNING id, email, email_lower, display_name, verified_at, blocked_at, last_spam_at, user_id, created_at, last_seen_at
+RETURNING id, email, email_lower, display_name, verified_at, blocked_at, last_spam_at, user_id, created_at, last_seen_at, blocked_by
 `
 
 type UpsertCommenterParams struct {
@@ -1289,6 +1298,7 @@ func (q *Queries) UpsertCommenter(ctx context.Context, arg UpsertCommenterParams
 		&i.UserID,
 		&i.CreatedAt,
 		&i.LastSeenAt,
+		&i.BlockedBy,
 	)
 	return i, err
 }
@@ -1299,7 +1309,7 @@ SET verified_at = coalesce(verified_at, now()),
     display_name = $1,
     last_seen_at = now()
 WHERE id = $2
-RETURNING id, email, email_lower, display_name, verified_at, blocked_at, last_spam_at, user_id, created_at, last_seen_at
+RETURNING id, email, email_lower, display_name, verified_at, blocked_at, last_spam_at, user_id, created_at, last_seen_at, blocked_by
 `
 
 type VerifyCommenterParams struct {
@@ -1323,6 +1333,7 @@ func (q *Queries) VerifyCommenter(ctx context.Context, arg VerifyCommenterParams
 		&i.UserID,
 		&i.CreatedAt,
 		&i.LastSeenAt,
+		&i.BlockedBy,
 	)
 	return i, err
 }

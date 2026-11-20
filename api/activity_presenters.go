@@ -80,6 +80,15 @@ func toActivityResponse(row db.ListActivityRow) ActivityResponse {
 		if row.PostTitle.Valid {
 			rsp.Post = &ActivityPost{ID: row.ObjectID, Title: row.PostTitle.String, PostType: row.PostType.String, PostStatus: row.PostStatus.String}
 		}
+	case db.ActivityObjectReaderComment:
+		// Discussion (#526): the comment's post, named by payload.post_id (ListActivity
+		// joins it), so the feed reads "approved a comment on <post>".
+		var payload struct {
+			PostID int64 `json:"post_id"`
+		}
+		if row.PostTitle.Valid && json.Unmarshal(row.Payload, &payload) == nil && payload.PostID > 0 {
+			rsp.Post = &ActivityPost{ID: payload.PostID, Title: row.PostTitle.String, PostType: row.PostType.String, PostStatus: row.PostStatus.String}
+		}
 	case db.ActivityObjectMedia:
 		if row.MediaName.Valid {
 			rsp.Media = &ActivityMedia{ID: row.ObjectID, Name: row.MediaName.String}
@@ -169,6 +178,9 @@ type NeedsAttentionResponse struct {
 	// ReviewRequests (#323): open review requests the caller should review (editors
 	// and admins; null otherwise), see ListReviewRequestsForReviewer.
 	ReviewRequests *AttentionList[ReviewRequestAttention] `json:"review_requests"`
+	// CommentsPending (#526): reader comments awaiting moderation, for the moderators
+	// (editors and admins; null otherwise).
+	CommentsPending *PendingCommentsAttention `json:"comments_pending"`
 }
 
 // AttentionAccessRequest is an open edit access request (#321): who asked, for
