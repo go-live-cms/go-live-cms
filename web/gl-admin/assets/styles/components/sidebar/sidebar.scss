@@ -173,6 +173,23 @@ $mobile: 768px; // MOBILE_QUERY in Sidebar.tsx
     white-space: nowrap;
   }
 
+  // Discussion's pending count (#526, the Sidebar board): a small accent pill after the label.
+  &__count {
+    background: var(--accent-subtle);
+    border-radius: 999px;
+    color: var(--text-selected);
+    display: inline-grid;
+    flex: none;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    height: 18px;
+    min-width: 20px;
+    padding: 0 6px;
+    place-items: center;
+    box-sizing: border-box;
+  }
+
   // Posts: the link and its disclosure share one hover row.
   &__group {
     align-items: center;

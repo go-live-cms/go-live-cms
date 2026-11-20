@@ -1279,6 +1279,25 @@ Built as designed, with these details the text left open:
 - The three writes are in C3's `publicCacheDiscussionRoutes`: their handlers purge through
   `purgeDiscussion`, only when a comment was published.
 
+### 16.3 What C6 settled (#526)
+
+Built as designed and drawn, with these details the text left open:
+
+- **`PUT /discussion/comments/:id/status` takes `{action}`**, not `{status}`: approve, unapprove,
+  spam, not_spam, trash, restore. Unapprove and Not spam both land in pending, and Restore puts back
+  `trashed_from`, so the action is what the moderator chose. The bulk route takes the same actions
+  plus `delete`.
+- **`commenters.blocked_by`** (16.1) is migration `000066`; unblocking clears it.
+- **A reply's parent may be pending or approved.** A pending one is approved in the reply's own
+  transaction; spam, trash, a tombstone or another post's comment is 404 `parent_not_found`. A member
+  may reply on any post that isn't in the trash, while comments are on for the site.
+- **Delete permanently purges only when it leaves a tombstone:** a comment in spam or the trash with
+  no approved replies was never shown.
+- **The bulk action records one event** (`reader_comments_bulk_moderated`), not one per comment, so a
+  cleanup of 50 spam comments is one line in the feed.
+- **The settings switch has no gate any more** (#527's `COMMENTS_SWITCH_READY` is gone); comments
+  start off. The hook for #528's notifications is `readerCommentModerated` (api/CLAUDE.md).
+
 ## 17. Phased plan
 
 Each phase ships with `comments_enabled` off and its switch hidden, until phase 3 gives

@@ -26,6 +26,19 @@ const keys = (sections: NavSection[]) =>
 const build = (role: string | undefined) => buildNavigation({ role, postTypes: POST_TYPES, taxonomyTypes: TAXONOMIES })
 
 describe("buildNavigation", () => {
+  // #526: Discussion after Media, for editors and admins only (decision 3), with its count.
+  it("gives editors and admins Discussion with the pending count; contributors nothing", () => {
+    for (const role of ["admin", "editor"]) {
+      const item = buildNavigation({ role, postTypes: POST_TYPES, discussionPending: 4 })[1].items.find((i) => i.key === "discussion")!
+      expect(item).toMatchObject({ to: "/discussion", count: 4, countLabel: "Discussion, 4 comments waiting" })
+    }
+    expect(keys(build("contributor"))).not.toContain("discussion")
+    const none = build("editor")[1].items.find((i) => i.key === "discussion")!
+    expect(none.count).toBeUndefined()
+    expect(none.countLabel).toBeUndefined()
+    expect(activeKey(build("editor"), "/discussion/commenters/7")).toBe("discussion")
+  })
+
   it("gives admins every section, with the workspace pages", () => {
     const nav = build("admin")
     expect(nav.map((s) => s.key)).toEqual(["top", "content", "appearance", "workspace"])
@@ -69,7 +82,7 @@ describe("buildNavigation", () => {
 
   it("orders post types by menu position, skips hidden ones, and nests page taxonomies under Pages", () => {
     const content = build("admin")[1]
-    expect(content.items.map((i) => i.label)).toEqual(["Posts", "Pages", "Recipes", "Media"])
+    expect(content.items.map((i) => i.label)).toEqual(["Posts", "Pages", "Recipes", "Media", "Discussion"])
     const posts = content.items[0]
     expect(posts.children!.map((c) => c.label)).toEqual(["All posts", "Categories", "Tags"])
     expect(content.items[1].children!.map((c) => c.label)).toEqual(["All pages", "Page Categories"])

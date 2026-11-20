@@ -151,6 +151,8 @@ func (server *Server) listContinueEditing(c *gin.Context) {
 //     naming them, naming nobody, or naming someone who can no longer review;
 //     never their own. Editors and admins only (null for contributors, who
 //     can't review; their requests' outcome shows in the editor).
+//   - comments_pending (#526): reader comments awaiting moderation (Discussion),
+//     editors and admins only.
 //
 // Auth: any content role.
 func (server *Server) getNeedsAttention(c *gin.Context) {
@@ -213,6 +215,14 @@ func (server *Server) getNeedsAttention(c *gin.Context) {
 			return
 		}
 		rsp.ReviewRequests = toReviewRequestAttention(reviews)
+
+		pending, err := server.pendingCommentsAttention(ctx)
+		if err != nil {
+			server.requestLog(c).Warn("counting pending reader comments failed", "error", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load what needs attention"})
+			return
+		}
+		rsp.CommentsPending = pending
 	}
 
 	c.JSON(http.StatusOK, rsp)

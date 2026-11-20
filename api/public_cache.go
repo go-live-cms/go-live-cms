@@ -582,6 +582,7 @@ var publicCacheNoPurgeRoutes = map[string]string{
 	"POST /api/v1/users":                                           "a new member, credited on nothing yet",
 	"POST /api/v1/users/me/email":                                  "the email isn't public",
 	"POST /api/v1/collab/tickets":                                  "a socket ticket",
+	"PUT /api/v1/discussion/commenters/:id/block":                  "a blocked commenter's later comments go to spam; nothing shown changes (#526)",
 	"POST /api/v1/embeds/resolve":                                  "a lookup",
 	"POST /api/v1/posts/:id/duplicate":                             "a new draft",
 	"PUT /api/v1/site-design/global-styles":                        "the styles draft is never public; publish purges",

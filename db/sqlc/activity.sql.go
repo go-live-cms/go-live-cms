@@ -141,7 +141,10 @@ SELECT
     pl.name AS plugin_name
 FROM activity a
 LEFT JOIN users actor ON actor.id = a.actor_id
-LEFT JOIN posts p ON a.object_type = 'post' AND p.id = a.object_id
+LEFT JOIN posts p ON p.id = CASE
+    WHEN a.object_type = 'post' THEN a.object_id
+    WHEN a.object_type = 'reader_comment' AND (a.payload->>'post_id') ~ '^[0-9]{1,18}$' THEN (a.payload->>'post_id')::bigint
+  END
 LEFT JOIN media m ON a.object_type = 'media' AND m.id = a.object_id
 LEFT JOIN users target ON a.object_type = 'user' AND target.id = a.object_id
 LEFT JOIN plugins pl ON a.object_type = 'plugin' AND pl.id = a.object_id
@@ -164,6 +167,9 @@ WHERE ($1::bigint IS NULL OR a.id < $1::bigint)
     OR (a.object_type = 'media' AND (
           $5::boolean
           OR m.user_id = $6::bigint))
+    -- Discussion (#526, 15.2): editors moderate, so they see its events; contributors
+    -- have no Discussion (decision 3) and see none.
+    OR (a.object_type IN ('reader_comment', 'commenter') AND $5::boolean)
   )
 ORDER BY a.id DESC
 LIMIT $7::int
@@ -212,10 +218,13 @@ type ListActivityRow struct {
 //     else's published post only when they are about the viewer (the actor or
 //     payload.user_id): who asked for or lost access isn't every contributor's
 //     business.
+//   - moderators also see Discussion's reader_comment and commenter events (#526).
 //
 // Member, invitation, settings and plugin events are admin-only. Names and titles are
 // joined now, never stored. object_type/object_id narrow it to one object.
 // subject_* is the member an access event is about (payload.user_id).
+// A reader comment's event (#526) names its post in payload.post_id, which the feed
+// titles ("approved a comment on <post>"); the comment itself may be gone.
 // CASE, not AND: Postgres may evaluate the cast before a sibling condition.
 func (q *Queries) ListActivity(ctx context.Context, arg ListActivityParams) ([]ListActivityRow, error) {
 	rows, err := q.db.QueryContext(ctx, listActivity,

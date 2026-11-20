@@ -1,5 +1,6 @@
 import { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
+import { MemoryRouter } from "react-router-dom"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import axe from "axe-core"
 
@@ -13,6 +14,8 @@ const typesApi = vi.hoisted(() => ({ getPostTypeByName: vi.fn() }))
 vi.mock("@gl-admin/lib/api/postTypes", () => typesApi)
 const discussionApi = vi.hoisted(() => ({ getPostDiscussion: vi.fn(), setPostDiscussion: vi.fn() }))
 vi.mock("@gl-admin/lib/api/postDiscussion", () => discussionApi)
+const countsApi = vi.hoisted(() => ({ getDiscussionCounts: vi.fn() }))
+vi.mock("@gl-admin/lib/api/discussion", () => countsApi)
 vi.mock("@gl-admin/lib/hooks/useSiteSettings", () => ({
   useSiteDateSettings: () => ({ language: "en-US", timeZone: "UTC", dateFormat: "month_day_year" }),
 }))
@@ -39,7 +42,13 @@ const answer = (discussion: string, over: Record<string, unknown> = {}) => ({
 })
 
 async function render(published = true) {
-  await act(async () => root.render(<PostDiscussion postId={7} postType="post" published={published} />))
+  await act(async () =>
+    root.render(
+      <MemoryRouter>
+        <PostDiscussion postId={7} postType="post" published={published} />
+      </MemoryRouter>
+    )
+  )
   await settle()
 }
 
@@ -57,6 +66,7 @@ beforeEach(() => {
     post_type: { name: "post", label: "Posts", public: true, is_active: true, supports: ["title", "comments"] },
   })
   discussionApi.getPostDiscussion.mockReset().mockResolvedValue(answer("default"))
+  countsApi.getDiscussionCounts.mockReset().mockResolvedValue({ pending: 2, approved: 12, spam: 0, trash: 0 })
   discussionApi.setPostDiscussion.mockReset().mockImplementation(async (_id, discussion) => answer(discussion))
 })
 
@@ -191,5 +201,22 @@ describe("a failed read", () => {
     await act(async () => Array.from(container.querySelectorAll("button")).find((b) => b.textContent === "Try again")!.click())
     await settle()
     expect(radio("Default").checked).toBe(true)
+  })
+})
+
+// #526: the counts link to the queue filtered by the post; a failed read leaves them out.
+describe("the counts", () => {
+  it("links to Discussion filtered by the post", async () => {
+    await render()
+    expect(countsApi.getDiscussionCounts).toHaveBeenCalledWith({ post_id: 7 })
+    const link = container.querySelector<HTMLAnchorElement>("a.post-discussion__counts")!
+    expect(link.textContent).toBe("12 comments · 2 waiting")
+    expect(link.getAttribute("href")).toBe("/discussion?post=7")
+  })
+
+  it("says nothing when the read fails", async () => {
+    countsApi.getDiscussionCounts.mockRejectedValue(new Error("down"))
+    await render()
+    expect(container.querySelector("a.post-discussion__counts")).toBeNull()
   })
 })

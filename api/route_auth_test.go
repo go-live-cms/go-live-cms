@@ -163,6 +163,17 @@ var commentRoutes = map[string]string{
 	"POST /api/v1/posts/:id/comment-threads/:thread_id/replies":   "canCommentOnPost",
 	"POST /api/v1/posts/:id/comment-threads/:thread_id/resolve":   "canResolveCommentThread",
 	"POST /api/v1/posts/:id/comment-threads/:thread_id/unresolve": "canResolveCommentThread",
+	// Discussion, the reader comments' moderation (#526): editors and admins only.
+	"GET /api/v1/discussion/comments":             "requireContentEditor",
+	"GET /api/v1/discussion/comments/:id/thread":  "requireContentEditor",
+	"PUT /api/v1/discussion/comments/:id/status":  "requireContentEditor",
+	"POST /api/v1/discussion/comments/bulk":       "requireContentEditor",
+	"DELETE /api/v1/discussion/comments/:id":      "requireContentEditor",
+	"PUT /api/v1/discussion/comments/:id":         "requireContentEditor: a member's own comment",
+	"POST /api/v1/discussion/posts/:id/comments":  "requireContentEditor",
+	"GET /api/v1/discussion/commenters":           "requireContentEditor: the whole address only",
+	"GET /api/v1/discussion/commenters/:id":       "requireContentEditor",
+	"PUT /api/v1/discussion/commenters/:id/block": "requireContentEditor",
 }
 
 func TestCommentRoutesRequireAuth(t *testing.T) {

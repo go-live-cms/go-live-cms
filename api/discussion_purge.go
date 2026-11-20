@@ -122,7 +122,12 @@ func (server *Server) purgeDiscussion(ctx context.Context, log *slog.Logger, pos
 // (TestMutatingRoutesDeclarePublicCachePurge). /public has no purge middleware at all, so
 // a /public write must be here or in publicCacheNoPurgeRoutes.
 var publicCacheDiscussionRoutes = map[string]string{
-	"POST /public/posts/:id/comments":         "only a keyed comment the rules publish; an unconfirmed or held one changes nothing public (#524)",
-	"POST /public/discussion/confirm":         "only when the confirmed comment is published, not held (#524)",
-	"POST /public/discussion/unconfirmed/:id": "only a Publish the rules approve; a discard or a hold changes nothing public (#524)",
+	"POST /public/posts/:id/comments":            "only a keyed comment the rules publish; an unconfirmed or held one changes nothing public (#524)",
+	"POST /public/discussion/confirm":            "only when the confirmed comment is published, not held (#524)",
+	"POST /public/discussion/unconfirmed/:id":    "only a Publish the rules approve; a discard or a hold changes nothing public (#524)",
+	"PUT /api/v1/discussion/comments/:id/status": "only a change into or out of approved (#526)",
+	"POST /api/v1/discussion/comments/bulk":      "once, when one of the comments entered or left approved (#526)",
+	"DELETE /api/v1/discussion/comments/:id":     "only a tombstone; a spam or trashed comment without approved replies was never shown (#526)",
+	"PUT /api/v1/discussion/comments/:id":        "a member's edit of an approved comment (#526)",
+	"POST /api/v1/discussion/posts/:id/comments": "a member's comment, approved at once, on a published post (#526)",
 }
