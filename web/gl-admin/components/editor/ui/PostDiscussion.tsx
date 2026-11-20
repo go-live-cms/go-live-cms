@@ -4,6 +4,9 @@ import Button from "@gl-admin/components/ui/Button"
 import { getSettings } from "@gl-admin/lib/api/settings"
 import { getPostTypeByName } from "@gl-admin/lib/api/postTypes"
 import { getPostDiscussion, setPostDiscussion, type PostDiscussionAnswer } from "@gl-admin/lib/api/postDiscussion"
+import { getDiscussionCounts, type DiscussionCounts } from "@gl-admin/lib/api/discussion"
+import { postCommentsLine } from "@gl-admin/lib/discussion"
+import { Link } from "react-router-dom"
 import {
   DISCUSSION_CHOICES,
   DISCUSSION_SAVE_FAILED,
@@ -26,8 +29,8 @@ import type { DiscussionSite, PostDiscussion as PostDiscussionChoice } from "@/l
 // "Changes not published" for it. The API purges the public cache, so the post's thread
 // follows (#523).
 //
-// Not built yet, so not shown: "12 comments · 2 waiting" linking to Discussion filtered by
-// the post (the queue and its counts are #526).
+// "12 comments · 2 waiting" links to Discussion filtered by the post (#526; GET
+// /discussion/counts?post_id=). A failed read leaves the line out.
 
 type Loaded = { site: DiscussionSite; type: DiscussionTypeInfo; answer: PostDiscussionAnswer }
 
@@ -88,6 +91,19 @@ export default function PostDiscussion({
     void load()
   }, [load])
 
+  // The queue's counts for this post (#526), on their own: a failure leaves the line out.
+  const [counts, setCounts] = useState<DiscussionCounts | null>(null)
+  useEffect(() => {
+    let live = true
+    getDiscussionCounts({ post_id: postId })
+      .then((c) => live && setCounts(c))
+      .catch(() => live && setCounts(null))
+    return () => {
+      live = false
+    }
+  }, [postId])
+  const countsLine = postCommentsLine(counts)
+
   const choose = async (choice: PostDiscussionChoice) => {
     if (!loaded) return
     const save = ++saveRef.current
@@ -144,6 +160,11 @@ export default function PostDiscussion({
           />
           <p className="post-discussion__now">{summary?.now ?? "Loading…"}</p>
           {summary?.why && <small className="post-settings__hint">{summary.why}</small>}
+          {countsLine && (
+            <Link className="post-discussion__counts" to={`/discussion?post=${postId}`}>
+              {countsLine}
+            </Link>
+          )}
         </>
       )}
       {/* In the page from the start, empty, so a change is announced (#477). */}

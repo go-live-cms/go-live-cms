@@ -40,6 +40,7 @@ WHERE u.id = @actor_id
 --     else's published post only when they are about the viewer (the actor or
 --     payload.user_id): who asked for or lost access isn't every contributor's
 --     business.
+--   - moderators also see Discussion's reader_comment and commenter events (#526).
 -- Member, invitation, settings and plugin events are admin-only. Names and titles are
 -- joined now, never stored. object_type/object_id narrow it to one object.
 -- subject_* is the member an access event is about (payload.user_id).
@@ -60,7 +61,12 @@ SELECT
     pl.name AS plugin_name
 FROM activity a
 LEFT JOIN users actor ON actor.id = a.actor_id
-LEFT JOIN posts p ON a.object_type = 'post' AND p.id = a.object_id
+-- A reader comment's event (#526) names its post in payload.post_id, which the feed
+-- titles ("approved a comment on <post>"); the comment itself may be gone.
+LEFT JOIN posts p ON p.id = CASE
+    WHEN a.object_type = 'post' THEN a.object_id
+    WHEN a.object_type = 'reader_comment' AND (a.payload->>'post_id') ~ '^[0-9]{1,18}$' THEN (a.payload->>'post_id')::bigint
+  END
 LEFT JOIN media m ON a.object_type = 'media' AND m.id = a.object_id
 LEFT JOIN users target ON a.object_type = 'user' AND target.id = a.object_id
 LEFT JOIN plugins pl ON a.object_type = 'plugin' AND pl.id = a.object_id
@@ -84,6 +90,9 @@ WHERE (sqlc.narg(before_id)::bigint IS NULL OR a.id < sqlc.narg(before_id)::bigi
     OR (a.object_type = 'media' AND (
           @is_moderator::boolean
           OR m.user_id = @viewer_id::bigint))
+    -- Discussion (#526, 15.2): editors moderate, so they see its events; contributors
+    -- have no Discussion (decision 3) and see none.
+    OR (a.object_type IN ('reader_comment', 'commenter') AND @is_moderator::boolean)
   )
 ORDER BY a.id DESC
 LIMIT @row_limit::int;

@@ -1361,6 +1361,21 @@
     margin: 0;
   }
 
+  // "12 comments · 2 waiting", linking to the queue (#526).
+  &__counts {
+    align-self: flex-start;
+    color: var(--text-secondary);
+    font-size: var(--type-footnote);
+    line-height: var(--type-footnote-lh);
+    text-decoration: underline;
+    text-decoration-color: var(--border-strong);
+    text-underline-offset: 2px;
+
+    &:hover {
+      color: var(--text-primary);
+    }
+  }
+
   &__status,
   &__error {
     font-size: var(--type-footnote);

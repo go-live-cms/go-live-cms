@@ -1290,7 +1290,8 @@ Built as the boards draw it, with these details:
 - **The code layout now, block templates with #500.** The default theme renders through its block templates
   (#498), which can't hold the section until the comments block exists, so until #500 adds it to `single*` a
   default-theme site shows comments only where a code layout renders (a failed template read, another theme).
-  The parity check lists it. **#500 should land before #526 turns comments on.**
+  The parity check lists it. **#500 should land before a default-theme site turns comments on** (the switch
+  shows since #526).
 - **The post route reads only what shows.** No read when `discussion` is off, closed with none, or open with none
   (the empty answer is built); `?comments=N` or `?thread=<id>` past what exists falls back to page 1. The read runs
   while the code layout loads; a block template skips it.
@@ -1307,6 +1308,25 @@ Built as the boards draw it, with these details:
   confirm, and "Stop all mail" on that page waits for it.
 - **Contrast.** The comments' new pairs (text, muted text and links on `primarySubtle`, a link on `surface2`,
   `danger` on `surface`, the page's background on `danger`) are in core's list, so global styles warn on them.
+
+### 16.4 What C6 settled (#526)
+
+Built as designed and drawn, with these details the text left open:
+
+- **`PUT /discussion/comments/:id/status` takes `{action}`**, not `{status}`: approve, unapprove,
+  spam, not_spam, trash, restore. Unapprove and Not spam both land in pending, and Restore puts back
+  `trashed_from`, so the action is what the moderator chose. The bulk route takes the same actions
+  plus `delete`.
+- **`commenters.blocked_by`** (16.1) is migration `000066`; unblocking clears it.
+- **A reply's parent may be pending or approved.** A pending one is approved in the reply's own
+  transaction; spam, trash, a tombstone or another post's comment is 404 `parent_not_found`. A member
+  may reply on any post that isn't in the trash, while comments are on for the site.
+- **Delete permanently purges only when it leaves a tombstone:** a comment in spam or the trash with
+  no approved replies was never shown.
+- **The bulk action records one event** (`reader_comments_bulk_moderated`), not one per comment, so a
+  cleanup of 50 spam comments is one line in the feed.
+- **The settings switch has no gate any more** (#527's `COMMENTS_SWITCH_READY` is gone); comments
+  start off. The hook for #528's notifications is `readerCommentModerated` (api/CLAUDE.md).
 
 ## 17. Phased plan
 

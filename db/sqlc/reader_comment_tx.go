@@ -27,6 +27,8 @@ type DeleteReaderCommentTxResult struct {
 	// its thread still had (none of them approved), and Comment is the row as it was.
 	Tombstoned bool
 	Comment    ReaderComment
+	// Status is the status the comment had (a tombstone's own is approved).
+	Status string
 }
 
 // DeleteReaderCommentTx deletes a reader comment for good: a moderator's Delete
@@ -35,11 +37,31 @@ type DeleteReaderCommentTxResult struct {
 // DELETE CASCADE never takes an approved reply with it. The row and its replies are
 // locked first, so a reply approved meanwhile is seen. sql.ErrNoRows: no such comment.
 func (store *SQLStore) DeleteReaderCommentTx(ctx context.Context, id int64) (DeleteReaderCommentTxResult, error) {
+	return store.deleteReaderCommentTx(ctx, id, nil)
+}
+
+// DeleteModeratedReaderCommentTx is a moderator's Delete permanently (#526): only a
+// comment in spam or the trash, checked under the row lock (ErrReaderCommentStatusChanged
+// otherwise, nothing deleted), so a comment restored meanwhile stays.
+func (store *SQLStore) DeleteModeratedReaderCommentTx(ctx context.Context, id int64) (DeleteReaderCommentTxResult, error) {
+	return store.deleteReaderCommentTx(ctx, id, []string{ReaderCommentSpam, ReaderCommentTrash})
+}
+
+// deleteReaderCommentTx deletes or tombstones a comment; with statuses, only one in them.
+func (store *SQLStore) deleteReaderCommentTx(ctx context.Context, id int64, statuses []string) (DeleteReaderCommentTxResult, error) {
 	var result DeleteReaderCommentTxResult
 	err := store.execTx(ctx, func(q *Queries) error {
 		comment, err := q.LockReaderComment(ctx, id)
 		if err != nil {
 			return err
+		}
+		result.Status = comment.Status
+		if statuses != nil && comment.Status == ReaderCommentUnconfirmed {
+			// Not moderated (4.1): as if there were no such comment.
+			return sql.ErrNoRows
+		}
+		if statuses != nil && (comment.RemovedAt.Valid || !slices.Contains(statuses, comment.Status)) {
+			return ErrReaderCommentStatusChanged
 		}
 		replies, err := q.LockReaderCommentReplyStatuses(ctx, id)
 		if err != nil {

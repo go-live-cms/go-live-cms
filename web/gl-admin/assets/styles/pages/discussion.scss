@@ -1,0 +1,499 @@
+// Discussion (#526): the queue, the comment drawer and the commenter page, as the #521
+// boards draw them ("Discussion · queue", "comment drawer", "commenter", "375 · Discussion").
+// Design tokens only; the page reuses the posts list's header, toolbar and bulk bar.
+
+.gl-discussion {
+  &__sub {
+    color: var(--text-secondary);
+    margin: calc(-1 * var(--space-4)) 0 0;
+  }
+
+  &__pager {
+    align-items: center;
+    color: var(--text-secondary);
+    display: flex;
+    gap: var(--space-3);
+    justify-content: center;
+  }
+}
+
+.gl-dq-filter {
+  align-items: center;
+  background: transparent;
+  border: 1px dashed var(--control-border);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px;
+  white-space: nowrap;
+
+  &.is-set {
+    background: var(--accent-subtle);
+    border-color: var(--accent-border);
+    border-style: solid;
+    color: var(--text-selected);
+    cursor: default;
+    max-width: 100%;
+
+    > span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  }
+
+  &__clear {
+    background: transparent;
+    border: 0;
+    border-radius: var(--radius-sm);
+    color: inherit;
+    cursor: pointer;
+    display: inline-grid;
+    padding: 2px;
+    place-items: center;
+  }
+}
+
+.gl-dq-list {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  list-style: none;
+  margin: 0;
+  overflow: hidden;
+  padding: 0;
+}
+
+.gl-dq-row {
+  border-bottom: 1px solid var(--border-color);
+  display: grid;
+  gap: 0 12px;
+  grid-template-columns: 16px 28px minmax(0, 1fr);
+  padding: 14px 14px 12px;
+
+  &:last-child {
+    border-bottom: 0;
+  }
+
+  &.is-selected {
+    background: var(--accent-subtle);
+  }
+
+  > .gl-checkbox {
+    margin-top: 6px;
+  }
+
+  &--all {
+    align-items: center;
+    background: var(--background-subtle);
+    padding-block: 8px;
+
+    > .gl-checkbox {
+      margin-top: 0;
+    }
+  }
+
+  &--plain {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  &__all-label {
+    color: var(--text-secondary);
+    font-size: 12px;
+    grid-column: 3;
+  }
+
+  &__body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+  }
+}
+
+.gl-dq-who {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+
+  b {
+    font-weight: 600;
+  }
+}
+
+.gl-dq-mail,
+.gl-dq-help {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.gl-dq-help {
+  margin: 0;
+}
+
+.gl-dq-tag {
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16px;
+  padding: 0 6px;
+}
+
+.gl-dq-badge {
+  align-items: center;
+  background: var(--accent-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-selected);
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 600;
+  height: 18px;
+  padding: 0 6px;
+}
+
+.gl-dq-text {
+  margin: 0;
+  max-width: 760px;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+  white-space: pre-line;
+}
+
+.gl-dq-more,
+.gl-dq-link {
+  background: none;
+  border: 0;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-decoration: underline;
+  text-decoration-color: var(--border-strong);
+  text-underline-offset: 2px;
+
+  &:hover {
+    color: var(--text-primary);
+  }
+}
+
+.gl-dq-more {
+  color: var(--text-selected);
+}
+
+.gl-dq-meta {
+  align-items: center;
+  color: var(--text-secondary);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 12px;
+  gap: 4px 12px;
+  line-height: 16px;
+  margin: 0;
+
+  a {
+    color: var(--text-secondary);
+    text-decoration: underline;
+    text-decoration-color: var(--border-strong);
+    text-underline-offset: 2px;
+
+    &:hover {
+      color: var(--text-primary);
+    }
+  }
+}
+
+.gl-dq-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+
+  &--phone {
+    display: none;
+  }
+
+  // An opened comment at 375: all three, 44px tall (16.1).
+  &--big .gl-button {
+    flex: 1;
+    min-height: 44px;
+  }
+}
+
+.gl-dq-phone-more {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  cursor: pointer;
+  display: inline-flex;
+  height: 44px;
+  justify-content: center;
+  width: 44px;
+}
+
+// The drawer and its thread.
+.gl-dq-drawer {
+  &__body,
+  &__loading {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+}
+
+.gl-dq-thread,
+.gl-dq-replies {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.gl-dq-replies {
+  margin: 8px 0 0 36px;
+}
+
+.gl-dq-c {
+  background: var(--background);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  display: flex;
+  gap: 10px;
+  padding: 12px;
+
+  &.is-held {
+    border-color: var(--control-border);
+    border-style: dashed;
+  }
+
+  &.is-open {
+    border-color: var(--selected-border-color);
+    border-style: solid;
+    box-shadow: 0 0 0 1px var(--selected-border-color);
+  }
+
+  &.is-removed {
+    background: var(--background-subtle);
+    color: var(--text-secondary);
+  }
+}
+
+.gl-dq-removed {
+  font-style: italic;
+  font-weight: 500;
+}
+
+.gl-dq-reply,
+.gl-dq-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  &__actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+}
+
+.gl-dq-reply__actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.gl-dq-sum {
+  background: var(--background-subtle);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+
+  &__head {
+    align-items: center;
+    display: flex;
+    gap: 10px;
+  }
+
+  &__who {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+
+    b {
+      font-weight: 600;
+    }
+  }
+
+  &__counts {
+    color: var(--text-primary);
+    font-size: 13px;
+    line-height: 20px;
+  }
+}
+
+// The commenter page.
+.gl-dq-crumb {
+  align-items: center;
+  color: var(--text-secondary);
+  display: flex;
+  gap: 6px;
+
+  a {
+    color: var(--text-secondary);
+  }
+}
+
+.gl-dq-commenter {
+  &__head {
+    align-items: flex-start;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  &__who {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 200px;
+  }
+
+  &__name {
+    font-size: 24px;
+    font-weight: 600;
+    line-height: 32px;
+    margin: 0;
+  }
+
+  &__section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+
+    h2 {
+      font-size: 14px;
+      font-weight: 600;
+      margin: 0;
+    }
+  }
+}
+
+.gl-dq-stats {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+}
+
+.gl-dq-stat {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 2px;
+  padding: 10px 12px;
+
+  dt {
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+  }
+
+  dd {
+    font-size: 20px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    line-height: 28px;
+    margin: 0;
+  }
+}
+
+.gl-dq-cards {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+}
+
+.gl-dq-card {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+
+  h2 {
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 20px;
+    margin: 0;
+  }
+
+  p {
+    margin: 0;
+  }
+}
+
+// 375 (the "375 · Discussion" board): no checkboxes, Approve and Spam full width at
+// 44px, Trash and the thread behind More.
+@media (width <= 768px) {
+  .gl-dq-row {
+    grid-template-columns: 24px minmax(0, 1fr);
+    padding: 14px 16px;
+
+    > .gl-checkbox {
+      display: none;
+    }
+
+    &--all {
+      display: none;
+    }
+  }
+
+  .gl-dq-acts--wide {
+    display: none;
+  }
+
+  .gl-dq-acts--phone {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+
+    > .gl-button {
+      flex: 1;
+      min-height: 44px;
+    }
+  }
+
+  .gl-dq-text {
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    display: -webkit-box;
+    overflow: hidden;
+  }
+
+  .gl-dq-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .gl-dq-replies {
+    margin-left: 16px;
+  }
+}

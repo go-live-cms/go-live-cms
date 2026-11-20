@@ -1398,7 +1398,7 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
 
 - Design: `docs/design/reader-comments.md` (#499; decisions in its section 18). `/public` reads
   them since C3 (#523, below) and writes them since C4 (#524, below), and
-  `settings.comments_enabled` starts off with its switch hidden until #526/#527. Never #192's
+  `settings.comments_enabled` starts off; its switch shows since #526 (Discussion, below). Never #192's
   names: `reader_comment*`, `commenter*`, `discussion*`.
 - **Tables (6.1):** `commenters` (one per address, `email_lower` UNIQUE; never public, never
   logged), `commenter_keys` (browser keys as SHA-256), `reader_comments`,
@@ -1416,8 +1416,9 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   an unconfirmed comment can't be trashed (no row: it expires, and keeps its confirm token).
   A tombstone has no unsubscribe token (the Tx deletes it; the job's
   `DeleteTombstoneUnsubscribeTokens` for the ones it makes).
-  **C6's approval of a reply should lock its root and parent (`FOR SHARE`) first**, so the
-  retention job (`SKIP LOCKED`) can't cascade a reply being approved.
+  **A moderator's status change locks the comment's root and parent (`FOR SHARE`) first**
+  (`ModerateReaderCommentTx`, #526), so the retention job (`SKIP LOCKED`) can't cascade a reply being
+  approved.
 - **`posts.discussion`** (`default|open|closed|off`) is **not in `golive_post_settings()`**: it
   applies at once and never shows "changes not published"; `UpdatePostDiscussion` doesn't touch
   `changed_at` (no `post.saved` event). `GET` and `PUT /posts/:id/discussion` (`posts_discussion.go`):
@@ -1557,6 +1558,50 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   reason and spam route), `discussion_write_db_test.go` (real DB: the flow to the key, a link
   confirming only its own, single use, expiry, keys for another address, step 5, the Tx
   re-checks, no address in any answer).
+
+## Reader comments: Discussion, the moderation queue (#526, `discussion_admin.go`, `000066`)
+
+- **`/api/v1/discussion/*`, `requireContentEditor` on the group** (4.3): contributors get 403 on
+  every route (decision 3; `TestDiscussionRoutesAreModeratorsOnly`, `commentRoutes` in
+  `route_auth_test.go`). Export and erasure are #529's (admin). Queries: `db/query/discussion_admin.sql`;
+  one `ListModerationComments` serves the queue (`status`, newest first), a thread (`root_id`, oldest
+  first, every status but unconfirmed, tombstones included), a commenter's comments and one comment
+  (`id`). Unconfirmed comments are never moderated (404). `CountModerationComments` follows the same
+  filters (post, commenter, ILIKE search with `likePattern` escaping wildcards).
+- **Routes:** `GET /comments?status=&post_id=&commenter_id=&q=&page=&limit=` (`{comments, counts,
+  comments_enabled, pagination}`), `GET /counts` (the sidebar and the editor's "12 comments · 2
+  waiting"), `GET /comments/:id/thread` (`{comment, thread, commenter, discussion}`), `PUT
+  /comments/:id/status {action}` (approve, unapprove, spam, not_spam, trash, restore: **an action, not a
+  status**, since unapprove and Not spam both land in pending), `POST /comments/bulk {action, ids}` (+
+  `delete`, ≤100, per-comment results as `POST /posts/bulk`), `DELETE /comments/:id` (spam or trash
+  only, `DeleteModeratedReaderCommentTx` checks under the lock), `POST /posts/:id/comments {body,
+  parent_id?}` (a member's), `PUT /comments/:id {body}` (one's own only: 403 `not_your_comment`),
+  `GET /commenters?email=` (the whole address), `GET /commenters/:id`, `PUT /commenters/:id/block`.
+- **Transitions** (`db.ReaderCommentActionAllowedFrom`, `reader_comment_moderation_tx.go`):
+  `ModerateReaderCommentTx` share-locks root and parent, then the row FOR UPDATE, checks the action's
+  from-statuses (409 `comment_status_changed`; tombstones never). Spam sets `held_reason moderator`
+  and the commenter's `last_spam_at`; Not spam goes to pending with `previous_spam`; approve clears the
+  reason. **A member's reply** (`CreateMemberReaderCommentTx`) goes under a pending or approved comment of
+  the post; **a pending parent is approved first in the same transaction** (`parent_approved`, and its own
+  `reader_comment_approved`); anything else is 404 `parent_not_found`. Posted as the member
+  (`author_user_id`, name cut to 60), approved at once; 409 `comments_off`, 409 `post_trashed`.
+  Badges are computed at read time (Author on `post_published_authors`, else Staff); a removed member's
+  comment keeps its name and has none (`author_user_id` SET NULL).
+- **Activity (15.2):** `reader_comment` / `commenter` objects (`db/sqlc/activity.go`), ids and counts
+  only; every reader_comment verb carries `post_id`, which `ListActivity` joins for the title. Bulk is
+  one `reader_comments_bulk_moderated {action, count, post_id?}`. Editors see these object types
+  (contributors don't).
+- **Purges:** each write calls `purgeDiscussion` after its commit with the outcome's event (status
+  change via `discussionStatusEvent`; a delete only when it tombstoned; one purge per bulk request);
+  the routes are in `publicCacheDiscussionRoutes`; Block is `publicCacheNoPurgeRoutes`.
+- **#528's hook:** `server.readerCommentModerated(ctx, []readerCommentChange)` (nil until then), called
+  after every committed change with `{CommentID, PostID, ParentID, From, To, ActorID}` (From "" = a new
+  member comment, To "" = deleted).
+- **Block** records `blocked_by` (000066, cleared on unblock; a second block keeps the first).
+  Home's Needs attention: `comments_pending {count, post_count, oldest_at}` for moderators.
+- Logs: ids, action, statuses only; never the address (`TestDiscussionCommenters` checks).
+  Tests: `discussion_admin_db_test.go` (real DB and miniredis: access, every action and its verb, bulk,
+  Approve and reply, badges, commenters, Home, the feed, purges).
 
 ## Per-block "Last edited by" (#328, `000049`, `post_block_edits.go`)
 
