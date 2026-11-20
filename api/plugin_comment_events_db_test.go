@@ -21,7 +21,7 @@ import (
 	"github.com/go-live-cms/go-live-cms/pluginsdk"
 )
 
-// Reader comment events and the comment guard (#530, 000066, reader-comments.md 14)
+// Reader comment events and the comment guard (#530, 000067, reader-comments.md 14)
 // against the test database (skipped without one): the trigger writes the six events
 // only for a subscriber and with ids only, they reach an observer through the outbox,
 // Host.Comments reads the text only with comments:read, and the guard's hold, spam and

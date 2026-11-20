@@ -1086,7 +1086,7 @@ then a guard can only judge what the form sends.
 
 ### 14.4 What C10 settled (#530)
 
-Built as designed (`000066`, `api/plugin_comment_guards.go`), with these details the text left open:
+Built as designed (`000067`, `api/plugin_comment_guards.go`), with these details the text left open:
 
 - **A comment created approved or as spam** gets `comment.created` then `comment.approved` (or
   `comment.spammed`), so a plugin following approvals needs one event, whatever the path.

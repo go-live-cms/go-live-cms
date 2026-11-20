@@ -1792,7 +1792,7 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   path refused then allowed, the guard never runs while the post is locked, only enabled plugins,
   on_error on the button and the scheduler).
 
-## Plugins and reader comments (#530, `000066`, `plugin_comment_guards.go`, reader-comments.md 14)
+## Plugins and reader comments (#530, `000067`, `plugin_comment_guards.go`, reader-comments.md 14)
 
 - **Events:** the `reader_comments_plugin_events` trigger (`golive_reader_comment_plugin_events`)
   writes to #458's outbox like the posts trigger, filtered by `golive_plugin_event_subscribed` (**no
