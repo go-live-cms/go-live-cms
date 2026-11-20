@@ -67,6 +67,21 @@ func TestPluginHooksMismatch(t *testing.T) {
 		"hooks in Go not declared in plugin.json: post.before_publish")
 	require.Empty(t, pluginHooksMismatch(hooksManifest(pluginGuardEvent, pluginsdk.EventPostSaved),
 		pluginsdk.Plugin{BeforePublish: allowGuard, Observers: observing(pluginsdk.EventPostSaved).Observers}, true))
+
+	// The comment guard (#530) is Plugin.BeforeCommentCreate, on the same rule: declared
+	// without code (or as an observer) is incompatible, and so is code plugin.json
+	// doesn't declare.
+	commentGuard := func(context.Context, pluginsdk.Host, pluginsdk.CommentCandidate) (pluginsdk.CommentDecision, error) {
+		return pluginsdk.AllowComment(), nil
+	}
+	require.Contains(t, pluginHooksMismatch(hooksManifest(pluginCommentGuardEvent), pluginsdk.Plugin{}, true),
+		"declared without a hook in Go: comment.before_create")
+	require.Contains(t, pluginHooksMismatch(hooksManifest(pluginCommentGuardEvent), guarding(allowGuard), true),
+		"declared without a hook in Go: comment.before_create")
+	require.Contains(t, pluginHooksMismatch(PluginManifest{}, pluginsdk.Plugin{BeforeCommentCreate: commentGuard}, true),
+		"hooks in Go not declared in plugin.json: comment.before_create")
+	require.Empty(t, pluginHooksMismatch(hooksManifest(pluginCommentGuardEvent, pluginsdk.EventCommentCreated, pluginGuardEvent),
+		pluginsdk.Plugin{BeforeCommentCreate: commentGuard, BeforePublish: allowGuard, Observers: observing(pluginsdk.EventCommentCreated).Observers}, true))
 }
 
 func TestHookPluginTimeout(t *testing.T) {

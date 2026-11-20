@@ -34,6 +34,7 @@ func (h fakeWebhookHost) Settings(context.Context) (map[string]any, error) { ret
 func (fakeWebhookHost) Posts() pluginsdk.PostReader                        { return nil }
 func (fakeWebhookHost) Media() pluginsdk.MediaReader                       { return nil }
 func (fakeWebhookHost) Users() pluginsdk.UserReader                        { return nil }
+func (fakeWebhookHost) Comments() pluginsdk.CommentReader                  { return nil }
 func (fakeWebhookHost) Log() *slog.Logger                                  { return slog.New(slog.DiscardHandler) }
 
 var testWebhookSpec = PluginWebhook{URLSetting: "url", SecretSetting: "signing_secret"}
@@ -315,6 +316,15 @@ func TestWebhookPluginMismatch(t *testing.T) {
 	server := &Server{}
 	plugin := server.webhookPlugin("notify", webhook)
 	require.Equal(t, []string{pluginsdk.EventPostPublished}, plugin.HookEvents())
+
+	// Comment events (#530) are hooks a webhook delivers like any other; a guard never is.
+	comments := PluginManifest{Server: PluginServer{
+		Hooks:   []PluginHook{{Event: pluginsdk.EventCommentCreated}, {Event: pluginsdk.EventCommentDeleted}},
+		Webhook: &PluginWebhook{URLSetting: "url", SecretSetting: "secret"},
+	}}
+	plugin = server.webhookPlugin("comment-feed", comments)
+	require.Equal(t, []string{pluginsdk.EventCommentCreated, pluginsdk.EventCommentDeleted}, plugin.HookEvents())
+	require.Nil(t, plugin.BeforeCommentCreate)
 }
 
 // NewServer refuses the development allowance outside debug mode, whatever built the

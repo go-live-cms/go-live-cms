@@ -78,6 +78,35 @@ func TestGenerateRefusesServerCodeWithAWebhook(t *testing.T) {
 	require.NotContains(t, string(out), "hooks-only")
 }
 
+// A guard (#459, #530) runs in Go: declared without server code, the plugin would be
+// incompatible, and a webhook can't deliver one.
+func TestGenerateRefusesAGuardWithoutServerCode(t *testing.T) {
+	for name, manifest := range map[string]string{
+		"comment guard":   `{"capabilities": ["comments:private"], "server": {"hooks": [{"event": "comment.before_create", "on_error": "hold"}]}}`,
+		"publish guard":   `{"server": {"hooks": [{"event": "post.saved"}, {"event": "post.before_publish"}]}}`,
+		"webhook + guard": `{"server": {"webhook": {"url_setting": "url", "secret_setting": "s"}, "hooks": [{"event": "comment.created"}, {"event": "comment.before_create"}]}}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			root := fakeRepo(t)
+			writeFile(t, filepath.Join(root, "web/plugins/spam-check/plugin.json"), manifest)
+			_, err := generate(root)
+			require.ErrorContains(t, err, "has no server code")
+		})
+	}
+
+	// With server code a guard is fine; comment events alone need none.
+	root := fakeRepo(t)
+	writeFile(t, filepath.Join(root, "web/plugins/spam-check/plugin.json"),
+		`{"server": {"hooks": [{"event": "comment.before_create"}]}}`)
+	writeFile(t, filepath.Join(root, "web/plugins/spam-check/server/guard.go"), "package server")
+	writeFile(t, filepath.Join(root, "web/plugins/comment-feed/plugin.json"),
+		`{"server": {"webhook": {"url_setting": "url", "secret_setting": "s"}, "hooks": [{"event": "comment.approved"}]}}`)
+	out, err := generate(root)
+	require.NoError(t, err)
+	require.Contains(t, string(out), "spam-check/server")
+	require.NotContains(t, string(out), "comment-feed")
+}
+
 func TestRunWritesThenChecks(t *testing.T) {
 	root := fakeRepo(t)
 	writeFile(t, filepath.Join(root, "web/plugins/seo/server/hooks.go"), "package server")

@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 
+	db "github.com/go-live-cms/go-live-cms/db/sqlc"
 	"github.com/go-live-cms/go-live-cms/pluginsdk"
 )
 
@@ -49,6 +50,15 @@ func (h *pluginHost) Users() pluginsdk.UserReader {
 		return nil
 	}
 	return pluginUserReader{server: h.server}
+}
+
+// Comments reads reader comments (comments:read, #530). Never the commenter's address:
+// observers can't read addresses at all (reader-comments.md 14.1).
+func (h *pluginHost) Comments() pluginsdk.CommentReader {
+	if !h.declares(pluginsdk.CapabilityCommentsRead) {
+		return nil
+	}
+	return pluginCommentReader{server: h.server}
 }
 
 // Settings are plugin.json's defaults, overlaid with the values stored for the
@@ -178,6 +188,33 @@ func (r pluginMediaReader) Get(ctx context.Context, id int64) (pluginsdk.Media, 
 		Height:      int(media.Height),
 		FileSize:    media.FileSize,
 		CreatedAt:   media.CreatedAt,
+	}, nil
+}
+
+type pluginCommentReader struct{ server *Server }
+
+// Get returns a comment's name, text, status and post, field by field: never the
+// commenter's id, address, network hash or tokens. An unconfirmed comment isn't created
+// yet (no comment.created was sent for it), so it is not found.
+func (r pluginCommentReader) Get(ctx context.Context, id int64) (pluginsdk.Comment, error) {
+	comment, err := r.server.store.GetReaderComment(ctx, id)
+	if errors.Is(err, sql.ErrNoRows) || (err == nil && comment.Status == db.ReaderCommentUnconfirmed) {
+		return pluginsdk.Comment{}, pluginsdk.ErrNotFound
+	}
+	if err != nil {
+		return pluginsdk.Comment{}, err
+	}
+	return pluginsdk.Comment{
+		ID:        comment.ID,
+		PostID:    comment.PostID,
+		ParentID:  comment.ParentID.Int64,
+		RootID:    comment.RootID.Int64,
+		Name:      comment.DisplayName,
+		Body:      comment.Body,
+		Status:    comment.Status,
+		MemberID:  comment.AuthorUserID.Int64,
+		Removed:   comment.RemovedAt.Valid,
+		CreatedAt: comment.CreatedAt,
 	}, nil
 }
 

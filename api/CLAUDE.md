@@ -1536,10 +1536,11 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   lower case), word boundaries by letter/number runes; links: http(s) only, trailing punctuation
   trimmed. Both pinned by `web/src/lib/discussionRulesVectors.json` (twins in
   `web/src/lib/discussion.ts`). Member names: `ListMemberNames`, folded and spaces collapsed.
-- **The guard's hook** (`discussion_guard.go`): `server.readerCommentGuard`, nil until #530. Called
-  after core's checks, before the insert, with the candidate (email, IP, UA included); hold or spam
-  only (an approve is ignored); a hold on an unconfirmed comment is stored (`held_reason plugin`)
-  and applied at confirmation without asking again.
+- **The guard's hook** (`discussion_guard.go`): `server.readerCommentGuard`, which `NewServer` sets
+  to `runCommentGuards` (#530, below). Called after core's checks, before the insert, with the
+  candidate (email, IP, UA included); hold or spam only (an approve is ignored); a hold on an
+  unconfirmed comment is stored (`held_reason plugin`) and applied at confirmation without asking
+  again.
 - **Limits** (`ratelimit.go`): `commentPost` per IP (`RATE_LIMIT_COMMENT_POST_PER_MINUTE`, 5,
   middleware, no exempt CIDR), `commentAddress` per IP + address
   (`RATE_LIMIT_COMMENT_ADDRESS_PER_MINUTE`, 3), `commentMail` (silent, 10 minutes, on when
@@ -1790,6 +1791,39 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   × on_error, the total budget, the candidate copy) and `plugin_guards_db_test.go` (real DB: each
   path refused then allowed, the guard never runs while the post is locked, only enabled plugins,
   on_error on the button and the scheduler).
+
+## Plugins and reader comments (#530, `000066`, `plugin_comment_guards.go`, reader-comments.md 14)
+
+- **Events:** the `reader_comments_plugin_events` trigger (`golive_reader_comment_plugin_events`)
+  writes to #458's outbox like the posts trigger, filtered by `golive_plugin_event_subscribed` (**no
+  subscriber, no row**): `comment.created` (an INSERT that isn't unconfirmed, or status leaving
+  unconfirmed), `comment.approved`, `comment.unapproved` (approved → pending), `comment.spammed`,
+  `comment.trashed`, `comment.deleted` (DELETE or tombstone; not an unconfirmed comment, not a
+  tombstone's later DELETE, not the cascade of a post deleted for good: `post.deleted` stands for
+  it). `post_id` is the comment's post (ordering per plugin and post). **`data` is ids only**:
+  `comment_id`, `root_id`, `status` (the old one on a delete), `previous_status`, `by_member`; never
+  a name, text or address. `actor_id`: the member on `comment.created`, the moderator when
+  `moderated_at` moved. `pluginsdk.ObserverEvents` lists them, so webhooks deliver them unchanged.
+- **Capabilities:** `comments:read` → `Host.Comments()` (`pluginCommentReader`: name, text, status,
+  post, ids; never the commenter, address or hashes; an unconfirmed comment is `ErrNotFound`).
+  `comments:private` is required by the validator for a `comment.before_create` guard (both twins,
+  `pluginManifestVectors.json`).
+- **The guard:** `pluginsdk.Plugin.BeforeCommentCreate`, declared `{event: comment.before_create,
+  on_error: allow|hold, priority}` (`pluginGuardOnError` holds each guard's on_error words; no
+  `timeout_ms`; never a webhook; `gen-plugins` refuses any guard without server code).
+  `runCommentGuards`: no guard code in the build → nothing read; `guardPlugins` (shared with
+  publish guards: enabled, registered, matching plugin.json, `(priority, slug)`), sequential, **the
+  first spam wins**, a hold is kept while later guards run, 2s each (`commentGuardTimeout`) and 3s
+  total (`commentGuardBudget`), calls capped per plugin (`commentGuardCalls`). Error, panic, timeout
+  or budget used up → allow unless `on_error: hold` ("<name> couldn't check this comment."). Any
+  verdict but hold or spam is allow (**a guard can't approve**). Listing the guards fails → hold.
+  The reason becomes `held_detail` "<name>: <reason>" (≤200). Logs: plugin, post id, verdict and
+  duration only; a plugin's error text is logged with the candidate's values blanked
+  (`redactCandidate`).
+- Tests: `plugin_comment_guards_test.go` (mock: order, spam over hold, verdicts, failures ×
+  on_error, budget, caps, redaction) and `plugin_comment_events_db_test.go` (real DB: no
+  subscriber, every event and its data, observers and `Host.Comments`, the guard on the real write
+  path keyed and keyless, the budget).
 
 ## Plugin webhooks (#460, `plugin_webhooks.go`, `outbound_http.go`, design 7.9)
 

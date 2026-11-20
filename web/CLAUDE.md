@@ -122,7 +122,8 @@ are the most fragile part of the codebase. **Before editing anything under
 - **Plugins page (#11, #457; the canvas's "Plugins" board):** `pages/Plugins.tsx` at `/plugins`
   (admins: `AdminOnly` in `app.tsx`, Workspace › Plugins in `nav.ts`). One list (name, version,
   author, description, the status pill, declared capabilities plus "Can block publishing" for a
-  `post.before_publish` hook), Enable (the trust warning and what it declares) and Disable (what
+  `post.before_publish` hook and "Checks reader comments" for a `comment.before_create` one, #530),
+  Enable (the trust warning and what it declares) and Disable (what
   it affects: blocks, server features, settings) behind dialogs, and Settings, a `Drawer` built
   from the manifest's fields (text, `enum` select, number, switch, secret: "Saved" + Replace,
   never the value) with **Delete plugin data** (asks first). Rules, wording and the form's draft
