@@ -581,7 +581,7 @@ are the most fragile part of the codebase. **Before editing anything under
   passes `BlockTemplateLayout` (`comments` option); not one of the four. Placement is the store's (never in a part,
   never in a query, once per template); which templates may hold it (`commentsAllowedInTemplate`: single and page
   ones, `custom-*`) is the inserter's (`offeredOnce`, `SiteEditorBridge.allowsComments`). The placeholder says when
-  comments are off for the site (`commentsEnabled`, read by `SiteTemplateEditor` from `GET /settings`) and has a
+  comments are off for the site (`commentsEnabled`, read with `loadSiteDesignContext` before the editor mounts) and has a
   "Discussion settings" button. Nothing per reader; comment text never through `set:html`.
 - **Template rendering (#491, design `docs/design/theme-builder.md` 3.2–3.4, 3.7):** every public route file makes one
   call, `resolveTemplate(Astro.locals, route)` (`src/lib/siteTemplates.ts`): the route's ranked slugs (`templateRanks`:
