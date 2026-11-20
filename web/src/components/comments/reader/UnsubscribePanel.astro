@@ -1,0 +1,45 @@
+---
+/**
+ * /comments/unsubscribe's panel (#525, docs/design/reader-comments.md 8.2, 11.6): the visible link
+ * of a reply mail, `#token=` in the fragment. **Stop these emails** turns that comment's reply
+ * mail off; **Stop all mail from this site** every subscription of the commenter. Each posts to
+ * `/gl-comments/unsubscribe` (#528 adds the endpoint and the API route; until then the page
+ * isn't served, `READER_PAGES_READY.unsubscribe`). Same pattern as ConfirmPanel.astro.
+ */
+import ReaderNeedsScripts from './ReaderNeedsScripts.astro'
+---
+
+<div class="reader-page-panel" data-gl-reader="unsubscribe">
+  <section class="reader-panel" data-reader-panel aria-labelledby="reader-title">
+    <ReaderNeedsScripts />
+  </section>
+  <p class="sr-only" role="status" data-reader-live></p>
+
+  <template data-reader-state="before">
+    <h1 id="reader-title">Stop reply emails?</h1>
+    <p>You won’t get emails about replies to your comment.</p>
+    <div class="reader-actions">
+      <button type="button" class="btn btn-primary" data-reader-unsubscribe="one">Stop these emails</button>
+      <button type="button" class="btn btn-secondary" data-reader-unsubscribe="all">Stop all mail from this site</button>
+    </div>
+  </template>
+  <template data-reader-state="done">
+    <h1 id="reader-title">You won’t get reply emails for this comment</h1>
+    <p>Other comments you asked about still send replies.</p>
+  </template>
+  <template data-reader-state="done-all">
+    <h1 id="reader-title">You won’t get mail from this site any more</h1>
+    <p>If you comment again, you may be asked to confirm your address.</p>
+  </template>
+  <template data-reader-state="invalid">
+    <h1 id="reader-title">This link doesn’t work anymore</h1>
+    <p>It was already used, or it’s too old.</p>
+    <div class="reader-actions"><a href="/" class="btn btn-secondary">Go to the front page</a></div>
+  </template>
+  <template data-reader-state="error">
+    <h1 id="reader-title">That didn’t work</h1>
+    <p data-slot="reason"></p>
+    <div class="reader-actions"><button type="button" class="btn btn-primary" data-reader-retry>Try again</button><a href="/" class="btn btn-secondary">Go to the front page</a></div>
+  </template>
+</div>
+<script is:inline src="/gl-comments.js" defer></script>

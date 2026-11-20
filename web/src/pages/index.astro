@@ -66,6 +66,7 @@ const title = list ? (page === 1 ? homeTitle(list.siteTitle, list.siteTagline) :
     publishedImage={frontPage.featured_image?.url ?? null}
     publishedTerms={frontPage.taxonomy_terms ?? []}
     publishedSeo={frontPage.seo ?? null}
+    publishedDiscussion={frontPage.discussion ?? null}
   />
 ) : blockTemplate ? (
   <BlockTemplateLayout kind="home" choice={blockTemplate} title={title} description={list!.siteTagline || `The latest posts from ${list!.siteTitle}`} list={list} />

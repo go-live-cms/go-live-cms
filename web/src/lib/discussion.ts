@@ -233,6 +233,32 @@ export function readerCommentLinks(text: string): string[] {
   return links
 }
 
+/** A run of a comment's line: text, or a link `readerCommentLinks` counts (`href` is the link). */
+export interface ReaderCommentRun {
+  text: string
+  href?: string
+}
+
+/**
+ * A line of a comment's text split into text and the links in it, as the renderer links
+ * them (5.4, the same rule as `readerCommentLinks`): the punctuation after a link stays
+ * text. Concatenating the runs' `text` gives the line back.
+ */
+export function readerCommentRuns(line: string): ReaderCommentRun[] {
+  const runs: ReaderCommentRun[] = []
+  let last = 0
+  for (const match of line.matchAll(LINK_PATTERN)) {
+    const start = match.index ?? 0
+    const link = trimLinkPunctuation(match[0])
+    if (link.length <= link.indexOf("://") + 3) continue
+    if (start > last) runs.push({ text: line.slice(last, start) })
+    runs.push({ text: link, href: link })
+    last = start + link.length
+  }
+  if (last < line.length) runs.push({ text: line.slice(last) })
+  return runs
+}
+
 function foldMemberName(name: string): string {
   return foldDiscussionText(name).split(/\s+/u).filter(Boolean).join(" ")
 }

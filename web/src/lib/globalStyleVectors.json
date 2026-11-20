@@ -54,7 +54,13 @@
     ["success", "successBg", 3],
     ["warning", "warningBg", 3],
     ["danger", "dangerBg", 3],
-    ["borderStrong", "surface", 3]
+    ["borderStrong", "surface", 3],
+    ["text", "primarySubtle", 4.5],
+    ["textMuted", "primarySubtle", 4.5],
+    ["primary", "primarySubtle", 4.5],
+    ["primary", "surface2", 4.5],
+    ["danger", "surface", 4.5],
+    ["background", "danger", 4.5]
   ],
   "valid": [
     { "name": "no override", "input": {}, "normalized": {} },

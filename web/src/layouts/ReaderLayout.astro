@@ -1,0 +1,53 @@
+---
+/**
+ * Theme-neutral frame for the reader pages (#525, src/components/ThemedReaderPage.astro), used
+ * when the active theme ships no layouts/reader/default.astro: core's header and footer around
+ * the panel, with the theme's registered stylesheets (so its tokens apply), as ErrorLayout.astro
+ * does for the error pages. Not indexed.
+ */
+import Header from '@/layouts/Header.astro'
+import Footer from '@/layouts/Footer.astro'
+import SeoHead from '@/components/SeoHead.astro'
+import { getSiteSettings } from '@/lib/siteSettings'
+import '@/assets/styles/global.css'
+
+interface Props {
+  title: string
+  description: string
+}
+
+const { title, description } = Astro.props
+const site = await getSiteSettings(Astro.locals)
+const themeAssets = Astro.locals.themeAssets || {}
+const legacyCssPath = Astro.locals.themeCssPath
+---
+
+<!doctype html>
+<html lang={site.language}>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <SeoHead title={title} description={description} siteName={site.title} noindex />
+    {themeAssets.styles?.map((style: any) => <link rel="stylesheet" href={style.src} media={style.media || 'all'} />)}
+    {!themeAssets.styles?.length && legacyCssPath && <link rel="stylesheet" href={legacyCssPath} />}
+  </head>
+  <body>
+    <Header />
+    <main id="content" class="reader-page-main">
+      <slot />
+    </main>
+    <Footer />
+  </body>
+</html>
+
+<style is:global>
+  /* The panels' live region and labels (core markup), when the theme has no .sr-only of its own. */
+  .reader-page-main .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+</style>

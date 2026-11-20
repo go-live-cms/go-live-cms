@@ -23,6 +23,7 @@ import { requestIdHeaders } from "./log"
 import { appendForwardedFor } from "../middleware/apiProxy"
 import { PRIVATE_NO_STORE } from "./httpCache"
 import { designPreviewCookieSecure } from "./designPreview"
+import { COMMENT_CODE_REASONS, COMMENT_FORM_FIELDS, COMMENTED_PARAM } from "./commentFormFields"
 
 /** The browser key's cookie (3.3): one value listing up to five keys, `.`-separated. */
 export const COMMENTER_COOKIE = "gl_commenter"
@@ -36,22 +37,10 @@ export const COMMENTER_KEY_HEADER = "GoLive-Commenter-Key"
 const KEY_PATTERN = /^[A-Za-z0-9_-]{43}$/
 
 /** The comment form's field names, which the comments section (#525) renders. */
-export const COMMENT_FORM_FIELDS = {
-  body: "comment",
-  name: "name",
-  email: "email",
-  notifyReplies: "notify_replies",
-  // The honeypot (5.2): hidden, labelled "Leave this empty". Anything in it is spam.
-  website: "website",
-  parentId: "parent_id",
-  // The page the form is on (the post, or its page N of comments): where to go back.
-  returnTo: "return_to",
-} as const
+export { COMMENT_FORM_FIELDS, COMMENTED_PARAM }
 
 /** The outcomes the API answers and the notice parameter carries. */
 export type CommentOutcome = "confirm_email" | "pending" | "published"
-/** The notice a post page shows after a redirect (`?commented=`), never cached (httpCache.ts). */
-export const COMMENTED_PARAM = "commented"
 const NOTICE_VALUE: Record<CommentOutcome, string> = { confirm_email: "confirm", pending: "pending", published: "published" }
 
 export function isCommenterKey(value: unknown): value is string {
@@ -202,14 +191,7 @@ const FIELD_REASONS: Record<string, string> = {
   body_invalid: "Your comment has characters that can't be shown. Remove them and try again.",
 }
 
-const CODE_REASONS: Record<string, string> = {
-  comments_closed: "Comments on this post are closed.",
-  comments_off: "Comments are off for this post.",
-  not_found: "This post isn't available.",
-  parent_not_found: "The comment you replied to isn't available any more. Post yours as a new comment.",
-  comments_busy: "Too many comments are waiting for review on this post. Try again later.",
-  invalid_token: "This link has been used or has expired.",
-}
+const CODE_REASONS = COMMENT_CODE_REASONS
 
 /** Why the API refused, in the reader's words (the form states board's wording). */
 export function commentRefusal(answer: ApiAnswer): CommentRefusal {

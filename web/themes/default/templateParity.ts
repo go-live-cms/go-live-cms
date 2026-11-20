@@ -33,6 +33,7 @@ export const BLOCK_TEMPLATE_DIFFERENCES = [
   "An empty list says so in `div.query-no-results > p`, not `p.empty-state.dek` (no fixture has one).",
   "React adds `<link rel=\"preload\" as=\"image\" fetchpriority=\"high\">` at the start of the body for the image the page shows first (the featured image, the front page's featured post), which the code layouts only marked `fetchpriority=\"high\"`.",
   "On a page, a heading of the body that slugs to `content` is `content-2`, as on a post: the code page layouts didn't reserve the page's own ids, so it took `main#content`'s (the skip link's target).",
+  "Reader comments (#525): a code layout renders the comments section (`section.comments`, `PostComments`) and its script (`/gl-comments.js`) from the `comments` layout prop; a block template renders them with the comments block, which #500 adds to the `single*` templates (this rule goes then).",
 ] as const
 
 /** The frame elements unwrapped (replaced by their children) on each side. */
@@ -181,6 +182,8 @@ export function comparablePage(html: string, side: "code" | "template", name: st
     removeClasses(document, ".site-copyright", ["site-copyright"])
     unwrapAll(root, TEMPLATE_WRAPPERS)
   } else {
+    // #525: the comments section is the code layout's until the comments block (#500).
+    for (const el of Array.from(document.querySelectorAll('section.comments, script[src="/gl-comments.js"]'))) el.remove()
     removeClasses(document, ".prose", ["measure", "page-body"])
     unwrapAll(root, CODE_WRAPPERS)
   }

@@ -540,6 +540,14 @@ var contrastPairs = []contrastPair{
 	{"warning", "warningBg", contrastUI},
 	{"danger", "dangerBg", contrastUI},
 	{"borderStrong", "surface", contrastUI},
+	// Reader comments (#525): the reader's own comment and a success notice, a reply's
+	// "Replying to" line, field errors and the reader pages' Delete buttons.
+	{"text", "primarySubtle", contrastText},
+	{"textMuted", "primarySubtle", contrastText},
+	{"primary", "primarySubtle", contrastText},
+	{"primary", "surface2", contrastText},
+	{"danger", "surface", contrastText},
+	{"background", "danger", contrastText},
 }
 
 // blockColorSurfaces are the page surfaces tinted block text must read on.

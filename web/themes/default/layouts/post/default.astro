@@ -1,13 +1,15 @@
 ---
 /**
  * Default Post Layout (#345): one reading column, the featured image at wide width,
- * then terms, "Written by" (#350), older / newer posts and "More to read" (#351).
+ * then terms, "Written by" (#350), older / newer posts, the reader comments (#525) and "More to read"
+ * (#351).
  */
 import BaseLayout from '../base.astro'
 import BlockRenderer from '@/components/BlockRenderer'
 import PostHeader from '../../components/PostHeader.astro'
 import FeaturedImage from '../../components/FeaturedImage.astro'
 import PostEnd from '../../components/PostEnd.astro'
+import PostComments from '@/components/comments/PostComments.astro'
 import RelatedPosts from '../../components/RelatedPosts.astro'
 import { COLUMN_IMAGE_SIZES } from '../../lib/imageSizes'
 import { THEME_ELEMENT_IDS } from '../../lib/posts'
@@ -17,6 +19,7 @@ import { resolveSiteUrl } from '@/lib/seo'
 import type { AuthorProfile, Post } from '@gl-admin/lib/api/types'
 import type { LinkedTerm } from '@/lib/termPage'
 import type { SeoMeta } from '@/lib/seo'
+import type { PostCommentsData } from '@/lib/postComments'
 
 interface Props {
   post: Post
@@ -31,9 +34,11 @@ interface Props {
   siteTitle?: string
   // The site's id/slug URL setting, which the post route already fetched (#351).
   urlStructure?: string
+  // Reader comments (#525): the thread answer the post route read, or null (no section).
+  comments?: PostCommentsData | null
 }
 
-const { post, title, description, seo, terms, authors = [], featuredImage, siteTitle, urlStructure } = Astro.props
+const { post, title, description, seo, terms, authors = [], featuredImage, siteTitle, urlStructure, comments = null } = Astro.props
 const headings = headingAnchors(post.published_blocks, THEME_ELEMENT_IDS)
 const end = await loadPostEnd(post, terms, resolveSiteUrl(Astro.url), { urlStructure })
 ---
@@ -47,6 +52,7 @@ const end = await loadPostEnd(post, terms, resolveSiteUrl(Astro.url), { urlStruc
         {post.published_blocks && <BlockRenderer doc={post.published_blocks} imageSizes={COLUMN_IMAGE_SIZES} headings={headings} />}
       </div>
       <PostEnd postType={post.post_type} terms={terms} authors={authors} end={end} class="measure" />
+      <PostComments post={post} comments={comments} class="measure" />
     </article>
     <RelatedPosts posts={end.related} />
   </div>

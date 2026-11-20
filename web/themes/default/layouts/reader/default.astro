@@ -1,0 +1,22 @@
+---
+/**
+ * Reader Page Layout (#525, docs/design/reader-comments.md 11.6): the comment confirm,
+ * unsubscribe and "your comments" pages, and a comment refused without scripts. The 404 page's
+ * shape: the header, one short panel (core's markup, the slot) and the footer, not indexed.
+ * The panel's styles are theme.css's "reader comments (#525)" section.
+ */
+import BaseLayout from '../base.astro'
+
+interface Props {
+  title: string
+  description: string
+}
+
+const { title, description } = Astro.props
+---
+
+<BaseLayout title={title} description={description} seo={{ noindex: true }}>
+  <div class="container reader-page">
+    <slot />
+  </div>
+</BaseLayout>
