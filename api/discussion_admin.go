@@ -263,19 +263,22 @@ func (server *Server) countDiscussion(ctx context.Context, f discussionFilters) 
 }
 
 // urlStructure is the site's post URL structure, for the public links (the default when
-// the settings can't be read: a link is a convenience, never a reason to fail).
-func (server *Server) urlStructure(ctx context.Context) (string, bool) {
+// the settings can't be read: a link is a convenience, never a reason to fail), and whether
+// comments are on for the site: nil when the settings couldn't be read, so a failed read is
+// never answered as "comments are off".
+func (server *Server) urlStructure(ctx context.Context) (string, *bool) {
 	settings, err := server.store.GetSettings(ctx)
 	if err != nil {
-		return "", false
+		return "", nil
 	}
-	return settings.PostUrlStructure, settings.CommentsEnabled
+	enabled := settings.CommentsEnabled
+	return settings.PostUrlStructure, &enabled
 }
 
 // listDiscussionComments handles GET /discussion/comments?status=&post_id=&commenter_id=
 // &q=&page=&limit=: one page of the queue (4.4), newest first, with the tab counts
 // (which follow the filters) and whether comments are on for the site (the queue's
-// "Comments are off for this site" state).
+// "Comments are off for this site" state; null when the settings couldn't be read).
 func (server *Server) listDiscussionComments(c *gin.Context) {
 	status := c.DefaultQuery("status", db.ReaderCommentPending)
 	switch status {
@@ -687,7 +690,7 @@ func (server *Server) bulkDiscussionComments(c *gin.Context) {
 		if samePost {
 			payload["post_id"] = postID
 		}
-		server.recordRequestActivity(c, activityEvent{Verb: db.ActivityReaderCommentsBulkModerated, ObjectType: db.ActivityObjectReaderComment, ObjectID: purgePost, Payload: payload})
+		server.recordRequestActivity(c, activityEvent{Verb: db.ActivityReaderCommentsBulkModerated, ObjectType: db.ActivityObjectReaderComment, ObjectID: 0, Payload: payload})
 		server.notifyReaderCommentChanges(ctx, changes)
 	}
 	server.requestLog(c).Info("discussion_bulk_moderated", "action", req.Action, "requested", len(ids), "succeeded", succeeded)

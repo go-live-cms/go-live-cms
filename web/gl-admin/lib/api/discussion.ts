@@ -68,7 +68,8 @@ export interface DiscussionFilters {
 export interface DiscussionPage {
   comments: ModerationComment[]
   counts: DiscussionCounts
-  comments_enabled: boolean
+  // null when the API couldn't read the settings: then the queue doesn't claim comments are off.
+  comments_enabled: boolean | null
   pagination: { page: number; per_page: number; total: number; total_pages: number }
 }
 

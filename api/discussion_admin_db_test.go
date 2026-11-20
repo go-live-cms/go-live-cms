@@ -220,6 +220,9 @@ func TestDiscussionStatusActions(t *testing.T) {
 	unconfirmed := f.comment(t, post, ana, nil, db.ReaderCommentUnconfirmed)
 	code, _ = f.call(t, &f.editor, http.MethodPut, fmt.Sprintf("/api/v1/discussion/comments/%d/status", unconfirmed.ID), map[string]any{"action": "approve"})
 	require.Equal(t, http.StatusNotFound, code, "unconfirmed comments aren't moderated")
+	code, _ = f.call(t, &f.editor, http.MethodDelete, fmt.Sprintf("/api/v1/discussion/comments/%d", unconfirmed.ID), nil)
+	require.Equal(t, http.StatusNotFound, code, "nor deleted from here")
+	require.True(t, f.exists(t, unconfirmed.ID))
 
 	// Delete permanently: spam and trash only; with approved replies it's a tombstone.
 	code, _ = f.call(t, &f.editor, http.MethodDelete, fmt.Sprintf("/api/v1/discussion/comments/%d", comment.ID), nil)
@@ -268,8 +271,8 @@ func TestDiscussionBulkActions(t *testing.T) {
 	require.Equal(t, db.ReaderCommentSpam, f.reload(t, spam.ID).Status)
 
 	var payload json.RawMessage
-	require.NoError(t, f.conn.QueryRow(`SELECT payload FROM activity WHERE verb = $1 AND object_id = $2 ORDER BY id DESC LIMIT 1`,
-		db.ActivityReaderCommentsBulkModerated, post.ID).Scan(&payload))
+	require.NoError(t, f.conn.QueryRow(`SELECT payload FROM activity WHERE verb = $1 AND object_id = 0 AND payload->>'post_id' = $2 ORDER BY id DESC LIMIT 1`,
+		db.ActivityReaderCommentsBulkModerated, fmt.Sprint(post.ID)).Scan(&payload))
 	require.JSONEq(t, fmt.Sprintf(`{"action":"approve","count":2,"post_id":%d}`, post.ID), string(payload))
 
 	recorder = trashCall(t, f.server, &f.editor, http.MethodPost, "/api/v1/discussion/comments/bulk",

@@ -124,8 +124,8 @@ export default function Discussion() {
   const [confirmDelete, setConfirmDelete] = useState<number[] | null>(null)
   const [findOpen, setFindOpen] = useState(false)
   const [expanded, setExpanded] = useState<Set<number>>(new Set())
-  // Names of the filters' post and commenter, kept from the rows that had them.
-  const [filterNames, setFilterNames] = useState<{ post?: string; commenter?: string }>({})
+  // Names of the filters' post and commenter, by id, kept from the rows that had them.
+  const [filterNames, setFilterNames] = useState<{ post?: { id: number; name: string }; commenter?: { id: number; name: string } }>({})
 
   const reload = useCallback(() => setRefresh((n) => n + 1), [])
 
@@ -136,12 +136,24 @@ export default function Discussion() {
     getDiscussionComments(tab.id, { post_id: postId, commenter_id: commenterId, q: search }, page, PAGE_SIZE)
       .then((answer) => {
         if (!live) return
+        // A page past the end (its last comments just moved): show the last page instead.
+        const last = Math.max(1, answer.pagination.total_pages)
+        if (answer.comments.length === 0 && page > last) {
+          const next = new URLSearchParams(latest.current)
+          if (last === 1) next.delete("page")
+          else next.set("page", String(last))
+          setSearchParams(next, { replace: true })
+          return
+        }
         setData(answer)
+        // The selection keeps only what is still on this page (a row action may have moved one).
+        const onPage = new Set(answer.comments.map((c) => c.id))
+        setSelected((s) => (s.every((id) => onPage.has(id)) ? s : s.filter((id) => onPage.has(id))))
         const first = answer.comments[0]
         if (first) {
           setFilterNames((names) => ({
-            post: postId && first.post.id === postId ? first.post.title || "Untitled" : names.post,
-            commenter: commenterId && first.commenter?.id === commenterId ? first.name : names.commenter,
+            post: postId && first.post.id === postId ? { id: postId, name: first.post.title || "Untitled" } : names.post,
+            commenter: commenterId && first.commenter?.id === commenterId ? { id: commenterId, name: first.name } : names.commenter,
           }))
         }
       })
@@ -218,7 +230,6 @@ export default function Discussion() {
       if (ids.length === 1 && action === "delete" && !selected.includes(ids[0])) {
         await deleteCommentPermanently(ids[0])
         toast.success(actionDoneMessage("delete"))
-        if (openId === ids[0]) closeThread()
       } else {
         const answer = await bulkModerateComments(action, ids)
         const r = bulkReport(action, answer.results, names)
@@ -226,6 +237,8 @@ export default function Discussion() {
         if (!r.partial) toast.success(r.message)
         setSelected(selectionAfterBulk(answer.results))
       }
+      // The drawer's comment deleted (alone or with the selection): close it.
+      if (action === "delete" && openId && ids.includes(openId)) closeThread()
       setConfirmDelete(null)
       changed()
     } catch (e) {
@@ -241,7 +254,7 @@ export default function Discussion() {
   const allSelected = pageIds.length > 0 && pageIds.every((id) => selected.includes(id))
   const someSelected = !allSelected && pageIds.some((id) => selected.includes(id))
   const totalAll = counts ? counts.pending + counts.approved + counts.spam + counts.trash : 0
-  const off = data && !data.comments_enabled
+  const off = data?.comments_enabled === false
   const totalPages = data?.pagination.total_pages ?? 1
 
   // The filters' options are the posts and commenters on this page.
@@ -316,14 +329,14 @@ export default function Discussion() {
             <div className="gl-content-list__filters" role="group" aria-label="Filters">
               <FilterChip
                 label="Post"
-                value={postId ? filterNames.post || `Post ${postId}` : null}
+                value={postId ? (filterNames.post?.id === postId ? filterNames.post.name : `Post ${postId}`) : null}
                 options={postOptions}
                 onPick={(id) => setParams({ post: String(id), page: null })}
                 onClear={() => setParams({ post: null, page: null })}
               />
               <FilterChip
                 label="Commenter"
-                value={commenterId ? filterNames.commenter || "This commenter" : null}
+                value={commenterId ? (filterNames.commenter?.id === commenterId ? filterNames.commenter.name : "This commenter") : null}
                 options={commenterOptions}
                 onPick={(id) => setParams({ commenter: String(id), page: null })}
                 onClear={() => setParams({ commenter: null, page: null })}
@@ -726,9 +739,13 @@ function CommentDrawer({ id, me, meId, isPhone, onClose, onChanged, onDelete }: 
     try {
       const answer = await postMemberComment(comment.post.id, reply, comment.id)
       setReply("")
-      toast.success(replyPosted(answer.parent_approved, comment), {
-        action: { label: "View on site", onClick: () => window.open(`${comment.post.url}#comment-${answer.comment.id}`, "_blank", "noopener,noreferrer") },
-      })
+      // "View on site" only for a post on the site: an unpublished one has no public page.
+      toast.success(
+        replyPosted(answer.parent_approved, comment),
+        comment.post.status === "published"
+          ? { action: { label: "View on site", onClick: () => window.open(`${comment.post.url}#comment-${answer.comment.id}`, "_blank", "noopener,noreferrer") } }
+          : undefined
+      )
       refresh()
     } catch (err) {
       setReplyError(replyFailure(err instanceof ApiError ? err.code : null))
@@ -866,10 +883,13 @@ function ThreadList({
 }) {
   const root = thread.find((c) => c.root_id === null)
   const replies = thread.filter((c) => c.root_id !== null)
+  // A hidden root shows readers "This comment was removed" only while an approved reply hangs from it.
+  const placeholder = replies.some((r) => r.status === "approved" && !r.removed)
   const item = (c: ModerationComment) => (
     <ThreadComment
       comment={c}
       open={c.id === openId}
+      placeholder={c.root_id === null && placeholder}
       meId={meId}
       editing={editing?.id === c.id ? editing : null}
       onEdit={onEdit}
@@ -901,6 +921,7 @@ function ThreadList({
 function ThreadComment({
   comment: c,
   open,
+  placeholder,
   meId,
   editing,
   onEdit,
@@ -910,6 +931,7 @@ function ThreadComment({
 }: {
   comment: ModerationComment
   open: boolean
+  placeholder: boolean
   meId: number | null | undefined
   editing: { id: number; text: string } | null
   onEdit: (e: { id: number; text: string } | null) => void
@@ -966,7 +988,7 @@ function ThreadComment({
         ) : (
           <p className="gl-dq-text">{c.body}</p>
         )}
-        {c.status !== "approved" && !open && c.root_id === null && (
+        {c.status !== "approved" && placeholder && (
           <span className="gl-dq-meta">Readers see “This comment was removed” while it has approved replies.</span>
         )}
         {actions.length > 0 && !editing && (

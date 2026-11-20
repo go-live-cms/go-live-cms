@@ -321,3 +321,32 @@ describe("the drawer (4.4, 3.4)", () => {
     expect(buttons("Approve Maya Lindqvist's comment", drawer)).toHaveLength(1)
   })
 })
+
+describe("after a change (review fixes)", () => {
+  it("drops a comment a row action moved from the selection", async () => {
+    await render()
+    await click(container.querySelector<HTMLInputElement>("input[aria-label='Select comment by Maya Lindqvist']")!)
+    await click(container.querySelector<HTMLInputElement>("input[aria-label='Select comment by Tom Okafor']")!)
+    expect(container.querySelector("[role='region'][aria-label='Bulk actions'] [aria-live]")?.textContent).toBe("2 selected")
+    api.getDiscussionComments.mockResolvedValue(page([TOM]))
+    await click(buttons("Approve Maya Lindqvist's comment")[0])
+    expect(container.querySelector("[role='region'][aria-label='Bulk actions'] [aria-live]")?.textContent).toBe("1 selected")
+  })
+
+  it("goes back to the last page when its page emptied", async () => {
+    api.getDiscussionComments.mockImplementation(async (_s: string, _f: unknown, p: number) =>
+      p === 3 ? { ...page([]), pagination: { page: 3, per_page: 25, total: 30, total_pages: 2 } } : { ...page([MAYA]), pagination: { page: p, per_page: 25, total: 30, total_pages: 2 } }
+    )
+    await render("/discussion?page=3")
+    expect(api.getDiscussionComments).toHaveBeenLastCalledWith("pending", expect.anything(), 2, 25)
+    expect(container.textContent).not.toContain("Nothing waits for review")
+    expect(container.textContent).toContain("Maya Lindqvist")
+  })
+
+  it("doesn't say comments are off when the settings couldn't be read", async () => {
+    api.getDiscussionComments.mockResolvedValue({ ...page([]), counts: { pending: 0, approved: 0, spam: 0, trash: 0 }, comments_enabled: null })
+    await render()
+    expect(container.textContent).not.toContain("Comments are off for this site")
+    expect(container.textContent).toContain("Nothing waits for review")
+  })
+})

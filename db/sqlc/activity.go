@@ -24,8 +24,9 @@ const (
 	ActivityObjectImport = "import"
 	// Discussion (#526, docs/design/reader-comments.md 15.2): seen by moderators (editors
 	// and admins), never contributors. A reader_comment event's payload names its post_id,
-	// which the feed titles; object_id is the comment (0 for a bulk action over several
-	// posts). commenter events are on commenters.id, with counts only, never an address.
+	// which the feed titles; object_id is the comment (0 for a bulk action, whose comments
+	// are many: its post is payload.post_id when they were all on one). commenter events are
+	// on commenters.id, with counts only, never an address.
 	ActivityObjectReaderComment = "reader_comment"
 	ActivityObjectCommenter     = "commenter"
 )

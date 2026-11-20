@@ -56,6 +56,10 @@ func (store *SQLStore) deleteReaderCommentTx(ctx context.Context, id int64, stat
 			return err
 		}
 		result.Status = comment.Status
+		if statuses != nil && comment.Status == ReaderCommentUnconfirmed {
+			// Not moderated (4.1): as if there were no such comment.
+			return sql.ErrNoRows
+		}
 		if statuses != nil && (comment.RemovedAt.Valid || !slices.Contains(statuses, comment.Status)) {
 			return ErrReaderCommentStatusChanged
 		}
