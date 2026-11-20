@@ -180,12 +180,12 @@ func (server *Server) sendDiscussionMail(ctx context.Context, claim db.ClaimDueD
 
 	var built discussionMail
 	var err error
-	switch {
-	case claim.Kind == discussionMailKindReply:
+	switch claim.Kind {
+	case discussionMailKindReply:
 		built, err = server.buildReplyMail(ctx, claim, settings)
-	case claim.Kind == discussionMailKindAuthor:
+	case discussionMailKindAuthor:
 		built, err = server.buildAuthorMail(ctx, claim, settings)
-	case claim.Kind == discussionMailKindModeration:
+	case discussionMailKindModeration:
 		built, err = server.buildModerationMail(ctx, claim, settings)
 	}
 	if err != nil {
