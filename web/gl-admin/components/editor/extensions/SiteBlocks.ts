@@ -117,6 +117,8 @@ export const SearchResults = siteNode("search_results")
 export const PostFacts = siteNode("post_facts")
 export const SiteCopyright = siteNode("site_copyright")
 export const GoliveCredit = siteNode("golive_credit")
+// #500: the post's reader comments (core's PostCommentsSection on the page).
+export const CommentsBlock = siteNode("comments")
 export const QueryPagination = siteNode("query_pagination")
 
 /**
@@ -197,6 +199,19 @@ export interface SiteEditorBridge {
    * search), so a query loop may use "This page's list". False in single, page, 404 and parts.
    */
   routeHasList?: boolean
+  /**
+   * #500: the template may hold the comments block (`commentsAllowedInTemplate`: single and page
+   * templates). False in a list, the 404 or a part: the inserter leaves it out and a placeholder
+   * there says it shows nothing.
+   */
+  allowsComments?: boolean
+  /**
+   * #500: whether comments are on for the site (Settings › Discussion), read when the editor
+   * opened; null while unknown. Off, the comments placeholder says so (16.1).
+   */
+  commentsEnabled?: () => boolean | null
+  /** #500: opens Settings › Discussion (the comments placeholder's link; the Site editor is admins' only). */
+  openDiscussionSettings?: () => void
 }
 
 /** The Site editor's bridge, or null (a post's editor, a test). */

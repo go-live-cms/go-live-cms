@@ -303,6 +303,11 @@ reload loads the new bundle, and nothing typed is lost. Tell editors before such
 
 Releases that did this, newest first:
 
+- **#500, the comments block** (`comments`, with its `title`): one new node type, and a wider doc
+  and containers. No migration. Open editor tabs reload once after the deploy. The default theme's
+  `single*` and `page*` block templates now hold it, so a default-theme site shows reader comments
+  on its posts and pages once comments are on (Settings › Discussion); the web, collab and api
+  images must come from the same commit (the API's starters are those files).
 - **#497, site blocks III** (`related_posts`, `author_cards`, `table_of_contents`,
   `color_scheme_switch`, and `readingTime` on `post_byline`): four new node types, a new attr on
   the byline, and a wider doc and containers. No migration. Open editor tabs reload once after

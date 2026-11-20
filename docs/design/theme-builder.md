@@ -167,9 +167,9 @@ on the design canvases, section 13).
 - **Font uploads.** Families come from what the theme ships, plus system stacks.
 - **Per-block style presets** (WordPress's `styles.blocks`). Block colours stay the #356
   palette.
-- **A comments block, for now.** There is no reader-comments feature yet. #192 comments are
-  editorial and never public. Reader comments are planned (decided) as their own issue, and
-  the block (T18) follows them.
+- **A comments block, at first.** There was no reader-comments feature yet. #192 comments are
+  editorial and never public. Reader comments were planned (decided) as their own design (#499),
+  and the block (T18) followed them: built in #500 (4.1, 4.5).
 - **Scheduled design publishes.**
 - **Editing templates on a phone** (open question 2).
 - **Per-template "Last edited by" and comments.** #328 and #192 stay post features in v1.
@@ -397,6 +397,7 @@ theme must be able to render them, and the generic layout depends on them.
 | `author_cards` (T16) | flow atom | — | the route's credited authors (#350) |
 | `table_of_contents` (T16) | flow atom | — | the route's post's headings, with `post_content`'s ids |
 | `color_scheme_switch` (T16) | flow atom | `variant` (`segmented`/`menu`) | — (the theme's `theme-init.js` drives it) |
+| `comments` (T18, #500) | flow atom, single and page templates only | `title` (≤ 60, "Comments" by default) | the route's post's reader comments (`/public/posts/:id/comments`, reader-comments 11.1) |
 
 A menu named by `menuId` that is deleted renders nothing. The Menus page's delete
 confirmation names the templates and parts that use it.
@@ -406,8 +407,7 @@ confirmation names the templates and parts that use it.
 page"), `color_scheme_switch` (the Light/Dark/System switch), and `readingTime` on
 `post_byline`. Each takes one more row here and needs no new mechanism.
 
-`comments` waits for reader comments (section 2). It is T18, after that feature's own
-issue.
+`comments` is T18 (#500), built on reader comments (#499): see 4.5's "As built (T18)".
 
 ### 4.2 Where each may sit
 
@@ -562,6 +562,35 @@ and vectors, flow atoms like T6's, offered in templates and parts. Details the t
   page-wide: the template and its placed parts are numbered together (a second one is `-2`), and every
   heading on the page skips them.
 - **In a list** the three post blocks render nothing (they show the route's post), as `post_content`.
+
+**As built (T18, #500):** the comments block is the same module and vectors, a flow atom (`comments`, node
+`comments`), built on reader comments (`docs/design/reader-comments.md` 11.1). Details the text left open:
+
+- **Attr.** `title`: plain text, trimmed, at most 60 code points; "Comments" is the default and left out, like
+  every site block's defaults (the bridge, the API's `sanitizeSiteBlockAttrs`, Zod).
+- **Where it may sit** (`siteBlockKindIssues`, Go `checkSiteBlockPlacement`, the vectors), as `post_content`:
+  never in a part (referenced or not), never inside a `query` at any depth (its post template or its "no
+  results"), at most one per template. In a post nothing is refused (inert). **Which templates** may hold it
+  (`commentsAllowedInTemplate`: `single`, `single-*`, `page`, `page-*` and the Site editor's own page templates,
+  `custom-*`) is the editor's rule and the renderer's, not the store's: the store doesn't know the slug, and on a
+  route without a post the block renders nothing. The inserter offers it once and only there (`offeredOnce`, the
+  `SiteEditorBridge`'s `allowsComments`); a copy elsewhere says it shows nothing.
+- **Data.** `collectTemplateNeeds` sees the template's own block (`comments: true`, never a part's or one in a
+  query) and `loadSiteRenderContext` reads the route's post's thread with the post route's loader
+  (`loadPostComments`: no read when comments are off, closed with none or open with none; page `?comments=N` or
+  `?thread=`), from the `discussion` the post route passes the layout. It isn't one of the page's four: one per
+  template, the page's own post. A failed read is `comments_fetch_failed` and no section, the rest of the page
+  renders.
+- **Markup.** The block renders core's `PostCommentsSection` (`src/components/blocks/utils/commentsBlock.tsx`)
+  from the same view a code layout's `PostComments.astro` builds, so the HTML is the same element by element
+  (`themes/default/theme.astro.test.ts`: the post templates' whole pages and a page with comments). No `measure`
+  class: the template lays it out, as the post's body.
+- **The default theme** (5.7, T17) places it after the post's end and before "More to read" in `single`,
+  `single-wide` and `single-sidebar` (the main column's last block), and after the body in `page` and
+  `page-fullwidth`: the code layouts' place. The parity check's comments difference is gone.
+- **In the editor** (the blocks canvas's "Editor · comments block"): a placeholder ("“Comments” · the post’s
+  threads, then the form"), a Block tab with Title (its invalid state past 60), a "Discussion settings" button to
+  Settings › Discussion, and, with comments off for the site, "Comments are off for this site" (16.1).
 
 Theme and plugin blocks work in templates exactly as in posts, with their own renderers and
 #456's boundary for plugins. **Data-reading ("dynamic") blocks from themes or plugins are not

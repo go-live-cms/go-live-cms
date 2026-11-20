@@ -6,7 +6,7 @@
     "blocks": {
       "sidebar-header": { "id": "sidebar-header", "type": "template_part", "version": 1, "attrs": { "slug": "header" } },
       "sidebar-columns": { "id": "sidebar-columns", "type": "columns", "version": 1, "attrs": { "layout": "67-33" }, "children": ["sidebar-main", "sidebar-aside"] },
-      "sidebar-main": { "id": "sidebar-main", "type": "column", "version": 1, "attrs": {}, "children": ["sidebar-category", "sidebar-title", "sidebar-dek", "sidebar-byline", "sidebar-image", "sidebar-content", "sidebar-terms", "sidebar-authors", "sidebar-navigation"] },
+      "sidebar-main": { "id": "sidebar-main", "type": "column", "version": 1, "attrs": {}, "children": ["sidebar-category", "sidebar-title", "sidebar-dek", "sidebar-byline", "sidebar-image", "sidebar-content", "sidebar-terms", "sidebar-authors", "sidebar-navigation", "sidebar-comments"] },
       "sidebar-category": { "id": "sidebar-category", "type": "post_terms", "version": 1, "attrs": {} },
       "sidebar-title": { "id": "sidebar-title", "type": "post_title", "version": 1, "attrs": {} },
       "sidebar-dek": { "id": "sidebar-dek", "type": "post_excerpt", "version": 1, "attrs": {} },
@@ -16,6 +16,7 @@
       "sidebar-terms": { "id": "sidebar-terms", "type": "post_terms", "version": 1, "attrs": { "all": true } },
       "sidebar-authors": { "id": "sidebar-authors", "type": "author_cards", "version": 1, "attrs": {} },
       "sidebar-navigation": { "id": "sidebar-navigation", "type": "post_navigation", "version": 1, "attrs": {} },
+      "sidebar-comments": { "id": "sidebar-comments", "type": "comments", "version": 1, "attrs": {} },
       "sidebar-aside": { "id": "sidebar-aside", "type": "column", "version": 1, "attrs": {}, "children": ["sidebar-toc", "sidebar-in-category", "sidebar-facts"] },
       "sidebar-toc": { "id": "sidebar-toc", "type": "table_of_contents", "version": 1, "attrs": {} },
       "sidebar-in-category": { "id": "sidebar-in-category", "type": "related_posts", "version": 1, "attrs": { "layout": "list", "taxonomy": "category" } },

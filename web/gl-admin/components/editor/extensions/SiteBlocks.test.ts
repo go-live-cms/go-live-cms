@@ -4,11 +4,12 @@ import { NodeSelection } from "@tiptap/pm/state"
 import type { Schema } from "@tiptap/pm/model"
 import { schemaExtensions } from "@gl-admin/lib/collaboration/schema"
 import { blockDocToPM, pmToBlockDoc } from "@gl-admin/lib/collaboration/blockBridge"
-import { SITE_BLOCK_NODE_NAMES, SITE_BLOCK_TYPES, SITE_FLOW_BLOCK_TYPES, siteBlockNodeAttrs, type BlockDocV1, type SiteBlockType } from "@gl-admin/lib/blocks-spec"
+import { commentsAllowedInTemplate, SITE_BLOCK_NODE_NAMES, SITE_BLOCK_TYPES, SITE_FLOW_BLOCK_TYPES, siteBlockNodeAttrs, type BlockDocV1, type SiteBlockType } from "@gl-admin/lib/blocks-spec"
 import { BlockNodeViews } from "./BlockNodeViews"
 import { PasteSanitizer } from "./PasteSanitizer"
-import { editorDocKind, SiteBlockContext } from "./SiteBlocks"
-import { partName, siteBlockInertNote, siteBlockSummary } from "./SiteBlockViews"
+import { editorDocKind, SiteBlockContext, type SiteEditorBridge } from "./SiteBlocks"
+import { COMMENTS_NOT_HERE_NOTE, COMMENTS_OFF_NOTE, commentsBlockNote, DISCUSSION_SETTINGS_LABEL, partName, siteBlockInertNote, siteBlockSummary } from "./SiteBlockViews"
+import { menuEntries, offeredOnce } from "../blocks/catalog"
 import { stubJsdomRangeLayout } from "@gl-admin/lib/collaboration/testHelpers"
 
 // The site blocks in the editor (#488; the blocks canvas's "Site blocks in the editor"):
@@ -331,6 +332,112 @@ describe("site blocks IV in the editor (#498)", () => {
       expect(at, type).toBeGreaterThan(-1)
       expect(ed.state.doc.child(at).attrs, type).toMatchObject(siteBlockNodeAttrs(type, {}))
     }
+  })
+})
+
+describe("the comments block in the editor (#500)", () => {
+  function openWith(doc: BlockDocV1 | null, kind: "post" | "template" | "part", bridge: SiteEditorBridge | null) {
+    const element = document.createElement("div")
+    document.body.append(element)
+    editor = new Editor({
+      element,
+      extensions: [...Object.values(schemaExtensions({ collaborating: false })), BlockNodeViews, PasteSanitizer, SiteBlockContext.configure({ kind, bridge })],
+      content: doc ? blockDocToPM(doc, schemaOf()).toJSON() : "<p>first</p>",
+    })
+    return editor
+  }
+
+  it("round trips through the bridge with its title, the default left out", () => {
+    const doc = docOf(["comments", { title: "Responses" }], ["comments", {}])
+    const ed = open(doc, "template")
+    expect(topTypes(ed)).toEqual(["comments", "comments", "paragraph"])
+    expect(ed.state.doc.child(0).attrs).toMatchObject({ title: "Responses" })
+    expect(ed.state.doc.child(1).attrs).toMatchObject({ title: null })
+    const back = pmToBlockDoc(ed.state.doc)
+    expect(back.blocks[ID(0)]).toEqual(doc.blocks[ID(0)])
+    expect(back.blocks[ID(1)]).toEqual({ id: ID(1), type: "comments", version: 1, attrs: {} })
+  })
+
+  it("a client's untrimmed, long, default or extra title stops at the bridge", () => {
+    const ed = open(docOf(["comments", {}]), "template")
+    ed.view.dispatch(ed.state.tr.setNodeMarkup(0, undefined, { ...ed.state.doc.child(0).attrs, title: `  ${"x".repeat(70)}  `, postId: 3 }))
+    expect(pmToBlockDoc(ed.state.doc).blocks[ID(0)].attrs).toEqual({ title: "x".repeat(60) })
+    ed.view.dispatch(ed.state.tr.setNodeMarkup(0, undefined, { ...ed.state.doc.child(0).attrs, title: "Comments" }))
+    expect(pmToBlockDoc(ed.state.doc).blocks[ID(0)].attrs).toEqual({})
+  })
+
+  it("is a labelled placeholder, inert in a post and in a part, and says so", () => {
+    const ed = open(docOf(["comments", { title: "Responses" }]), "template")
+    const view = ed.view.dom.querySelector('.editor-site-block[data-type="comments"]')!
+    expect(view.querySelector(".editor-site-block__name")!.textContent).toBe("Comments")
+    expect(view.querySelector(".editor-site-block__detail")!.textContent).toBe("“Responses” · the post’s threads, then the form")
+    expect(view.classList.contains("is-inert")).toBe(false)
+    ed.destroy()
+    const post = open(docOf(["comments", {}]), "post")
+    expect(post.view.dom.querySelector(".editor-site-block.is-inert [role=note]")?.textContent).toBe("Comments only works in the Site editor. In a post it shows nothing on the page. You can remove it.")
+    post.destroy()
+    const part = open(docOf(["comments", {}]), "part")
+    expect(part.view.dom.querySelector(".editor-site-block.is-inert [role=note]")?.textContent).toBe("Comments can't go in a part, so it shows nothing. You can remove it.")
+    expect(siteBlockSummary("comments", {})).toBe("“Comments” · the post’s threads, then the form")
+  })
+
+  it("in the Site editor: off for the site, a template it can't show in, and the Discussion settings link", () => {
+    let enabled: boolean | null = null
+    const opened: string[] = []
+    const bridge: SiteEditorBridge = { allowsComments: true, commentsEnabled: () => enabled, openDiscussionSettings: () => opened.push("discussion") }
+    expect(commentsBlockNote(bridge)).toBeNull()
+    enabled = false
+    expect(commentsBlockNote(bridge)).toBe(COMMENTS_OFF_NOTE)
+    expect(commentsBlockNote({ ...bridge, allowsComments: false })).toBe(COMMENTS_NOT_HERE_NOTE)
+    expect(commentsBlockNote(null)).toBeNull()
+
+    const ed = openWith(docOf(["comments", {}]), "template", bridge)
+    const view = ed.view.dom.querySelector('.editor-site-block[data-type="comments"]')!
+    expect(view.classList.contains("is-inert")).toBe(true)
+    expect(view.querySelector("[role=note]")!.textContent).toBe(COMMENTS_OFF_NOTE)
+    const button = view.querySelector<HTMLButtonElement>("button.editor-site-block__open")!
+    expect(button.textContent).toBe(DISCUSSION_SETTINGS_LABEL)
+    button.click()
+    expect(opened).toEqual(["discussion"])
+    // Clicking it doesn't touch the doc (rule 7): the block is as it was.
+    expect(pmToBlockDoc(ed.state.doc).blocks[ID(0)].attrs).toEqual({})
+    ed.destroy()
+    enabled = true
+    const on = openWith(docOf(["comments", {}]), "template", bridge)
+    expect(on.view.dom.querySelector('[data-type="comments"] [role=note]')).toBeNull()
+  })
+
+  it("is offered once, only where the template may hold it, never in a post's or a part's menus", () => {
+    const offered = (ed: Editor, context: "post" | "template" | "part") => menuEntries({ role: "admin", context }).filter(offeredOnce(ed)).map((e) => e.type)
+    const single = openWith(null, "template", { allowsComments: true })
+    expect(offered(single, "template")).toContain("comments")
+    single.destroy()
+    const archive = openWith(null, "template", { allowsComments: false })
+    expect(offered(archive, "template")).not.toContain("comments")
+    archive.destroy()
+    const already = openWith(docOf(["comments", {}]), "template", { allowsComments: true })
+    expect(offered(already, "template")).not.toContain("comments")
+    // The post content rule is unchanged beside it.
+    expect(offered(already, "template")).toContain("post_content")
+    already.destroy()
+    const part = openWith(null, "part", null)
+    expect(offered(part, "part")).not.toContain("comments")
+    part.destroy()
+    const post = openWith(null, "post", null)
+    expect(offered(post, "post")).not.toContain("comments")
+  })
+
+  it("insertSiteBlock puts it in with its default title", () => {
+    const ed = open(null, "template")
+    ed.commands.setTextSelection(ed.state.doc.content.size - 1)
+    expect(ed.commands.insertSiteBlock("comments")).toBe(true)
+    const at = topTypes(ed).indexOf("comments")
+    expect(ed.state.doc.child(at).attrs).toMatchObject({ title: null })
+  })
+
+  it("which templates may hold it: single and page ones, the Site editor's page templates", () => {
+    for (const slug of ["single", "single-post", "single-sidebar", "page", "page-fullwidth", "custom-pricing"]) expect(commentsAllowedInTemplate(slug), slug).toBe(true)
+    for (const slug of ["home", "front-page", "archive", "archive-post", "taxonomy", "author", "search", "404", "header", "single-", "singles", null]) expect(commentsAllowedInTemplate(slug), String(slug)).toBe(false)
   })
 })
 

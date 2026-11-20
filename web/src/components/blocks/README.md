@@ -361,6 +361,13 @@ interface BlockComponentProps {
   `section > h2#more-posts`) and `layout: links` (`ul.link-list`), the pager's `end` ("That’s every post …"),
   `post_terms`' `all` (every taxonomy, `PostTerms`), `related_posts`' `layout: list` (`section.aside-list`,
   "In <term>"), `post_content`'s `width` (the theme's `imageSizes`).
+- **The comments block (#500, `utils/commentsBlock.tsx`, registered by `comments/`; docs/design/reader-comments.md
+  11.1):** the route's post's reader comments, **exactly the markup below** (core's `PostCommentsSection`, the
+  section a code layout renders through `PostComments.astro`), from the context's `comments` (the thread read
+  before the render with the post route's loader, the page's URL and clock, Settings › Discussion): its `title`
+  heads the section ("Comments" by default), and `<script src="/gl-comments.js" defer>` follows it when it has a
+  form. No `measure` class: a block template lays it out. Nothing in a post's body, a part, a query, on a route
+  without a post, or wherever the section itself shows nothing.
 - **Reader comments (#525, `src/components/comments/PostCommentsSection.tsx`, docs/design/reader-comments.md
   11.1; the default theme canvas's "Comments section" and "Comment form states" boards):** core's markup, one
   component for a code layout (`src/components/comments/PostComments.astro`, from the `comments` layout prop) and

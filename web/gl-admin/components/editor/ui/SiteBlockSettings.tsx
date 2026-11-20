@@ -2,6 +2,8 @@ import { useEffect, useId, useState } from "react"
 import type { Editor as TiptapEditor } from "@tiptap/core"
 import type { Node as PMNode } from "@tiptap/pm/model"
 import {
+  COMMENTS_BLOCK_DEFAULT_TITLE,
+  COMMENTS_BLOCK_TITLE_MAX_LENGTH,
   normalizeSiteBlockAttrs,
   normalizeSiteLogoWidth,
   SEARCH_BUTTON_MAX_LENGTH,
@@ -112,6 +114,8 @@ export function siteBlockHint(type: SiteBlockType): string | null {
       return SITE_COPYRIGHT_HELP
     case "golive_credit":
       return GOLIVE_CREDIT_HELP
+    case "comments":
+      return COMMENTS_BLOCK_HELP
     default:
       return null
   }
@@ -470,6 +474,7 @@ export default function SiteBlockSettings({ editor, node, blockRef }: { editor: 
           )}
         </>
       )}
+      {type === "comments" && <CommentsTitleField id={`${ids}-title`} value={attrs.title} onChange={(title) => set({ title })} />}
       {type === "template_part" && <PartField id={`${ids}-part`} slug={attrs.slug} onPick={(slug) => set({ slug })} />}
       {type === "query" && <QueryFields ids={ids} attrs={attrs} set={set} listRoute={editorSiteBridge(editor)?.routeHasList ?? true} />}
       {type === "query_title" && (
@@ -704,6 +709,41 @@ function TextField({
           {hint}
         </small>
       )}
+    </div>
+  )
+}
+
+// #500 (the blocks canvas's "Editor · comments block" and reader-comments 16.1).
+export const COMMENTS_BLOCK_HELP = "The post’s approved comments, then the form. Once per single or page template; set who may comment in Settings › Discussion."
+export const COMMENTS_TITLE_HELP = `Empty: “${COMMENTS_BLOCK_DEFAULT_TITLE}”. Up to ${COMMENTS_BLOCK_TITLE_MAX_LENGTH} characters; the count follows it.`
+export const COMMENTS_TITLE_TOO_LONG = `Up to ${COMMENTS_BLOCK_TITLE_MAX_LENGTH} characters. The page shows the first ${COMMENTS_BLOCK_TITLE_MAX_LENGTH}.`
+
+/**
+ * The comments block's one field (16.1): its title, stored as typed (the bridge trims and caps it,
+ * `normalizeSiteBlockAttrs`), with the invalid state of the canvas when it runs past 60 characters
+ * (code points, as the API counts).
+ */
+export function CommentsTitleField({ id, value, onChange }: { id: string; value: unknown; onChange: (title: string | null) => void }) {
+  const text = typeof value === "string" ? value : ""
+  const tooLong = [...text.trim()].length > COMMENTS_BLOCK_TITLE_MAX_LENGTH
+  return (
+    <div className="post-settings__field">
+      <label className="post-settings__label" htmlFor={id}>
+        Title
+      </label>
+      <input
+        id={id}
+        type="text"
+        maxLength={COMMENTS_BLOCK_TITLE_MAX_LENGTH * 2}
+        value={text}
+        placeholder={COMMENTS_BLOCK_DEFAULT_TITLE}
+        aria-invalid={tooLong || undefined}
+        aria-describedby={`${id}-hint`}
+        onChange={(event) => onChange(event.currentTarget.value === "" ? null : event.currentTarget.value)}
+      />
+      <small id={`${id}-hint`} className={tooLong ? "post-settings__field-error" : "post-settings__hint"}>
+        {tooLong ? COMMENTS_TITLE_TOO_LONG : COMMENTS_TITLE_HELP}
+      </small>
     </div>
   )
 }

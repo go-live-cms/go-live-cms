@@ -548,6 +548,8 @@ export const SITE_BLOCKS: readonly CatalogEntry[] = [
   siteEntry("post_facts", ["details", "published", "updated", "reading time", "facts"]),
   siteEntry("site_copyright", ["copyright", "year", "legal"]),
   siteEntry("golive_credit", ["credit", "powered", "published with"]),
+  // #500: the post's reader comments; once per single or page template (`offeredOnce`).
+  siteEntry("comments", ["discussion", "replies", "responses", "readers"]),
 ]
 
 function siteEntry(type: SiteBlockType, keywords: readonly string[]): CatalogEntry {
@@ -620,20 +622,27 @@ export function offeredIn(entry: CatalogEntry, kind: BlockDocKind = "post"): boo
   return !entry.contexts || entry.contexts.includes(kind)
 }
 
+/** The site blocks a template holds at most one of (design 4.2; #500, reader-comments 11.1). */
+const ONCE_PER_TEMPLATE = ["post_content", "comments"] as const
+
 /**
  * #493 (design 4.2): a template holds at most one Post content, so once its doc has one the
- * menus don't offer another (a second would make every store `kept-invalid`). Reads the doc;
- * everything is offered in a post.
+ * menus don't offer another (a second would make every store `kept-invalid`). #500: the same for
+ * Comments, which is also offered only where the Site editor says the template may hold it
+ * (`SiteEditorBridge.allowsComments`: single and page templates). Reads the doc; everything is
+ * offered in a post.
  */
 export function offeredOnce(editor: Editor): (entry: CatalogEntry) => boolean {
   if (editorDocKind(editor) === "post") return () => true
-  const name = SITE_BLOCK_NODE_NAMES.post_content
-  let has = false
+  const names = new Map<string, string>(ONCE_PER_TEMPLATE.map((type) => [SITE_BLOCK_NODE_NAMES[type], type]))
+  const present = new Set<string>()
   editor.state.doc.descendants((node) => {
-    if (node.type.name === name) has = true
-    return !has
+    const type = names.get(node.type.name)
+    if (type) present.add(type)
+    return present.size < names.size
   })
-  return (entry) => !(has && entry.type === "post_content")
+  const commentsHere = editorSiteBridge(editor)?.allowsComments !== false
+  return (entry) => !(entry.type && present.has(entry.type)) && (entry.type !== "comments" || commentsHere)
 }
 
 /** The entries a menu offers in `context`, in catalog order. */

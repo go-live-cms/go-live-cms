@@ -126,3 +126,20 @@ func TestSiteQueryAttrsCarryNoQueryLanguage(t *testing.T) {
 	sanitizeBlock(block)
 	require.Equal(t, map[string]interface{}{"perPage": float64(24), "taxonomy": "category", "termIds": []interface{}{float64(1), float64(2), float64(3)}}, block["attrs"])
 }
+
+// #500: the comments block keeps its title only, as plain text, in every kind; where it may sit is
+// the vectors' (never a part, never in a query, once per template). In a post it is inert.
+func TestCommentsBlockStores(t *testing.T) {
+	raw := `{"doc_version":1,"blocks_order":["comments-1","comments-2"],"blocks":{` +
+		`"comments-1":{"id":"comments-1","type":"comments","version":1,"attrs":{"title":"  Responses\u0000 ","threads":[{"body":"hi"}],"postId":3,"pm":{"type":"doc"}}},` +
+		`"comments-2":{"id":"comments-2","type":"comments","version":1,"attrs":{"title":"Comments"}}}}`
+	doc := parseVectorDoc(t, json.RawMessage(raw))
+	require.NoError(t, doc.prepareForStore(ThemeBlockManifest{}))
+	require.Equal(t, map[string]interface{}{"title": "Responses"}, doc.Blocks["comments-1"].(map[string]interface{})["attrs"])
+	require.Equal(t, map[string]interface{}{}, doc.Blocks["comments-2"].(map[string]interface{})["attrs"])
+
+	template := parseVectorDoc(t, json.RawMessage(raw))
+	require.ErrorContains(t, template.prepareForStoreAs(ThemeBlockManifest{}, blockDocKindTemplate), "at most one comments block")
+	part := parseVectorDoc(t, json.RawMessage(raw))
+	require.ErrorContains(t, part.prepareForStoreAs(ThemeBlockManifest{}, blockDocKindPart), "can't be in a part")
+}

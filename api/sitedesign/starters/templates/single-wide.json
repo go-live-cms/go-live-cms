@@ -2,7 +2,7 @@
   "title": "Single post · wide",
   "doc": {
     "doc_version": 1,
-    "blocks_order": ["single-wide-header", "single-wide-category", "single-wide-title", "single-wide-dek", "single-wide-byline", "single-wide-image", "single-wide-content", "single-wide-terms", "single-wide-authors", "single-wide-navigation", "single-wide-related", "single-wide-footer"],
+    "blocks_order": ["single-wide-header", "single-wide-category", "single-wide-title", "single-wide-dek", "single-wide-byline", "single-wide-image", "single-wide-content", "single-wide-terms", "single-wide-authors", "single-wide-navigation", "single-wide-comments", "single-wide-related", "single-wide-footer"],
     "blocks": {
       "single-wide-header": { "id": "single-wide-header", "type": "template_part", "version": 1, "attrs": { "slug": "header" } },
       "single-wide-category": { "id": "single-wide-category", "type": "post_terms", "version": 1, "attrs": {} },
@@ -14,6 +14,7 @@
       "single-wide-terms": { "id": "single-wide-terms", "type": "post_terms", "version": 1, "attrs": { "all": true } },
       "single-wide-authors": { "id": "single-wide-authors", "type": "author_cards", "version": 1, "attrs": {} },
       "single-wide-navigation": { "id": "single-wide-navigation", "type": "post_navigation", "version": 1, "attrs": {} },
+      "single-wide-comments": { "id": "single-wide-comments", "type": "comments", "version": 1, "attrs": {} },
       "single-wide-related": { "id": "single-wide-related", "type": "related_posts", "version": 1, "attrs": {} },
       "single-wide-footer": { "id": "single-wide-footer", "type": "template_part", "version": 1, "attrs": { "slug": "footer" } }
     }

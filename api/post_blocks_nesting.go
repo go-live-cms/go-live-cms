@@ -79,6 +79,8 @@ var flowBlockTypes = map[string]bool{
 	// #498
 	"query_total": true, "author_avatar": true, "search_results": true, "post_facts": true,
 	"site_copyright": true, "golive_credit": true,
+	// #500
+	"comments": true,
 }
 
 // listBlockTypes have their items as children (Block Spec `LIST_ITEMS`): list_item for

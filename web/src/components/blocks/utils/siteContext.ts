@@ -2,6 +2,7 @@ import { createContext, useContext } from "react"
 import type { BlockDocV1 } from "@gl-admin/lib/blocks-spec"
 import type { AuthorProfile, Post, TaxonomyTerm } from "@gl-admin/lib/api/types"
 import type { DateSettings } from "../../../lib/siteDates"
+import type { CommentsSettings, PostCommentsData } from "../../../lib/postComments"
 import type { BlockMedia } from "./responsiveImage"
 
 /**
@@ -84,6 +85,28 @@ export interface SiteRenderContext {
    * table of contents block, and a "In <term>" list (`related_posts` with `layout: "list"`) with posts.
    */
   pageShows?: { tableOfContents: boolean; categoryList: boolean }
+  /**
+   * #500: the route's post's reader comments for the comments block (reader-comments 11.1), read
+   * before the render with the code layout's loader (`loadPostComments`: page `?comments=N` or
+   * `?thread=`, nothing when there is nothing to show). Missing or null: no comments block on
+   * the page, no post here, comments off, or the read failed, and the block renders nothing.
+   */
+  comments?: SiteComments | null
+}
+
+/**
+ * #500: what the comments block draws `PostCommentsSection` from: what `PostComments.astro` reads
+ * (the thread answer, the page's URL, the clock, Settings › Discussion), so the block and the code
+ * layout's component build the same view (`commentsView`). Nothing about the reader.
+ */
+export interface SiteComments {
+  data: PostCommentsData
+  postId: number
+  /** The page's URL (`href`): its path, `?comments=`, `?thread=`, `?replyto=`, `?commented=`. */
+  url: string
+  /** The clock `closes_at` is applied with (ISO), taken when the context was loaded. */
+  now: string
+  settings: CommentsSettings
 }
 
 /** A term with its archive's link and its taxonomy's label (`src/lib/termPage.ts` `linkTerms`). */

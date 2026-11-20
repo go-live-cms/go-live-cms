@@ -110,8 +110,8 @@ const blockTemplate = await resolveTemplate(Astro.locals, templateRoute)
 // code-layout setting).
 let LayoutComponent: any = null
 // Reader comments (#525, design 11.1): the thread the code layout's `PostComments` renders,
-// read while the layout loads. A block template's comments are its comments block's (#500),
-// which reads them itself. Null when there is nothing to show or the read failed (logged
+// read while the layout loads. A block template's comments are its comments block's (#500): the
+// template's collector reads them with the same loader, from the `discussion` it gets below. Null when there is nothing to show or the read failed (logged
 // `comments_fetch_failed`: the post renders without the section).
 let comments: Awaited<ReturnType<typeof loadPostComments>> = null
 if (!blockTemplate) {
@@ -196,7 +196,7 @@ const layoutProps = {
 ---
 
 {blockTemplate ? (
-  <BlockTemplateLayout kind={templateRoute.kind} choice={blockTemplate} {...layoutProps} />
+  <BlockTemplateLayout kind={templateRoute.kind} choice={blockTemplate} {...layoutProps} discussion={publishedDiscussion} />
 ) : (
   <LayoutComponent {...layoutProps} />
 )}

@@ -828,6 +828,11 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   query_pagination `end: true`, post_content `width: wide`, post_featured_image `width: wide|full`, post_byline
   `date: true`, post_terms `all: true` (drops `taxonomy`), related_posts `layout: list`, color_scheme_switch
   `variant: popover`. Allowlists, defaults left out (`siteBlockVectors.json`). No route change, no migration.
+- **The comments block (#500):** one more flow type, `comments` (`title`: plain text, ≤ 60 runes, "Comments" left
+  out). `checkSiteBlockPlacement` gives it `post_content`'s rules: never in a part, never inside a `query` at any
+  depth, at most one per template; inert in a post. The default theme's `single*` and `page*` templates (and so the
+  starters, `go generate ./api/sitedesign`) hold it. No route change (the web reads the cached
+  `/public/posts/:id/comments`), no migration.
 ## Categories, merges and redirects (#331, #146, `000047`)
 
 - **One category per post** (taxonomy `category`, `db.CategoryTaxonomy`): `PUT

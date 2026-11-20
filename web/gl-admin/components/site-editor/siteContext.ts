@@ -1,6 +1,7 @@
 import { getActiveTheme } from "@gl-admin/lib/api/themes"
 import { getPostTypes } from "@gl-admin/lib/api/postTypes"
 import { getTaxonomyTypes } from "@gl-admin/lib/api/taxonomies"
+import { getSettings } from "@gl-admin/lib/api/settings"
 import type { SiteVocabulary } from "@gl-admin/lib/siteDesign"
 
 // What every Site editor screen reads about the active theme and the site (#493): the
@@ -14,13 +15,19 @@ export interface SiteDesignContext {
   shippedTemplates: Readonly<Record<string, { title?: string; doc?: unknown }>>
   shippedParts: Readonly<Record<string, { title?: string; doc?: unknown }>>
   vocabulary: SiteVocabulary
+  /**
+   * #500: whether reader comments are on for the site (Settings › Discussion), for the comments
+   * block's placeholder; null when the read failed (the placeholder then says nothing about it).
+   */
+  commentsEnabled?: boolean | null
 }
 
 export async function loadSiteDesignContext(): Promise<SiteDesignContext> {
-  const [theme, types, taxonomies] = await Promise.all([
+  const [theme, types, taxonomies, settings] = await Promise.all([
     getActiveTheme(),
     getPostTypes().catch(() => null),
     getTaxonomyTypes().catch(() => null),
+    getSettings().catch(() => null),
   ])
   const config = theme.config ?? ({} as typeof theme.config)
   return {
@@ -28,6 +35,7 @@ export async function loadSiteDesignContext(): Promise<SiteDesignContext> {
     themeSlug: theme.slug,
     shippedTemplates: config.block_templates ?? {},
     shippedParts: config.block_parts ?? {},
+    commentsEnabled: settings ? settings.comments_enabled ?? false : null,
     vocabulary: {
       postTypes: (types?.data ?? [])
         .filter((t) => t.name !== "post" && t.name !== "page" && t.public !== false && t.is_active !== false)
