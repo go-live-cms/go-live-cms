@@ -4,8 +4,8 @@ import { MemoryRouter } from "react-router-dom"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import axe from "axe-core"
 
-// Settings › Discussion (#527): off shows the switch alone, the switch stays hidden until
-// the moderation queue ships, the form refuses what the API refuses before any request,
+// Settings › Discussion (#527): off shows the switch alone, the switch shows since the
+// moderation queue shipped (#526), the form refuses what the API refuses before any request,
 // and a save sends only what changed.
 
 const api = vi.hoisted(() => ({ getSettings: vi.fn(), updateSettings: vi.fn() }))
@@ -60,11 +60,11 @@ const settle = () =>
     for (let i = 0; i < 6; i++) await new Promise((r) => setTimeout(r, 0))
   })
 
-async function render(props: { switchReady?: boolean } = {}) {
+async function render() {
   await act(async () =>
     root.render(
       <MemoryRouter initialEntries={["/settings/discussion"]}>
-        <SettingsDiscussion {...props} />
+        <SettingsDiscussion />
       </MemoryRouter>
     )
   )
@@ -122,14 +122,12 @@ it("groups Moderation, Display and Privacy", async () => {
   expect([...container.querySelectorAll("h3")].map((h) => h.textContent)).toEqual(["Moderation", "Display", "Privacy"])
 })
 
-describe("the site switch (hidden until #526)", () => {
-  it("isn't offered while comments are off: a note says why, and nothing else shows", async () => {
+describe("the site switch (shown since #526)", () => {
+  it("is offered while comments are off, so they can be turned on", async () => {
     api.getSettings.mockResolvedValue({ ...SAVED, comments_enabled: false })
     await render()
-    expect(sw()).toBeNull()
-    expect(container.textContent).toContain("Comments can’t be turned on yet")
-    expect(container.querySelector("h3")).toBeNull()
-    expect(textarea("comments_hold_words")).toBeNull()
+    expect(sw()?.getAttribute("aria-checked")).toBe("false")
+    expect(container.textContent).not.toContain("Comments can’t be turned on yet")
   })
 
   it("shows while comments are on, so they can be turned off", async () => {
@@ -141,7 +139,7 @@ describe("the site switch (hidden until #526)", () => {
 describe("Off hides the rest", () => {
   it("shows the switch alone when off, and the rest when turned on", async () => {
     api.getSettings.mockResolvedValue({ ...SAVED, comments_enabled: false })
-    await render({ switchReady: true })
+    await render()
     expect(sw()?.getAttribute("aria-checked")).toBe("false")
     expect(container.querySelector("h3")).toBeNull()
     expect(container.textContent).toContain("The rest of the settings appear when comments are on.")
@@ -157,7 +155,7 @@ describe("Off hides the rest", () => {
   })
 
   it("turning it off hides the rest at once", async () => {
-    await render({ switchReady: true })
+    await render()
     await act(async () => sw()!.click())
     expect(container.querySelector("h3")).toBeNull()
   })

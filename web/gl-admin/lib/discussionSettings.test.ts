@@ -3,7 +3,6 @@ import path from "node:path"
 import { describe, expect, it } from "vitest"
 import type { Settings } from "@gl-admin/lib/api/settings"
 import {
-  COMMENTS_SWITCH_READY,
   DISCUSSION_LIMITS,
   apiFieldError,
   changedDiscussionFields,
@@ -11,7 +10,6 @@ import {
   normalizeNotice,
   normalizeWordList,
   rangeValue,
-  showCommentsSwitch,
   showDiscussionDetails,
   toDiscussionDraft,
   toDiscussionRequest,
@@ -203,18 +201,8 @@ describe("toDiscussionRequest", () => {
   })
 })
 
-describe("the switch and Off", () => {
+describe("Off", () => {
   const saved = toDiscussionDraft(SAVED)
-
-  it("is hidden until the moderation queue ships (#526 flips COMMENTS_SWITCH_READY)", () => {
-    expect(COMMENTS_SWITCH_READY).toBe(false)
-    expect(showCommentsSwitch({ ...saved, comments_enabled: false })).toBe(false)
-    expect(showCommentsSwitch({ ...saved, comments_enabled: false }, true)).toBe(true)
-  })
-
-  it("shows while comments are on, so they can be turned off", () => {
-    expect(showCommentsSwitch({ ...saved, comments_enabled: true })).toBe(true)
-  })
 
   it("off shows the switch alone", () => {
     expect(showDiscussionDetails({ ...saved, comments_enabled: false })).toBe(false)

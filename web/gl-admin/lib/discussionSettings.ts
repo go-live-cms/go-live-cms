@@ -8,15 +8,6 @@ import type { Settings, UpdateSettingsRequest } from "@gl-admin/lib/api/settings
 // discussionSettingsVectors.json, which both suites run: the form refuses what the API
 // refuses, field by field, before a request is made.
 
-/**
- * The site switch ("Allow comments on this site") stays hidden until the moderation queue
- * ships (design section 17: comments can be turned on only after phase 3, which also needs
- * Discussion, #526). #526 sets this to true (and updates the test that pins it); nothing
- * else changes. While it is false the page shows the switch only to turn comments off
- * again if the API already has them on.
- */
-export const COMMENTS_SWITCH_READY = false
-
 export type CommentsModeration = NonNullable<Settings["comments_moderation"]>
 export type CommentsThreading = NonNullable<Settings["comments_threading"]>
 export type CommentsOrder = NonNullable<Settings["comments_order"]>
@@ -234,11 +225,6 @@ export function toDiscussionRequest(draft: DiscussionDraft, saved: DiscussionDra
   // was unpublished since mustn't stop the other fields from saving (as the front page).
   if (changed("comments_privacy_page_id")) body.comments_privacy_page_id = draft.comments_privacy_page_id
   return body
-}
-
-/** Whether the switch shows: once #526 ships, or while comments are on, to turn them off. */
-export function showCommentsSwitch(saved: DiscussionDraft, ready: boolean = COMMENTS_SWITCH_READY): boolean {
-  return ready || saved.comments_enabled
 }
 
 /**

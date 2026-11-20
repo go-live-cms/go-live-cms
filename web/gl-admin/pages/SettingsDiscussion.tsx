@@ -8,7 +8,6 @@ import Textarea from "@gl-admin/components/ui/Textarea"
 import RadioGroup from "@gl-admin/components/ui/RadioGroup"
 import SegmentedControl from "@gl-admin/components/ui/SegmentedControl"
 import Switch from "@gl-admin/components/ui/Switch"
-import Notice from "@gl-admin/components/ui/Notice"
 import Skeleton from "@gl-admin/components/ui/Skeleton"
 import Button from "@gl-admin/components/ui/Button"
 import EmptyState from "@gl-admin/components/ui/EmptyState"
@@ -17,7 +16,6 @@ import { focusFirstInvalid } from "@gl-admin/components/ui/a11y"
 import SettingsNav from "@gl-admin/components/settings/SettingsNav"
 import PrivacyPageField from "@gl-admin/components/settings/PrivacyPageField"
 import {
-  COMMENTS_SWITCH_READY,
   DISCUSSION_LIMITS,
   MODERATION_OPTIONS,
   ORDER_OPTIONS,
@@ -25,7 +23,6 @@ import {
   apiFieldError,
   changedDiscussionFields,
   discussionUnsavedMessage,
-  showCommentsSwitch,
   showDiscussionDetails,
   toDiscussionDraft,
   toDiscussionRequest,
@@ -43,18 +40,12 @@ import "@gl-admin/assets/styles/pages/workspace.scss"
 // AdminOnly; PUT /settings is requireSiteAdmin, and GET /settings sends the word lists only
 // with an admin's token).
 //
-// The site switch is hidden until the moderation queue ships (COMMENTS_SWITCH_READY, #526):
-// until then the page says comments can't be turned on yet, and offers the switch only to
-// turn them off if the API has them on.
+// The site switch shows since the moderation queue shipped (#526; design section 17:
+// comments can be turned on after phase 3). It starts off (comments_enabled's default).
 
 const inputValue = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => e.currentTarget.value
 
-type Props = {
-  // Tests turn the switch on; the app reads COMMENTS_SWITCH_READY.
-  switchReady?: boolean
-}
-
-export default function SettingsDiscussion({ switchReady = COMMENTS_SWITCH_READY }: Props) {
+export default function SettingsDiscussion() {
   const [settings, setSettings] = useState<Settings | null>(null)
   const [draft, setDraft] = useState<DiscussionDraft | null>(null)
   const [loadError, setLoadError] = useState<unknown>(null)
@@ -185,7 +176,6 @@ export default function SettingsDiscussion({ switchReady = COMMENTS_SWITCH_READY
     )
   }
 
-  const switchShown = showCommentsSwitch(saved, switchReady)
   const details = showDiscussionDetails(draft)
   const numberField = (field: "comments_max_links" | "comments_close_after_days" | "comments_per_page", title: string, hint: string) => (
     <Input
@@ -234,22 +224,15 @@ export default function SettingsDiscussion({ switchReady = COMMENTS_SWITCH_READY
                   </p>
                 </div>
 
-                {switchShown ? (
-                  <div className="gl-settings__card">
-                    <Switch
-                      label="Allow comments on this site"
-                      description="Off: no post shows a comments section and none takes new comments. Comments you already have are kept."
-                      checked={draft.comments_enabled}
-                      onChange={(checked) => update({ comments_enabled: checked })}
-                    />
-                  </div>
-                ) : (
-                  <Notice tone="info" title="Comments can’t be turned on yet">
-                    They arrive with the moderation queue, so that someone can review what readers write before it reaches the
-                    site. Until then no post shows a comments section.
-                  </Notice>
-                )}
-                {switchShown && !details && (
+                <div className="gl-settings__card">
+                  <Switch
+                    label="Allow comments on this site"
+                    description="Off: no post shows a comments section and none takes new comments. Comments you already have are kept."
+                    checked={draft.comments_enabled}
+                    onChange={(checked) => update({ comments_enabled: checked })}
+                  />
+                </div>
+                {!details && (
                   <p className="gl-workspace-field__hint">The rest of the settings appear when comments are on.</p>
                 )}
               </section>

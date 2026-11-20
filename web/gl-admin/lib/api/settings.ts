@@ -33,8 +33,8 @@ export interface Settings {
   // PUBLIC_BASE_URL, read-only ("" when not configured): the domain is deploy config.
   site_address: string
   // Settings › Discussion (#522, docs/design/reader-comments.md 12.1; the form is #527's
-  // pages/SettingsDiscussion.tsx). Off by default; its switch stays hidden until the moderation
-  // queue ships (#526, lib/discussionSettings.ts COMMENTS_SWITCH_READY).
+  // pages/SettingsDiscussion.tsx). Off by default; its switch shows since the moderation queue
+  // shipped (#526).
   comments_enabled?: boolean
   comments_moderation?: "all" | "first" | "none"
   comments_max_links?: number
