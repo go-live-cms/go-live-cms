@@ -430,3 +430,89 @@ func TestMentionAndReminderTemplates(t *testing.T) {
 	require.Contains(t, reminder.Text, "2026-12-01 at 10:00 (Europe/Lisbon)")
 	require.Contains(t, reminder.HTML, "Launch &lt;plan&gt;")
 }
+
+func TestReaderCommentNotificationTemplates(t *testing.T) {
+	long := strings.Repeat("word ", 100) + "<b>end</b>"
+	reply, err := RenderReaderCommentReply("ana@example.com", ReaderCommentReply{
+		SiteTitle: "Acme\r\nBcc: x@y.z", PostTitle: "Hello <world>",
+		Replies: []CommentItem{
+			{Name: "Bea", Excerpt: "Short <script>reply</script>", URL: "https://acme.example/post/1#comment-7"},
+			{Name: "", Excerpt: long, URL: "https://acme.example/post/1#comment-8"},
+		},
+		UnsubscribeLink: "https://acme.example/comments/unsubscribe#token=abc",
+		OneClick:        "https://acme.example/gl-comments/unsubscribe/abc",
+	})
+	require.NoError(t, err)
+	require.Equal(t, TemplateReaderCommentReply, reply.Template)
+	require.Equal(t, "2 new replies to your comment on Hello <world>", reply.Subject)
+	require.Equal(t, "https://acme.example/gl-comments/unsubscribe/abc", reply.ListUnsubscribe)
+	require.Contains(t, reply.Text, "Someone wrote:", "a missing name has its fallback")
+	require.Contains(t, reply.Text, "#comment-8")
+	require.Contains(t, reply.Text, "https://acme.example/comments/unsubscribe#token=abc")
+	require.NotContains(t, reply.Text, "<b>end</b>", "300 characters at most")
+	require.Contains(t, reply.Text, "…")
+	require.NotContains(t, reply.HTML, "<script>", "escaped")
+	require.Contains(t, reply.HTML, "&lt;script&gt;")
+
+	one, err := RenderReaderCommentReply("ana@example.com", ReaderCommentReply{PostTitle: "Hi", Replies: []CommentItem{{Name: "Bea", Excerpt: "x"}}, OneClick: "https://a.example/u/t"})
+	require.NoError(t, err)
+	require.Equal(t, "New reply to your comment on Hi", one.Subject)
+
+	author, err := RenderReaderCommentAuthor("ed@example.com", ReaderCommentAuthor{
+		SiteTitle: "Acme", Comments: []CommentItem{{Name: "Ana", Excerpt: "Nice", URL: "https://acme.example/p#comment-1", PostTitle: "First"}},
+		DiscussionLink: "https://acme.example/gl-admin/discussion?status=approved", ProfileLink: "https://acme.example/gl-admin/profile",
+	})
+	require.NoError(t, err)
+	require.Equal(t, "New comment on First", author.Subject)
+	require.Empty(t, author.ListUnsubscribe)
+	require.Contains(t, author.Text, "Moderate comments in Discussion")
+	digest, err := RenderReaderCommentAuthor("ed@example.com", ReaderCommentAuthor{
+		SiteTitle: "Acme", Digest: true, ProfileLink: "https://acme.example/gl-admin/profile",
+		Comments: []CommentItem{{Name: "Ana", Excerpt: "a"}, {Name: "Bea", Excerpt: "b"}},
+	})
+	require.NoError(t, err)
+	require.Equal(t, "Today on Acme: 2 new comments on your posts", digest.Subject)
+	require.NotContains(t, digest.Text, "Moderate comments", "a contributor's mail has no Discussion link")
+	require.NotContains(t, digest.HTML, "Open Discussion")
+
+	moderation, err := RenderReaderCommentModeration("ed@example.com", ReaderCommentModeration{
+		SiteTitle: "Acme", Count: 4, PostTitles: []string{"First", ""}, Link: "https://acme.example/gl-admin/discussion?status=pending",
+	})
+	require.NoError(t, err)
+	require.Equal(t, "4 comments await moderation on Acme", moderation.Subject)
+	require.Contains(t, moderation.Text, "- First")
+	require.Contains(t, moderation.Text, "- Untitled")
+	single, err := RenderReaderCommentModeration("ed@example.com", ReaderCommentModeration{Count: 1})
+	require.NoError(t, err)
+	require.Equal(t, "A comment awaits moderation on GoLive CMS", single.Subject)
+}
+
+// RFC 8058: a mail a reader can stop carries List-Unsubscribe with the one-click URL and
+// List-Unsubscribe-Post; nothing else does, and a URL that would break the header is refused.
+func TestListUnsubscribeHeaders(t *testing.T) {
+	from := &mail.Address{Address: "no-reply@acme.example"}
+	_, raw, err := buildMessage(from, Message{To: "ana@example.com", Text: "x", ListUnsubscribe: "https://acme.example/gl-comments/unsubscribe/abc_-1"}, time.Now())
+	require.NoError(t, err)
+	parsed, err := mail.ReadMessage(bytes.NewReader(raw))
+	require.NoError(t, err)
+	require.Equal(t, "<https://acme.example/gl-comments/unsubscribe/abc_-1>", parsed.Header.Get("List-Unsubscribe"))
+	require.Equal(t, "List-Unsubscribe=One-Click", parsed.Header.Get("List-Unsubscribe-Post"))
+
+	_, raw, err = buildMessage(from, Message{To: "ana@example.com", Text: "x"}, time.Now())
+	require.NoError(t, err)
+	parsed, err = mail.ReadMessage(bytes.NewReader(raw))
+	require.NoError(t, err)
+	require.Empty(t, parsed.Header.Get("List-Unsubscribe"))
+	require.Empty(t, parsed.Header.Get("List-Unsubscribe-Post"))
+
+	for _, bad := range []string{"mailto:x@y.z", "/relative", "https://a.example/x>\r\nBcc: v@x.y", "https://a.example/a b"} {
+		_, _, err := buildMessage(from, Message{To: "ana@example.com", Text: "x", ListUnsubscribe: bad}, time.Now())
+		require.Error(t, err, bad)
+	}
+}
+
+func TestExcerpt(t *testing.T) {
+	require.Equal(t, "short", Excerpt("  short  ", 10))
+	require.Equal(t, "one two…", Excerpt("one two three", 10))
+	require.Equal(t, "ééééé…", Excerpt("éééééééééé", 5), "code points, not bytes")
+}

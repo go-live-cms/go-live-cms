@@ -260,6 +260,21 @@ func (mr *MockStoreMockRecorder) CheckURLExists(arg0, arg1 interface{}) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckURLExists", reflect.TypeOf((*MockStore)(nil).CheckURLExists), arg0, arg1)
 }
 
+// ClaimDueDiscussionMail mocks base method.
+func (m *MockStore) ClaimDueDiscussionMail(arg0 context.Context, arg1 db.ClaimDueDiscussionMailParams) ([]db.ClaimDueDiscussionMailRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ClaimDueDiscussionMail", arg0, arg1)
+	ret0, _ := ret[0].([]db.ClaimDueDiscussionMailRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ClaimDueDiscussionMail indicates an expected call of ClaimDueDiscussionMail.
+func (mr *MockStoreMockRecorder) ClaimDueDiscussionMail(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClaimDueDiscussionMail", reflect.TypeOf((*MockStore)(nil).ClaimDueDiscussionMail), arg0, arg1)
+}
+
 // ClaimDuePluginHookRuns mocks base method.
 func (m *MockStore) ClaimDuePluginHookRuns(arg0 context.Context, arg1 db.ClaimDuePluginHookRunsParams) ([]db.ClaimDuePluginHookRunsRow, error) {
 	m.ctrl.T.Helper()
@@ -1480,6 +1495,20 @@ func (mr *MockStoreMockRecorder) CreateReaderCommentTx(arg0, arg1 interface{}) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateReaderCommentTx", reflect.TypeOf((*MockStore)(nil).CreateReaderCommentTx), arg0, arg1)
 }
 
+// CreateReaderCommentUnsubscribeToken mocks base method.
+func (m *MockStore) CreateReaderCommentUnsubscribeToken(arg0 context.Context, arg1 db.CreateReaderCommentUnsubscribeTokenParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateReaderCommentUnsubscribeToken", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateReaderCommentUnsubscribeToken indicates an expected call of CreateReaderCommentUnsubscribeToken.
+func (mr *MockStoreMockRecorder) CreateReaderCommentUnsubscribeToken(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateReaderCommentUnsubscribeToken", reflect.TypeOf((*MockStore)(nil).CreateReaderCommentUnsubscribeToken), arg0, arg1)
+}
+
 // CreateReviewRequest mocks base method.
 func (m *MockStore) CreateReviewRequest(arg0 context.Context, arg1 db.CreateReviewRequestParams) (db.ReviewRequest, error) {
 	m.ctrl.T.Helper()
@@ -2573,6 +2602,21 @@ func (mr *MockStoreMockRecorder) EnablePlugin(arg0, arg1 interface{}) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnablePlugin", reflect.TypeOf((*MockStore)(nil).EnablePlugin), arg0, arg1)
 }
 
+// EnqueueModerationMail mocks base method.
+func (m *MockStore) EnqueueModerationMail(arg0 context.Context) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "EnqueueModerationMail", arg0)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// EnqueueModerationMail indicates an expected call of EnqueueModerationMail.
+func (mr *MockStoreMockRecorder) EnqueueModerationMail(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnqueueModerationMail", reflect.TypeOf((*MockStore)(nil).EnqueueModerationMail), arg0)
+}
+
 // EnsureCommenter mocks base method.
 func (m *MockStore) EnsureCommenter(arg0 context.Context, arg1 db.EnsureCommenterParams) (db.Commenter, error) {
 	m.ctrl.T.Helper()
@@ -2644,6 +2688,21 @@ func (m *MockStore) FanOutPluginEvents(arg0 context.Context, arg1 int32) (db.Fan
 func (mr *MockStoreMockRecorder) FanOutPluginEvents(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FanOutPluginEvents", reflect.TypeOf((*MockStore)(nil).FanOutPluginEvents), arg0, arg1)
+}
+
+// FinishDiscussionMail mocks base method.
+func (m *MockStore) FinishDiscussionMail(arg0 context.Context, arg1 db.FinishDiscussionMailParams) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FinishDiscussionMail", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FinishDiscussionMail indicates an expected call of FinishDiscussionMail.
+func (mr *MockStoreMockRecorder) FinishDiscussionMail(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FinishDiscussionMail", reflect.TypeOf((*MockStore)(nil).FinishDiscussionMail), arg0, arg1)
 }
 
 // FinishImportItem mocks base method.
@@ -3771,6 +3830,21 @@ func (mr *MockStoreMockRecorder) GetReaderComment(arg0, arg1 interface{}) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetReaderComment", reflect.TypeOf((*MockStore)(nil).GetReaderComment), arg0, arg1)
 }
 
+// GetReaderCommentByUnsubscribeToken mocks base method.
+func (m *MockStore) GetReaderCommentByUnsubscribeToken(arg0 context.Context, arg1 []byte) (db.GetReaderCommentByUnsubscribeTokenRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetReaderCommentByUnsubscribeToken", arg0, arg1)
+	ret0, _ := ret[0].(db.GetReaderCommentByUnsubscribeTokenRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetReaderCommentByUnsubscribeToken indicates an expected call of GetReaderCommentByUnsubscribeToken.
+func (mr *MockStoreMockRecorder) GetReaderCommentByUnsubscribeToken(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetReaderCommentByUnsubscribeToken", reflect.TypeOf((*MockStore)(nil).GetReaderCommentByUnsubscribeToken), arg0, arg1)
+}
+
 // GetReaderCommentPost mocks base method.
 func (m *MockStore) GetReaderCommentPost(arg0 context.Context, arg1 int64) (db.GetReaderCommentPostRow, error) {
 	m.ctrl.T.Helper()
@@ -4281,6 +4355,21 @@ func (mr *MockStoreMockRecorder) GetUserMediaCount(arg0, arg1 interface{}) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserMediaCount", reflect.TypeOf((*MockStore)(nil).GetUserMediaCount), arg0, arg1)
 }
 
+// GetUserNotifications mocks base method.
+func (m *MockStore) GetUserNotifications(arg0 context.Context, arg1 int64) (db.GetUserNotificationsRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetUserNotifications", arg0, arg1)
+	ret0, _ := ret[0].(db.GetUserNotificationsRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetUserNotifications indicates an expected call of GetUserNotifications.
+func (mr *MockStoreMockRecorder) GetUserNotifications(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserNotifications", reflect.TypeOf((*MockStore)(nil).GetUserNotifications), arg0, arg1)
+}
+
 // GetValidEmailChangeTokenByHash mocks base method.
 func (m *MockStore) GetValidEmailChangeTokenByHash(arg0 context.Context, arg1 []byte) (db.EmailChangeToken, error) {
 	m.ctrl.T.Helper()
@@ -4696,6 +4785,21 @@ func (mr *MockStoreMockRecorder) ListCreditedAuthors(arg0, arg1 interface{}) *go
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListCreditedAuthors", reflect.TypeOf((*MockStore)(nil).ListCreditedAuthors), arg0, arg1)
 }
 
+// ListDiscussionMailComments mocks base method.
+func (m *MockStore) ListDiscussionMailComments(arg0 context.Context, arg1 db.ListDiscussionMailCommentsParams) ([]db.ListDiscussionMailCommentsRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListDiscussionMailComments", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListDiscussionMailCommentsRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListDiscussionMailComments indicates an expected call of ListDiscussionMailComments.
+func (mr *MockStoreMockRecorder) ListDiscussionMailComments(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListDiscussionMailComments", reflect.TypeOf((*MockStore)(nil).ListDiscussionMailComments), arg0, arg1)
+}
+
 // ListEnabledPluginSlugs mocks base method.
 func (m *MockStore) ListEnabledPluginSlugs(arg0 context.Context) ([]string, error) {
 	m.ctrl.T.Helper()
@@ -4996,6 +5100,21 @@ func (mr *MockStoreMockRecorder) ListModerationComments(arg0, arg1 interface{}) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListModerationComments", reflect.TypeOf((*MockStore)(nil).ListModerationComments), arg0, arg1)
 }
 
+// ListNewestPendingCommentPosts mocks base method.
+func (m *MockStore) ListNewestPendingCommentPosts(arg0 context.Context, arg1 int32) ([]db.ListNewestPendingCommentPostsRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListNewestPendingCommentPosts", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListNewestPendingCommentPostsRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListNewestPendingCommentPosts indicates an expected call of ListNewestPendingCommentPosts.
+func (mr *MockStoreMockRecorder) ListNewestPendingCommentPosts(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListNewestPendingCommentPosts", reflect.TypeOf((*MockStore)(nil).ListNewestPendingCommentPosts), arg0, arg1)
+}
+
 // ListOpenReviewRequestsForPosts mocks base method.
 func (m *MockStore) ListOpenReviewRequestsForPosts(arg0 context.Context, arg1 []int64) ([]db.ListOpenReviewRequestsForPostsRow, error) {
 	m.ctrl.T.Helper()
@@ -5054,6 +5173,21 @@ func (m *MockStore) ListPendingPostAccessRequests(arg0 context.Context, arg1 int
 func (mr *MockStoreMockRecorder) ListPendingPostAccessRequests(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPendingPostAccessRequests", reflect.TypeOf((*MockStore)(nil).ListPendingPostAccessRequests), arg0, arg1)
+}
+
+// ListPendingReaderCommentIDs mocks base method.
+func (m *MockStore) ListPendingReaderCommentIDs(arg0 context.Context) ([]int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListPendingReaderCommentIDs", arg0)
+	ret0, _ := ret[0].([]int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListPendingReaderCommentIDs indicates an expected call of ListPendingReaderCommentIDs.
+func (mr *MockStoreMockRecorder) ListPendingReaderCommentIDs(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPendingReaderCommentIDs", reflect.TypeOf((*MockStore)(nil).ListPendingReaderCommentIDs), arg0)
 }
 
 // ListPluginExtensionSettings mocks base method.
@@ -6324,6 +6458,21 @@ func (mr *MockStoreMockRecorder) Ping(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Ping", reflect.TypeOf((*MockStore)(nil).Ping), arg0)
 }
 
+// PruneDiscussionMail mocks base method.
+func (m *MockStore) PruneDiscussionMail(arg0 context.Context, arg1 time.Time) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PruneDiscussionMail", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PruneDiscussionMail indicates an expected call of PruneDiscussionMail.
+func (mr *MockStoreMockRecorder) PruneDiscussionMail(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PruneDiscussionMail", reflect.TypeOf((*MockStore)(nil).PruneDiscussionMail), arg0, arg1)
+}
+
 // PrunePostBlockEdits mocks base method.
 func (m *MockStore) PrunePostBlockEdits(arg0 context.Context, arg1 db.PrunePostBlockEditsParams) error {
 	m.ctrl.T.Helper()
@@ -6573,6 +6722,21 @@ func (m *MockStore) RefreshPublishedSettings(arg0 context.Context, arg1 []int64)
 func (mr *MockStoreMockRecorder) RefreshPublishedSettings(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RefreshPublishedSettings", reflect.TypeOf((*MockStore)(nil).RefreshPublishedSettings), arg0, arg1)
+}
+
+// ReleaseDiscussionMail mocks base method.
+func (m *MockStore) ReleaseDiscussionMail(arg0 context.Context, arg1 db.ReleaseDiscussionMailParams) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ReleaseDiscussionMail", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ReleaseDiscussionMail indicates an expected call of ReleaseDiscussionMail.
+func (mr *MockStoreMockRecorder) ReleaseDiscussionMail(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReleaseDiscussionMail", reflect.TypeOf((*MockStore)(nil).ReleaseDiscussionMail), arg0, arg1)
 }
 
 // ReleaseReminder mocks base method.
@@ -6958,6 +7122,21 @@ func (m *MockStore) RetargetRedirects(arg0 context.Context, arg1 db.RetargetRedi
 func (mr *MockStoreMockRecorder) RetargetRedirects(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RetargetRedirects", reflect.TypeOf((*MockStore)(nil).RetargetRedirects), arg0, arg1)
+}
+
+// RetimeAuthorMail mocks base method.
+func (m *MockStore) RetimeAuthorMail(arg0 context.Context, arg1 db.RetimeAuthorMailParams) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RetimeAuthorMail", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RetimeAuthorMail indicates an expected call of RetimeAuthorMail.
+func (mr *MockStoreMockRecorder) RetimeAuthorMail(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RetimeAuthorMail", reflect.TypeOf((*MockStore)(nil).RetimeAuthorMail), arg0, arg1)
 }
 
 // RetimePostReminders mocks base method.
@@ -7844,6 +8023,36 @@ func (mr *MockStoreMockRecorder) UnresolvePostCommentThread(arg0, arg1 interface
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnresolvePostCommentThread", reflect.TypeOf((*MockStore)(nil).UnresolvePostCommentThread), arg0, arg1)
 }
 
+// UnsubscribeCommenter mocks base method.
+func (m *MockStore) UnsubscribeCommenter(arg0 context.Context, arg1 sql.NullInt64) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UnsubscribeCommenter", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UnsubscribeCommenter indicates an expected call of UnsubscribeCommenter.
+func (mr *MockStoreMockRecorder) UnsubscribeCommenter(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnsubscribeCommenter", reflect.TypeOf((*MockStore)(nil).UnsubscribeCommenter), arg0, arg1)
+}
+
+// UnsubscribeReaderComment mocks base method.
+func (m *MockStore) UnsubscribeReaderComment(arg0 context.Context, arg1 int64) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UnsubscribeReaderComment", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UnsubscribeReaderComment indicates an expected call of UnsubscribeReaderComment.
+func (mr *MockStoreMockRecorder) UnsubscribeReaderComment(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnsubscribeReaderComment", reflect.TypeOf((*MockStore)(nil).UnsubscribeReaderComment), arg0, arg1)
+}
+
 // UpdateDiscoveredPlugin mocks base method.
 func (m *MockStore) UpdateDiscoveredPlugin(arg0 context.Context, arg1 db.UpdateDiscoveredPluginParams) (db.UpdateDiscoveredPluginRow, error) {
 	m.ctrl.T.Helper()
@@ -8274,6 +8483,21 @@ func (m *MockStore) UpdateUser(arg0 context.Context, arg1 db.UpdateUserParams) (
 func (mr *MockStoreMockRecorder) UpdateUser(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateUser", reflect.TypeOf((*MockStore)(nil).UpdateUser), arg0, arg1)
+}
+
+// UpdateUserNotifications mocks base method.
+func (m *MockStore) UpdateUserNotifications(arg0 context.Context, arg1 db.UpdateUserNotificationsParams) (db.UpdateUserNotificationsRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateUserNotifications", arg0, arg1)
+	ret0, _ := ret[0].(db.UpdateUserNotificationsRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdateUserNotifications indicates an expected call of UpdateUserNotifications.
+func (mr *MockStoreMockRecorder) UpdateUserNotifications(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateUserNotifications", reflect.TypeOf((*MockStore)(nil).UpdateUserNotifications), arg0, arg1)
 }
 
 // UpdateUserTx mocks base method.

@@ -56,6 +56,9 @@ func (server *Server) RegisterUserRoutes(v1 *gin.RouterGroup) {
 	usersAuth.PUT("/me/avatar", server.uploadAvatar)       // PUT /api/v1/users/me/avatar (multipart)
 	usersAuth.DELETE("/me/avatar", server.deleteAvatar)    // DELETE /api/v1/users/me/avatar
 	usersAuth.POST("/me/email", server.requestEmailChange) // POST /api/v1/users/me/email {current_password, new_email}
+	// Profile's Notifications (#528, discussion_unsubscribe.go): reader comment mail.
+	usersAuth.GET("/me/notifications", server.getUserNotifications)    // GET /api/v1/users/me/notifications
+	usersAuth.PUT("/me/notifications", server.updateUserNotifications) // PUT /api/v1/users/me/notifications {comments_on_posts, comments_to_moderate}
 
 	// Admin-only routes (require Bearer token + admin role)
 	admin := usersAuth.Group("")

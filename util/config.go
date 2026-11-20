@@ -291,6 +291,12 @@ type Config struct {
 	// turns the job off in this process (a zero Config: tests).
 	DiscussionMaintenanceInterval time.Duration `mapstructure:"DISCUSSION_MAINTENANCE_INTERVAL"`
 
+	// DiscussionMailInterval is how often the API sends due reader comment notifications
+	// (#528, api/discussion_mail.go): reply, author and moderation mails from the
+	// discussion_mail outbox. LoadConfig defaults it to 30s; 0 turns the sender off in this
+	// process (a zero Config: tests).
+	DiscussionMailInterval time.Duration `mapstructure:"DISCUSSION_MAIL_INTERVAL"`
+
 	// RedisURL is the Valkey/Redis cache (#185, cache/), e.g. redis://valkey:6379/0
 	// (rediss:// for TLS; a password goes in the URL, or use REDIS_URL_FILE). Optional:
 	// empty means no cache, every public read goes to Postgres as before. The cache only
@@ -390,6 +396,7 @@ func LoadConfig(path string) (config Config, err error) {
 	// Activity log (#324): Home reads the last few weeks; keep 90 days of history.
 	viper.SetDefault("ACTIVITY_RETENTION", "2160h")
 	viper.SetDefault("DISCUSSION_MAINTENANCE_INTERVAL", "1h")
+	viper.SetDefault("DISCUSSION_MAIL_INTERVAL", "30s")
 
 	// Email (#148). No SMTP defaults: release mode must be configured.
 	viper.SetDefault("MAIL_DRIVER", "")
@@ -511,6 +518,10 @@ func LoadConfig(path string) (config Config, err error) {
 
 	if config.DiscussionMaintenanceInterval < 0 {
 		return config, fmt.Errorf("DISCUSSION_MAINTENANCE_INTERVAL must be 0 (off) or a positive duration")
+	}
+
+	if config.DiscussionMailInterval < 0 {
+		return config, fmt.Errorf("DISCUSSION_MAIL_INTERVAL must be 0 (off) or a positive duration")
 	}
 
 	if _, err = config.PasetoPreviousPublicKeys(); err != nil {

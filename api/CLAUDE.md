@@ -1595,15 +1595,66 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
 - **Purges:** each write calls `purgeDiscussion` after its commit with the outcome's event (status
   change via `discussionStatusEvent`; a delete only when it tombstoned; one purge per bulk request);
   the routes are in `publicCacheDiscussionRoutes`; Block is `publicCacheNoPurgeRoutes`.
-- **#528's hook:** `server.readerCommentModerated(ctx, []readerCommentChange)` (nil until then), called
-  after every committed change with `{CommentID, PostID, ParentID, From, To, ActorID}` (From "" = a new
-  member comment, To "" = deleted).
+- **Notifications** need nothing here: #528's trigger queues reply and author mail in the approving
+  transaction (below). The after-commit hook #526 left for it (`readerCommentModerated`) is gone.
 - **Block** records `blocked_by` (000066, cleared on unblock; a second block keeps the first).
   Home's Needs attention: `comments_pending {count, post_count, oldest_at}` for moderators.
 - Logs: ids, action, statuses only; never the address (`TestDiscussionCommenters` checks).
   Tests: `discussion_admin_db_test.go` (real DB and miniredis: access, every action and its verb, bulk,
   Approve and reply, badges, commenters, Home, the feed, purges).
 
+## Reader comments: notifications (#528, `discussion_mail.go`, `discussion_unsubscribe.go`, `000068`)
+
+- Design 8.1 to 8.4 (decision 8: authors get a daily digest by default). **The outbox is `discussion_mail`**
+  (000061; 000068 adds `answered_id`, `outcome`, `created_at` and renames `sent_at` to `done_at`):
+  recipients by id only (`commenter_id` for reply mail, `user_id` for author and moderation mail; CHECKs),
+  `comment_ids` coalesced. **Reply and author rows are written by the `reader_comments_mail` trigger** in the
+  transaction that approves a comment (every path: moderation, bulk, member comments, confirmation, keyed,
+  restore), so a rollback leaves none and a commit always has its mail; never write them from Go. Reply:
+  to the parent's commenter when the parent has `notify_replies`, not the same commenter. Author: each
+  `post_published_authors` member whose `users.notify_post_comments` isn't off, unless they wrote it or
+  approved it (`moderated_by`). **Coalescing:** a comment joins its recipient's open row (partial unique
+  indexes `discussion_mail_open_reply` on `answered_id`, `discussion_mail_open_member` on `(kind, user_id)`,
+  `done_at IS NULL AND attempts = 0`), else opens one due in 5 minutes, a digest at the next 08:00 in the
+  site's zone (`golive_discussion_digest_at`, UTC for a zone Postgres doesn't know). Reply mail coalesces
+  per comment answered, not per reader: an unsubscribe token stops one comment (8.2). A comment already in
+  one of the recipient's rows isn't queued again (re-approval, restore). Nothing is queued while
+  `comments_enabled` is off.
+- **Moderation mail is not queued per comment** (no fan-out to every moderator): each sender round runs
+  `EnqueueModerationMail` (editors and admins with `notify_comment_moderation = hourly`, a pending comment no
+  sent mail of theirs counted, none sent in the last hour, none waiting). The mail records the pending ids
+  it counted (`FinishDiscussionMail`'s `comment_ids`), so the next one waits for something new.
+- **`RunDiscussionMail`** (main.go, `DISCUSSION_MAIL_INTERVAL`, 30s, 0 = off, every replica): `ClaimDueDiscussionMail`
+  one row at a time (`FOR UPDATE SKIP LOCKED`, a 2-minute lease as the fencing token, ≤25 per round), builds
+  from the current data and **drops** (`outcome dropped`) what no longer applies: a comment not approved or a
+  tombstone, a post not shown (published, public active type, discussion not off), the recipient's own
+  comment, a member off the byline or whose preference is off, a reader unsubscribed (`notify_replies`
+  false), blocked or **erased** (the commenter row gone: its rows go by ON DELETE CASCADE, and a claim that
+  raced it finds no commenter). #529's erasure needs nothing more. Failures retry with #147's backoff up to
+  8 attempts (`failed`). `RunDiscussionMaintenance` prunes finished rows after 7 days (`MailPruned`).
+- **Mail** (`mailer` templates `reader_comment_reply|author|moderation`, excerpts 300 code points): reply mail
+  mints its own unsubscribe token (`reader_comment_unsubscribe_tokens`, hash only, goes with the comment) for
+  the visible link (`/comments/unsubscribe#token=`) and **RFC 8058** (`Message.ListUnsubscribe` →
+  `List-Unsubscribe: <PUBLIC_BASE_URL/gl-comments/unsubscribe/TOKEN>` + `List-Unsubscribe-Post:
+  List-Unsubscribe=One-Click`, the URL checked to stay one header line). Members' mail has no unsubscribe
+  header: Profile is where they choose; a contributor's author mail has no Discussion link (decision 3).
+- **Unsubscribe routes** (`/public`, in `publicPOSTRoutes`, `publicReaderCommentRoutes`,
+  `publicCacheNoPurgeRoutes`, `discussionBodyLimit`): `POST /public/discussion/unsubscribe {token, all?}` (the
+  page; account-token limit) and `POST /public/discussion/unsubscribe/:token` (RFC 8058, form body
+  `List-Unsubscribe=One-Click` required, the general /public limit only: mail providers send many readers'
+  clicks from one address). Idempotent 204, every bad token 400 `invalid_token`, work while comments are off.
+  `all` turns off every comment of the commenter.
+- **Profile's Notifications (8.3):** `users.notify_post_comments` (`each|digest|off`, default digest) and
+  `notify_comment_moderation` (`hourly|off`, default hourly). `GET/PUT /users/me/notifications`
+  (`{comments_on_posts, comments_to_moderate, moderates}`); a change of the first retimes the waiting author row
+  (`RetimeAuthorMail`).
+- **Logs** carry mail, recipient and comment ids, kinds, counts and outcomes, never an address, name, text or
+  token; a failed send logs `error_type` only (an SMTP rejection quotes the address). Tests:
+  `discussion_mail_db_test.go` (real DB: rollback, twenty replies one mail, trashed left out, unsubscribed /
+  blocked / erased, never your own, preferences and digest time, moderation hourly, the log guard
+  `TestDiscussionMailLogsHoldNoAddress`), `mailer` `TestReaderCommentNotificationTemplates`,
+  `TestListUnsubscribeHeaders`. The DB tests start the outbox clean and turn other members' moderation mail
+  off, since the sender drains every due row.
 ## Per-block "Last edited by" (#328, `000049`, `post_block_edits.go`)
 
 - Design: `docs/design/block-map-yjs-schema.md` ("#328", #315 Option C). `post_block_edits`

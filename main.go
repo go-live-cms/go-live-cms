@@ -95,6 +95,10 @@ func main() {
 	// hourly in every replica; its statements skip rows another replica holds.
 	go server.RunDiscussionMaintenance(ctx, config.DiscussionMaintenanceInterval)
 
+	// Reader comment notifications (#528): reply, author and moderation mail from the
+	// discussion_mail outbox, every 30s in every replica; rows are claimed SKIP LOCKED.
+	go server.RunDiscussionMail(ctx, config.DiscussionMailInterval)
+
 	// Server-to-server routes (collab WS role lookup, metrics) run on their own
 	// listener, which must not be published to the internet.
 	go func() {

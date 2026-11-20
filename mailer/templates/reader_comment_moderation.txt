@@ -1,0 +1,11 @@
+{{if eq .Count 1}}A comment awaits{{else}}{{.Count}} comments await{{end}} moderation on {{.SiteTitle}}.
+{{if .Titles}}
+The newest are on:
+{{range .Titles}}
+- {{.}}{{end}}
+{{end}}
+Review them in Discussion: {{.Link}}
+
+You get this email at most once an hour, because of your notification settings: {{.ProfileLink}}
+
+{{.SiteTitle}}

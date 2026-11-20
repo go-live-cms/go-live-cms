@@ -33,7 +33,13 @@ func (server *Server) registerPublicRoutes(rg *gin.RouterGroup) {
 	{
 		discussion.POST("/confirm", server.confirmPublicReaderComment)
 		discussion.POST("/unconfirmed/:id", server.actOnUnconfirmedReaderComment)
+		// The reply mail's unsubscribe page (#528, discussion_unsubscribe.go).
+		discussion.POST("/unsubscribe", server.unsubscribeReaderComment)
 	}
+	// RFC 8058's one-click (#528): mail providers POST it from their own servers, many
+	// readers' clicks from one address, so it has only the general /public limit. The
+	// token (32 random bytes) is the authority, and it can only stop one comment's mail.
+	rg.POST("/discussion/unsubscribe/:token", server.unsubscribeReaderCommentOneClick)
 
 	// The page shown at / (#336, front_page.go); 404 = the latest posts
 	rg.GET("/front-page", server.getPublicFrontPage)

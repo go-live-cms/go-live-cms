@@ -45,16 +45,19 @@ type CommenterKey struct {
 }
 
 type DiscussionMail struct {
-	ID           int64         `json:"id"`
-	Kind         string        `json:"kind"`
-	CommenterID  sql.NullInt64 `json:"commenter_id"`
-	UserID       sql.NullInt64 `json:"user_id"`
-	PostID       sql.NullInt64 `json:"post_id"`
-	CommentIds   []int64       `json:"comment_ids"`
-	DueAt        time.Time     `json:"due_at"`
-	ClaimedUntil sql.NullTime  `json:"claimed_until"`
-	Attempts     int32         `json:"attempts"`
-	SentAt       sql.NullTime  `json:"sent_at"`
+	ID           int64          `json:"id"`
+	Kind         string         `json:"kind"`
+	CommenterID  sql.NullInt64  `json:"commenter_id"`
+	UserID       sql.NullInt64  `json:"user_id"`
+	PostID       sql.NullInt64  `json:"post_id"`
+	CommentIds   []int64        `json:"comment_ids"`
+	DueAt        time.Time      `json:"due_at"`
+	ClaimedUntil sql.NullTime   `json:"claimed_until"`
+	Attempts     int32          `json:"attempts"`
+	DoneAt       sql.NullTime   `json:"done_at"`
+	AnsweredID   sql.NullInt64  `json:"answered_id"`
+	Outcome      sql.NullString `json:"outcome"`
+	CreatedAt    time.Time      `json:"created_at"`
 }
 
 type EmailChangeToken struct {
@@ -669,18 +672,20 @@ type ThemeSetting struct {
 }
 
 type User struct {
-	ID                int64        `json:"id"`
-	Username          string       `json:"username"`
-	FullName          string       `json:"full_name"`
-	Email             string       `json:"email"`
-	HashedPassword    string       `json:"hashed_password"`
-	PasswordChangedAt time.Time    `json:"password_changed_at"`
-	CreatedAt         time.Time    `json:"created_at"`
-	Role              string       `json:"role"`
-	Bio               string       `json:"bio"`
-	Website           string       `json:"website"`
-	LastActiveAt      sql.NullTime `json:"last_active_at"`
-	AvatarUrl         string       `json:"avatar_url"`
+	ID                      int64        `json:"id"`
+	Username                string       `json:"username"`
+	FullName                string       `json:"full_name"`
+	Email                   string       `json:"email"`
+	HashedPassword          string       `json:"hashed_password"`
+	PasswordChangedAt       time.Time    `json:"password_changed_at"`
+	CreatedAt               time.Time    `json:"created_at"`
+	Role                    string       `json:"role"`
+	Bio                     string       `json:"bio"`
+	Website                 string       `json:"website"`
+	LastActiveAt            sql.NullTime `json:"last_active_at"`
+	AvatarUrl               string       `json:"avatar_url"`
+	NotifyPostComments      string       `json:"notify_post_comments"`
+	NotifyCommentModeration string       `json:"notify_comment_moderation"`
 }
 
 type UserInvitation struct {

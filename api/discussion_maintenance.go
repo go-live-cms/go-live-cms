@@ -22,7 +22,9 @@ import (
 //   - tombstones with no replies left;
 //   - commenters with no comments and no keys, unseen for 30 days, unless blocked or
 //     marked spam in the last 90 days: those rows are what the block and previous_spam
-//     rules remember, and they hold no text.
+//     rules remember, and they hold no text;
+//   - notification outbox rows (#528, discussion_mail.go) 7 days after they were sent,
+//     dropped or failed.
 
 const (
 	readerCommentUnconfirmedTTL = 48 * time.Hour
@@ -46,6 +48,7 @@ type discussionMaintenanceResult struct {
 	HashesCleared     int64
 	KeysDeleted       int64
 	CommentersDeleted int64
+	MailPruned        int64
 }
 
 func (r discussionMaintenanceResult) changed() bool {
@@ -89,7 +92,8 @@ func (server *Server) maintainDiscussion(ctx context.Context) {
 			"tombstones_deleted", result.TombstonesDeleted,
 			"network_hashes_cleared", result.HashesCleared,
 			"commenter_keys_deleted", result.KeysDeleted,
-			"commenters_deleted", result.CommentersDeleted)
+			"commenters_deleted", result.CommentersDeleted,
+			"mail_pruned", result.MailPruned)
 	}
 }
 
@@ -129,6 +133,9 @@ func (server *Server) runDiscussionMaintenance(ctx context.Context, now time.Tim
 	if result.KeysDeleted, err = server.store.DeleteExpiredCommenterKeys(ctx, now); err != nil {
 		return result, err
 	}
-	result.CommentersDeleted, err = server.store.DeleteStaleCommenters(ctx, db.DeleteStaleCommentersParams{StaleBefore: now.Add(-commenterStaleTTL), SpamSince: now.Add(-commenterSpamMemory)})
+	if result.CommentersDeleted, err = server.store.DeleteStaleCommenters(ctx, db.DeleteStaleCommentersParams{StaleBefore: now.Add(-commenterStaleTTL), SpamSince: now.Add(-commenterSpamMemory)}); err != nil {
+		return result, err
+	}
+	result.MailPruned, err = server.store.PruneDiscussionMail(ctx, now.Add(-discussionMailKeep))
 	return result, err
 }
