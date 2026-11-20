@@ -62,8 +62,9 @@ type Server struct {
 	// password flow). A field so tests can run it synchronously.
 	runInBackground func(requestID, route string, f func())
 
-	// readerCommentGuard is the comment guard's hook point (discussion_guard.go): nil
-	// until the plugins' comment.before_create guards are built (#530).
+	// readerCommentGuard is the comment guard's hook point (discussion_guard.go):
+	// runCommentGuards, the plugins' comment.before_create guards (#530,
+	// plugin_comment_guards.go). A field so tests can set their own.
 	readerCommentGuard readerCommentGuardFunc
 
 	// readerCommentModerated is where #528's moderation and reply notifications attach
@@ -118,6 +119,8 @@ type Server struct {
 	// plugin_guards.go); guardSkipLogged remembers which mismatches were logged.
 	guardCalls      publishGuardCalls
 	guardSkipLogged sync.Map
+	// commentGuardCalls counts each plugin's comment guard calls still running (#530).
+	commentGuardCalls publishGuardCalls
 
 	// publicCache is the public read cache (#185, public_cache.go): Valkey when
 	// REDIS_URL is set, else a no-op. Purged after every write to public content.
@@ -247,6 +250,7 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 		pluginRegistry: pluginsdk.Registered(),
 	}
 	server.runInBackground = server.runDetached
+	server.readerCommentGuard = server.runCommentGuards
 	server.publicCache = newPublicCache(cacheClient, server.logger)
 
 	if shouldCheckSeededAccounts(config) {

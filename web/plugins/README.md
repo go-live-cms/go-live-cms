@@ -50,13 +50,14 @@ web/plugins/<slug>/
 | `version` | Required, a semantic version (`1.2.0`, `2.0.0-beta.1`). |
 | `author`, `description` | Optional strings, at most 100 and 1000 characters. |
 | `plugin_api` | Required integer (1 to 1000000): the extension contract the plugin was written against. Outside core's range (today `1` to `1`) the plugin is listed as `incompatible` and can't be enabled. |
-| `capabilities` | Optional, distinct values of `posts:read`, `media:read`, `users:read`, `network`. Declared and shown, not enforced in Beta. |
+| `capabilities` | Optional, distinct values of `posts:read`, `media:read`, `users:read`, `network`, `comments:read` (reader comments' names, text and status through `Host.Comments`), `comments:private` (required by the comment guard: it receives commenters' email and IP address). Declared and shown, not enforced in Beta. |
 | `blocks` | Optional, up to 50 distinct directory names under `blocks/` (`^[A-Z][A-Za-z0-9]{0,63}$`). |
 | `settings` | Optional, up to 50 fields keyed `^[a-z][a-z0-9_]{0,63}$`. Each has `type` (`string`, `number`, `boolean`) and may have `default`, `label`, `description`; strings `enum`, `maxLength`, `secret`; numbers `enum`, `integer`, `minimum`, `maximum`. A `default` must satisfy the field's own rules. |
-| `server.hooks` | Optional, one entry per event: `post.saved`, `post.published`, `post.unpublished`, `post.trashed`, `post.restored`, `post.deleted` (may have `timeout_ms`, 1 to 30000), or the guard `post.before_publish` (may have `on_error`: `allow` or `deny`, and `priority`, -1000 to 1000). |
+| `server.hooks` | Optional, one entry per event: `post.saved`, `post.published`, `post.unpublished`, `post.trashed`, `post.restored`, `post.deleted`, `comment.created`, `comment.approved`, `comment.unapproved`, `comment.spammed`, `comment.trashed`, `comment.deleted` (may have `timeout_ms`, 1 to 30000), or a guard: `post.before_publish` (may have `on_error`: `allow` or `deny`) or `comment.before_create` (needs `comments:private`; may have `on_error`: `allow` or `hold`), both with an optional `priority`, -1000 to 1000. |
 
-A plugin that declares a hook must implement it in Go (see "Server hooks" below), the guard
-`post.before_publish` included: declared and not implemented, it's listed as `incompatible`.
+A plugin that declares a hook must implement it in Go (see "Server hooks" below), the guards
+included: declared and not implemented, it's listed as `incompatible`, and `gen-plugins` refuses a
+plugin.json that declares a guard without server code.
 
 Unknown fields are refused, at every level. One validator in Go (`api/plugins_manifest.go`) and its
 TypeScript twin (`web/gl-admin/lib/plugins/manifest.ts`) share their cases
@@ -163,12 +164,23 @@ func init() {
   Go has no runtime loading, so hooks are compiled into the API image.
 - **Declare it:** every hook in Go must be in `server.hooks`, and every declared hook must be in Go.
   If they differ the plugin is listed as `incompatible` (`incompatible_reason: "hooks"`) and can't
-  be enabled. A guard (`post.before_publish`) is `Plugin.BeforePublish` (below).
+  be enabled. A guard is `Plugin.BeforePublish` (`post.before_publish`) or
+  `Plugin.BeforeCommentCreate` (`comment.before_create`), below.
 - **Events:** `post.saved` (created, a body store or a settings save; coalesced, so read the post
   when the hook runs), `post.published` (also an Update; `ActorID` is who it's credited to),
   `post.unpublished`, `post.trashed`, `post.restored`, `post.deleted` (the post is gone; `Data`
   has `post_type`). The database writes them in the transaction of the change, and only while an
   enabled plugin subscribes.
+- **Reader comment events (#530):** `comment.created` (a reader's comment confirmed, or stored at
+  once from a keyed browser or as spam; a member's comment), `comment.approved`,
+  `comment.unapproved` (approved back to pending), `comment.spammed`, `comment.trashed`,
+  `comment.deleted` (deleted, or kept as a placeholder for its replies; not for the comments of a
+  post deleted for good, whose `post.deleted` stands for them). `PostID` is the comment's post; a
+  comment's own events arrive in order (two comments written at the same moment may come in
+  either order). `Data` holds ids only: `comment_id`, `root_id`, `status`,
+  `previous_status`, `by_member`; never a name, text or address. To read the text, declare
+  `comments:read` and call `host.Comments().Get(ctx, id)` (name, text, status, post; never the
+  address). A webhook may deliver them like any other event.
 - **How they run:** after the change committed, outside any transaction, as the system. At least
   once (`Event.ID` is the idempotency key), in order per post. An error, panic or timeout
   (`timeout_ms`, default 10s, at most 30s) is retried with backoff, at most 8 attempts, and
@@ -176,8 +188,8 @@ func init() {
   Runs for a hook an upgrade drops are skipped. Two run at a time per plugin; a hook that ignores
   its context holds its slot until it returns. A hook can never fail, slow or roll back a publish.
 - **Read-only.** `Host` gives the plugin's settings, a logger, and a reader per declared capability
-  (`posts:read`, `media:read`, `users:read`; nil otherwise). Nothing writes a post: only the collab
-  server writes `block_doc`.
+  (`posts:read`, `media:read`, `users:read`, `comments:read`; nil otherwise). Nothing writes a
+  post: only the collab server writes `block_doc`.
 
 ## Publish guards (#459)
 
@@ -215,6 +227,44 @@ pluginsdk.Register("alt-text-check", pluginsdk.Plugin{
 - It's a policy check, not a lock: an edit stored between the guard and the publish goes out
   unchecked.
 
+## Comment guards (#530)
+
+A comment guard checks a reader's comment before it is stored: the place for an Akismet-style
+service (core has no CAPTCHA; a plugin that wants a widget on the page waits for page injection).
+Declare it as `{ "event": "comment.before_create", "on_error": "allow" | "hold", "priority": 0 }`
+with the `comments:private` capability, and set `BeforeCommentCreate`:
+
+```go
+pluginsdk.Register("spam-check", pluginsdk.Plugin{
+	BeforeCommentCreate: func(ctx context.Context, host pluginsdk.Host, c pluginsdk.CommentCandidate) (pluginsdk.CommentDecision, error) {
+		score, err := askService(ctx, c.IP, c.UserAgent, c.Email, c.Body)
+		if err != nil {
+			return pluginsdk.CommentDecision{}, err // on_error decides
+		}
+		if score > 0.9 {
+			return pluginsdk.SpamComment(fmt.Sprintf("Spam score %.2f.", score)), nil
+		}
+		return pluginsdk.AllowComment(), nil
+	},
+})
+```
+
+- **What it sees:** `{PostID, ParentID, Name, Email, Body, IP, UserAgent, HasBrowserKey}`, the
+  request as the reader sent it. The IP exists only here (core never stores it). It's personal
+  data: send it to your service if you must, never log or store it.
+- **What it answers:** allow, hold (the comment waits in the moderation queue) or spam (stored as
+  spam, silently: nothing is mailed). **There is no approve:** moderation stays core's, and any
+  other verdict counts as allow. Your reason is shown to moderators as "<name>: <reason>" (one
+  line, at most 200 characters); without one, "<name> held it for review.".
+- **Order and budget:** enabled plugins only, by `priority` then id, one at a time. The first
+  spam wins and stops the rest; a hold is kept while the others run. 2 seconds each, 3 for all of
+  them. An error, panic or timeout allows the comment (core's rules then decide) unless you
+  declared `"on_error": "hold"`: then it's held with "<name> couldn't check this comment.".
+- **The verdict is stored with the comment** (`held_reason` `plugin`, `held_detail` the reason),
+  so a comment waiting for its email confirmation is not checked again when confirmed.
+- **Never a webhook:** a guard runs inside the comment's request and can't wait on a remote
+  server's delivery; the validator refuses a webhook plugin that declares one.
+
 ## Webhooks (#460)
 
 A plugin with no Go code can still have hooks: declare `server.webhook`, and each hook in
@@ -236,8 +286,9 @@ A plugin with no Go code can still have hooks: declare `server.webhook`, and eac
 ```
 
 - **Rules:** `url_setting` is a string setting, `secret_setting` a different one with `"secret":
-  true`; `network` is declared; at least one hook, and no `post.before_publish` (a guard runs
-  inside the publish request and can't wait on a remote server).
+  true`; `network` is declared; at least one hook, and no guard (`post.before_publish`,
+  `comment.before_create`: a guard runs inside the request it checks and can't wait on a remote
+  server).
 - **The receiver gets** `{id, event, plugin, post_id, actor_id, data, occurred_at}` with the headers
   `GoLive-Event-Id`, `GoLive-Event`, `GoLive-Timestamp` and `GoLive-Signature: v1=<hex>`, the
   HMAC-SHA256 of `"<timestamp>.<raw body>"` under the secret. Verify it over the raw bytes, refuse a

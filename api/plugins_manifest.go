@@ -75,16 +75,40 @@ var reservedPluginIDs = map[string]bool{"enabled": true}
 
 // PluginCapabilities are what a plugin may declare it uses (section 2). Declared and
 // shown; not a security boundary in Beta.
-var PluginCapabilities = []string{"posts:read", "media:read", "users:read", "network"}
+// comments:read and comments:private are reader comments' (#530, reader-comments.md 14):
+// the comment text through Host.Comments, and the comment guard's candidate, which holds
+// the commenter's email and IP address.
+var PluginCapabilities = []string{"posts:read", "media:read", "users:read", "network", "comments:read", "comments:private"}
 
-// PluginHookEvents are the events a hook may subscribe to (section 7.2);
-// post.before_publish is the publish guard (7.7).
+// PluginHookEvents are the events a hook may subscribe to (section 7.2, and the reader
+// comment events of reader-comments.md 14.1); post.before_publish is the publish guard
+// (7.7) and comment.before_create the comment guard (14.2).
 var PluginHookEvents = []string{
 	"post.saved", "post.published", "post.unpublished", "post.trashed", "post.restored", "post.deleted",
 	pluginGuardEvent,
+	"comment.created", "comment.approved", "comment.unapproved", "comment.spammed", "comment.trashed", "comment.deleted",
+	pluginCommentGuardEvent,
 }
 
-const pluginGuardEvent = "post.before_publish"
+const (
+	pluginGuardEvent        = "post.before_publish"
+	pluginCommentGuardEvent = "comment.before_create"
+	// pluginCommentsPrivate is the capability the comment guard needs.
+	pluginCommentsPrivate = "comments:private"
+)
+
+// pluginGuardOnError is each guard's on_error vocabulary: what a failed guard does.
+var pluginGuardOnError = map[string][]string{
+	pluginGuardEvent:        {"allow", "deny"},
+	pluginCommentGuardEvent: {"allow", "hold"},
+}
+
+// isPluginGuard reports whether a hook event is a guard (runs synchronously, never from
+// the outbox).
+func isPluginGuard(event string) bool {
+	_, guard := pluginGuardOnError[event]
+	return guard
+}
 
 // Limits. They match manifest.ts.
 const (
@@ -273,7 +297,29 @@ func validatePluginManifestValue(value any, dir string) *PluginManifestError {
 	if problem := validatePluginServer(manifest["server"]); problem != nil {
 		return problem
 	}
-	return validatePluginWebhook(manifest)
+	if problem := validatePluginWebhook(manifest); problem != nil {
+		return problem
+	}
+	return validatePluginCommentGuard(manifest)
+}
+
+// validatePluginCommentGuard: the comment guard (#530) receives commenters' email and IP
+// address, so declaring it needs the comments:private capability, which the enable
+// dialog shows. Checked last, once hooks and capabilities are well formed.
+func validatePluginCommentGuard(manifest map[string]any) *PluginManifestError {
+	server, _ := manifest["server"].(map[string]any)
+	hooks, _ := server["hooks"].([]any)
+	for _, item := range hooks {
+		hook, _ := item.(map[string]any)
+		if event, _ := hook["event"].(string); event != pluginCommentGuardEvent {
+			continue
+		}
+		capabilities, _ := manifest["capabilities"].([]any)
+		if !slices.Contains(capabilities, any(pluginCommentsPrivate)) {
+			return manifestProblem("capabilities", "must include %s when server.hooks declares %s", pluginCommentsPrivate, pluginCommentGuardEvent)
+		}
+	}
+	return nil
 }
 
 func validatePluginCapabilities(value any) *PluginManifestError {
@@ -467,8 +513,8 @@ var (
 // hooks are known to be well formed: it names a string setting for the URL and a
 // different, secret string setting for the signing key; the plugin declares the network
 // capability (it makes outbound calls, through core); and it has at least one hook, none
-// of them the publish guard, which runs synchronously before a publish and can't wait on
-// a remote server.
+// of them a guard (the publish guard, or the comment guard, #530), which runs
+// synchronously in the request it checks and can't wait on a remote server.
 func validatePluginWebhook(manifest map[string]any) *PluginManifestError {
 	server, _ := manifest["server"].(map[string]any)
 	raw, present := server["webhook"]
@@ -509,8 +555,8 @@ func validatePluginWebhook(manifest map[string]any) *PluginManifestError {
 	}
 	for i, item := range hooks {
 		hook, _ := item.(map[string]any)
-		if event, _ := hook["event"].(string); event == pluginGuardEvent {
-			return manifestProblem(fmt.Sprintf("server.hooks[%d].event", i), "can't be delivered by a webhook (%s is a publish guard)", pluginGuardEvent)
+		if event, _ := hook["event"].(string); isPluginGuard(event) {
+			return manifestProblem(fmt.Sprintf("server.hooks[%d].event", i), "can't be delivered by a webhook (%s is a guard)", event)
 		}
 	}
 	return nil
@@ -577,11 +623,11 @@ func validatePluginServer(value any) *PluginManifestError {
 			return manifestProblem(field+".event", "is declared twice")
 		}
 		seen[event] = true
-		guard := event == pluginGuardEvent
+		onError, guard := pluginGuardOnError[event]
 
 		if raw, present := hook["timeout_ms"]; present {
 			if guard {
-				return manifestProblem(field+".timeout_ms", "is not allowed for %s (guards have a fixed budget)", pluginGuardEvent)
+				return manifestProblem(field+".timeout_ms", "is not allowed for %s (guards have a fixed budget)", event)
 			}
 			if n, ok := raw.(float64); !ok || !isInteger(n) || n < 1 || n > pluginHookTimeoutMax {
 				return manifestProblem(field+".timeout_ms", "must be an integer from 1 to %d", pluginHookTimeoutMax)
@@ -589,15 +635,15 @@ func validatePluginServer(value any) *PluginManifestError {
 		}
 		if raw, present := hook["on_error"]; present {
 			if !guard {
-				return manifestProblem(field+".on_error", "is only allowed for %s", pluginGuardEvent)
+				return manifestProblem(field+".on_error", "is only allowed for a guard (%s, %s)", pluginGuardEvent, pluginCommentGuardEvent)
 			}
-			if s, ok := raw.(string); !ok || (s != "allow" && s != "deny") {
-				return manifestProblem(field+".on_error", "must be allow or deny")
+			if s, ok := raw.(string); !ok || !slices.Contains(onError, s) {
+				return manifestProblem(field+".on_error", "must be %s", strings.Join(onError, " or "))
 			}
 		}
 		if raw, present := hook["priority"]; present {
 			if !guard {
-				return manifestProblem(field+".priority", "is only allowed for %s", pluginGuardEvent)
+				return manifestProblem(field+".priority", "is only allowed for a guard (%s, %s)", pluginGuardEvent, pluginCommentGuardEvent)
 			}
 			if n, ok := raw.(float64); !ok || !isInteger(n) || math.Abs(n) > pluginGuardPriorityMax {
 				return manifestProblem(field+".priority", "must be an integer from -%d to %d", pluginGuardPriorityMax, pluginGuardPriorityMax)

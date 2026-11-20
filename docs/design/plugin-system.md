@@ -108,6 +108,8 @@ Beta.** `plugin.json` lists what the plugin says it uses:
 | `media:read` | `host.Media()`: read media rows. |
 | `users:read` | `host.Users()`: id, name, role. Never the email or password fields. |
 | `network` | Nothing; declares that the plugin makes outbound calls. |
+| `comments:read` | `host.Comments()`: a reader comment's name, text, status and post (#530). Never the commenter's address. |
+| `comments:private` | Nothing; required to declare the comment guard, which receives commenters' email and IP address (reader-comments.md 14.2). |
 
 The Plugins page lists them, and `Host` only hands out the accessors declared, so a plugin that
 forgets one fails in development rather than in production. In-process Go can still import

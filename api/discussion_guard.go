@@ -14,10 +14,11 @@ import (
 // is stored with the comment (held_reason "plugin", held_detail its reason), so confirming
 // an unconfirmed comment later applies it without calling the plugin again.
 //
-// Until #530 the hook is nil: no guard, core's rules alone decide. #530 sets it from the
-// enabled plugins' declared `comment.before_create` guards (their order, budget and
-// on_error), and must keep this contract: never block longer than its budget, never
-// panic out, never log the candidate's email, address or text.
+// NewServer sets the hook to runCommentGuards (plugin_comment_guards.go, #530): the
+// enabled plugins' declared `comment.before_create` guards, with their order, budget and
+// on_error. It keeps this contract: never block longer than its budget, never panic out,
+// never log the candidate's email, address or text. A nil hook (or a build without
+// comment guards) leaves core's rules alone to decide.
 
 // The verdicts a guard may give.
 const (
@@ -48,8 +49,8 @@ type readerCommentGuardVerdict struct {
 // readerCommentGuardFunc runs the guards for one candidate.
 type readerCommentGuardFunc func(ctx context.Context, logger *slog.Logger, candidate readerCommentCandidate) readerCommentGuardVerdict
 
-// guardReaderComment asks the guards (none until #530) about a candidate. Anything but
-// hold or spam is allow.
+// guardReaderComment asks the guards about a candidate. Anything but hold or spam is
+// allow: a guard can't approve.
 func (server *Server) guardReaderComment(ctx context.Context, logger *slog.Logger, candidate readerCommentCandidate) readerCommentGuardVerdict {
 	if server.readerCommentGuard == nil {
 		return readerCommentGuardVerdict{}

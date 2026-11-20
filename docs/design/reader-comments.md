@@ -1084,6 +1084,28 @@ all.
 A CAPTCHA plugin needs a widget on the page: plugin-system S13 (public page injection). Until
 then a guard can only judge what the form sends.
 
+### 14.4 What C10 settled (#530)
+
+Built as designed (`000067`, `api/plugin_comment_guards.go`), with these details the text left open:
+
+- **A comment created approved or as spam** gets `comment.created` then `comment.approved` (or
+  `comment.spammed`), so a plugin following approvals needs one event, whatever the path.
+- **`comment.deleted` is not written for the comments of a post deleted for good**: the cascade
+  would write one per comment, and `post.deleted` stands for them. Nor for an unconfirmed
+  comment (never created) or a tombstone's later removal (announced when it became one). Its
+  `status` is the one the comment had.
+- **`actor_id`** is the member on a member's `comment.created`, and the moderator on a status
+  change that moved `moderated_at`; otherwise none.
+- **The stored reason** (`held_detail`) is "<plugin name>: <reason>", or "<plugin name> held it
+  for review." without one, so moderators know which plugin. An error with `on_error: hold` is
+  "<plugin name> couldn't check this comment."
+- **When the guards can't be listed** (the database failed), the comment is held: a guard this
+  build has may have wanted to see it.
+- **Logs** never carry the candidate: a plugin's error text is logged with its name, email, IP,
+  user agent and text blanked.
+- **`gen-plugins`** refuses a plugin.json that declares either guard without server code (a
+  webhook plugin included); the validator still refuses a webhook declaring one.
+
 ---
 
 ## 15. Access and activity

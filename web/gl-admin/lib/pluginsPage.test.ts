@@ -61,6 +61,20 @@ describe("what a row shows", () => {
     expect(declaredUses(plugin()).length).toBe(0)
   })
 
+  it("lists the comment capabilities and the comment guard (#530)", () => {
+    const uses = declaredUses(
+      plugin({
+        capabilities: ["comments:read", "comments:private"],
+        hooks: [{ event: "comment.created" }, { event: "comment.before_create" }],
+      }),
+    )
+    expect(uses.map((u) => u.name)).toEqual(["Read comments", "Commenters’ private details", "Checks reader comments"])
+    expect(uses[2].description).toContain("Receives commenters’ email and IP address")
+    expect(uses[0].description).toContain("Never email addresses")
+    // Comment events alone are no guard.
+    expect(declaredUses(plugin({ hooks: [{ event: "comment.approved" }] }))).toEqual([])
+  })
+
   it("labels and explains a plugin that can't run", () => {
     expect(statusLabel(plugin())).toBeNull()
     expect(statusLabel(plugin({ status: "missing" }))).toBe("Not in this build")

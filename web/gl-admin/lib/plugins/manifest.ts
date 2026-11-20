@@ -13,12 +13,26 @@
 /** Core's plugin_api range (Go: PluginAPIMin, PluginAPIMax). */
 export const PLUGIN_API = { min: 1, max: 1 } as const
 
-export const PLUGIN_CAPABILITIES = ["posts:read", "media:read", "users:read", "network"] as const
+// comments:read and comments:private are reader comments' (#530, reader-comments.md 14).
+export const PLUGIN_CAPABILITIES = [
+  "posts:read",
+  "media:read",
+  "users:read",
+  "network",
+  "comments:read",
+  "comments:private",
+] as const
 export type PluginCapability = (typeof PLUGIN_CAPABILITIES)[number]
 
-// The publish guard (design 7.7).
+// The publish guard (design 7.7) and the comment guard (reader-comments.md 14.2, #530).
 export const PLUGIN_GUARD_EVENT = "post.before_publish"
-const GUARD_EVENT = PLUGIN_GUARD_EVENT
+export const PLUGIN_COMMENT_GUARD_EVENT = "comment.before_create"
+const COMMENTS_PRIVATE = "comments:private"
+// Each guard's on_error vocabulary (Go: pluginGuardOnError).
+const GUARD_ON_ERROR: Record<string, readonly string[]> = {
+  [PLUGIN_GUARD_EVENT]: ["allow", "deny"],
+  [PLUGIN_COMMENT_GUARD_EVENT]: ["allow", "hold"],
+}
 export const PLUGIN_HOOK_EVENTS = [
   "post.saved",
   "post.published",
@@ -26,9 +40,18 @@ export const PLUGIN_HOOK_EVENTS = [
   "post.trashed",
   "post.restored",
   "post.deleted",
-  GUARD_EVENT,
+  PLUGIN_GUARD_EVENT,
+  "comment.created",
+  "comment.approved",
+  "comment.unapproved",
+  "comment.spammed",
+  "comment.trashed",
+  "comment.deleted",
+  PLUGIN_COMMENT_GUARD_EVENT,
 ] as const
 export type PluginHookEvent = (typeof PLUGIN_HOOK_EVENTS)[number]
+
+const isGuard = (event: unknown): event is string => typeof event === "string" && Object.hasOwn(GUARD_ON_ERROR, event)
 
 const ID_RE = /^[a-z][a-z0-9-]{0,62}$/
 const BLOCK_NAME_RE = /^[A-Z][A-Za-z0-9]{0,63}$/
@@ -75,7 +98,7 @@ export interface PluginSettingSpec {
 export interface PluginHook {
   event: PluginHookEvent
   timeout_ms?: number
-  on_error?: "allow" | "deny"
+  on_error?: "allow" | "deny" | "hold"
   priority?: number
 }
 
@@ -177,8 +200,20 @@ function manifestProblem(value: unknown, dir: string): Problem | null {
     blocksProblem(value.blocks) ??
     settingsProblem(value.settings) ??
     serverProblem(value.server) ??
-    webhookProblem(value)
+    webhookProblem(value) ??
+    commentGuardProblem(value)
   )
+}
+
+// The comment guard (#530) receives commenters' email and IP address, so declaring it
+// needs comments:private. Checked last, once hooks and capabilities are well formed.
+function commentGuardProblem(manifest: JsonObject): Problem | null {
+  const server = isObject(manifest.server) ? manifest.server : {}
+  const hooks = Array.isArray(server.hooks) ? server.hooks : []
+  if (!hooks.some((hook) => isObject(hook) && hook.event === PLUGIN_COMMENT_GUARD_EVENT)) return null
+  const capabilities = Array.isArray(manifest.capabilities) ? manifest.capabilities : []
+  if (capabilities.includes(COMMENTS_PRIVATE)) return null
+  return problem("capabilities", `must include ${COMMENTS_PRIVATE} when server.hooks declares ${PLUGIN_COMMENT_GUARD_EVENT}`)
 }
 
 function capabilitiesProblem(value: unknown): Problem | null {
@@ -346,23 +381,25 @@ function serverProblem(value: unknown): Problem | null {
     }
     if (seen.has(event)) return problem(`${field}.event`, "is declared twice")
     seen.add(event)
-    const guard = event === GUARD_EVENT
+    const guard = isGuard(event)
+    const guards = `${PLUGIN_GUARD_EVENT}, ${PLUGIN_COMMENT_GUARD_EVENT}`
 
     if (has(hook, "timeout_ms")) {
-      if (guard) return problem(`${field}.timeout_ms`, `is not allowed for ${GUARD_EVENT} (guards have a fixed budget)`)
+      if (guard) return problem(`${field}.timeout_ms`, `is not allowed for ${event} (guards have a fixed budget)`)
       const n = hook.timeout_ms
       if (typeof n !== "number" || !Number.isInteger(n) || n < 1 || n > LIMITS.hookTimeout) {
         return problem(`${field}.timeout_ms`, `must be an integer from 1 to ${LIMITS.hookTimeout}`)
       }
     }
     if (has(hook, "on_error")) {
-      if (!guard) return problem(`${field}.on_error`, `is only allowed for ${GUARD_EVENT}`)
-      if (hook.on_error !== "allow" && hook.on_error !== "deny") {
-        return problem(`${field}.on_error`, "must be allow or deny")
+      if (!guard) return problem(`${field}.on_error`, `is only allowed for a guard (${guards})`)
+      const allowed = GUARD_ON_ERROR[event]
+      if (typeof hook.on_error !== "string" || !allowed.includes(hook.on_error)) {
+        return problem(`${field}.on_error`, `must be ${allowed.join(" or ")}`)
       }
     }
     if (has(hook, "priority")) {
-      if (!guard) return problem(`${field}.priority`, `is only allowed for ${GUARD_EVENT}`)
+      if (!guard) return problem(`${field}.priority`, `is only allowed for a guard (${guards})`)
       const n = hook.priority
       if (typeof n !== "number" || !Number.isInteger(n) || Math.abs(n) > LIMITS.guardPriority) {
         return problem(`${field}.priority`, `must be an integer from -${LIMITS.guardPriority} to ${LIMITS.guardPriority}`)
@@ -374,7 +411,7 @@ function serverProblem(value: unknown): Problem | null {
 
 // server.webhook (#460), checked once settings, capabilities and hooks are well formed:
 // a string setting for the URL, a different secret string setting for the signing key,
-// the network capability, and at least one hook, none the publish guard.
+// the network capability, and at least one hook, none a guard (publish or comment).
 function webhookProblem(manifest: JsonObject): Problem | null {
   const server = isObject(manifest.server) ? manifest.server : {}
   const webhook = server.webhook
@@ -401,8 +438,8 @@ function webhookProblem(manifest: JsonObject): Problem | null {
     return problem("server.hooks", "must declare at least one hook when server.webhook is set")
   }
   for (const [i, hook] of hooks.entries()) {
-    if (isObject(hook) && hook.event === GUARD_EVENT) {
-      return problem(`server.hooks[${i}].event`, `can't be delivered by a webhook (${GUARD_EVENT} is a publish guard)`)
+    if (isObject(hook) && isGuard(hook.event)) {
+      return problem(`server.hooks[${i}].event`, `can't be delivered by a webhook (${hook.event} is a guard)`)
     }
   }
   return null

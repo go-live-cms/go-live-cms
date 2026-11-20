@@ -35,6 +35,12 @@
 //		},
 //	})
 //
+// A plugin may also check reader comments (#530, docs/design/reader-comments.md 14.2):
+// Plugin.BeforeCommentCreate, declared as {"event": "comment.before_create", "on_error":
+// "allow" | "hold"} with the comments:private capability, is asked about every reader
+// comment before it is stored and may hold it for a moderator or mark it as spam (see
+// CommentGuard). It can't approve one: moderation stays core's.
+//
 // Observers observe; they can't change anything on the way through. An observer runs after
 // the change it describes has committed, outside any transaction, as the system rather
 // than as the member who caused it. It can't fail, slow or roll back that change: an
@@ -86,11 +92,50 @@ const (
 	EventPostDeleted = "post.deleted"
 )
 
+// The reader comment events (#530, docs/design/reader-comments.md 14.1). Event.PostID is
+// the comment's post; a comment's own events arrive in order (two comments written at
+// the same moment may come in either order). Data holds ids and small
+// facts only, never a name, text or address: "comment_id"; "root_id" (absent on a
+// top-level comment); "status", the comment's status after the change (pending,
+// approved, spam or trash; on comment.deleted the one it had); "previous_status" (absent
+// on a new comment and on comment.deleted); and "by_member", true for a staff member's
+// comment. ActorID is the member who wrote it on comment.created, and the moderator on a
+// change a moderator made. A plugin that wants the text declares comments:read and reads
+// it with Host.Comments.
+const (
+	// EventCommentCreated: a comment exists for the site: a reader's comment was
+	// confirmed (or stored at once, from a browser that holds the address's key, or as
+	// spam), or a member's comment was written. Status says where it went. An unconfirmed
+	// comment is not created yet.
+	EventCommentCreated = "comment.created"
+	// EventCommentApproved: a comment became approved, by a moderator or by core's rules
+	// (then it follows comment.created). ActorID is the moderator, when one did it.
+	EventCommentApproved = "comment.approved"
+	// EventCommentUnapproved: an approved comment went back to pending.
+	EventCommentUnapproved = "comment.unapproved"
+	// EventCommentSpammed: a comment was marked as spam (by a moderator, or by core's
+	// rules or a guard, then after comment.created).
+	EventCommentSpammed = "comment.spammed"
+	// EventCommentTrashed: a comment was moved to the trash.
+	EventCommentTrashed = "comment.trashed"
+	// EventCommentDeleted: a comment was deleted, or removed and kept as a placeholder
+	// because approved replies answer it. Its text is gone when the hook runs. Not sent
+	// for the comments of a post deleted for good: its post.deleted stands for them.
+	EventCommentDeleted = "comment.deleted"
+)
+
 // ObserverEvents lists the events an observer may subscribe to.
 var ObserverEvents = []string{
 	EventPostSaved, EventPostPublished, EventPostUnpublished,
 	EventPostTrashed, EventPostRestored, EventPostDeleted,
+	EventCommentCreated, EventCommentApproved, EventCommentUnapproved,
+	EventCommentSpammed, EventCommentTrashed, EventCommentDeleted,
 }
+
+// EventCommentBeforeCreate is the comment guard's name in plugin.json's server.hooks
+// (#530). Like EventBeforePublish it is not an event: a guard is
+// Plugin.BeforeCommentCreate, called before a reader's comment is stored.
+const EventCommentBeforeCreate = "comment.before_create"
 
 // EventBeforePublish is the publish guard's name in plugin.json's server.hooks
 // (section 7.7). It is not an event: a guard is Plugin.BeforePublish, called before a
@@ -159,6 +204,74 @@ func Deny(reason string) Decision { return Decision{Deny: true, Reason: reason} 
 // publish is published unchecked. It can't change the content (no mutating filters).
 type Guard func(ctx context.Context, host Host, candidate PublishCandidate) (Decision, error)
 
+// CommentCandidate is a reader's comment a comment guard is asked about, as the request
+// carried it. It holds personal data (the address, the network address, the user agent):
+// a guard may send it to the service it uses, which is why declaring the guard needs
+// comments:private, but never logs or stores it. The IP address exists only here: core
+// never stores it.
+type CommentCandidate struct {
+	// PostID is the post the comment is on.
+	PostID int64
+	// ParentID is the comment it answers; 0 for a top-level comment.
+	ParentID int64
+	// Name and Email are what the reader typed; Body the text, as stored (normalized).
+	Name  string
+	Email string
+	Body  string
+	// IP is the reader's address, and UserAgent their browser's, as the request gave them.
+	IP        string
+	UserAgent string
+	// HasBrowserKey: the browser holds the address's key (it confirmed a comment before),
+	// so the comment is published or held at once instead of waiting for a confirmation.
+	HasBrowserKey bool
+}
+
+// CommentVerdict is what a comment guard says: allow, hold or spam. There is no approve:
+// moderation stays core's, and any other value counts as allow.
+type CommentVerdict string
+
+const (
+	// CommentAllow leaves the comment to core's rules.
+	CommentAllow CommentVerdict = "allow"
+	// CommentHold puts it in the moderation queue, with the guard's reason.
+	CommentHold CommentVerdict = "hold"
+	// CommentSpam sends it to spam, silently: the reader is answered as for a held one
+	// and nothing is mailed.
+	CommentSpam CommentVerdict = "spam"
+)
+
+// CommentDecision is a comment guard's answer. The zero value allows the comment.
+type CommentDecision struct {
+	Verdict CommentVerdict
+	// Reason is shown to moderators beside the held comment, as one line of plain text
+	// ("Looks automated (score 0.91)."). Longer reasons are cut at 200 characters.
+	Reason string
+}
+
+// AllowComment leaves the comment to core's rules.
+func AllowComment() CommentDecision { return CommentDecision{Verdict: CommentAllow} }
+
+// HoldComment holds the comment for a moderator, with a short plain-text reason.
+func HoldComment(reason string) CommentDecision {
+	return CommentDecision{Verdict: CommentHold, Reason: reason}
+}
+
+// SpamComment sends the comment to spam, with a short plain-text reason.
+func SpamComment(reason string) CommentDecision {
+	return CommentDecision{Verdict: CommentSpam, Reason: reason}
+}
+
+// CommentGuard checks a reader's comment before it is stored (#530). It runs on the
+// comment's write path, after core's own checks: keep it fast. Guards run one after
+// another in plugin.json's priority order (lowest first, then the plugin id); the first
+// spam wins and stops the rest, a hold is kept while the others still run. A guard gets
+// 2 seconds, and all of them together 3. An error, a panic or running past its time
+// allows the comment (and is logged) unless plugin.json declares "on_error": "hold".
+//
+// The verdict is stored with the comment, so confirming it later applies it without
+// asking again.
+type CommentGuard func(ctx context.Context, host Host, candidate CommentCandidate) (CommentDecision, error)
+
 // Capabilities a plugin.json may declare (section 2). Host hands out an accessor only
 // when its capability is declared.
 const (
@@ -166,9 +279,15 @@ const (
 	CapabilityMediaRead = "media:read"
 	CapabilityUsersRead = "users:read"
 	CapabilityNetwork   = "network"
+	// CapabilityCommentsRead gives Host.Comments: a comment's name, text, status and
+	// post. Never the commenter's address.
+	CapabilityCommentsRead = "comments:read"
+	// CapabilityCommentsPrivate is required to declare the comment guard, which receives
+	// commenters' email and IP address (CommentCandidate).
+	CapabilityCommentsPrivate = "comments:private"
 )
 
-// Event is one change to a post, as an observer receives it.
+// Event is one change to a post or a reader comment, as an observer receives it.
 type Event struct {
 	// ID is unique per event and stable across retries: the idempotency key.
 	ID int64
@@ -179,9 +298,10 @@ type Event struct {
 	ActorID int64
 	// Name is one of the Event* constants.
 	Name string
-	// Data holds ids and small facts: always "post_type" and "post_status" (the status
-	// after the change, or before a delete), "from_status" on a status change, and
-	// "version_id" on post.published. Never content.
+	// Data holds ids and small facts, never content. A post event has "post_type" and
+	// "post_status" (the status after the change, or before a delete), "from_status" on
+	// a status change, and "version_id" on post.published. A comment event's are listed
+	// with EventCommentCreated.
 	Data map[string]any
 	// OccurredAt is when the change was made (its transaction's time).
 	OccurredAt time.Time
@@ -198,6 +318,8 @@ type Host interface {
 	Media() MediaReader
 	// Users is nil unless plugin.json declares users:read.
 	Users() UserReader
+	// Comments is nil unless plugin.json declares comments:read.
+	Comments() CommentReader
 	// Log is the API's logger, with the plugin and event attached. The API's rules
 	// apply: no secrets, and ids rather than names or content.
 	Log() *slog.Logger
@@ -268,6 +390,35 @@ type User struct {
 	Role     string
 }
 
+// CommentReader reads reader comments (comments:read). Read-only, and never the
+// commenter's address: observers can't read addresses at all.
+type CommentReader interface {
+	// Get is the comment as moderators see it. ErrNotFound for an id that doesn't exist,
+	// or a comment still waiting for its confirmation (it isn't created yet).
+	Get(ctx context.Context, id int64) (Comment, error)
+}
+
+// Comment is a reader comment as a hook sees it.
+type Comment struct {
+	ID     int64
+	PostID int64
+	// ParentID is the comment it answers and RootID its thread's top-level comment; 0
+	// for a top-level comment (and ParentID 0 when the comment it answered is gone).
+	ParentID int64
+	RootID   int64
+	// Name is the name as posted and Body the plain text. Both are empty on a removed
+	// comment.
+	Name string
+	Body string
+	// Status is pending, approved, spam or trash.
+	Status string
+	// MemberID is the member who wrote it, for a staff comment; 0 for a reader's.
+	MemberID int64
+	// Removed: deleted and kept as a placeholder because approved replies answer it.
+	Removed   bool
+	CreatedAt time.Time
+}
+
 // Observer handles one event. A non-nil error (or a panic, or running past the hook's
 // timeout_ms) is a failed attempt, retried later. ctx carries the timeout.
 type Observer func(ctx context.Context, host Host, event Event) error
@@ -281,20 +432,28 @@ type Plugin struct {
 	// BeforePublish is the plugin's publish guard, or nil. plugin.json must declare it
 	// as {"event": "post.before_publish"}, and a declared guard must be set here.
 	BeforePublish Guard
+	// BeforeCommentCreate is the plugin's comment guard, or nil. plugin.json must
+	// declare it as {"event": "comment.before_create"} (with the comments:private
+	// capability), and a declared guard must be set here.
+	BeforeCommentCreate CommentGuard
 }
 
-// HookEvents lists the events p has a hook for, sorted, the guard
-// (EventBeforePublish) included: what plugin.json's server.hooks must declare.
+// HookEvents lists the events p has a hook for, sorted, the guards
+// (EventBeforePublish, EventCommentBeforeCreate) included: what plugin.json's
+// server.hooks must declare.
 func (p Plugin) HookEvents() []string {
 	events := p.ObserverEvents()
 	if p.BeforePublish != nil {
 		events = append(events, EventBeforePublish)
-		sort.Strings(events)
 	}
+	if p.BeforeCommentCreate != nil {
+		events = append(events, EventCommentBeforeCreate)
+	}
+	sort.Strings(events)
 	return events
 }
 
-// ObserverEvents lists the events p observes, sorted: HookEvents without the guard.
+// ObserverEvents lists the events p observes, sorted: HookEvents without the guards.
 func (p Plugin) ObserverEvents() []string {
 	events := make([]string, 0, len(p.Observers))
 	for event := range p.Observers {
@@ -342,6 +501,9 @@ func validate(slug string, p Plugin) error {
 		}
 		if !known && event == EventBeforePublish {
 			return fmt.Errorf("pluginsdk: plugin %q: %q is not an observer event; set Plugin.BeforePublish", slug, event)
+		}
+		if !known && event == EventCommentBeforeCreate {
+			return fmt.Errorf("pluginsdk: plugin %q: %q is not an observer event; set Plugin.BeforeCommentCreate", slug, event)
 		}
 		if !known {
 			return fmt.Errorf("pluginsdk: plugin %q: %q is not an observer event", slug, event)

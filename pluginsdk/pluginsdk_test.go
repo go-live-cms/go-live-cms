@@ -106,6 +106,41 @@ func TestRegisterGuard(t *testing.T) {
 	}
 }
 
+// The comment guard (#530) is BeforeCommentCreate: among HookEvents with the publish
+// guard, never an observer; its helpers have no approve.
+func TestRegisterCommentGuard(t *testing.T) {
+	guard := func(context.Context, Host, CommentCandidate) (CommentDecision, error) {
+		return HoldComment("check"), nil
+	}
+	publish := func(context.Context, Host, PublishCandidate) (Decision, error) { return Allow(), nil }
+	Register("sdk-test-comment-guard", Plugin{BeforeCommentCreate: guard, BeforePublish: publish,
+		Observers: map[string]Observer{EventCommentApproved: noop}})
+	got := Registered()["sdk-test-comment-guard"]
+	if events := strings.Join(got.HookEvents(), ","); events != "comment.approved,comment.before_create,post.before_publish" {
+		t.Fatalf("HookEvents = %v", events)
+	}
+	if events := strings.Join(got.ObserverEvents(), ","); events != "comment.approved" {
+		t.Fatalf("ObserverEvents = %v", events)
+	}
+	decision, err := got.BeforeCommentCreate(context.Background(), nil, CommentCandidate{})
+	if err != nil || decision != (CommentDecision{Verdict: CommentHold, Reason: "check"}) {
+		t.Fatalf("guard = %+v, %v", decision, err)
+	}
+	mustPanic(t, "set Plugin.BeforeCommentCreate", func() {
+		Register("sdk-test-comment-guard-observer", Plugin{Observers: map[string]Observer{EventCommentBeforeCreate: noop}})
+	})
+	if d := SpamComment("bot"); d.Verdict != CommentSpam || d.Reason != "bot" {
+		t.Fatalf("SpamComment = %+v", d)
+	}
+	if d := AllowComment(); d.Verdict != CommentAllow {
+		t.Fatalf("AllowComment = %+v", d)
+	}
+	for _, event := range []string{EventCommentCreated, EventCommentApproved, EventCommentUnapproved,
+		EventCommentSpammed, EventCommentTrashed, EventCommentDeleted} {
+		Register("sdk-test-observes-"+strings.ReplaceAll(event, ".", "-"), Plugin{Observers: map[string]Observer{event: noop}})
+	}
+}
+
 // The registry keeps its own copy of the observers map.
 func TestRegisterCopiesObservers(t *testing.T) {
 	observers := map[string]Observer{EventPostTrashed: noop}

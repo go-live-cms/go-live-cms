@@ -10,7 +10,9 @@
 // Run it from the repository root (or pass -root). A plugin has server code when its
 // server/ directory holds a non-test .go file; symlinked plugin directories are skipped,
 // as the startup scan skips them. A plugin with server code whose plugin.json declares
-// server.webhook (#460) is an error: its hooks are either Go or a webhook.
+// server.webhook (#460) is an error: its hooks are either Go or a webhook. So is a
+// plugin.json that declares a guard (post.before_publish, #459, or
+// comment.before_create, #530) without server code: a guard is Go, never a webhook.
 package main
 
 import (
@@ -24,6 +26,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -109,32 +112,28 @@ func serverPlugins(dir string) ([]string, error) {
 			continue
 		}
 		slug := entry.Name()
-		files, err := os.ReadDir(filepath.Join(dir, slug, "server"))
-		if errors.Is(err, fs.ErrNotExist) {
-			continue
-		}
+		hasCode, err := hasServerCode(filepath.Join(dir, slug, "server"))
 		if err != nil {
 			return nil, err
 		}
-		hasCode := false
-		for _, file := range files {
-			name := file.Name()
-			if file.Type().IsRegular() && strings.HasSuffix(name, ".go") && !strings.HasSuffix(name, "_test.go") {
-				hasCode = true
-				break
-			}
+		declared, err := readDeclared(filepath.Join(dir, slug, "plugin.json"))
+		if err != nil {
+			return nil, err
 		}
 		if !hasCode {
+			// A guard runs in Go, in the request it checks: declared without code, the
+			// startup scan lists the plugin as incompatible (pluginHooksMismatch), and a
+			// webhook can't deliver one (the validator refuses it). Say so at build time.
+			if len(declared.guards) > 0 {
+				return nil, fmt.Errorf("%s/%s declares the guard %s but has no server code: a guard is Go (Plugin.BeforePublish, Plugin.BeforeCommentCreate), never a webhook",
+					pluginsDir, slug, strings.Join(declared.guards, ", "))
+			}
 			continue
 		}
 		if !slugRe.MatchString(slug) {
 			return nil, fmt.Errorf("%s/%s has server code but %q is not a plugin id", pluginsDir, slug, slug)
 		}
-		webhook, err := declaresWebhook(filepath.Join(dir, slug, "plugin.json"))
-		if err != nil {
-			return nil, err
-		}
-		if webhook {
+		if declared.webhook {
 			// The startup scan would list it as incompatible (pluginHooksMismatch); say so
 			// at build time instead.
 			return nil, fmt.Errorf("%s/%s has server code and declares server.webhook: a plugin's hooks are Go or a webhook, not both", pluginsDir, slug)
@@ -145,26 +144,64 @@ func serverPlugins(dir string) ([]string, error) {
 	return slugs, nil
 }
 
-// declaresWebhook reports whether a plugin.json sets server.webhook (#460). A missing or
-// unreadable manifest declares nothing here: the validator reports it elsewhere.
-func declaresWebhook(manifestPath string) (bool, error) {
-	raw, err := os.ReadFile(manifestPath)
+// hasServerCode reports whether dir (a plugin's server/) holds a non-test .go file.
+func hasServerCode(dir string) (bool, error) {
+	files, err := os.ReadDir(dir)
 	if errors.Is(err, fs.ErrNotExist) {
 		return false, nil
 	}
 	if err != nil {
 		return false, err
 	}
+	for _, file := range files {
+		name := file.Name()
+		if file.Type().IsRegular() && strings.HasSuffix(name, ".go") && !strings.HasSuffix(name, "_test.go") {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// guardEvents are the hooks that are guards (#459, #530): Go only, run synchronously.
+var guardEvents = []string{"comment.before_create", "post.before_publish"}
+
+// declared is what gen-plugins reads of a plugin.json: whether it sets server.webhook
+// (#460) and which guards it declares.
+type declared struct {
+	webhook bool
+	guards  []string
+}
+
+// readDeclared reads a plugin.json's webhook and guards. A missing or unreadable manifest
+// declares nothing here: the validator reports it elsewhere.
+func readDeclared(manifestPath string) (declared, error) {
+	raw, err := os.ReadFile(manifestPath)
+	if errors.Is(err, fs.ErrNotExist) {
+		return declared{}, nil
+	}
+	if err != nil {
+		return declared{}, err
+	}
 	var manifest struct {
 		Server struct {
 			Webhook json.RawMessage `json:"webhook"`
+			Hooks   []struct {
+				Event string `json:"event"`
+			} `json:"hooks"`
 		} `json:"server"`
 	}
 	if json.Unmarshal(raw, &manifest) != nil {
-		return false, nil
+		return declared{}, nil
 	}
 	webhook := bytes.TrimSpace(manifest.Server.Webhook)
-	return len(webhook) > 0 && !bytes.Equal(webhook, []byte("null")), nil
+	out := declared{webhook: len(webhook) > 0 && !bytes.Equal(webhook, []byte("null"))}
+	for _, hook := range manifest.Server.Hooks {
+		if slices.Contains(guardEvents, hook.Event) && !slices.Contains(out.guards, hook.Event) {
+			out.guards = append(out.guards, hook.Event)
+		}
+	}
+	sort.Strings(out.guards)
+	return out, nil
 }
 
 // modulePath reads the module line of go.mod.

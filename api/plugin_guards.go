@@ -158,19 +158,26 @@ func (server *Server) hasGuardCode() bool {
 	return false
 }
 
-// publishGuards lists the guards that run now, in order.
-func (server *Server) publishGuards(ctx context.Context) ([]publishGuard, error) {
-	if !server.hasGuardCode() {
-		return nil, nil
-	}
+// guardPlugin is an enabled plugin whose code has a guard for one event, with that
+// hook's priority and on_error.
+type guardPlugin struct {
+	plugin   hookPlugin
+	priority int
+	onError  string
+}
+
+// guardPlugins lists the enabled, installed plugins whose registered code has the guard
+// for event (has says whether it does) and matches their plugin.json, sorted by
+// (priority, slug): the order both kinds of guard run in (7.5).
+func (server *Server) guardPlugins(ctx context.Context, event string, has func(pluginsdk.Plugin) bool) ([]guardPlugin, error) {
 	rows, err := server.store.ListHookPlugins(ctx)
 	if err != nil {
 		return nil, err
 	}
-	guards := []publishGuard{}
+	guards := []guardPlugin{}
 	for _, row := range rows {
 		code, registered := server.pluginRegistry[row.Slug]
-		if !registered || code.BeforePublish == nil {
+		if !registered || !has(code) {
 			continue
 		}
 		var manifest PluginManifest
@@ -179,20 +186,17 @@ func (server *Server) publishGuards(ctx context.Context) ([]publishGuard, error)
 		}
 		if mismatch := pluginHooksMismatch(manifest, code, true); mismatch != "" {
 			// The startup scan marks it incompatible; until then its guard can't be
-			// trusted to be the one plugin.json describes. Logged once, not per publish.
+			// trusted to be the one plugin.json describes. Logged once, not per call.
 			if _, logged := server.guardSkipLogged.LoadOrStore(row.Slug+"\x00"+mismatch, true); !logged {
 				server.logger.Warn("plugin_guard_skipped", "plugin", row.Slug, "reason", mismatch)
 			}
 			continue
 		}
-		guard := publishGuard{
-			plugin: hookPlugin{id: row.ID, slug: row.Slug, manifest: manifest, code: code},
-			guard:  code.BeforePublish,
-		}
+		guard := guardPlugin{plugin: hookPlugin{id: row.ID, slug: row.Slug, manifest: manifest, code: code}}
 		for _, hook := range manifest.Server.Hooks {
-			if hook.Event == pluginGuardEvent {
+			if hook.Event == event {
 				guard.priority = hook.Priority
-				guard.onErrorDeny = hook.OnError == pluginGuardOnErrorDeny
+				guard.onError = hook.OnError
 			}
 		}
 		guards = append(guards, guard)
@@ -203,6 +207,23 @@ func (server *Server) publishGuards(ctx context.Context) ([]publishGuard, error)
 		}
 		return guards[i].plugin.slug < guards[j].plugin.slug
 	})
+	return guards, nil
+}
+
+// publishGuards lists the guards that run now, in order.
+func (server *Server) publishGuards(ctx context.Context) ([]publishGuard, error) {
+	if !server.hasGuardCode() {
+		return nil, nil
+	}
+	plugins, err := server.guardPlugins(ctx, pluginGuardEvent, func(p pluginsdk.Plugin) bool { return p.BeforePublish != nil })
+	if err != nil {
+		return nil, err
+	}
+	guards := make([]publishGuard, 0, len(plugins))
+	for _, p := range plugins {
+		guards = append(guards, publishGuard{plugin: p.plugin, guard: p.plugin.code.BeforePublish,
+			priority: p.priority, onErrorDeny: p.onError == pluginGuardOnErrorDeny})
+	}
 	return guards, nil
 }
 
@@ -299,22 +320,34 @@ func (server *Server) runPublishGuard(budget context.Context, log *slog.Logger, 
 // waiting when ctx is done: a guard that ignores its context can't hold a publish
 // past its time. done is called when the goroutine returns, however late.
 func callGuard(ctx context.Context, log *slog.Logger, host pluginsdk.Host, guard pluginsdk.Guard, publish pluginsdk.PublishCandidate, done func()) (pluginsdk.Decision, error) {
-	type answer struct {
-		decision pluginsdk.Decision
-		err      error
-	}
 	// Each guard gets its own copy of the body: one can't change what the next sees.
 	publish.BlockDoc = append(json.RawMessage(nil), publish.BlockDoc...)
+	return callWithDeadline(ctx, func(ctx context.Context) (pluginsdk.Decision, error) {
+		return guard(ctx, host, publish)
+	}, func(rec any, stack []byte) {
+		log.Error("plugin_guard_panic", "error", fmt.Sprint(rec), "stack", string(stack))
+	}, done)
+}
+
+// callWithDeadline runs call on its own goroutine with panics recovered (onPanic is told
+// of one), and stops waiting when ctx is done: a guard that ignores its context can't
+// hold the request it checks past its time. done is called when the goroutine returns,
+// however late.
+func callWithDeadline[D any](ctx context.Context, call func(context.Context) (D, error), onPanic func(rec any, stack []byte), done func()) (D, error) {
+	type answer struct {
+		decision D
+		err      error
+	}
 	result := make(chan answer, 1)
 	go func() {
 		defer done()
 		defer func() {
 			if rec := recover(); rec != nil {
-				log.Error("plugin_guard_panic", "error", fmt.Sprint(rec), "stack", string(debug.Stack()))
+				onPanic(rec, debug.Stack())
 				result <- answer{err: fmt.Errorf("panic: %v", rec)}
 			}
 		}()
-		decision, err := guard(ctx, host, publish)
+		decision, err := call(ctx)
 		result <- answer{decision, err}
 	}()
 	select {
@@ -328,7 +361,8 @@ func callGuard(ctx context.Context, log *slog.Logger, host pluginsdk.Host, guard
 			return got.decision, got.err
 		default:
 		}
-		return pluginsdk.Decision{}, fmt.Errorf("timed out: %w", ctx.Err())
+		var zero D
+		return zero, fmt.Errorf("timed out: %w", ctx.Err())
 	}
 }
 

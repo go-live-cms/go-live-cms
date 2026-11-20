@@ -1,5 +1,5 @@
 import type { Plugin, PluginSecretState, PluginSettingField, PluginSettings, PluginSettingValue } from "@gl-admin/lib/api/plugins"
-import { PLUGIN_GUARD_EVENT } from "@gl-admin/lib/plugins/manifest"
+import { PLUGIN_COMMENT_GUARD_EVENT, PLUGIN_GUARD_EVENT } from "@gl-admin/lib/plugins/manifest"
 
 // The Plugins page (#11, the redesign canvas's "Plugins" board) and its settings panel
 // (#457): what a row shows and offers, what the confirmations say, and the settings
@@ -12,17 +12,26 @@ export const CAPABILITY_LABELS: Record<string, { name: string; description: stri
   "media:read": { name: "Read media", description: "Your media library’s details." },
   "users:read": { name: "Read members", description: "Names and roles. Never emails or passwords." },
   network: { name: "Connect to other services", description: "Makes requests to services outside your site." },
+  // Reader comments (#530, docs/design/reader-comments.md 14).
+  "comments:read": { name: "Read comments", description: "Readers’ comments: names, text and status. Never email addresses." },
+  "comments:private": { name: "Commenters’ private details", description: "Commenters’ email and IP address, while a comment is posted." },
 }
 
-// A publish guard (post.before_publish, design 7.7) is shown beside the capabilities.
+// The guards are shown beside the capabilities: the publish guard (post.before_publish,
+// design 7.7) and the comment guard (comment.before_create, reader-comments.md 14.2).
 const GUARD = { name: "Can block publishing", description: "Can stop a post from going live, and says why." }
+const COMMENT_GUARD = {
+  name: "Checks reader comments",
+  description: "Receives commenters’ email and IP address. Can hold a comment for review or mark it as spam.",
+}
 
 export type DeclaredUse = { name: string; description: string }
 
-// What a plugin says it uses: its capabilities in the manifest's order, then the guard.
+// What a plugin says it uses: its capabilities in the manifest's order, then the guards.
 export function declaredUses(plugin: Pick<Plugin, "capabilities" | "hooks">): DeclaredUse[] {
   const uses = plugin.capabilities.map((c) => CAPABILITY_LABELS[c] ?? { name: c, description: "" })
   if (plugin.hooks.some((h) => h.event === PLUGIN_GUARD_EVENT)) uses.push(GUARD)
+  if (plugin.hooks.some((h) => h.event === PLUGIN_COMMENT_GUARD_EVENT)) uses.push(COMMENT_GUARD)
   return uses
 }
 

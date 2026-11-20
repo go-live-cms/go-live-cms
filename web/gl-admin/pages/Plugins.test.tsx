@@ -191,6 +191,26 @@ describe("enable and disable", () => {
     expect(button("Disable Publish checklist")).toBeDefined()
   })
 
+  it("shows a comment guard's lines on the row and in the enable dialog (#530)", async () => {
+    const checker = plugin({
+      slug: "spam-check",
+      name: "Spam check",
+      capabilities: ["comments:read", "comments:private", "network"],
+      hooks: [{ event: "comment.created" }, { event: "comment.before_create", on_error: "hold" }],
+    })
+    api.listPlugins.mockResolvedValue({ plugins: [checker], count: 1, plugin_api: { min: 1, max: 1 } })
+    await render()
+    expect(Array.from(row("Spam check").querySelectorAll(".gl-plugin__cap")).map((c) => c.textContent)).toEqual([
+      "Read comments",
+      "Commenters’ private details",
+      "Connect to other services",
+      "Checks reader comments",
+    ])
+    await click("Enable Spam check")
+    expect(dialog()!.textContent).toContain("Checks reader comments")
+    expect(dialog()!.textContent).toContain("Receives commenters’ email and IP address")
+  })
+
   it("says what a disable affects before disabling", async () => {
     await render()
     await click("Disable Link checker")

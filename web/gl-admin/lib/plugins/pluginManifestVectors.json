@@ -32,7 +32,7 @@
     { "name": "server with an empty hook list", "valid": true, "set": { "server": { "hooks": [] } } },
     { "name": "a prerelease and build version", "valid": true, "set": { "version": "2.0.0-beta.1+build.7" } },
     { "name": "a plugin_api outside core's range still validates (it is listed as incompatible)", "valid": true, "set": { "plugin_api": 99 } },
-    { "name": "every capability", "valid": true, "set": { "capabilities": ["posts:read", "media:read", "users:read", "network"] } },
+    { "name": "every capability", "valid": true, "set": { "capabilities": ["posts:read", "media:read", "users:read", "network", "comments:read", "comments:private"] } },
     { "name": "every hook event", "valid": true, "set": { "server": { "hooks": [
       { "event": "post.saved" }, { "event": "post.published" }, { "event": "post.unpublished" },
       { "event": "post.trashed" }, { "event": "post.restored" }, { "event": "post.deleted", "timeout_ms": 30000 },
@@ -130,6 +130,51 @@
     { "name": "priority on an observer", "valid": false, "field": "server.hooks[0].priority", "set": { "server": { "hooks": [{ "event": "post.saved", "priority": 1 }] } } },
     { "name": "priority over 1000", "valid": false, "field": "server.hooks[0].priority", "set": { "server": { "hooks": [{ "event": "post.before_publish", "priority": 1001 }] } } },
 
+    { "name": "every comment event and the comment guard (#530)", "valid": true, "set": {
+      "capabilities": ["comments:read", "comments:private"],
+      "server": { "hooks": [
+        { "event": "comment.created" }, { "event": "comment.approved", "timeout_ms": 2000 }, { "event": "comment.unapproved" },
+        { "event": "comment.spammed" }, { "event": "comment.trashed" }, { "event": "comment.deleted" },
+        { "event": "comment.before_create", "on_error": "hold", "priority": 5 }
+      ] }
+    } },
+    { "name": "comment events need no capability", "valid": true, "set": { "server": { "hooks": [{ "event": "comment.created" }] } } },
+    { "name": "both guards", "valid": true, "set": {
+      "capabilities": ["posts:read", "comments:private"],
+      "server": { "hooks": [{ "event": "post.before_publish", "on_error": "deny" }, { "event": "comment.before_create", "on_error": "allow", "priority": -1 }] }
+    } },
+    { "name": "the comment guard without comments:private", "valid": false, "field": "capabilities", "set": {
+      "capabilities": ["comments:read"], "server": { "hooks": [{ "event": "comment.before_create" }] }
+    } },
+    { "name": "the comment guard without capabilities", "valid": false, "field": "capabilities", "set": {
+      "capabilities": null, "server": { "hooks": [{ "event": "comment.before_create", "on_error": "hold" }] }
+    } },
+    { "name": "on_error deny on the comment guard", "valid": false, "field": "server.hooks[0].on_error", "set": {
+      "capabilities": ["comments:private"], "server": { "hooks": [{ "event": "comment.before_create", "on_error": "deny" }] }
+    } },
+    { "name": "on_error hold on the publish guard", "valid": false, "field": "server.hooks[0].on_error", "set": {
+      "server": { "hooks": [{ "event": "post.before_publish", "on_error": "hold" }] }
+    } },
+    { "name": "on_error approve on the comment guard (a guard can't approve)", "valid": false, "field": "server.hooks[0].on_error", "set": {
+      "capabilities": ["comments:private"], "server": { "hooks": [{ "event": "comment.before_create", "on_error": "approve" }] }
+    } },
+    { "name": "timeout_ms on the comment guard", "valid": false, "field": "server.hooks[0].timeout_ms", "set": {
+      "capabilities": ["comments:private"], "server": { "hooks": [{ "event": "comment.before_create", "timeout_ms": 500 }] }
+    } },
+    { "name": "on_error on a comment event", "valid": false, "field": "server.hooks[0].on_error", "set": {
+      "server": { "hooks": [{ "event": "comment.created", "on_error": "allow" }] }
+    } },
+    { "name": "priority on a comment event", "valid": false, "field": "server.hooks[0].priority", "set": {
+      "server": { "hooks": [{ "event": "comment.approved", "priority": 1 }] }
+    } },
+    { "name": "the comment guard twice", "valid": false, "field": "server.hooks[1].event", "set": {
+      "capabilities": ["comments:private"], "server": { "hooks": [{ "event": "comment.before_create" }, { "event": "comment.before_create" }] }
+    } },
+    { "name": "an unknown comment event", "valid": false, "field": "server.hooks[0].event", "set": {
+      "server": { "hooks": [{ "event": "comment.edited" }] }
+    } },
+    { "name": "an unknown comments capability", "valid": false, "field": "capabilities[0]", "set": { "capabilities": ["comments:write"] } },
+
     { "name": "a webhook plugin (#460)", "valid": true, "set": {
       "capabilities": ["network"],
       "settings": { "url": { "type": "string", "maxLength": 2048 }, "signing_secret": { "type": "string", "secret": true } },
@@ -191,6 +236,18 @@
     { "name": "webhook delivering the publish guard", "valid": false, "field": "server.hooks[1].event", "set": {
       "capabilities": ["network"], "settings": { "url": { "type": "string" }, "s": { "type": "string", "secret": true } },
       "server": { "webhook": { "url_setting": "url", "secret_setting": "s" }, "hooks": [{ "event": "post.saved" }, { "event": "post.before_publish" }] }
+    } },
+    { "name": "a webhook delivering comment events (#530)", "valid": true, "set": {
+      "capabilities": ["network", "comments:read"], "settings": { "url": { "type": "string" }, "s": { "type": "string", "secret": true } },
+      "server": { "webhook": { "url_setting": "url", "secret_setting": "s" }, "hooks": [{ "event": "comment.created" }, { "event": "comment.approved" }, { "event": "comment.deleted" }] }
+    } },
+    { "name": "webhook declaring the comment guard", "valid": false, "field": "server.hooks[1].event", "set": {
+      "capabilities": ["network", "comments:private"], "settings": { "url": { "type": "string" }, "s": { "type": "string", "secret": true } },
+      "server": { "webhook": { "url_setting": "url", "secret_setting": "s" }, "hooks": [{ "event": "comment.created" }, { "event": "comment.before_create", "on_error": "hold" }] }
+    } },
+    { "name": "webhook declaring the comment guard without comments:private", "valid": false, "field": "server.hooks[0].event", "set": {
+      "capabilities": ["network"], "settings": { "url": { "type": "string" }, "s": { "type": "string", "secret": true } },
+      "server": { "webhook": { "url_setting": "url", "secret_setting": "s" }, "hooks": [{ "event": "comment.before_create" }] }
     } },
     { "name": "webhook null is no webhook", "valid": true, "set": { "server": { "webhook": null, "hooks": [{ "event": "post.saved" }] } } }
   ]

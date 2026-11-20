@@ -231,7 +231,7 @@ func TestParseCommenterKeys(t *testing.T) {
 
 func TestGuardReaderCommentHook(t *testing.T) {
 	server := &Server{}
-	require.Equal(t, readerCommentGuardVerdict{}, server.guardReaderComment(t.Context(), nil, readerCommentCandidate{}), "no guard until #530")
+	require.Equal(t, readerCommentGuardVerdict{}, server.guardReaderComment(t.Context(), nil, readerCommentCandidate{}), "no comment guard in this build")
 
 	var seen readerCommentCandidate
 	server.readerCommentGuard = func(_ context.Context, _ *slog.Logger, c readerCommentCandidate) readerCommentGuardVerdict {
