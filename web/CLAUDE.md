@@ -390,8 +390,8 @@ are the most fragile part of the codebase. **Before editing anything under
   `discussionState(setting, now)` for the editor's Discussion section and the renderer, and the
   text rules (`normalizeReaderCommentBody`, `readerCommentLength` in code points, as the API
   counts) for the form's counter. Pinned by `src/lib/discussionStateVectors.json` and
-  `src/lib/discussionTextVectors.json` (both suites; `JSON.parse`). Nothing renders comments yet
-  (C5 #525), and `comments_enabled` stays off, its switch hidden until #526 (#527, below). **The reads (#523):**
+  `src/lib/discussionTextVectors.json` (both suites; `JSON.parse`). The section renders since #525 (below),
+  and `comments_enabled` stays off, its switch hidden until #526 (#527, below). **The reads (#523):**
   `getPublicPost`/`getPublicFrontPage` carry `discussion` (`{state, closes_at, count}`, cached and
   clock-free: apply `discussionState(discussion, now)` before showing a form), and
   `getPublicPostComments(id, page)` / `getPublicCommentThread(id, rootId)` in `src/lib/api.ts` read
@@ -418,6 +418,26 @@ are the most fragile part of the codebase. **Before editing anything under
   reader pages no-store. `/gl-comments` is noindex and in robots.txt. Logs: route pattern and
   status only. Tests: `src/lib/commentWrites.test.ts`, `src/pages/gl-comments/confirm.test.ts` and
   the container test `src/pages/gl-comments/commentEndpoint.astro.test.ts` (the no-script flow).
+- **The comments section and reader pages (#525, design 11; the default theme canvas's row 6):** one core
+  component, its markup `src/components/comments/PostCommentsSection.tsx` (React, so the comments block, #500,
+  renders the same HTML) drawing `commentsView` (`src/lib/postComments.ts`: 11.2's states, `discussionState`'s
+  clock on the cached `closes_at`, `?comments=N`, `?thread=`, `?replyto=`, `?commented=`; tested). Code layouts
+  render `src/components/comments/PostComments.astro` from the **`comments` layout prop**, which `PostPage.astro`
+  reads with `loadPostComments` (`src/lib/postCommentsLoader.ts`) while the code layout loads: no read when off,
+  closed with none or open with none; a failure is `comments_fetch_failed` and no section. **Block templates
+  have no comments until #500** puts the comments block in `single*` (a listed parity difference,
+  `templateParity.ts`). Comment text is text: never `set:html`/`dangerouslySetInnerHTML` (a test scans the
+  sources), links `rel="nofollow ugc noopener"` (`readerCommentRuns`, `discussion.ts`). Nothing per reader on a
+  post page: the notice is `?commented=` (no-store). `public/gl-comments.js` (plain, a `<script src defer>` after
+  the section; copies of the link rule, avatar colours and reasons, compared in `PostComments.astro.test.ts`)
+  posts with fetch, shows field errors (focus the first), the outcome in the status region, the reader's own
+  comment in place, moves the form to reply, counts code points. Reader pages `/comments/confirm`,
+  `/comments/unsubscribe`, `/comments/your-data` (`src/pages/comments/`, panels in `components/comments/reader/`)
+  and the refusal page render in `ThemedReaderPage.astro` (the theme's `layouts/reader/default.astro`, else
+  `ReaderLayout.astro`), noindex; their states are `<template data-reader-state>` that `gl-comments.js` shows
+  from the `#token=` fragment, spending it only on the button. Unsubscribe and your data answer 404 until #528 /
+  #529 add their routes (`READER_PAGES_READY`), and the notice's "Your comments" link waits for #529. Styles:
+  theme.css "reader comments (#525)"; new contrast pairs in `CONTRAST_PAIRS` (and Go's copy, the vectors).
 - **Discussion settings screens (#527, design 12.1–12.3; the canvas's "Settings · Discussion", "Post types ·
   Posts" and "Discussion settings…" boards):** Settings › Discussion is its own page, `/settings/discussion`
   (`pages/SettingsDiscussion.tsx`, admins), after Editor in the Settings menu (`components/settings/SettingsNav.tsx`,

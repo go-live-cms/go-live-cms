@@ -3077,3 +3077,465 @@ div.post-item-media {
 [data-template="404"] .site-main > .block-content > h2 + .query-loop {
   margin-top: var(--space-3);
 }
+
+/* ---------- reader comments (#525) ----------
+   Core markup from PostComments (src/components/comments/PostCommentsSection.tsx), the same for a
+   code layout and the comments site block (#500), as the canvas's "Comments section" and "Comment
+   form states" boards draw it. Core's classes: comments, comments-title, comment, comment-replies,
+   comment-meta, comment-badge, comment-removed, comment-form, comments-closed, comments-pagination
+   (src/components/blocks/README.md lists the rest). Errors use the callouts' tomato pair
+   (--color-danger, --color-danger-bg), so the comments add no colour token. */
+.comments {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  margin-top: var(--space-8);
+  padding-top: var(--space-7);
+  border-top: 1px solid var(--color-border);
+  scroll-margin-top: var(--header-height);
+}
+.comments-title {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: var(--size-xl);
+  font-weight: 700;
+  line-height: var(--leading-snug);
+  letter-spacing: -0.015em;
+  color: var(--color-secondary);
+}
+.comments-count {
+  font-weight: 500;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.comments-empty,
+.comments-thread-back {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: var(--size-sm);
+  color: var(--color-text-muted);
+}
+.comment-list,
+.comment-replies {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.comment-list > li {
+  padding-block: var(--space-5);
+}
+.comment-list > li:first-child {
+  padding-top: 0;
+}
+.comment-list > li + li {
+  border-top: 1px solid var(--color-border);
+}
+.comment {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: var(--space-3);
+  scroll-margin-top: calc(var(--header-height) + var(--space-4));
+}
+.comment > .avatar {
+  width: 40px;
+  height: 40px;
+  font-size: 16px;
+}
+.comment-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.comment-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px var(--space-2);
+  font-family: var(--font-heading);
+  font-size: var(--size-sm);
+  line-height: var(--leading-normal);
+  color: var(--color-text-muted);
+}
+.comment-author {
+  font-weight: 600;
+  color: var(--color-text);
+}
+.site .comment-meta a {
+  color: var(--color-text-muted);
+  text-decoration: none;
+}
+.site .comment-meta a:hover {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+.comment-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 0 8px;
+  border-radius: var(--radius-full);
+  background: var(--color-primary-subtle);
+  color: var(--color-secondary);
+  font-size: var(--size-xs);
+  font-weight: 600;
+  line-height: 1;
+}
+.comment-replyto,
+.comment-pending {
+  font-family: var(--font-heading);
+  font-size: var(--size-xs);
+  color: var(--color-text-muted);
+}
+.comment-pending {
+  font-weight: 600;
+}
+.comment-text {
+  overflow-wrap: anywhere;
+}
+.comment-text p {
+  margin: 0;
+}
+.comment-text p + p {
+  margin-top: 0.8em;
+}
+.comment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  font-family: var(--font-heading);
+  font-size: var(--size-sm);
+}
+.site a.comment-reply {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.site a.comment-reply:hover {
+  text-decoration: underline;
+}
+.comment-replies {
+  gap: var(--space-5);
+  margin: var(--space-4) 0 0 19px;
+  padding-left: var(--space-5);
+  border-left: 2px solid var(--color-border);
+}
+.comment-replies .comment {
+  grid-template-columns: 32px minmax(0, 1fr);
+}
+.comment-replies .comment > .avatar {
+  width: 32px;
+  height: 32px;
+  font-size: 13px;
+}
+.comment-removed .comment-text {
+  font-style: italic;
+  color: var(--color-text-muted);
+}
+.comment-removed > .avatar {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--color-border-strong);
+}
+/* The reader's own comment, shown in place by gl-comments.js. */
+.comment.is-own {
+  margin: calc(-1 * var(--space-3));
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-primary-subtle);
+}
+.site a.comment-more {
+  display: inline-flex;
+  margin-top: var(--space-4);
+  font-family: var(--font-heading);
+  font-size: var(--size-sm);
+  font-weight: 600;
+}
+.comments-closed {
+  margin: 0;
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  font-family: var(--font-heading);
+  font-size: var(--size-sm);
+  color: var(--color-text-muted);
+}
+.comments-pagination {
+  justify-content: flex-start;
+  padding-top: 0;
+}
+
+.comment-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  font-family: var(--font-heading);
+  font-size: var(--size-sm);
+  line-height: var(--leading-normal);
+  scroll-margin-top: calc(var(--header-height) + var(--space-4));
+}
+/* Moved under a comment to reply (gl-comments.js). */
+.comment-list .comment-form {
+  margin-top: var(--space-4);
+}
+.comment-form h3 {
+  margin: 0;
+  font-size: var(--size-lg);
+  font-weight: 700;
+  line-height: var(--leading-snug);
+  color: var(--color-secondary);
+}
+.comment-form-replying {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+}
+/* Empty, the status region stays in the page (a live region must exist before it speaks, #477)
+   and takes no room: its margin cancels the form's gap. */
+.comment-status:empty {
+  margin-top: calc(-1 * var(--space-4));
+}
+.comment-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  gap: var(--space-4);
+}
+.comment-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.comment-field > label {
+  font-weight: 600;
+  color: var(--color-text);
+}
+.comment-field .hint {
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+.comment-form .input,
+.reader-panel .input {
+  min-height: 44px;
+  font-size: var(--size-sm);
+}
+.comment-form textarea.input,
+.reader-panel textarea.input {
+  min-height: 144px;
+  padding: 12px 16px;
+  font-family: var(--font-heading);
+  line-height: var(--leading-normal);
+  resize: vertical;
+}
+.reader-panel textarea.input {
+  min-height: 112px;
+}
+.comment-form .input[aria-invalid="true"],
+.reader-panel .input[aria-invalid="true"] {
+  border-color: var(--color-danger);
+  box-shadow: 0 0 0 1px var(--color-danger);
+}
+.comment-count {
+  align-self: flex-end;
+  font-size: var(--size-xs);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.comment-count.is-over {
+  color: var(--color-danger);
+  font-weight: 600;
+}
+.comment-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  font-size: var(--size-xs);
+  font-weight: 500;
+  color: var(--color-danger);
+}
+.comment-error > svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-top: 2px;
+}
+.comment-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  color: var(--color-text);
+}
+.comment-check input {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--color-primary);
+}
+/* The honeypot (5.2): never shown, never in the tab order. */
+.comment-hp {
+  display: none;
+}
+.comment-submit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3) var(--space-4);
+}
+.comment-privacy {
+  margin: 0;
+  font-size: var(--size-xs);
+  line-height: var(--leading-normal);
+  color: var(--color-text-muted);
+}
+.site .comment-privacy a {
+  color: var(--color-text-muted);
+}
+.comment-notice {
+  display: flex;
+  gap: var(--space-3);
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+  color: var(--color-text);
+}
+.comment-notice > svg {
+  flex: none;
+  margin-top: 3px;
+}
+.comment-notice > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.comment-notice b {
+  font-weight: 600;
+}
+.comment-notice p {
+  margin: 0;
+}
+.comment-notice.is-success {
+  border-color: var(--color-primary);
+  background: var(--color-primary-subtle);
+}
+.comment-notice.is-success > svg {
+  color: var(--color-primary);
+}
+.comment-notice.is-error {
+  border-color: var(--color-danger);
+  background: var(--color-danger-bg);
+}
+.comment-notice.is-error > svg {
+  color: var(--color-danger);
+}
+
+/* Reader pages (11.6): /comments/confirm, /comments/unsubscribe, /comments/your-data and a comment
+   refused without scripts, in layouts/reader/default.astro: the 404 page's shape, one short panel. */
+.reader-page {
+  padding-bottom: var(--space-9);
+}
+.reader-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 600px;
+  margin: var(--space-8) auto 0;
+  padding: var(--space-6);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  font-family: var(--font-heading);
+  font-size: var(--size-sm);
+  line-height: var(--leading-normal);
+}
+.reader-panel h1 {
+  margin: 0;
+  font-size: var(--size-2xl);
+  font-weight: 700;
+  line-height: var(--leading-snug);
+  letter-spacing: -0.015em;
+  color: var(--color-secondary);
+  text-wrap: balance;
+}
+.reader-panel h1:focus {
+  outline: none;
+}
+.reader-panel p {
+  margin: 0;
+}
+.reader-panel .section-title {
+  margin-top: var(--space-2);
+}
+.reader-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.reader-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+.reader-form {
+  flex-wrap: wrap;
+}
+.reader-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--color-border);
+}
+.reader-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  padding-block: var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+}
+.reader-list li > div {
+  display: flex;
+  flex: 1 1 260px;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.reader-list q {
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+.site .btn-danger {
+  background: transparent;
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+.site .btn-danger:hover {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+}
+.site .btn-danger-solid {
+  background: var(--color-danger);
+  color: var(--color-background);
+}
+.site .btn-danger-solid:hover {
+  color: var(--color-background);
+}
+.btn[disabled] {
+  cursor: progress;
+  opacity: 0.7;
+}

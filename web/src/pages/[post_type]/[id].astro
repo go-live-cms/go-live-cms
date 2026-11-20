@@ -1,5 +1,5 @@
 ---
-import { getPublishedPosts, getPublicPost, getSettings, getPostTypes, getPublicPostTypeNames } from '../../lib/api'
+import { getPublishedPosts, getPublicPost, getSettings, getPostTypes, getPublicPostTypeNames, type PublicDiscussion } from '../../lib/api'
 import { parsePageSegment, resolveListRequest } from '../../lib/pagination'
 import { normalizeUrlStructure, type PostSeo } from '../../lib/seo'
 import { isTermRoute, termPath, TERM_ARCHIVE_ROUTE } from '../../lib/termPage'
@@ -129,6 +129,7 @@ let fullPost: Post | undefined = post
 let publishedImage: string | null = null
 let publishedTerms: TaxonomyTerm[] = []
 let publishedSeo: PostSeo | null = null
+let publishedDiscussion: PublicDiscussion | null = null
 
 // Determine if ID is numeric (ID-based) or not (slug-based)
 const isNumeric = /^\d+$/.test(id)
@@ -141,6 +142,7 @@ if (!fullPost) {
     publishedImage = published?.featured_image?.url ?? null
     publishedTerms = published?.taxonomy_terms ?? []
     publishedSeo = published?.seo ?? null
+    publishedDiscussion = published?.discussion ?? null
   } catch (error) {
     // An unknown id or slug (crawlers, old links) is an ordinary 404, not an error.
     // No id: it is the raw URL segment (api/CLAUDE.md, never log raw paths).
@@ -181,4 +183,5 @@ if (fullPost.post_status !== 'published' || (fullPost.post_type && fullPost.post
   publishedImage={publishedImage}
   publishedTerms={publishedTerms}
   publishedSeo={publishedSeo}
+  publishedDiscussion={publishedDiscussion}
 />

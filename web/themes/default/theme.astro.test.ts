@@ -710,8 +710,19 @@ describe("layout snapshots (#484)", () => {
     { id: 2, name: "Product updates", slug: "product-updates", taxonomy_type_name: "category", taxonomy_label: "Categories", href: "/category/product-updates" },
     { id: 1, name: "Editor", slug: "editor", taxonomy_type_name: "tag", taxonomy_label: "Tags", href: "/tag/editor" },
   ]
-  const postProps = { post: full, title: "Hello World · Field Notes", description: "An excerpt", terms: linked, authors, featuredImage: "https://example.org/uploads/a.jpg", siteTitle: "Field Notes", seo: { canonical: "http://web:4321/post/hello-world" } }
-  const pageProps = { ...postProps, post: { ...full, post_type: "page" }, terms: [], authors: [] }
+  // #525: the post has reader comments (the comments layout prop): a thread with a reply to a
+  // reply, a removed comment that keeps its reply, a link; the pages have none.
+  const reader = (id: number, extra: Record<string, unknown> = {}) => ({ id, parent_id: null, root_id: null, name: `Reader ${id}`, badge: null, avatar: null, body: `Comment ${id}`, created_at: "2026-11-12T09:30:00Z", edited: false, removed: false, replying_to: null, ...extra })
+  const comments = {
+    discussion: { state: "open", closes_at: null, count: 4 },
+    threads: [
+      { comment: reader(1, { name: "Kenji Mori", body: "Can I see who changed a paragraph?" }), replies: [reader(2, { parent_id: 1, root_id: 1, name: "Ana Costa", badge: "author", body: "Not yet." }), reader(3, { parent_id: 2, root_id: 1, name: "Maya", replying_to: "Ana Costa", body: "Looking forward to it." })], reply_count: 2 },
+      { comment: reader(4, { removed: true, name: "", body: "" }), replies: [reader(5, { parent_id: 4, root_id: 4, name: "Tom Okafor", body: "Notes: https://okafor.example/notes\n\nThe redirects took longest." })], reply_count: 1 },
+    ],
+    pagination: { page: 1, per_page: 30, total: 2, total_pages: 1 },
+  }
+  const postProps = { post: full, title: "Hello World · Field Notes", description: "An excerpt", terms: linked, authors, featuredImage: "https://example.org/uploads/a.jpg", siteTitle: "Field Notes", seo: { canonical: "http://web:4321/post/hello-world" }, comments }
+  const pageProps = { ...postProps, post: { ...full, post_type: "page" }, terms: [], authors: [], comments: null }
   const item = (id: number) => ({ post: { ...post, id, title: `Post ${id}` }, href: `/post/p${id}`, image: id === 1 ? "https://example.org/uploads/1.jpg" : null })
   const list = (basePath: string) => ({ posts: [item(1), item(2), item(3)], total: 12, page: 1, totalPages: 2, basePath, links: { older: `${basePath === "/" ? "" : basePath}/page/2/` }, siteTitle: "Field Notes", siteTagline: "Notes from the team" })
 
@@ -741,6 +752,23 @@ describe("layout snapshots (#484)", () => {
       // The Astro version, so a framework bump alone doesn't fail these.
       .replace(/<meta name="generator" content="Astro v[^"]*">/, '<meta name="generator" content="Astro">')
     await expect(html).toMatchFileSnapshot(`./__snapshots__/layouts/${name}.html`)
+  })
+
+  // #525 (design 11.1, 7.1): the comments section after the post's end and before "More to read",
+  // in each post layout; a commenter's address never on the page (the API sends none; nothing in
+  // the section makes one).
+  it.each(KINDS.filter(([name]) => name.startsWith("post-")))("%s: the comments after the post's end, before More to read, no address", async (_name, component, props) => {
+    const html = await container.renderToString(component as any, { props, request, locals: { activeTheme: "default", themeAssets: themeConfig.assets } })
+    const dom = new JSDOM(html)
+    const document = dom.window.document
+    const section = document.querySelector("section.comments#comments")!
+    expect(section.previousElementSibling?.matches("footer.post-end")).toBe(true)
+    expect(section.closest("article.post")).not.toBeNull()
+    expect(section.compareDocumentPosition(document.querySelector("#more-to-read")!) & dom.window.Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(section.querySelector(".comments-title")!.textContent).toBe("Comments 4")
+    expect(document.querySelectorAll('script[src="/gl-comments.js"]')).toHaveLength(1)
+    expect(html).not.toMatch(/[a-z0-9._%+-]+@[a-z0-9-]+\.[a-z]{2,}/i)
+    dom.window.close()
   })
 
   // #498: the theme's block templates (templates/, parts/) render the same pages as the code

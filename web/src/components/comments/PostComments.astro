@@ -1,0 +1,50 @@
+---
+/**
+ * PostComments (#525, docs/design/reader-comments.md 11.1): the comments section a code layout
+ * renders where it wants it (the default theme: after the post's end, before "More to read").
+ * Core's, not a theme's: it takes the post and the `comments` layout prop (the thread answer the
+ * post route fetched, or null) and renders `PostCommentsSection`'s markup, which themes style.
+ *
+ * It renders nothing when comments are off, on a closed post with none, or when the thread read
+ * failed (`comments` is null: the post route logged `comments_fetch_failed`). It applies the
+ * clock to the cached answer's `closes_at` (12.4), reads the page's `?comments=`, `?thread=`,
+ * `?replyto=` and `?commented=` (11.2, 11.3, 9.4) and the site's Discussion settings, and nothing
+ * about the reader: the page stays the same for everyone and cacheable (design section 10).
+ *
+ * With a form it adds `/gl-comments.js` (11.4) once after the section: a same-origin script file,
+ * never inline, so the public CSP is untouched.
+ */
+import { PostCommentsSection } from './PostCommentsSection'
+import { commentsView, COMMENTS_SCRIPT_SRC, COMMENTS_TITLE, type CommentsView, type PostCommentsData } from '@/lib/postComments'
+import { getSiteSettings } from '@/lib/siteSettings'
+import { DEFAULT_DATE_SETTINGS } from '@/lib/siteDates'
+
+interface Props {
+  post: { id: number }
+  comments?: PostCommentsData | null
+  // The section's title (the comments block's `title`, #500), "Comments" by default.
+  title?: string
+  class?: string
+}
+
+const { post, comments = null, title = COMMENTS_TITLE, class: className } = Astro.props
+let view: CommentsView | null = null
+if (comments) {
+  const site = await getSiteSettings(Astro.locals)
+  const settings = site.comments ?? { threading: 'replies' as const, notice: '', privacyHref: null }
+  view = commentsView(
+    comments,
+    post.id,
+    { path: Astro.url.pathname, url: Astro.url, now: new Date() },
+    settings,
+    {
+      language: site.language ?? DEFAULT_DATE_SETTINGS.language,
+      timeZone: site.timeZone ?? DEFAULT_DATE_SETTINGS.timeZone,
+      dateFormat: site.dateFormat ?? DEFAULT_DATE_SETTINGS.dateFormat,
+    },
+    title,
+  )
+}
+---
+
+{view && <PostCommentsSection view={view} className={className} script={COMMENTS_SCRIPT_SRC} />}

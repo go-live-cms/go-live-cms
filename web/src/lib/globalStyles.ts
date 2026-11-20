@@ -335,6 +335,15 @@ export const CONTRAST_PAIRS: readonly (readonly [string, string, number])[] = [
   ["danger", "dangerBg", CONTRAST_UI],
   // To-do checkboxes (#419): the box edge on a card.
   ["borderStrong", "surface", CONTRAST_UI],
+  // Reader comments (#525): the reader's own comment and a success notice (text, its meta and
+  // links on the tint), a reply's "Replying to" link, field errors and the reader pages' Delete
+  // buttons (outline on a panel, solid with the page's background as its text).
+  ["text", "primarySubtle", CONTRAST_TEXT],
+  ["textMuted", "primarySubtle", CONTRAST_TEXT],
+  ["primary", "primarySubtle", CONTRAST_TEXT],
+  ["primary", "surface2", CONTRAST_TEXT],
+  ["danger", "surface", CONTRAST_TEXT],
+  ["background", "danger", CONTRAST_TEXT],
 ]
 
 /** The page surfaces tinted block text (#356) must read on. */

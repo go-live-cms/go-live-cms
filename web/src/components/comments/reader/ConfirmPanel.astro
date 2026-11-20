@@ -1,0 +1,99 @@
+---
+/**
+ * /comments/confirm's panel (#525, docs/design/reader-comments.md 3.3, 11.6; the canvas's "Reader
+ * pages" board): core markup in a reader page. The confirmation mail links here with the token in
+ * the #fragment, which `gl-comments.js` reads: it shows **Publish my comment**, which posts the
+ * token to `/gl-comments/confirm` (#524), never on load, then the outcome and the address's other
+ * unconfirmed comments, each with Publish and Discard (3.3 step 5).
+ *
+ * The visible panel starts as "This page needs JavaScript"; each state the script can show is a
+ * `<template data-reader-state>` (not in the page until shown, so the page has one `<h1>`), and
+ * `data-slot` elements take the API's values as text or a site path. A state the server already
+ * knows (`?error=` from a refused confirmation without scripts, `?discarded=1`) renders at once,
+ * `data-reader-final`.
+ */
+import { COMMENT_CODE_REASONS } from '@/lib/commentFormFields'
+import { READER_PAGES_READY, YOUR_DATA_PATH } from '@/lib/postComments'
+import ReaderNeedsScripts from './ReaderNeedsScripts.astro'
+
+interface Props {
+  // `?error=<code>` (commentWrites.ts errorCodeParam), `?discarded=1`, or nothing.
+  error?: string | null
+  discarded?: boolean
+}
+
+const { error = null, discarded = false } = Astro.props
+const final = error !== null || discarded
+const invalid = error === 'invalid_token'
+const reason = error && !invalid ? (COMMENT_CODE_REASONS[error] ?? "The site couldn't publish your comment just now. Try the link again in a moment.") : null
+---
+
+<div class="reader-page-panel" data-gl-reader="confirm" data-reader-final={final ? '' : undefined}>
+  <section class="reader-panel" data-reader-panel aria-labelledby="reader-title">
+    {invalid ? (
+      <>
+        <h1 id="reader-title">This link doesn’t work anymore</h1>
+        <p>It was already used, or it’s too old. Confirm links last 48 hours.</p>
+        <div class="reader-actions"><a href="/" class="btn btn-secondary">Go to the front page</a></div>
+      </>
+    ) : reason ? (
+      <>
+        <h1 id="reader-title">Your comment wasn’t published</h1>
+        <p>{reason}</p>
+        <div class="reader-actions"><a href="/" class="btn btn-secondary">Go to the front page</a></div>
+      </>
+    ) : discarded ? (
+      <>
+        <h1 id="reader-title">The comment was discarded</h1>
+        <p>It won’t be published.</p>
+        <div class="reader-actions"><a href="/" class="btn btn-secondary">Go to the front page</a></div>
+      </>
+    ) : (
+      <ReaderNeedsScripts />
+    )}
+  </section>
+  <p class="sr-only" role="status" data-reader-live></p>
+
+  <template data-reader-state="before">
+    <h1 id="reader-title">Publish your comment</h1>
+    <p>You’re confirming a comment written with your email address. This browser will remember you afterwards, so your next comments won’t need an email.</p>
+    <div class="reader-actions"><button type="button" class="btn btn-primary" data-reader-confirm>Publish my comment</button></div>
+    <p class="meta">Didn’t write a comment? Close this page. Nothing is published.</p>
+  </template>
+  <template data-reader-state="published">
+    <h1 id="reader-title">Your comment is published</h1>
+    <p>Thanks for writing. <a href="/" data-slot="comment">See your comment</a></p>
+  </template>
+  <template data-reader-state="pending">
+    <h1 id="reader-title">Your comment is waiting for review</h1>
+    <p>It shows on the post once a moderator approves it. <a href="/" data-slot="post">Back to the post</a></p>
+  </template>
+  <template data-reader-state="others">
+    <h2 class="section-title">Also written with your address, not confirmed</h2>
+    <p class="meta">Anyone can type any address. Publish only the ones you wrote; the rest go on their own after 48 hours.</p>
+    <ul class="reader-list"></ul>
+  </template>
+  <template data-reader-state="other">
+    <li>
+      <div><b><a href="/" data-slot="post"></a></b><q data-slot="excerpt"></q></div>
+      <span class="reader-actions">
+        <button type="button" class="btn btn-secondary" data-reader-other="publish" aria-label="Publish the comment on">Publish</button>
+        <button type="button" class="btn btn-secondary" data-reader-other="discard" aria-label="Discard the comment on">Discard</button>
+      </span>
+    </li>
+  </template>
+  <template data-reader-state="invalid">
+    <h1 id="reader-title">This link doesn’t work anymore</h1>
+    <p>It was already used, or it’s too old. Confirm links last 48 hours.</p>
+    <div class="reader-actions">
+      {READER_PAGES_READY.yourData && <a href={YOUR_DATA_PATH} class="btn btn-secondary">Get a new “Your comments” link</a>}
+      <a href="/" class="btn btn-secondary">Go to the front page</a>
+    </div>
+  </template>
+  <template data-reader-state="error">
+    <h1 id="reader-title">Your comment wasn’t published</h1>
+    <p data-slot="reason"></p>
+    <div class="reader-actions"><a href="/" class="btn btn-secondary">Go to the front page</a></div>
+  </template>
+</div>
+<script is:inline src="/gl-comments.js" defer></script>

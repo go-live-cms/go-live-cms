@@ -1279,6 +1279,35 @@ Built as designed, with these details the text left open:
 - The three writes are in C3's `publicCacheDiscussionRoutes`: their handlers purge through
   `purgeDiscussion`, only when a comment was published.
 
+### 16.3 What C5 settled (#525)
+
+Built as the boards draw it, with these details:
+
+- **One markup, in React.** The section's markup is `PostCommentsSection.tsx`, drawing a view
+  (`src/lib/postComments.ts`) from the thread answer, the clock, the URL and the settings. Code layouts render it
+  through `PostComments.astro`; the comments block (#500) renders the same component inside `BlockRenderer`, so
+  the parity of 11.1 holds by construction.
+- **The code layout now, block templates with #500.** The default theme renders through its block templates
+  (#498), which can't hold the section until the comments block exists, so until #500 adds it to `single*` a
+  default-theme site shows comments only where a code layout renders (a failed template read, another theme).
+  The parity check lists it. **#500 should land before #526 turns comments on.**
+- **The post route reads only what shows.** No read when `discussion` is off, closed with none, or open with none
+  (the empty answer is built); `?comments=N` or `?thread=<id>` past what exists falls back to page 1. The read runs
+  while the code layout loads; a block template skips it.
+- **Reply** keeps the page's own parameters (`?comments=2&replyto=7#comment-form`), and so do the form's
+  `return_to` and Cancel. A flat site (`comments_threading: flat`) has no Reply.
+- **The counter** reads "Up to 4,000 characters" without scripts and "86 / 4,000" with them. The form has no
+  `maxlength`: browsers count UTF-16 units, the API code points.
+- **The reader pages' states are `<template>`s** the script shows, so a page holds one `<h1>`; a state the server
+  knows (`?error=`, `?discarded=1`) renders without scripts. The confirm page can't name the post before the button
+  (nothing reads a token without spending it), so it says "a comment written with your email address".
+- **Unsubscribe and "your comments"** are built and tested with their states, but answer 404 until #528 and #529
+  add their routes (`READER_PAGES_READY`); the privacy notice's "Your comments" link waits for #529 too. The list's
+  shape (`{commenter: {email}, comments: [{id, post_title, post_url, status, created_at, body}]}`) is #529's to
+  confirm, and "Stop all mail" on that page waits for it.
+- **Contrast.** The comments' new pairs (text, muted text and links on `primarySubtle`, a link on `surface2`,
+  `danger` on `surface`, the page's background on `danger`) are in core's list, so global styles warn on them.
+
 ## 17. Phased plan
 
 Each phase ships with `comments_enabled` off and its switch hidden, until phase 3 gives

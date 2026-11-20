@@ -65,7 +65,8 @@ function submit({ fields, headers = {}, method = "POST", id = "42" }: PostOption
   return container.renderToResponse(Endpoint, { request, params: { id }, locals: { activeTheme: "default" } as App.Locals })
 }
 
-describe("POST /gl-comments/posts/:id without scripts", () => {
+// The refusal is a reader page in the theme (#525): the first render compiles its layouts.
+describe("POST /gl-comments/posts/:id without scripts", { timeout: 30_000 }, () => {
   it("maps the form, calls the API with the browser's address and keys, and redirects back with the notice", async () => {
     stubApi({ status: 202, body: { outcome: "confirm_email", post_url: "/post/hello" } })
     const response = await submit({ headers: { "X-Forwarded-For": "203.0.113.7", Cookie: `${COMMENTER_COOKIE}=${KEY}; theme=dark` } })

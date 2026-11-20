@@ -1,0 +1,23 @@
+---
+/**
+ * /comments/confirm (#525, docs/design/reader-comments.md 3.3, 11.6): where the confirmation
+ * mail's link goes (`#token=`, read by gl-comments.js and posted by the page's button, never on
+ * load). A reader page: in the theme, not indexed, never cached (httpCache.ts). A confirmation
+ * refused without scripts comes back here with `?error=<code>` (#524), a discard with
+ * `?discarded=1`.
+ */
+import ThemedReaderPage from '@/components/ThemedReaderPage.astro'
+import ConfirmPanel from '@/components/comments/reader/ConfirmPanel.astro'
+
+export const prerender = false
+
+const raw = Astro.url.searchParams.get('error')
+const error = raw && /^[a-z][a-z_]{0,39}$/.test(raw) ? raw : raw ? 'failed' : null
+const discarded = Astro.url.searchParams.get('discarded') === '1'
+Astro.response.headers.set('Referrer-Policy', 'no-referrer')
+Astro.response.headers.set('X-Robots-Tag', 'noindex')
+---
+
+<ThemedReaderPage title="Publish your comment" description="Confirm a comment you wrote.">
+  <ConfirmPanel error={error} discarded={discarded} />
+</ThemedReaderPage>

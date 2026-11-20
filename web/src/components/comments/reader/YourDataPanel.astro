@@ -1,0 +1,79 @@
+---
+/**
+ * /comments/your-data's panel (#525, docs/design/reader-comments.md 13.2, 11.6): "Your comments".
+ * Without a link the reader types the address and gets one by mail (always the same answer);
+ * with the link (`#token=`, valid an hour) the page lists their comments with Delete on each,
+ * Download my data and Delete everything (asked first). Each posts to `/gl-comments/data-request`,
+ * `/data` or `/data/delete`, which #529 adds with the API routes and the export's shape; until
+ * then the page isn't served (`READER_PAGES_READY.yourData`). Same pattern as ConfirmPanel.astro,
+ * except that the request form is what shows first: it is a plain form.
+ */
+---
+
+<div class="reader-page-panel" data-gl-reader="your-data">
+  <section class="reader-panel" data-reader-panel aria-labelledby="reader-title">
+    <h1 id="reader-title">Your comments</h1>
+    <p>Enter the email you commented with. We’ll send a link to see, download or delete your comments.</p>
+    <form class="search-form reader-form" method="post" action="/gl-comments/data-request" data-reader-request>
+      <label for="reader-email" class="sr-only">Email</label>
+      <input id="reader-email" name="email" type="email" class="input" autocomplete="email" required placeholder="you@example.com" />
+      <button type="submit" class="btn btn-primary">Send me a link</button>
+    </form>
+  </section>
+  <p class="sr-only" role="status" data-reader-live></p>
+
+  <template data-reader-state="request">
+    <h1 id="reader-title">Your comments</h1>
+    <p>Enter the email you commented with. We’ll send a link to see, download or delete your comments.</p>
+    <form class="search-form reader-form" method="post" action="/gl-comments/data-request" data-reader-request>
+      <label for="reader-email" class="sr-only">Email</label>
+      <input id="reader-email" name="email" type="email" class="input" autocomplete="email" required placeholder="you@example.com" />
+      <button type="submit" class="btn btn-primary">Send me a link</button>
+    </form>
+  </template>
+  <template data-reader-state="sent">
+    <h1 id="reader-title">Check your email</h1>
+    <p>If comments were written with that address, a link is on its way. It works for an hour.</p>
+  </template>
+  <template data-reader-state="loading">
+    <h1 id="reader-title">Your comments</h1>
+    <p class="meta">Loading your comments…</p>
+  </template>
+  <template data-reader-state="list">
+    <div class="reader-heading"><h1 id="reader-title">Your comments</h1><span class="meta" data-slot="email"></span></div>
+    <ul class="reader-list"></ul>
+    <div class="reader-actions">
+      <button type="button" class="btn btn-secondary" data-reader-download>Download my data</button>
+      <button type="button" class="btn btn-danger" data-reader-erase-ask>Delete everything</button>
+    </div>
+  </template>
+  <template data-reader-state="item">
+    <li>
+      <div><b><a href="/" data-slot="post"></a></b><span class="meta"><span data-slot="when"></span> · <span data-slot="status"></span></span><q data-slot="excerpt"></q></div>
+      <button type="button" class="btn btn-secondary" data-reader-delete>Delete</button>
+    </li>
+  </template>
+  <template data-reader-state="erase">
+    <h1 id="reader-title">Delete everything?</h1>
+    <p>This deletes <span data-slot="count"></span> and everything this site keeps about <span data-slot="email"></span>. Comments with replies are replaced by “This comment was removed”. This can’t be undone.</p>
+    <div class="reader-actions">
+      <button type="button" class="btn btn-secondary" data-reader-erase-cancel>Cancel</button>
+      <button type="button" class="btn btn-danger-solid" data-reader-erase>Delete everything</button>
+    </div>
+  </template>
+  <template data-reader-state="erased">
+    <h1 id="reader-title">Your comments and address are deleted</h1>
+    <p>Nothing about <span data-slot="email"></span> is left on this site. Copies in backups made before today expire on the site’s own schedule.</p>
+  </template>
+  <template data-reader-state="invalid">
+    <h1 id="reader-title">This link doesn’t work anymore</h1>
+    <p>It was already used, or it’s too old. “Your comments” links last an hour.</p>
+    <div class="reader-actions"><a href="/comments/your-data" class="btn btn-secondary">Get a new “Your comments” link</a><a href="/" class="btn btn-secondary">Go to the front page</a></div>
+  </template>
+  <template data-reader-state="error">
+    <h1 id="reader-title">That didn’t work</h1>
+    <p data-slot="reason"></p>
+    <div class="reader-actions"><a href="/" class="btn btn-secondary">Go to the front page</a></div>
+  </template>
+</div>
+<script is:inline src="/gl-comments.js" defer></script>

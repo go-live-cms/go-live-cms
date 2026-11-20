@@ -8,6 +8,8 @@ import PostHeader from '../../components/PostHeader.astro'
 import { COLUMN_IMAGE_SIZES } from '../../lib/imageSizes'
 import type { Post } from '@gl-admin/lib/api/types'
 import type { SeoMeta } from '@/lib/seo'
+import type { PostCommentsData } from '@/lib/postComments'
+import PostComments from '@/components/comments/PostComments.astro'
 
 interface Props {
   post: Post
@@ -15,9 +17,11 @@ interface Props {
   description: string
   seo?: SeoMeta
   siteTitle?: string
+  // Reader comments (#525), on a page type with the Comments field: the thread answer, or null.
+  comments?: PostCommentsData | null
 }
 
-const { post, title, description, seo, siteTitle } = Astro.props
+const { post, title, description, seo, siteTitle, comments = null } = Astro.props
 ---
 
 <BaseLayout title={title} description={description} seo={seo} siteTitle={siteTitle}>
@@ -27,6 +31,7 @@ const { post, title, description, seo, siteTitle } = Astro.props
       <div class="prose measure page-body">
         {post.published_blocks && <BlockRenderer doc={post.published_blocks} imageSizes={COLUMN_IMAGE_SIZES} />}
       </div>
+      <PostComments post={post} comments={comments} class="measure" />
     </article>
   </div>
 </BaseLayout>

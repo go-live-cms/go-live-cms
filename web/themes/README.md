@@ -367,6 +367,7 @@ interface Props {
   title: string // Post title (for <title> tag)
   description: string // Plain-text excerpt (for meta tag)
   seo?: SeoMeta // Canonical URL, featured image, og:type... (see SEO tags below)
+  comments?: PostCommentsData | null // Reader comments (#525), for <PostComments> (below)
 }
 ```
 
@@ -391,6 +392,28 @@ interface Post {
 ```
 
 > **Important:** Content is stored as `published_blocks` (a structured block document), **not** as an HTML string. Always use `<BlockRenderer>` to render it.
+
+A post or page layout also gets **`comments`** (#525): the post's reader comments as the post route read them
+(`PostCommentsData`: the discussion, a page of threads, its pagination), or `null` when comments are off, the post
+is closed with none, or the read failed. Render core's section where you want it, and it does the rest (the states,
+the form, `/gl-comments.js`):
+
+```astro
+---
+import PostComments from '@/components/comments/PostComments.astro'
+const { post, comments = null } = Astro.props
+---
+<PostComments post={post} comments={comments} class="measure" />
+```
+
+It renders nothing for `null`, and nothing about the reader, so the page stays cacheable. Its markup and classes
+are listed in `src/components/blocks/README.md` ("Reader comments"); style them (the default theme's are its
+theme.css "reader comments (#525)" section). A block template gets the same section from the comments block (#500).
+
+**Reader pages** (#525): the comment confirm, unsubscribe and "your comments" pages, and a comment refused without
+scripts, render core's panel (`section.reader-panel`) inside your `layouts/reader/default.astro` when you ship one
+(props `title`, `description`; the panel is its default slot; mark it `noindex`), else inside core's plain
+`src/layouts/ReaderLayout.astro`. The default theme's wraps it in its base layout, as its 404 page.
 
 ### SEO tags
 

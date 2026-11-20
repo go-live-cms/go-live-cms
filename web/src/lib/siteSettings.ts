@@ -9,6 +9,7 @@ import { DEFAULT_DATE_SETTINGS, normalizeDateSettings, type DateSettings } from 
 import { log } from "@/lib/log"
 import { knownEmbedProviders, type EmbedProvider } from "@gl-admin/lib/blocks-spec/embeds"
 import type { BlockMedia } from "@/components/blocks/utils/responsiveImage"
+import type { CommentsSettings } from "@/lib/postComments"
 
 export interface SiteSettings extends DateSettings {
   title: string
@@ -28,6 +29,9 @@ export interface SiteSettings extends DateSettings {
   // The site logo (#488, `site_logo_media_id`): its media as the API attaches block media,
   // and its alt text. Null for none, a deleted one, or settings that can't be read.
   logo: SiteLogo | null
+  // Settings › Discussion's public fields (#525, design 7.5, 12.1): how the comments section
+  // threads, its privacy notice ("" = core's text) and the privacy page it links.
+  comments?: CommentsSettings
 }
 
 export interface SiteLogo {
@@ -53,6 +57,17 @@ export function normalizeSiteLogo(value: unknown): SiteLogo | null {
       variants: logo.variants && typeof logo.variants === "object" ? (logo.variants as BlockMedia["variants"]) : undefined,
     },
     alt: typeof logo.alt === "string" ? logo.alt.trim() : "",
+  }
+}
+
+/** The comments section's settings (#525) from GET /settings; the defaults for anything else. */
+export function normalizeCommentsSettings(settings: Record<string, unknown> | null | undefined): CommentsSettings {
+  const page = settings?.comments_privacy_page_id
+  return {
+    threading: settings?.comments_threading === "flat" ? "flat" : "replies",
+    notice: typeof settings?.comments_notice === "string" ? settings.comments_notice.trim() : "",
+    // A published page (the API checks it on save), at its id URL, which renders it under any URL setting.
+    privacyHref: typeof page === "number" && Number.isInteger(page) && page > 0 ? `/page/${page}` : null,
   }
 }
 
@@ -91,6 +106,7 @@ async function loadSiteSettings(): Promise<SiteSettings> {
     frontPageId: Number.isInteger(settings?.front_page_id) && (settings?.front_page_id as number) > 0 ? (settings?.front_page_id as number) : null,
     allowedEmbeds: knownEmbedProviders(settings?.editor_allowed_embeds),
     logo: normalizeSiteLogo(settings?.site_logo),
+    comments: normalizeCommentsSettings(settings),
     ...normalizeDateSettings({
       language: settings ? settings.site_language : (lastKnownLanguage ?? undefined),
       timeZone: settings?.site_timezone,

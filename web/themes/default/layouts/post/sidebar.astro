@@ -10,6 +10,7 @@ import BlockRenderer from '@/components/BlockRenderer'
 import PostHeader from '../../components/PostHeader.astro'
 import FeaturedImage from '../../components/FeaturedImage.astro'
 import PostEnd from '../../components/PostEnd.astro'
+import PostComments from '@/components/comments/PostComments.astro'
 import RelatedPosts from '../../components/RelatedPosts.astro'
 import TableOfContents from '../../components/TableOfContents.astro'
 import { COLUMN_IMAGE_SIZES } from '../../lib/imageSizes'
@@ -22,6 +23,7 @@ import { formatSiteDate, siteDay } from '@/lib/siteDates'
 import type { AuthorProfile, Post } from '@gl-admin/lib/api/types'
 import type { LinkedTerm } from '@/lib/termPage'
 import type { SeoMeta } from '@/lib/seo'
+import type { PostCommentsData } from '@/lib/postComments'
 
 interface Props {
   post: Post
@@ -36,9 +38,11 @@ interface Props {
   siteTitle?: string
   // The site's id/slug URL setting, which the post route already fetched (#351).
   urlStructure?: string
+  // Reader comments (#525): the thread answer the post route read, or null (no section).
+  comments?: PostCommentsData | null
 }
 
-const { post, title, description, seo, terms, authors = [], featuredImage, siteTitle, urlStructure } = Astro.props
+const { post, title, description, seo, terms, authors = [], featuredImage, siteTitle, urlStructure, comments = null } = Astro.props
 const headings = headingAnchors(post.published_blocks, THEME_ELEMENT_IDS)
 const toc = tableOfContents(headings)
 const [end, site] = await Promise.all([
@@ -69,6 +73,7 @@ const showFacts = toc.length === 0 && !end.inCategory
           {post.published_blocks && <BlockRenderer doc={post.published_blocks} imageSizes={COLUMN_IMAGE_SIZES} headings={headings} />}
         </div>
         <PostEnd postType={post.post_type} terms={terms} authors={authors} end={end} />
+        <PostComments post={post} comments={comments} />
       </article>
 
       <aside class="post-aside" aria-label="About this post">

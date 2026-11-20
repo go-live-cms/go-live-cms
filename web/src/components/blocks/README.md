@@ -361,6 +361,39 @@ interface BlockComponentProps {
   `section > h2#more-posts`) and `layout: links` (`ul.link-list`), the pager's `end` ("That’s every post …"),
   `post_terms`' `all` (every taxonomy, `PostTerms`), `related_posts`' `layout: list` (`section.aside-list`,
   "In <term>"), `post_content`'s `width` (the theme's `imageSizes`).
+- **Reader comments (#525, `src/components/comments/PostCommentsSection.tsx`, docs/design/reader-comments.md
+  11.1; the default theme canvas's "Comments section" and "Comment form states" boards):** core's markup, one
+  component for a code layout (`src/components/comments/PostComments.astro`, from the `comments` layout prop) and
+  the comments site block (#500, from the `SiteRenderContext`), so both give the same HTML; the view is
+  `src/lib/postComments.ts` (`commentsView`). Nothing renders when comments are off, on a closed post with
+  none, or when the thread read failed. Otherwise `section.comments#comments[aria-labelledby=comments-title]`:
+  `h2.comments-title` ("Comments" or the block's `title`, then `span.comments-count` with the approved count;
+  no count when there are none), `p.comments-empty` ("No comments yet."), on a thread's own page
+  (`?thread=<id>`) `p.comments-thread-back`, then `ol.comment-list > li` per thread: `article.comment#comment-<id>`
+  (`aria-labelledby` its name) with `span.avatar` (the bylines' colour and initial, or a member's `img`), and
+  `div.comment-body` holding `header.comment-meta` (`b.comment-author#comment-<id>-name`, `span.comment-badge`
+  "Author" or "Staff", `a[href=#comment-<id>] > time` in the site's date format, `span.comment-edited`),
+  `span.comment-replyto` ("Replying to <a>Ana</a>" on a reply to a reply), `div.comment-text` (a `p` per
+  blank line, `br` per newline, http(s) URLs as `a[rel="nofollow ugc noopener"]`; text only, never markup) and
+  `div.comment-actions > a.comment-reply[data-reply-to]` (`?replyto=<id>#comment-form`; not when closed or
+  flat). A removed comment that keeps its replies is `article.comment.comment-removed[aria-label]` ("This comment
+  was removed", an empty avatar). Replies are `ol.comment-replies > li > article.comment` inside their thread's
+  `li`, then `a.comment-more` ("Show 12 more replies", `?thread=<id>`). Then `nav.pagination.comments-pagination`
+  (#349's pager classes; `?comments=N#comments`), `p.comments-closed` ("Comments are closed.") or
+  `form.comment-form#comment-form[data-gl-comments]` posting to `/gl-comments/posts/<id>` (#524's field names):
+  `h3#comment-form-title` ("Leave a comment" / "Reply to Ana"), `p.comment-form-replying` (reply mode:
+  "Replying to <a>" and Cancel), `div.comment-status[role=status]` (empty, or the `?commented=` notice:
+  `div.comment-notice.is-success|is-error` with an icon, `b` and `p`), `div.comment-field` (label, `textarea.input`,
+  `span.comment-count`), `div.comment-fields` (Name, Email with `span.hint`), `label.comment-check` ("Email me
+  replies", unchecked), `div.comment-hp[aria-hidden]` (the honeypot: **hide it**, `display: none`), the hidden
+  `parent_id` and `return_to`, `div.comment-submit > button.btn.btn-primary` and `p.comment-privacy` (the
+  notice, its Privacy page and, once #529 ships, "Your comments"). A code layout's section is followed by
+  `<script src="/gl-comments.js" defer>` (11.4), which adds `p.comment-error#<field>-error` under a field with
+  `aria-invalid`, `article.comment.is-own` (the reader's own comment in place) with `span.comment-pending`,
+  and `span.comment-count.is-over`. The reader pages (`/comments/*`, `src/components/comments/reader/`) and the
+  refusal page are `section.reader-panel` (`h1`, `p`, `div.reader-actions` of `.btn`s, `ul.reader-list`, the
+  form's `div.comment-field`; `.btn-danger`, `.btn-danger-solid`) in the theme's `layouts/reader/default.astro`.
+  The default theme's rules are its theme.css "reader comments (#525)" section.
 - **Cover, media & text (#427, "Published · media & embeds", `cover/`, `media_text/`):** `div.cover`
   (`alignwide` / `alignfull`, `--dim` the overlay as a fraction) with the image, then `div.cover-inner`
   holding the blocks; `div.media-text` (`is-media-right`) with `figure.media-text-media` first, so it

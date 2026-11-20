@@ -1,0 +1,40 @@
+---
+/**
+ * A reader page in the active theme (#525, docs/design/reader-comments.md 11.6): the comment
+ * confirm, unsubscribe and "your comments" pages and the refusal of a comment posted without
+ * scripts (9.4). They render the way the 404 page does (ThemedErrorPage's pattern): the theme's
+ * header, one short panel (this component's slot, core's markup) and its footer. Not indexed;
+ * never cached (httpCache.ts lists the paths, and the refusal is the endpoint's no-store answer).
+ * The pages set their own headers (X-Robots-Tag, Referrer-Policy) before rendering this.
+ *
+ * Layout fallback chain:
+ * 1. themes/{theme}/layouts/reader/default.astro (props `title`, `description`; the panel is its slot)
+ * 2. src/layouts/ReaderLayout.astro (theme-neutral, loads the theme's stylesheets)
+ */
+import ReaderLayout from '@/layouts/ReaderLayout.astro'
+import { log } from '@/lib/log'
+import { getSiteSettings } from '@/lib/siteSettings'
+
+interface Props {
+  title: string
+  description: string
+}
+
+const readerLayouts = import.meta.glob('../../themes/*/layouts/reader/*.astro')
+const themeSlug = Astro.locals.activeTheme || 'default'
+const candidate = `../../themes/${themeSlug}/layouts/reader/default.astro`
+
+let LayoutComponent: any = ReaderLayout
+if (readerLayouts[candidate]) {
+  try {
+    LayoutComponent = ((await readerLayouts[candidate]()) as any).default
+  } catch (error) {
+    log.warn('reader_layout_load_failed', { layout: candidate, error })
+  }
+}
+// The layout's <title> as the error pages write it: "<page> | <site>".
+const site = await getSiteSettings(Astro.locals)
+const title = `${Astro.props.title} | ${site.title}`
+---
+
+<LayoutComponent title={title} description={Astro.props.description}><slot /></LayoutComponent>

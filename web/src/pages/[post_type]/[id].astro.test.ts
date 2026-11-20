@@ -244,3 +244,48 @@ describe("[post_type]/[id] category URLs", () => {
     expect((await renderAt("guides", "missing")).status).toBe(404)
   })
 })
+
+// Reader comments (#525, design 11.1): the route reads the thread for the code layout, only
+// when the post's discussion has something to show, and a failed read renders the post
+// without the section.
+describe("reader comments", () => {
+  const withDiscussion = (discussion: unknown) => json(200, { ...publishedView, discussion })
+  const thread = { comment: { id: 3, parent_id: null, root_id: null, name: "Kenji", badge: null, avatar: null, body: "Nice post", created_at: "2026-11-17T08:40:00Z", edited: false, removed: false, replying_to: null }, replies: [], reply_count: 0 }
+  const commentsUrl = `${SERVER_MEDIA_URL}/public/posts/7/comments`
+
+  function stubWithComments(discussion: unknown, comments: () => Response) {
+    const base = stubApi(withDiscussion(discussion))
+    const inner = base.getMockImplementation()!
+    base.mockImplementation(async (input: RequestInfo | URL) => (String(input).startsWith(commentsUrl) ? comments() : inner(input)))
+    return base
+  }
+
+  it("renders the thread the route read, after the post's end", async () => {
+    const open = { state: "open", closes_at: null, count: 1 }
+    stubWithComments(open, () => json(200, { discussion: open, threads: [thread], pagination: { page: 1, per_page: 30, total: 1, total_pages: 1 } }))
+    const html = await (await render()).text()
+    expect(html).toMatch(/<section class="comments measure" id="comments"/)
+    expect(html).toContain("Nice post")
+    expect(html).toContain('action="/gl-comments/posts/7"')
+  })
+
+  it("a failed thread read renders the post without the section, logged", async () => {
+    const { log } = await import("@/lib/log")
+    const warn = vi.spyOn(log, "warn")
+    stubWithComments({ state: "open", closes_at: null, count: 1 }, () => json(503, { error: "down" }))
+    const response = await render()
+    expect(response.status).toBe(200)
+    const html = await response.text()
+    expect(html).toContain("Published title")
+    expect(html).not.toContain('id="comments"')
+    expect(warn).toHaveBeenCalledWith("comments_fetch_failed", expect.objectContaining({ post_id: 7 }))
+    warn.mockRestore()
+  })
+
+  it("comments off: no read and no section", async () => {
+    const fetchMock = stubWithComments({ state: "off", closes_at: null, count: 0 }, () => json(200, {}))
+    const html = await (await render()).text()
+    expect(html).not.toContain('id="comments"')
+    expect(fetchMock.mock.calls.some((call) => String(call[0]).startsWith(commentsUrl))).toBe(false)
+  })
+})

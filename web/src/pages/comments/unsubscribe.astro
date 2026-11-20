@@ -1,0 +1,20 @@
+---
+/**
+ * /comments/unsubscribe (#525, docs/design/reader-comments.md 8.2, 11.6): a reply mail's visible
+ * unsubscribe link (`#token=`). Not served until #528 adds the mails and the endpoint
+ * (`READER_PAGES_READY.unsubscribe`): a 404 until then.
+ */
+import ThemedReaderPage from '@/components/ThemedReaderPage.astro'
+import UnsubscribePanel from '@/components/comments/reader/UnsubscribePanel.astro'
+import { READER_PAGES_READY } from '@/lib/postComments'
+
+export const prerender = false
+
+if (!READER_PAGES_READY.unsubscribe) return new Response(null, { status: 404 })
+Astro.response.headers.set('Referrer-Policy', 'no-referrer')
+Astro.response.headers.set('X-Robots-Tag', 'noindex')
+---
+
+<ThemedReaderPage title="Stop reply emails" description="Stop the emails about replies to your comments.">
+  <UnsubscribePanel />
+</ThemedReaderPage>

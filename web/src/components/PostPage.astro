@@ -27,6 +27,8 @@ import { getCachedTaxonomyTypes, linkTerms } from '../lib/termPage'
 import type { AuthorProfile, Post, TaxonomyTerm, TaxonomyType } from '@gl-admin/lib/api/types'
 import { log } from '../lib/log'
 import { resolveTemplate, type TemplateRoute } from '../lib/siteTemplates'
+import { loadPostComments } from '../lib/postCommentsLoader'
+import type { PublicDiscussion } from '../lib/api'
 import BlockTemplateLayout from '../layouts/BlockTemplateLayout.astro'
 
 interface Props {
@@ -36,6 +38,9 @@ interface Props {
   publishedImage: string | null
   publishedTerms: TaxonomyTerm[]
   publishedSeo: PostSeo | null
+  // Reader comments (#523): the post's discussion as /public carries it; null or absent
+  // renders no comments section.
+  publishedDiscussion?: PublicDiscussion | null
 }
 
 // WordPress-style: Auto-discover all theme layouts using glob imports
@@ -43,7 +48,7 @@ interface Props {
 const allLayouts = import.meta.glob('../../themes/*/layouts/**/*.astro')
 const LAYOUT_PREFIX = '../../themes'
 
-const { post: fullPost, postType, publishedImage, publishedTerms, publishedSeo } = Astro.props
+const { post: fullPost, postType, publishedImage, publishedTerms, publishedSeo, publishedDiscussion = null } = Astro.props
 
 // Phase 2: Apply theme content filter if available
 if (Astro.locals.themeFunctions?.filterContent && (fullPost as any).content) {
@@ -104,7 +109,13 @@ const blockTemplate = await resolveTemplate(Astro.locals, templateRoute)
 // The code layout, only when no builder template renders the post (the theme's slug is a
 // code-layout setting).
 let LayoutComponent: any = null
+// Reader comments (#525, design 11.1): the thread the code layout's `PostComments` renders,
+// read while the layout loads. A block template's comments are its comments block's (#500),
+// which reads them itself. Null when there is nothing to show or the read failed (logged
+// `comments_fetch_failed`: the post renders without the section).
+let comments: Awaited<ReturnType<typeof loadPostComments>> = null
 if (!blockTemplate) {
+  const commentsRead = loadPostComments(fullPost.id, publishedDiscussion, Astro.url)
   // Get active theme for dynamic layout loading
   const activeTheme = await getActiveTheme()
   const themeSlug = activeTheme.slug
@@ -122,6 +133,7 @@ if (!blockTemplate) {
     log.error('post_layout_not_found', { theme: themeSlug, post_type: postType, variant: layoutVariant })
     throw new Error('Layout Not Found')
   }
+  comments = await commentsRead
 }
 // Date chips (#320) in the site's language and date format: the renderer has no settings.
 if (fullPost.published_blocks) labelDateChips(fullPost.published_blocks, site)
@@ -177,6 +189,9 @@ const layoutProps = {
   featuredImage: publicImageUrl(resolveSiteUrl(Astro.url), featuredImage) ?? null,
   siteTitle: site.title,
   urlStructure,
+  // The thread answer (#525, themes/README.md "Layout Props"), or null: render it with
+  // `src/components/comments/PostComments.astro`.
+  comments,
 }
 ---
 
