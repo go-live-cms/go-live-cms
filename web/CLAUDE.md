@@ -399,10 +399,22 @@ are the most fragile part of the codebase. **Before editing anything under
   the threads (null on a 404; types `PublicReaderComment`, `PublicReaderCommentThread`). #524 adds
   the word-list, link and member-name twins (`matchDiscussionWord`, `readerCommentLinks`,
   `matchesMemberName`, `src/lib/discussionRulesVectors.json`).
+- **Cross-site form check (#528, `src/middleware/originCheck.ts`):** Astro's `security.checkOrigin` is **off** in
+  `astro.config.mjs` and the same rule runs first in `src/middleware/index.ts` (`crossSiteRefusal`: an unsafe
+  method whose `Origin` isn't the URL's, with a form-like content type or none, is 403), so RFC 8058's one-click
+  route can be exempt (`CROSS_SITE_POST_ROUTES`, POST only, with its reason). Don't turn Astro's back on: it
+  refuses every one-click. A new exemption needs a credential in the request itself.
+- **Profile's Notifications (#528, `components/profile/NotificationsSection.tsx`, `lib/notifications.ts`):** two
+  radio groups (Comments on my posts: Each one, Daily digest (default), Off; Comments to moderate, editors and
+  admins: Each hour at most, Off), each saving at once through `GET/PUT /users/me/notifications` with a status
+  line; a failed save puts the choice back.
 - **Comment write endpoints (#524, `src/lib/commentWrites.ts`, design 9.4):** the API's comment
   writes are under `/public` (never proxied), so the form posts to the site:
   `POST /gl-comments/posts/:id` (`src/pages/gl-comments/posts/[id].astro`), `/gl-comments/confirm`
-  and `/gl-comments/unconfirmed/:id` (`.ts`, the confirm page's buttons; #525 builds the page).
+  and `/gl-comments/unconfirmed/:id` (`.ts`, the confirm page's buttons; #525 builds the page), and since #528
+  `/gl-comments/unsubscribe` (the unsubscribe page's buttons, `{token, all?}`, JSON only) and
+  `/gl-comments/unsubscribe/:token` (**RFC 8058 one-click**, `unsubscribe/[token].ts`: mail providers POST it from
+  their servers, so **no origin check**; the body must be `List-Unsubscribe=One-Click`, no GET, no cookie).
   Each refuses a cross-origin request (`isSameOriginPost`), maps the form (`COMMENT_FORM_FIELDS`:
   `comment`, `name`, `email`, `notify_replies`, `website` = the honeypot, `parent_id`, `return_to`)
   to JSON, forwards the browser's address (`appendForwardedFor`, shared with the API proxy), the
@@ -436,8 +448,8 @@ are the most fragile part of the codebase. **Before editing anything under
   `/comments/unsubscribe`, `/comments/your-data` (`src/pages/comments/`, panels in `components/comments/reader/`)
   and the refusal page render in `ThemedReaderPage.astro` (the theme's `layouts/reader/default.astro`, else
   `ReaderLayout.astro`), noindex; their states are `<template data-reader-state>` that `gl-comments.js` shows
-  from the `#token=` fragment, spending it only on the button. Unsubscribe and your data answer 404 until #528 /
-  #529 add their routes (`READER_PAGES_READY`), and the notice's "Your comments" link waits for #529. Styles:
+  from the `#token=` fragment, spending it only on the button. Unsubscribe is served since #528; your data answers
+  404 until #529 adds its routes (`READER_PAGES_READY`), and the notice's "Your comments" link waits for #529. Styles:
   theme.css "reader comments (#525)"; new contrast pairs in `CONTRAST_PAIRS` (and Go's copy, the vectors).
 - **Discussion settings screens (#527, design 12.1–12.3; the canvas's "Settings · Discussion", "Post types ·
   Posts" and "Discussion settings…" boards):** Settings › Discussion is its own page, `/settings/discussion`

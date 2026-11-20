@@ -11,6 +11,7 @@ import { getMe, removeAvatar, updateUser } from "@gl-admin/lib/api/users"
 import { getMyDevices, signOutOtherDevices } from "@gl-admin/lib/api/sessions"
 import AvatarPhotoModal from "@gl-admin/components/profile/AvatarPhotoModal"
 import ChangeEmailModal from "@gl-admin/components/profile/ChangeEmailModal"
+import NotificationsSection from "@gl-admin/components/profile/NotificationsSection"
 import type { User } from "@gl-admin/lib/api/types"
 import { authManager } from "@gl-admin/lib/auth"
 import { roleLabel } from "@gl-admin/lib/roles"
@@ -464,6 +465,10 @@ export default function Profile() {
           </div>
         </div>
       </form>
+
+      <hr className="gl-workspace__rule" />
+
+      <NotificationsSection />
 
       <hr className="gl-workspace__rule" />
 

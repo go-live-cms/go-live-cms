@@ -12,6 +12,8 @@ const usersApi = vi.hoisted(() => ({
   uploadAvatar: vi.fn(),
   removeAvatar: vi.fn(),
   requestEmailChange: vi.fn(),
+  getMyNotifications: vi.fn(),
+  updateMyNotifications: vi.fn(),
 }))
 vi.mock("@gl-admin/lib/api/users", () => usersApi)
 const sessionsApi = vi.hoisted(() => ({ getMyDevices: vi.fn(), signOutOtherDevices: vi.fn() }))
@@ -88,6 +90,7 @@ async function renderProfile(user = ME) {
 beforeEach(() => {
   vi.clearAllMocks()
   sessionsApi.getMyDevices.mockResolvedValue({ sessions: [], other_count: 2 })
+  usersApi.getMyNotifications.mockResolvedValue({ comments_on_posts: "digest", comments_to_moderate: "hourly", moderates: true })
   vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: vi.fn(() => "blob:preview"), revokeObjectURL: vi.fn() }))
 })
 
@@ -257,5 +260,50 @@ describe("other devices", () => {
     await renderProfile()
     expect(container.textContent).toContain("You're not signed in anywhere else.")
     expect(button("Sign out of other devices")!.disabled).toBe(false)
+  })
+})
+
+// Notifications (#528, design 8.3): two radio groups that save at once.
+describe("notifications", () => {
+  const section = () => container.querySelector<HTMLElement>("[aria-labelledby='gl-profile-notifications']")!
+  const radio = (group: string, label: string) => {
+    const fieldset = Array.from(section().querySelectorAll("fieldset")).find((f) => f.querySelector("legend")?.textContent === group)
+    if (!fieldset) return undefined
+    const choice = Array.from(fieldset.querySelectorAll<HTMLLabelElement>("label")).find((l) => l.querySelector(".gl-choice__label")?.textContent === label)
+    return choice?.querySelector<HTMLInputElement>("input") ?? undefined
+  }
+
+  it("shows the digest default and saves a change at once", async () => {
+    await renderProfile()
+    expect(radio("Comments on my posts", "Daily digest")?.checked).toBe(true)
+    expect(radio("Comments to moderate", "Each hour at most")?.checked).toBe(true)
+    expect(section().textContent).toContain("several at once come as one mail")
+
+    usersApi.updateMyNotifications.mockResolvedValue({ comments_on_posts: "each", comments_to_moderate: "hourly", moderates: true })
+    await click(radio("Comments on my posts", "Each one"))
+    expect(usersApi.updateMyNotifications).toHaveBeenCalledWith({ comments_on_posts: "each", comments_to_moderate: "hourly" })
+    expect(radio("Comments on my posts", "Each one")?.checked).toBe(true)
+    expect(section().querySelector("[role='status']")?.textContent).toContain("a few minutes after")
+  })
+
+  it("puts the choice back when the save fails", async () => {
+    await renderProfile()
+    usersApi.updateMyNotifications.mockRejectedValue(new Error("down"))
+    await click(radio("Comments to moderate", "Off"))
+    expect(radio("Comments to moderate", "Each hour at most")?.checked).toBe(true)
+    expect(section().querySelector("[role='alert']")?.textContent).toContain("wasn't saved")
+  })
+
+  it("has no moderation choice for a contributor", async () => {
+    usersApi.getMyNotifications.mockResolvedValue({ comments_on_posts: "digest", comments_to_moderate: "hourly", moderates: false })
+    await renderProfile({ ...ME, role: "contributor" })
+    expect(radio("Comments on my posts", "Off")).toBeTruthy()
+    expect(section().textContent).not.toContain("Comments to moderate")
+  })
+
+  it("says so when the settings can't be read", async () => {
+    usersApi.getMyNotifications.mockRejectedValue(new Error("down"))
+    await renderProfile()
+    expect(section().textContent).toContain("couldn't be loaded")
   })
 })

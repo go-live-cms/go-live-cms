@@ -3,8 +3,8 @@
  * /comments/unsubscribe's panel (#525, docs/design/reader-comments.md 8.2, 11.6): the visible link
  * of a reply mail, `#token=` in the fragment. **Stop these emails** turns that comment's reply
  * mail off; **Stop all mail from this site** every subscription of the commenter. Each posts to
- * `/gl-comments/unsubscribe` (#528 adds the endpoint and the API route; until then the page
- * isn't served, `READER_PAGES_READY.unsubscribe`). Same pattern as ConfirmPanel.astro.
+ * `/gl-comments/unsubscribe` (#528, `src/pages/gl-comments/unsubscribe.ts`). Same pattern as
+ * ConfirmPanel.astro.
  */
 import ReaderNeedsScripts from './ReaderNeedsScripts.astro'
 ---

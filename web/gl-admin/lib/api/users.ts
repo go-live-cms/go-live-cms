@@ -87,3 +87,20 @@ export async function removeAvatar(): Promise<{ user: User }> {
 export async function requestEmailChange(currentPassword: string, newEmail: string): Promise<{ message: string; expires_in_seconds: number }> {
   return apiCall("/users/me/email", { method: "POST", body: { current_password: currentPassword, new_email: newEmail } })
 }
+/** Profile's Notifications (#528, reader comments design 8.3): the caller's own mail preferences. */
+export type CommentsOnPosts = "each" | "digest" | "off"
+export type CommentsToModerate = "hourly" | "off"
+export type UserNotifications = {
+  comments_on_posts: CommentsOnPosts
+  comments_to_moderate: CommentsToModerate
+  /** Editors and admins: "Comments to moderate" applies to them. */
+  moderates: boolean
+}
+
+export async function getMyNotifications(): Promise<UserNotifications> {
+  return apiCall("/users/me/notifications")
+}
+
+export async function updateMyNotifications(prefs: Pick<UserNotifications, "comments_on_posts" | "comments_to_moderate">): Promise<UserNotifications> {
+  return apiCall("/users/me/notifications", { method: "PUT", body: prefs })
+}
