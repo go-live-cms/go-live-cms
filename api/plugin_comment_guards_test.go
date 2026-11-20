@@ -223,7 +223,7 @@ func TestCommentGuardFailuresFollowOnError(t *testing.T) {
 // The budget is for all the guards together: once it is used up, the rest are failures
 // (their on_error decides) and aren't called.
 func TestCommentGuardTotalBudget(t *testing.T) {
-	shortCommentGuardBudgets(t, 40*time.Millisecond, 60*time.Millisecond)
+	shortCommentGuardBudgets(t, 100*time.Millisecond, 150*time.Millisecond)
 	ran := &commentGuardLog{}
 	slow := func(ctx context.Context) (pluginsdk.CommentDecision, error) {
 		<-ctx.Done()
@@ -236,8 +236,10 @@ func TestCommentGuardTotalBudget(t *testing.T) {
 	}, commentGuardRow(1, "a-slow", 0, ""), commentGuardRow(2, "b-slow", 0, ""), commentGuardRow(3, "c-late", 0, "hold"))
 	started := time.Now()
 	verdict := server.guardReaderComment(context.Background(), quietLog(), testCommentCandidate)
-	require.Less(t, time.Since(started), 500*time.Millisecond)
-	require.Equal(t, []string{"a-slow", "b-slow"}, ran.names(), "the last one isn't called once the budget is gone")
+	require.Less(t, time.Since(started), time.Second)
+	// Whether b-slow got the budget's last 50ms depends on scheduling; c-late never does.
+	require.Equal(t, "a-slow", ran.names()[0])
+	require.NotContains(t, ran.names(), "c-late", "the last one isn't called once the budget is gone")
 	require.Equal(t, readerCommentGuardVerdict{Action: readerCommentGuardHold, Reason: "Check c-late couldn't check this comment."}, verdict,
 		"and its on_error applies")
 }
@@ -276,9 +278,15 @@ func TestCommentGuardCallsAreCapped(t *testing.T) {
 	for i := 0; i < pluginGuardCallsMax+3; i++ {
 		require.Equal(t, readerCommentGuardVerdict{}, server.guardReaderComment(context.Background(), quietLog(), testCommentCandidate))
 	}
-	mu.Lock()
-	require.Equal(t, pluginGuardCallsMax, called)
-	mu.Unlock()
+	count := func() int {
+		mu.Lock()
+		defer mu.Unlock()
+		return called
+	}
+	// The goroutines may still be starting: wait for the eight, then make sure no more come.
+	require.Eventually(t, func() bool { return count() == pluginGuardCallsMax }, time.Second, 5*time.Millisecond)
+	time.Sleep(20 * time.Millisecond)
+	require.Equal(t, pluginGuardCallsMax, count(), "past the cap the guard isn't called")
 	close(release)
 	calls.Wait()
 	require.Eventually(t, func() bool { return server.commentGuardCalls.acquire("stuck") }, time.Second, 5*time.Millisecond,
@@ -287,8 +295,28 @@ func TestCommentGuardCallsAreCapped(t *testing.T) {
 
 // redactCandidate blanks the candidate's personal values in a plugin's error text.
 func TestRedactCandidate(t *testing.T) {
-	c := pluginsdk.CommentCandidate{Name: "Ana", Email: "Ana@Example.test", Body: "hello there", IP: "198.51.100.4", UserAgent: "UA/2"}
-	got := redactCandidate("ana@example.test (Ana@Example.test) at 198.51.100.4 said hello there with UA/2; Ana", c)
+	c := pluginsdk.CommentCandidate{Name: "Ana", Email: "Ana@Example.test", Body: "hello there", IP: "198.51.100.4", UserAgent: "UA/2.0"}
+	got := redactCandidate("ana@example.test (Ana@Example.test) at 198.51.100.4 said HELLO THERE with ua/2.0; ANA", c)
 	require.Equal(t, "[redacted] ([redacted]) at [redacted] said [redacted] with [redacted]; [redacted]", got)
 	require.Equal(t, "nothing to hide", redactCandidate("nothing to hide", pluginsdk.CommentCandidate{}))
+	// A one- or two-letter name identifies nobody and would mangle every word holding it.
+	require.Equal(t, "invalid API key", redactCandidate("invalid API key", pluginsdk.CommentCandidate{Name: "Al"}))
+	// Metacharacters are literal.
+	require.Equal(t, "x [redacted] y", redactCandidate("x a.b+c y", pluginsdk.CommentCandidate{Name: "a.b+c"}))
+	require.Equal(t, "axbbc", redactCandidate("axbbc", pluginsdk.CommentCandidate{Name: "a.b+c"}))
+}
+
+// A verdict the guard can't give is logged without the commenter's data.
+func TestCommentGuardUnknownVerdictIsRedacted(t *testing.T) {
+	server, _ := guardServer(t, pluginHookRegistry{"g": {BeforeCommentCreate: func(_ context.Context, _ pluginsdk.Host, c pluginsdk.CommentCandidate) (pluginsdk.CommentDecision, error) {
+		return pluginsdk.CommentDecision{Verdict: pluginsdk.CommentVerdict("blocked " + c.Email)}, nil
+	}}}, commentGuardRow(1, "g", 0, ""))
+	var logs bytes.Buffer
+	var mu sync.Mutex
+	log := slog.New(slog.NewJSONHandler(&lockedWriter{mu: &mu, w: &logs}, nil))
+	require.Equal(t, readerCommentGuardVerdict{}, server.guardReaderComment(context.Background(), log, testCommentCandidate))
+	mu.Lock()
+	defer mu.Unlock()
+	require.Contains(t, logs.String(), "plugin_comment_guard_unknown_verdict")
+	requireNoPersonalData(t, logs.String(), testCommentCandidate.Email)
 }

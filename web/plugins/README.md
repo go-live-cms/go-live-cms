@@ -175,8 +175,9 @@ func init() {
   once from a keyed browser or as spam; a member's comment), `comment.approved`,
   `comment.unapproved` (approved back to pending), `comment.spammed`, `comment.trashed`,
   `comment.deleted` (deleted, or kept as a placeholder for its replies; not for the comments of a
-  post deleted for good, whose `post.deleted` stands for them). `PostID` is the comment's post, so
-  a thread's events arrive in order. `Data` holds ids only: `comment_id`, `root_id`, `status`,
+  post deleted for good, whose `post.deleted` stands for them). `PostID` is the comment's post; a
+  comment's own events arrive in order (two comments written at the same moment may come in
+  either order). `Data` holds ids only: `comment_id`, `root_id`, `status`,
   `previous_status`, `by_member`; never a name, text or address. To read the text, declare
   `comments:read` and call `host.Comments().Get(ctx, id)` (name, text, status, post; never the
   address). A webhook may deliver them like any other event.

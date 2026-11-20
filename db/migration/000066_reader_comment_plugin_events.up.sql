@@ -3,8 +3,10 @@
 -- trigger does, so every path that changes a comment (the write path, the
 -- confirmation, moderation, deletion, the retention job) announces it in its own
 -- transaction, and a path added later can't forget to. The dispatcher, ordering (per
--- plugin and post_id, the comment's post, so a thread's events arrive in order),
--- retries and webhooks are 000055's and #460's, unchanged.
+-- plugin and post_id, the comment's post), retries and webhooks are 000055's and
+-- #460's, unchanged. A comment's own events are in order (its row lock serializes
+-- them); two comments written by concurrent transactions may be dispatched in either
+-- order, as with any outbox event whose id is taken before its commit.
 --
 -- The events:
 --

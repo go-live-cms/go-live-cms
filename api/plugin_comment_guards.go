@@ -32,8 +32,11 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"regexp"
+	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/go-live-cms/go-live-cms/pluginsdk"
 )
@@ -176,7 +179,7 @@ func (server *Server) runCommentGuard(budget context.Context, logger *slog.Logge
 	case pluginsdk.CommentAllow, "":
 	default:
 		// Not a verdict a guard can give (an "approve", say): allow, and core's rules decide.
-		log.Warn("plugin_comment_guard_unknown_verdict", "verdict", capPluginHookError(string(decision.Verdict)), "duration_ms", took)
+		log.Warn("plugin_comment_guard_unknown_verdict", "verdict", capPluginHookError(redactCandidate(string(decision.Verdict), candidate)), "duration_ms", took)
 		return readerCommentGuardVerdict{}
 	}
 	// The reason is the plugin's text about the comment: not logged.
@@ -202,15 +205,23 @@ func commentGuardReason(name, reason, fallback string) string {
 	return name + ": " + reason
 }
 
+// redactMinRunes is the shortest value redactCandidate blanks: a one- or two-letter name
+// would mangle every word holding it and identifies nobody.
+const redactMinRunes = 3
+
 // redactCandidate blanks the candidate's personal values in text a plugin produced (an
-// error, a panic), which may quote them: the logs never hold a commenter's name, email,
-// address, user agent or text.
+// error, a panic, a verdict), which may quote them in any case: the logs never hold a
+// commenter's name, email, address, user agent or text. Longest first, so a name inside
+// the body doesn't break the body's match.
 func redactCandidate(text string, c pluginsdk.CommentCandidate) string {
-	values := []string{c.Body, c.Email, strings.ToLower(c.Email), c.UserAgent, c.Name, c.IP}
+	values := []string{c.Body, c.UserAgent, c.Email, c.Name, c.IP}
+	sort.Slice(values, func(i, j int) bool { return len(values[i]) > len(values[j]) })
 	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			text = strings.ReplaceAll(text, value, "[redacted]")
+		value = strings.TrimSpace(value)
+		if utf8.RuneCountInString(value) < redactMinRunes {
+			continue
 		}
+		text = regexp.MustCompile(`(?i)`+regexp.QuoteMeta(value)).ReplaceAllLiteralString(text, "[redacted]")
 	}
 	return text
 }

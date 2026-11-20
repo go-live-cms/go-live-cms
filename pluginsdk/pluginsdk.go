@@ -93,7 +93,8 @@ const (
 )
 
 // The reader comment events (#530, docs/design/reader-comments.md 14.1). Event.PostID is
-// the comment's post, so a thread's events arrive in order. Data holds ids and small
+// the comment's post; a comment's own events arrive in order (two comments written at
+// the same moment may come in either order). Data holds ids and small
 // facts only, never a name, text or address: "comment_id"; "root_id" (absent on a
 // top-level comment); "status", the comment's status after the change (pending,
 // approved, spam or trash; on comment.deleted the one it had); "previous_status" (absent
