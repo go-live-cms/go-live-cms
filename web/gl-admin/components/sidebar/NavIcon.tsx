@@ -5,6 +5,7 @@ import type { NavIcon as NavIconName } from "./nav"
 // currentColor, decorative (the link text names the item).
 
 const PATHS: Record<NavIconName, ReactNode> = {
+  discussion: <path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z" />,
   home: (
     <>
       <path d="M3 10.5 12 3l9 7.5" />

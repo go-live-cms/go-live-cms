@@ -106,6 +106,8 @@ export interface NeedsAttention {
   access_requests: AttentionList<AttentionAccessRequest>
   // Open review requests to review (#323): editors and admins; null otherwise.
   review_requests: AttentionList<ReviewRequestAttention> | null
+  // Reader comments awaiting moderation (#526): editors and admins; null otherwise.
+  comments_pending?: { count: number; post_count: number; oldest_at: string | null } | null
 }
 
 // One request of Needs attention (#323): "Kenji asked for a review".
@@ -128,5 +130,6 @@ export async function getNeedsAttention(): Promise<NeedsAttention> {
     missing_alt: response.missing_alt ?? null,
     access_requests: response.access_requests ?? { total: 0, posts: [] },
     review_requests: response.review_requests ?? null,
+    comments_pending: response.comments_pending ?? null,
   }
 }

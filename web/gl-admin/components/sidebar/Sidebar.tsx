@@ -10,6 +10,7 @@ import { ChevronRightIcon, MenuIcon, MoreIcon, PlusIcon, SearchIcon } from "@gl-
 import GLIcon from "@gl-admin/assets/gl-logo.svg?raw"
 import { POST_TYPES_CHANGED, getPostTypes } from "@gl-admin/lib/api/postTypes"
 import { getTaxonomyTypes } from "@gl-admin/lib/api/taxonomies"
+import { DISCUSSION_CHANGED, getDiscussionCounts } from "@gl-admin/lib/api/discussion"
 import type { PostType, TaxonomyType } from "@gl-admin/lib/api/types"
 import { authManager } from "@gl-admin/lib/auth"
 import { COMMAND_PALETTE_SHORTCUT, openCommandPalette } from "@gl-admin/lib/commandPalette"
@@ -64,9 +65,15 @@ function NavLink({ item, current, nested = false }: { item: NavItem; current: st
       to={item.to}
       className={`gl-sidebar__link${nested ? " gl-sidebar__link--nested" : ""}${isCurrent ? " is-current" : ""}`}
       aria-current={isCurrent ? "page" : undefined}
+      aria-label={item.countLabel}
     >
       {!nested && <NavIcon name={item.icon} />}
       <span className="gl-sidebar__label">{item.label}</span>
+      {item.count ? (
+        <span className="gl-sidebar__count" aria-hidden="true">
+          {item.count > 99 ? "99+" : item.count}
+        </span>
+      ) : null}
     </Link>
   )
 }
@@ -212,6 +219,27 @@ export default function Sidebar() {
     return () => window.removeEventListener(POST_TYPES_CHANGED, load)
   }, [])
 
+  // Discussion's pending count (#526), for editors and admins: on load, after any
+  // moderation (DISCUSSION_CHANGED), and when the tab is shown again. A failed read shows none.
+  const [discussionPending, setDiscussionPending] = useState(0)
+  useEffect(() => {
+    if (!canManageTerms) return
+    let live = true
+    const load = () =>
+      getDiscussionCounts()
+        .then((counts) => live && setDiscussionPending(counts.pending))
+        .catch(() => live && setDiscussionPending(0))
+    const onVisible = () => document.visibilityState === "visible" && load()
+    load()
+    window.addEventListener(DISCUSSION_CHANGED, load)
+    document.addEventListener("visibilitychange", onVisible)
+    return () => {
+      live = false
+      window.removeEventListener(DISCUSSION_CHANGED, load)
+      document.removeEventListener("visibilitychange", onVisible)
+    }
+  }, [canManageTerms])
+
   useEffect(() => {
     if (!canManageTerms) return
     getTaxonomyTypes()
@@ -219,7 +247,7 @@ export default function Sidebar() {
       .catch((err) => console.warn("Failed to fetch taxonomy types for the sidebar:", err))
   }, [canManageTerms])
 
-  const sections = useMemo(() => buildNavigation({ role, postTypes, taxonomyTypes }), [role, postTypes, taxonomyTypes])
+  const sections = useMemo(() => buildNavigation({ role, postTypes, taxonomyTypes, discussionPending }), [role, postTypes, taxonomyTypes, discussionPending])
   const current = activeKey(sections, location.pathname, location.search)
   const currentItem = parentOf(sections, current)
   const title = (currentItem?.children?.find((c) => c.key === current) ?? currentItem)?.label

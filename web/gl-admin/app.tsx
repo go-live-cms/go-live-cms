@@ -42,6 +42,8 @@ const Taxonomies = lazy(() => import("@gl-admin/pages/Taxonomies"))
 const Users = lazy(() => import("@gl-admin/pages/Users"))
 const Settings = lazy(() => import("@gl-admin/pages/Settings"))
 const SettingsDiscussion = lazy(() => import("@gl-admin/pages/SettingsDiscussion"))
+const Discussion = lazy(() => import("@gl-admin/pages/Discussion"))
+const DiscussionCommenter = lazy(() => import("@gl-admin/pages/DiscussionCommenter"))
 const Themes = lazy(() => import("@gl-admin/pages/Themes"))
 const Plugins = lazy(() => import("@gl-admin/pages/Plugins"))
 const Import = lazy(() => import("@gl-admin/pages/Import"))
@@ -135,6 +137,9 @@ function AppLayout() {
                 <Route path="/site-editor/history" element={<AdminOnly area="Site editor"><SiteDesignHistory /></AdminOnly>} />
                 <Route path="/site-editor/templates/:id" element={<AdminOnly area="Site editor"><SiteTemplateEditor /></AdminOnly>} />
                 <Route path="/menus" element={<RequireRole allow={isContentModerator} area="Menus"><Menus /></RequireRole>} />
+                {/* Discussion (#526): editors and admins; contributors get the 403 page (decision 3). */}
+                <Route path="/discussion" element={<RequireRole allow={isContentModerator} area="Discussion"><Discussion /></RequireRole>} />
+                <Route path="/discussion/commenters/:id" element={<RequireRole allow={isContentModerator} area="Discussion"><DiscussionCommenter /></RequireRole>} />
                 <Route path="/users" element={<AdminOnly area="Users"><Users /></AdminOnly>} />
                 <Route path="/users/new" element={<AdminOnly area="Users"><NewUser /></AdminOnly>} />
                 <Route path="/users/edit/:id" element={<AdminOnly area="Users"><EditUser /></AdminOnly>} />

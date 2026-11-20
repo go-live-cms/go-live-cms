@@ -257,3 +257,59 @@ describe("review requests", () => {
     expect(attentionItems({ ...needs, review_requests: null }, now)).toEqual([])
   })
 })
+// Discussion (#526, design 15.2): the comment verbs, titled by the comment's post; ids only.
+describe("Discussion's verbs", () => {
+  const comment = (verb: string, payload: Record<string, unknown> = {}) =>
+    line({ verb, object_type: "reader_comment", object_id: 55, payload: { post_id: 10, ...payload } })
+
+  it("reads each status change on the post", () => {
+    expect(comment("reader_comment_approved")).toBe("Ana Costa approved a comment on October changelog")
+    expect(comment("reader_comment_unapproved")).toBe("Ana Costa unapproved a comment on October changelog")
+    expect(comment("reader_comment_spammed")).toBe("Ana Costa marked a comment as spam on October changelog")
+    expect(comment("reader_comment_not_spam")).toBe("Ana Costa marked a comment as not spam on October changelog")
+    expect(comment("reader_comment_trashed")).toBe("Ana Costa trashed a comment on October changelog")
+    expect(comment("reader_comment_restored")).toBe("Ana Costa restored a comment on October changelog")
+    expect(comment("reader_comment_deleted", { status: "spam" })).toBe("Ana Costa deleted a comment on October changelog")
+    expect(comment("reader_comment_edited")).toBe("Ana Costa edited their comment on October changelog")
+  })
+
+  it("tells a reply from a comment, and links to the drawer", () => {
+    expect(comment("reader_comment_posted", { parent_id: 4 })).toBe("Ana Costa replied to a comment on October changelog")
+    expect(comment("reader_comment_posted", { parent_id: 0 })).toBe("Ana Costa left a comment on October changelog")
+    const d = describeActivity(event({ verb: "reader_comment_approved", object_type: "reader_comment", object_id: 55, payload: { post_id: 10 } }), 99, now)
+    expect(d.href).toBe("/discussion?comment=55")
+  })
+
+  it("reads bulk actions with their count", () => {
+    expect(line({ verb: "reader_comments_bulk_moderated", object_type: "reader_comment", object_id: 0, post: undefined, payload: { action: "spam", count: 3 } })).toBe(
+      "Ana Costa marked 3 comments as spam"
+    )
+    expect(comment("reader_comments_bulk_moderated", { action: "approve", count: 2 })).toBe("Ana Costa approved 2 comments on October changelog")
+  })
+
+  it("reads commenter events without naming the reader", () => {
+    expect(line({ verb: "commenter_blocked", object_type: "commenter", object_id: 7, post: undefined, payload: { comment_count: 4 } })).toBe("Ana Costa blocked a commenter")
+    const d = describeActivity(event({ verb: "commenter_unblocked", object_type: "commenter", object_id: 7, post: undefined }), 99, now)
+    expect(d.href).toBe("/discussion/commenters/7")
+  })
+
+  it("puts the queue first in Needs attention", () => {
+    const needs: NeedsAttention = {
+      failed_schedules: { total: 0, posts: [] },
+      unpublished_changes: null,
+      missing_alt: { media_count: 3, published_post_count: 2 },
+      access_requests: { total: 0, posts: [] },
+      review_requests: null,
+      comments_pending: { count: 4, post_count: 3, oldest_at: "2026-11-04T13:00:00Z" },
+    }
+    const items = attentionItems(needs, now)
+    expect(items[0]).toEqual({
+      key: "comments-pending",
+      title: "4 comments await moderation",
+      detail: "On 3 posts · the oldest is 2 hours old",
+      href: "/discussion",
+      tone: "neutral",
+    })
+    expect(attentionItems({ ...needs, comments_pending: { count: 0, post_count: 0, oldest_at: null } }, now)[0].key).toBe("missing-alt")
+  })
+})

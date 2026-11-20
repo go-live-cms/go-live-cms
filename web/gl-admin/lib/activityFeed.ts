@@ -1,6 +1,7 @@
 import { editedPhrase, formatLastEdited } from "@gl-admin/lib/contentList"
 import { roleLabel } from "@gl-admin/lib/roles"
 import type { ActivityEvent, ActivityPerson, NeedsAttention } from "@gl-admin/lib/api/activity"
+import { pendingAttention } from "@gl-admin/lib/discussion"
 
 // Home's Activity feed and Needs attention (#324): how an event or an item reads.
 // The API stores ids only; names and titles here are the current ones it joins.
@@ -106,6 +107,44 @@ const PLUGIN_VERBS: Record<string, string> = {
   plugin_updated: "updated",
 }
 
+// Discussion's verbs (#526, the "Discussion settings…" board's Activity wording): "approved a
+// comment on <post>", "replied to a comment on <post>", "marked 3 comments as spam".
+const READER_COMMENT_VERBS: Record<string, string> = {
+  reader_comment_approved: "approved a comment on",
+  reader_comment_unapproved: "unapproved a comment on",
+  reader_comment_spammed: "marked a comment as spam on",
+  reader_comment_not_spam: "marked a comment as not spam on",
+  reader_comment_trashed: "trashed a comment on",
+  reader_comment_restored: "restored a comment on",
+  reader_comment_deleted: "deleted a comment on",
+  reader_comment_edited: "edited their comment on",
+}
+
+const BULK_COMMENT_VERBS: Record<string, (n: string) => string> = {
+  approve: (n) => `approved ${n}`,
+  unapprove: (n) => `unapproved ${n}`,
+  spam: (n) => `marked ${n} as spam`,
+  not_spam: (n) => `marked ${n} as not spam`,
+  trash: (n) => `trashed ${n}`,
+  restore: (n) => `restored ${n}`,
+  delete: (n) => `deleted ${n}`,
+}
+
+function readerCommentPart(event: ActivityEvent): { verb: string; what: string; href: string | null } {
+  const title = event.post ? event.post.title || "Untitled" : ""
+  if (event.verb === "reader_comments_bulk_moderated") {
+    const count = typeof event.payload.count === "number" ? event.payload.count : 0
+    const verb = BULK_COMMENT_VERBS[String(event.payload.action)]?.(plural(count, "comment", "comments")) ?? `moderated ${plural(count, "comment", "comments")}`
+    const href = event.post ? `/discussion?post=${event.post.id}` : "/discussion"
+    return title ? { verb: `${verb} on`, what: title, href } : { verb, what: "", href }
+  }
+  const href = `/discussion?comment=${event.object_id}`
+  const reply = typeof event.payload.parent_id === "number" && event.payload.parent_id > 0
+  const verb =
+    event.verb === "reader_comment_posted" ? (reply ? "replied to a comment on" : "left a comment on") : READER_COMMENT_VERBS[event.verb] ?? event.verb.replace(/_/g, " ")
+  return { verb, what: title || "a post", href }
+}
+
 function objectPart(event: ActivityEvent): { verb: string; what: string; href: string | null } {
   const fallbackVerb = event.verb.replace(/_/g, " ")
   switch (event.object_type) {
@@ -175,6 +214,15 @@ function objectPart(event: ActivityEvent): { verb: string; what: string; href: s
       }
       return { verb: fallbackVerb, what: "an import", href }
     }
+    // Discussion (#526, design 15.2): moderators only; ids underneath, never a reader's name or text.
+    case "reader_comment":
+      return readerCommentPart(event)
+    case "commenter": {
+      const href = `/discussion/commenters/${event.object_id}`
+      if (event.verb === "commenter_blocked") return { verb: "blocked", what: "a commenter", href }
+      if (event.verb === "commenter_unblocked") return { verb: "unblocked", what: "a commenter", href }
+      return { verb: fallbackVerb, what: "a commenter", href }
+    }
     case "redirect":
       if (event.verb === "redirect_created") return { verb: "added", what: "a redirect", href: "/settings#gl-settings-urls" }
       if (event.verb === "redirect_deleted") return { verb: "deleted", what: "a redirect", href: "/settings#gl-settings-urls" }
@@ -212,6 +260,12 @@ const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one :
 // `moderator`: the list tabs differ (contributors have no Scheduled tab).
 export function attentionItems(needs: NeedsAttention, now: Date = new Date(), moderator = true): AttentionItem[] {
   const items: AttentionItem[] = []
+
+  // Discussion (#526): "4 comments await moderation", first, linking to Pending.
+  const comments = pendingAttention(needs.comments_pending, now)
+  if (comments) {
+    items.push({ key: "comments-pending", title: comments.title, detail: comments.detail, href: "/discussion", tone: "neutral" })
+  }
 
   const failed = needs.failed_schedules
   for (const post of failed.posts) {

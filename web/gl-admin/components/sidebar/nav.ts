@@ -1,11 +1,12 @@
 import { canCreateContent, isContentModerator, isSiteAdmin } from "@gl-admin/lib/roles"
 import type { PostType, TaxonomyType } from "@gl-admin/lib/api/types"
+import { discussionNavLabel } from "@gl-admin/lib/discussion"
 
 // The sidebar's navigation (#339), as data so the role rules are testable. Who sees
 // what is a UI hint only (lib/roles.ts): the API enforces the real checks, and the
 // router guards the admin-only pages (RequireRole in app.tsx).
 
-export type NavIcon = "home" | "new" | "post" | "page" | "content" | "media" | "users" | "types" | "themes" | "siteeditor" | "menus" | "plugins" | "settings" | "tag"
+export type NavIcon = "home" | "new" | "post" | "page" | "content" | "media" | "discussion" | "users" | "types" | "themes" | "siteeditor" | "menus" | "plugins" | "settings" | "tag"
 
 export type NavItem = {
   key: string
@@ -14,6 +15,10 @@ export type NavItem = {
   icon: NavIcon
   // Nested links under a disclosure (Posts › All posts, Categories, Tags).
   children?: NavItem[]
+  // A count after the label (Discussion's pending comments, #526), and what the link says
+  // with it to a screen reader ("Discussion, 4 comments waiting"): the pill is decoration.
+  count?: number
+  countLabel?: string
 }
 
 export type NavSection = {
@@ -65,9 +70,11 @@ type BuildOptions = {
   role: string | null | undefined
   postTypes?: PostType[]
   taxonomyTypes?: TaxonomyType[]
+  // Comments awaiting moderation, for Discussion's pill (#526); 0 or unknown shows none.
+  discussionPending?: number
 }
 
-export function buildNavigation({ role, postTypes = DEFAULT_POST_TYPES, taxonomyTypes = [] }: BuildOptions): NavSection[] {
+export function buildNavigation({ role, postTypes = DEFAULT_POST_TYPES, taxonomyTypes = [], discussionPending = 0 }: BuildOptions): NavSection[] {
   const types = sortPostTypes(postTypes)
   const typeNames = types.map((pt) => pt.name)
   const visibleTaxonomies = taxonomyTypes.filter((t) => t.show_ui !== false)
@@ -107,7 +114,20 @@ export function buildNavigation({ role, postTypes = DEFAULT_POST_TYPES, taxonomy
     {
       key: "content",
       label: "Content",
-      items: [...typeItems, { key: "media", label: "Media", to: "/media", icon: "media" }],
+      items: [
+        ...typeItems,
+        { key: "media", label: "Media", to: "/media", icon: "media" },
+        // Discussion (#526): reader comments, moderated by editors and admins (requireContentEditor;
+        // contributors have no entry, decision 3), with the pending count.
+        {
+          key: "discussion",
+          label: "Discussion",
+          to: "/discussion",
+          icon: "discussion",
+          access: isContentModerator,
+          ...(discussionPending > 0 ? { count: discussionPending, countLabel: discussionNavLabel(discussionPending) } : {}),
+        },
+      ],
     },
     {
       // How the site looks: themes are admin-only (requireSiteAdmin); menus are managed
