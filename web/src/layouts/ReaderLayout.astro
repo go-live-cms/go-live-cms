@@ -39,3 +39,15 @@ const legacyCssPath = Astro.locals.themeCssPath
     <Footer />
   </body>
 </html>
+
+<style is:global>
+  /* The panels' live region and labels (core markup), when the theme has no .sr-only of its own. */
+  .reader-page-main .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+</style>

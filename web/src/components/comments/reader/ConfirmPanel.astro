@@ -93,7 +93,7 @@ const reason = error && !invalid ? (COMMENT_CODE_REASONS[error] ?? "The site cou
   <template data-reader-state="error">
     <h1 id="reader-title">Your comment wasn’t published</h1>
     <p data-slot="reason"></p>
-    <div class="reader-actions"><a href="/" class="btn btn-secondary">Go to the front page</a></div>
+    <div class="reader-actions"><button type="button" class="btn btn-primary" data-reader-retry>Try again</button><a href="/" class="btn btn-secondary">Go to the front page</a></div>
   </template>
 </div>
 <script is:inline src="/gl-comments.js" defer></script>

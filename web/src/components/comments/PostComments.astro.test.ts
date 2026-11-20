@@ -199,6 +199,15 @@ describe("comment text is text (6.3, 5.4)", () => {
     expect(SCRIPT).not.toMatch(/innerHTML|outerHTML|insertAdjacentHTML|document\.write/)
   })
 
+  it("hides the honeypot in the markup, whatever the theme styles (5.2)", async () => {
+    const { document } = await page(await render(answer("open", BOARD)))
+    const box = document.querySelector(".comment-hp") as HTMLElement
+    expect(box.getAttribute("aria-hidden")).toBe("true")
+    expect(box.style.position).toBe("absolute")
+    expect(box.style.left).toBe("-10000px")
+    expect(box.querySelector('[name="website"]')!.getAttribute("tabindex")).toBe("-1")
+  })
+
   it("never shows an address (7.1)", async () => {
     const html = await render(answer("open", [t(comment(1, { name: "Maya", body: "Write to me" }))]))
     expect(html).not.toMatch(/@[a-z0-9-]+\.[a-z]/i)
@@ -320,6 +329,7 @@ describe("gl-comments.js (11.4)", () => {
     fill(document)
     await submit(document)
     expect(requests[0].body.parent_id).toBe("105")
+    expect(document.querySelector(".comment-status p")!.textContent).toBe("It’s under the comment you replied to.")
     expect(document.querySelector("#comment-140")!.closest(".comment-replies")).toBe(document.querySelector("#comment-101")!.closest("li")!.querySelector(".comment-replies"))
     // The form is back at the end of the section, a new comment again.
     expect(form.parentElement!.matches("section.comments")).toBe(true)

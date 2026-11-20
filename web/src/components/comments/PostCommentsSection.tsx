@@ -164,6 +164,9 @@ function Pager({ pager }: { pager: PagerView }) {
   )
 }
 
+/** The honeypot's box: out of sight and out of the way whatever the theme styles. */
+const HONEYPOT_STYLE = { position: "absolute", left: "-10000px", width: "1px", height: "1px", overflow: "hidden" } as const
+
 const ICON_OK = (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M20 6 9 17l-5-5"></path>
@@ -229,7 +232,8 @@ function CommentForm({ form }: { form: CommentsFormView }) {
         <input type="checkbox" name={f.notifyReplies} value="1" />
         Email me replies
       </label>
-      <div className="comment-hp" aria-hidden="true">
+      {/* Off screen in the markup itself, not only by a theme's .comment-hp rule: a reader who sees it and types in it is spam (5.2). */}
+      <div className="comment-hp" aria-hidden="true" style={HONEYPOT_STYLE}>
         <label>
           Leave this empty <input name={f.website} tabIndex={-1} autoComplete="off" />
         </label>

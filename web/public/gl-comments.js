@@ -402,7 +402,7 @@
         }
         showOwn(answer.body.comment_id, outcome === "pending", values, parentId)
         if (outcome === "pending") notice("ok", "Thanks. Your comment is waiting for review", "It shows on the post once a moderator approves it.")
-        else notice("ok", "Your comment is published", "It’s at the end of the comments.")
+        else notice("ok", "Your comment is published", parentId ? "It’s under the comment you replied to." : "It’s at the end of the comments.")
         return
       }
       if (answer.status === 400 && answer.body.fields && typeof answer.body.fields === "object") {
@@ -501,6 +501,10 @@
       if (on) button.setAttribute("aria-busy", "true")
       else button.removeAttribute("aria-busy")
     }
+    // The token wasn't spent by a refusal: Try again shows the button again.
+    onClick("[data-reader-retry]", function () {
+      show("before", {}, true)
+    })
     function failed(answer) {
       if (answer.status === 400 && answer.body.code === "invalid_token") return show("invalid", {}, true)
       var code = answer.body.code
@@ -633,6 +637,11 @@
             busy(button, false)
             return failed(answer)
           }
+          if (request && Array.isArray(request.comments)) {
+            request.comments = request.comments.filter(function (c) {
+              return String(c && c.id) !== id
+            })
+          }
           button.replaceWith(h("span", { class: "meta reader-item-done" }, "Deleted"))
           say("Deleted your comment on " + ((item.querySelector("b") || {}).textContent || "the post") + ".")
         })
@@ -669,7 +678,7 @@
     }
     function countLabel(data) {
       var n = data && Array.isArray(data.comments) ? data.comments.length : 0
-      return n === 1 ? "your comment" : "your " + n + " comments"
+      return n === 0 ? "your comments" : n === 1 ? "your comment" : "your " + n + " comments"
     }
     function showData(data) {
       var node = show("list", { email: commenterEmail(data) }, true)

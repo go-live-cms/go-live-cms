@@ -152,6 +152,9 @@ describe("/comments/confirm", () => {
     await settle()
     expect(panelTitle(document)).toBe("Your comment wasn’t published")
     expect(document.querySelector('[data-slot="reason"]')!.textContent).toBe("Comments on this post are closed.")
+    // The token wasn't spent: Try again brings the button back.
+    click(dom, "[data-reader-retry]")
+    expect(panelTitle(document)).toBe("Publish your comment")
   }, 30_000)
 
   it("without scripts, a refused confirmation's ?error= renders at once, and the script leaves it", async () => {
@@ -211,7 +214,8 @@ describe("the pages that wait for #528 and #529", () => {
     expect(list.requests[1]).toEqual({ url: "/gl-comments/data/delete", body: { token: TOKEN, comment_id: 3 } })
     click(list.dom, "[data-reader-erase-ask]")
     expect(panelTitle(list.document)).toBe("Delete everything?")
-    expect(list.document.querySelector("[data-reader-panel]")!.textContent).toContain("This deletes your comment and everything this site keeps about jonas@example.com.")
+    // The one comment is already deleted: the count follows.
+    expect(list.document.querySelector("[data-reader-panel]")!.textContent).toContain("This deletes your comments and everything this site keeps about jonas@example.com.")
     expect(await axe(list.dom, true)).toEqual([])
     click(list.dom, "[data-reader-erase]")
     await settle()
