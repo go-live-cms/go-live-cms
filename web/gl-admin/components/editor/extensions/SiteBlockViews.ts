@@ -2,6 +2,7 @@ import type { Editor } from "@tiptap/core"
 import type { Node as PMNode } from "@tiptap/pm/model"
 import type { EditorView, NodeView } from "@tiptap/pm/view"
 import {
+  COMMENTS_BLOCK_DEFAULT_TITLE,
   normalizeSiteBlockAttrs,
   SEARCH_DEFAULTS,
   SITE_BLOCK_CONTEXTS,
@@ -14,7 +15,7 @@ import {
   siteBlockTypeOfNode,
   type SiteBlockType,
 } from "@gl-admin/lib/blocks-spec"
-import { editorDocKind, editorSiteBridge } from "./SiteBlocks"
+import { editorDocKind, editorSiteBridge, type SiteEditorBridge } from "./SiteBlocks"
 import { humanize } from "@gl-admin/lib/siteDesign"
 
 /**
@@ -124,6 +125,9 @@ export function siteBlockSummary(type: SiteBlockType, attrs: Record<string, unkn
       return "© this year, the site’s title"
     case "golive_credit":
       return "Published with GoLive"
+    // #500 (the blocks canvas's "Editor · comments block").
+    case "comments":
+      return `“${(a.title as string | undefined) ?? COMMENTS_BLOCK_DEFAULT_TITLE}” · the post’s threads, then the form`
   }
 }
 
@@ -148,6 +152,23 @@ export function siteBlockInertNote(type: SiteBlockType, kind: "post" | "template
   if (SITE_BLOCK_CONTEXTS[type].includes(kind)) return null
   if (kind === "part") return `${SITE_BLOCK_LABELS[type]} can't go in a part, so it shows nothing. You can remove it.`
   return `${SITE_BLOCK_LABELS[type]} ${SITE_BLOCK_INERT_NOTE}`
+}
+
+/** #500: a comments block in a template that isn't a single or page one (a copy, a pasted doc) shows nothing there. */
+export const COMMENTS_NOT_HERE_NOTE = "Comments only show in single and page templates, so this shows nothing here. You can remove it."
+/** #500 (16.1): the placeholder with comments off for the site. */
+export const COMMENTS_OFF_NOTE = "Comments are off for this site, so this shows nothing until an admin turns them on."
+export const DISCUSSION_SETTINGS_LABEL = "Discussion settings"
+
+/**
+ * #500: what a working comments block's placeholder adds in the Site editor (`bridge`): why it
+ * shows nothing in this template, or that comments are off for the site; null otherwise (or
+ * while the setting is unknown).
+ */
+export function commentsBlockNote(bridge: SiteEditorBridge | null): string | null {
+  if (!bridge) return null
+  if (bridge.allowsComments === false) return COMMENTS_NOT_HERE_NOTE
+  return bridge.commentsEnabled?.() === false ? COMMENTS_OFF_NOTE : null
 }
 
 function svgIcon(path: string): SVGSVGElement {
@@ -215,8 +236,25 @@ export class SiteBlockView implements NodeView {
     const status = bridge?.partStatus?.(slug!) ?? null
     detail.textContent = status?.detail ?? siteBlockSummary(this.type, this.node.attrs)
     text.append(name, detail)
+    // #500 (16.1): the comments block's own state, off for the site or a template it can't show in,
+    // and its "Discussion settings" link (the Site editor is admins' only).
+    const commentsBridge = this.type === "comments" && !inert ? editorSiteBridge(this.editor) : null
+    const commentsNote = commentsBlockNote(commentsBridge)
 
     const children: Node[] = [tile, text]
+    this.openButton = null
+    if (commentsBridge?.openDiscussionSettings) {
+      const settings = document.createElement("button")
+      settings.type = "button"
+      settings.className = "gl-button gl-button--secondary gl-button--sm editor-site-block__open"
+      settings.textContent = DISCUSSION_SETTINGS_LABEL
+      settings.addEventListener("click", (event) => {
+        event.preventDefault()
+        commentsBridge.openDiscussionSettings?.()
+      })
+      this.openButton = settings
+      children.push(settings)
+    }
     if (bridge?.openPart) {
       const open = document.createElement("button")
       open.type = "button"
@@ -229,14 +267,16 @@ export class SiteBlockView implements NodeView {
       })
       this.openButton = open
       children.push(open)
-    } else this.openButton = null
-    if (inert) {
+    }
+    const noteText = inert ?? commentsNote
+    if (noteText) {
       const note = document.createElement("p")
       note.className = "editor-site-block__note"
       note.setAttribute("role", "note")
-      note.textContent = inert
+      note.textContent = noteText
       children.push(note)
     }
+    this.dom.classList.toggle("is-inert", !!noteText)
     this.dom.replaceChildren(...children)
   }
 

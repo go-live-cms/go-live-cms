@@ -152,6 +152,8 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
       schema.postFacts,
       schema.siteCopyright,
       schema.goliveCredit,
+      // #500
+      schema.comments,
       schema.siteBlockCommands,
       schema.blockId,
       // #488: which kind of document this editor holds (a post until the Site editor, #493); no schema.
@@ -224,6 +226,7 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
             case "postFacts":
             case "siteCopyright":
             case "goliveCredit":
+            case "comments":
               return ""
             case "imageCaption":
             case "tableCaption":

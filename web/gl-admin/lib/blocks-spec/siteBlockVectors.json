@@ -119,7 +119,14 @@
     { "name": "#498 author_avatar: no attrs", "type": "author_avatar", "input": { "size": 96 }, "expected": {} },
     { "name": "#498 search_results: no attrs", "type": "search_results", "input": { "perPage": 20, "html": "<mark>x</mark>" }, "expected": {} },
     { "name": "#498 site_copyright: no attrs; the year and the name are the site's", "type": "site_copyright", "input": { "year": 1999, "text": "© Someone else" }, "expected": {} },
-    { "name": "#498 golive_credit: no attrs; the link is core's", "type": "golive_credit", "input": { "href": "https://example.org" }, "expected": {} }
+    { "name": "#498 golive_credit: no attrs; the link is core's", "type": "golive_credit", "input": { "href": "https://example.org" }, "expected": {} },
+    { "name": "#500 comments: no attrs is the default title", "type": "comments", "input": {}, "expected": {} },
+    { "name": "#500 comments: a title of its own, trimmed", "type": "comments", "input": { "title": "  Responses  " }, "expected": { "title": "Responses" } },
+    { "name": "#500 comments: \"Comments\" is the default, left out", "type": "comments", "input": { "title": "Comments" }, "expected": {} },
+    { "name": "#500 comments: a blank title is none", "type": "comments", "input": { "title": "   " }, "expected": {} },
+    { "name": "#500 comments: plain text, control characters as spaces", "type": "comments", "input": { "title": "Tell\u0000us\nwhat you think" }, "expected": { "title": "Tell us what you think" } },
+    { "name": "#500 comments: capped at 60 code points (emoji count once)", "type": "comments", "input": { "title": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀" }, "expected": { "title": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀" } },
+    { "name": "#500 comments: nothing else; the thread and the form are the post's", "type": "comments", "input": { "title": 3, "html": "<p>x</p>", "postId": 7, "count": 4, "open": true }, "expected": {} }
   ],
   "kinds": [
     {
@@ -434,6 +441,122 @@
           "templ-0001": { "id": "templ-0001", "type": "post_template", "version": 1, "attrs": {}, "children": ["toc-000001", "switch-001"] },
           "toc-000001": { "id": "toc-000001", "type": "table_of_contents", "version": 1, "attrs": {} },
           "switch-001": { "id": "switch-001", "type": "color_scheme_switch", "version": 1, "attrs": {} }
+        }
+      }
+    },
+    {
+      "name": "#500: a single template with its comments after the post's end, in a column too",
+      "kind": "template",
+      "valid": true,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["content-01", "cols-00001", "related-01"],
+        "blocks": {
+          "content-01": { "id": "content-01", "type": "post_content", "version": 1, "attrs": {} },
+          "cols-00001": { "id": "cols-00001", "type": "columns", "version": 1, "attrs": {}, "children": ["col-000001", "col-000002"] },
+          "col-000001": { "id": "col-000001", "type": "column", "version": 1, "attrs": {}, "children": ["comments-1"] },
+          "comments-1": { "id": "comments-1", "type": "comments", "version": 1, "attrs": { "title": "Responses" } },
+          "col-000002": { "id": "col-000002", "type": "column", "version": 1, "attrs": {}, "children": ["para-00001"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "x" } },
+          "related-01": { "id": "related-01", "type": "related_posts", "version": 1, "attrs": {} }
+        }
+      }
+    },
+    {
+      "name": "#500: comments can't be in a part (a header or footer would show the thread on every page)",
+      "kind": "part",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["comments-1"],
+        "blocks": {
+          "comments-1": { "id": "comments-1", "type": "comments", "version": 1, "attrs": {} }
+        }
+      }
+    },
+    {
+      "name": "#500: comments can't be in a part, even unreferenced",
+      "kind": "part",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["title-0001"],
+        "blocks": {
+          "title-0001": { "id": "title-0001", "type": "site_title", "version": 1, "attrs": {} },
+          "comments-1": { "id": "comments-1", "type": "comments", "version": 1, "attrs": {} }
+        }
+      }
+    },
+    {
+      "name": "#500: comments can't be in a post template (it would render the page's thread once per item)",
+      "kind": "template",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["query-0001"],
+        "blocks": {
+          "query-0001": { "id": "query-0001", "type": "query", "version": 1, "attrs": {}, "children": ["templ-0001"] },
+          "templ-0001": { "id": "templ-0001", "type": "post_template", "version": 1, "attrs": {}, "children": ["comments-1"] },
+          "comments-1": { "id": "comments-1", "type": "comments", "version": 1, "attrs": {} }
+        }
+      }
+    },
+    {
+      "name": "#500: comments can't be in a query's no results either",
+      "kind": "template",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["query-0001"],
+        "blocks": {
+          "query-0001": { "id": "query-0001", "type": "query", "version": 1, "attrs": {}, "children": ["templ-0001", "empty-0001"] },
+          "templ-0001": { "id": "templ-0001", "type": "post_template", "version": 1, "attrs": {}, "children": ["title-0001"] },
+          "title-0001": { "id": "title-0001", "type": "post_title", "version": 1, "attrs": {} },
+          "empty-0001": { "id": "empty-0001", "type": "query_no_results", "version": 1, "attrs": {}, "children": ["comments-1"] },
+          "comments-1": { "id": "comments-1", "type": "comments", "version": 1, "attrs": {} }
+        }
+      }
+    },
+    {
+      "name": "#500: comments can't be in a query at any depth",
+      "kind": "template",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["query-0001"],
+        "blocks": {
+          "query-0001": { "id": "query-0001", "type": "query", "version": 1, "attrs": {}, "children": ["templ-0001"] },
+          "templ-0001": { "id": "templ-0001", "type": "post_template", "version": 1, "attrs": {}, "children": ["detail-001"] },
+          "detail-001": { "id": "detail-001", "type": "details", "version": 1, "attrs": {}, "children": ["comments-1"] },
+          "comments-1": { "id": "comments-1", "type": "comments", "version": 1, "attrs": {} }
+        }
+      }
+    },
+    {
+      "name": "#500: a template holds at most one comments block, referenced or not",
+      "kind": "template",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["comments-1"],
+        "blocks": {
+          "comments-1": { "id": "comments-1", "type": "comments", "version": 1, "attrs": {} },
+          "comments-2": { "id": "comments-2", "type": "comments", "version": 1, "attrs": {} }
+        }
+      }
+    },
+    {
+      "name": "#500: in a post comments are inert, never refused, two of them and in a post template too",
+      "kind": "post",
+      "valid": true,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["comments-1", "query-0001"],
+        "blocks": {
+          "comments-1": { "id": "comments-1", "type": "comments", "version": 1, "attrs": {} },
+          "query-0001": { "id": "query-0001", "type": "query", "version": 1, "attrs": {}, "children": ["templ-0001"] },
+          "templ-0001": { "id": "templ-0001", "type": "post_template", "version": 1, "attrs": {}, "children": ["comments-2"] },
+          "comments-2": { "id": "comments-2", "type": "comments", "version": 1, "attrs": {} }
         }
       }
     }

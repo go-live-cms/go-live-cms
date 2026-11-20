@@ -9,7 +9,8 @@
  *
  * 1. What the blocks need: `loadSiteRenderContext` walks the template and its parts
  *    (`collectTemplateNeeds`) and fetches menus by location and up to four queries, each within
- *    2 s and failing soft; an inheriting query is the route's own list.
+ *    2 s and failing soft; an inheriting query is the route's own list. A comments block (#500)
+ *    reads the route's post's thread from its `discussion` prop (the post route passes it).
  * 2. The head: `SeoHead`, the active theme's tokens with the site's global styles (the draft
  *    while previewing, #486), its registered styles and scripts (the theme contract, #484).
  * 3. The body: the template's doc in one `BlockRenderer` with the context, no `b-<id>` anchors
@@ -26,6 +27,7 @@ import { resolveSiteUrl } from '@/lib/seo'
 import { loadSiteRenderContext } from '@/lib/siteRenderContext'
 import { getSiteSettings } from '@/lib/siteSettings'
 import type { BlockTemplateChoice } from '@/lib/siteTemplates'
+import type { PublicDiscussion } from '@/lib/api'
 import { resolveThemeTokens, themeCssVariables } from '@/lib/themeTokens'
 import { preloadFonts } from '@/lib/themeAssets'
 
@@ -58,6 +60,8 @@ const context = await loadSiteRenderContext(Astro.locals, {
   route,
   siteUrl,
   ...(imageSizes ? { imageSizes } : {}),
+  // #500: the comments block reads the route's post's thread for this URL (reader-comments 11.1).
+  comments: { discussion: layoutProps.discussion as PublicDiscussion | null | undefined, url: Astro.url },
 })
 
 let tokens = ''

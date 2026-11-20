@@ -288,6 +288,8 @@ describe("the Site group (#488)", () => {
       "Post details",
       "Copyright",
       "GoLive credit",
+      // #500
+      "Comments",
     ])
     expect(SITE_BLOCKS.every((e) => e.group === "site")).toBe(true)
     expect(catalogEntries()).toEqual(expect.arrayContaining([...SITE_BLOCKS]))
@@ -300,6 +302,8 @@ describe("the Site group (#488)", () => {
     expect(names(menuEntries({ role: "editor", context: "part" }).filter((e) => e.group === "site"))).not.toContain("Template part")
     // #489: a part never holds the post's body (design 4.2); it may hold a query loop.
     expect(names(menuEntries({ role: "editor", context: "part" }).filter((e) => e.group === "site"))).not.toContain("Post content")
+    // #500: nor the post's comments (reader-comments 11.1).
+    expect(names(menuEntries({ role: "editor", context: "part" }).filter((e) => e.group === "site"))).not.toContain("Comments")
     expect(names(menuEntries({ role: "editor", context: "part" }).filter((e) => e.group === "site"))).toContain("Query loop")
     // Every core block is still offered in a post; in templates and parts too, but Custom HTML
     // and footnotes (#493: their data is a post's, post_html_snippets and the post's notes).

@@ -2,13 +2,14 @@
   "title": "Page · full width",
   "doc": {
     "doc_version": 1,
-    "blocks_order": ["page-full-header", "page-full-band", "page-full-content", "page-full-footer"],
+    "blocks_order": ["page-full-header", "page-full-band", "page-full-content", "page-full-comments", "page-full-footer"],
     "blocks": {
       "page-full-header": { "id": "page-full-header", "type": "template_part", "version": 1, "attrs": { "slug": "header" } },
       "page-full-band": { "id": "page-full-band", "type": "group", "version": 1, "attrs": { "style": "tinted", "align": "full" }, "children": ["page-full-title", "page-full-dek"] },
       "page-full-title": { "id": "page-full-title", "type": "post_title", "version": 1, "attrs": {} },
       "page-full-dek": { "id": "page-full-dek", "type": "post_excerpt", "version": 1, "attrs": {} },
       "page-full-content": { "id": "page-full-content", "type": "post_content", "version": 1, "attrs": { "width": "wide" } },
+      "page-full-comments": { "id": "page-full-comments", "type": "comments", "version": 1, "attrs": {} },
       "page-full-footer": { "id": "page-full-footer", "type": "template_part", "version": 1, "attrs": { "slug": "footer" } }
     }
   }

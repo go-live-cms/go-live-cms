@@ -1348,9 +1348,31 @@ Built as designed and drawn, with these details the text left open:
 - **The bulk action records one event** (`reader_comments_bulk_moderated`), not one per comment, so a
   cleanup of 50 spam comments is one line in the feed.
 - **The settings switch has no gate any more** (#527's `COMMENTS_SWITCH_READY` is gone); comments
-  start off. The hook for #528's notifications is `readerCommentModerated` (api/CLAUDE.md).
+  start off. The hook for #528's notifications was `readerCommentModerated`; #528 replaced it with a trigger (16.6).
 
-### 16.5 What C8 settled (#528)
+### 16.5 What #500 settled
+
+The comments block, built as 11.1 and the blocks canvas's "Editor · comments block" draw it (the details are
+theme-builder 4.5's "As built (T18)"):
+
+- **One markup, still.** The block renders `PostCommentsSection` from the same view as `PostComments.astro`
+  (`commentsView`: the thread answer, the URL, the clock, the settings), so 11.1's parity holds by construction
+  and is tested element by element on the default theme's pages (`themes/default/theme.astro.test.ts`).
+- **The same read.** The template's collector reads the thread with the post route's loader
+  (`loadPostComments`), from the cached `discussion` the post route already has: no read when comments are off,
+  closed with none or open with none; `?comments=N` and `?thread=` as for a code layout; a failure is
+  `comments_fetch_failed` and no section. Nothing per reader reaches the page (section 10).
+- **Where.** Single and page templates only (`single`, `single-*`, `page`, `page-*`, and the Site editor's
+  `custom-*` page templates); once per template, never in a part or a query. The store enforces the last three;
+  the first is the inserter's (the store doesn't know the template's slug) and the renderer's (no post, no
+  section). The default theme's `single*` and `page*` templates hold it where its code layouts put the section, so
+  #525's listed parity difference is gone and a default-theme site can turn comments on.
+- **The editor.** The placeholder names the title ("“Responses” · the post’s threads, then the form"), says
+  "Comments are off for this site" while they are, and has a "Discussion settings" button (the Site editor is
+  admins' only). The Block tab's one field is Title, with its invalid state past 60 characters. Where it can't go
+  the inserter leaves it out, as Post content's second copy; a copy that got there anyway says it shows nothing.
+
+### 16.6 What C8 settled (#528)
 
 Built as designed (`000068`, `api/discussion_mail.go`, `api/discussion_unsubscribe.go`), with these details the
 text left open:
@@ -1384,6 +1406,7 @@ text left open:
   your-data link when its page is served.
 - **Erased is already respected.** Recipients are resolved when the mail is built, so an erased commenter (#529
   deletes the row, and its outbox rows go with it) or a removed member gets nothing.
+
 ## 17. Phased plan
 
 Each phase ships with `comments_enabled` off and its switch hidden, until phase 3 gives

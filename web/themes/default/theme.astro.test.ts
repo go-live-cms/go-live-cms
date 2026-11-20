@@ -23,11 +23,15 @@ vi.mock("@/lib/siteSettings", () => ({
 const getPublishedPosts = vi.fn()
 const getAdjacentPosts = vi.fn()
 const getRelatedPosts = vi.fn()
+// #500: a block template's comments block reads the thread itself (the code layouts get it as a prop).
+const getPublicPostComments = vi.fn()
 vi.mock("@/lib/api", () => ({
   getTaxonomyTypes: async () => [{ name: "tag", label: "Tags" }],
   getPublishedPosts: (...args: unknown[]) => getPublishedPosts(...args),
   getAdjacentPosts: (...args: unknown[]) => getAdjacentPosts(...args),
   getRelatedPosts: (...args: unknown[]) => getRelatedPosts(...args),
+  getPublicPostComments: (...args: unknown[]) => getPublicPostComments(...args),
+  getPublicCommentThread: async () => null,
 }))
 
 // The menus assigned to the theme's locations (#347); none unless a test sets them.
@@ -721,8 +725,8 @@ describe("layout snapshots (#484)", () => {
     ],
     pagination: { page: 1, per_page: 30, total: 2, total_pages: 1 },
   }
-  const postProps = { post: full, title: "Hello World · Field Notes", description: "An excerpt", terms: linked, authors, featuredImage: "https://example.org/uploads/a.jpg", siteTitle: "Field Notes", seo: { canonical: "http://web:4321/post/hello-world" }, comments }
-  const pageProps = { ...postProps, post: { ...full, post_type: "page" }, terms: [], authors: [], comments: null }
+  const postProps = { post: full, title: "Hello World · Field Notes", description: "An excerpt", terms: linked, authors, featuredImage: "https://example.org/uploads/a.jpg", siteTitle: "Field Notes", seo: { canonical: "http://web:4321/post/hello-world" }, comments, discussion: comments.discussion }
+  const pageProps = { ...postProps, post: { ...full, post_type: "page" }, terms: [], authors: [], comments: null, discussion: null }
   const item = (id: number) => ({ post: { ...post, id, title: `Post ${id}` }, href: `/post/p${id}`, image: id === 1 ? "https://example.org/uploads/1.jpg" : null })
   const list = (basePath: string) => ({ posts: [item(1), item(2), item(3)], total: 12, page: 1, totalPages: 2, basePath, links: { older: `${basePath === "/" ? "" : basePath}/page/2/` }, siteTitle: "Field Notes", siteTagline: "Notes from the team" })
 
@@ -792,6 +796,12 @@ describe("layout snapshots (#484)", () => {
     ]
 
     beforeEach(() => {
+      // #500: the post's thread, as /public/posts/:id/comments answers it, for the comments block;
+      // the code layouts got the same answer as their `comments` prop.
+      getPublicPostComments.mockReset()
+      getPublicPostComments.mockImplementation(async (id: number, page: number) =>
+        id === full.id && page === 1 ? { discussion: comments.discussion, threads: comments.threads, pagination: comments.pagination } : null,
+      )
       // The 404's recent posts are a query of the latest three (`/public/posts/type/post`).
       vi.stubGlobal(
         "fetch",
@@ -827,6 +837,47 @@ describe("layout snapshots (#484)", () => {
       expect(block.bodyHeadingIds).toEqual(code.bodyHeadingIds)
       // The embed loader, once per page.
       expect(block.embedLoaders).toBe(code.embedLoaders)
+    })
+
+    // #500 (reader-comments 11.1): the comments block renders the code layout's section, element by
+    // element, on the same post: the post templates above through the whole page; here a page with
+    // comments (the page fixtures have none), the block's title, and where it renders nothing.
+    it("the comments block renders PostComments' HTML: a page with comments and its own title", async () => {
+      const withComments = { ...pageProps, comments, discussion: comments.discussion }
+      const sectionOf = (html: string) => {
+        const dom = new JSDOM(html)
+        const document = dom.window.document
+        const section = document.querySelector("section.comments")
+        section?.classList.remove("measure")
+        const out = { section: section?.outerHTML ?? null, scripts: document.querySelectorAll('script[src="/gl-comments.js"]').length, next: section?.nextElementSibling?.outerHTML ?? null }
+        dom.window.close()
+        return out
+      }
+      const code = sectionOf(await container.renderToString(PageDefault as any, { props: withComments, request, locals: { activeTheme: "default", themeAssets: themeConfig.assets } }))
+      const block = sectionOf(await renderTemplate("page", "page", withComments))
+      expect(code.section).toContain("Comments <span class=\"comments-count\">4</span>")
+      expect(block).toEqual(code)
+      expect(getPublicPostComments).toHaveBeenCalledWith(full.id, 1)
+
+      // A title of its own: "Responses 4" (16.1), the rest unchanged.
+      const titled = shippedTemplate("templates", "page")
+      ;(titled.doc.blocks["page-comments"] as { attrs: Record<string, unknown> }).attrs = { title: "Responses" }
+      const choice = { template: { slug: "page", rank: 0, source: "theme", title: titled.title, doc: titled.doc }, parts: { header: shippedTemplate("parts", "header").doc, footer: shippedTemplate("parts", "footer").doc }, menusById: {} }
+      const html = await container.renderToString(BlockTemplateLayout as any, { props: { kind: "page", choice, ...withComments }, request, locals: { activeTheme: "default", themeAssets: themeConfig.assets } })
+      expect(new JSDOM(html).window.document.querySelector(".comments-title")!.textContent).toBe("Responses 4")
+    })
+
+    it("the comments block renders nothing with comments off, without a discussion, or when the read fails", async () => {
+      const off = await renderTemplate("single", "single", { ...postProps, discussion: { state: "off", closes_at: null, count: 0 } })
+      expect(off).not.toContain('id="comments"')
+      const none = await renderTemplate("single", "single", { ...postProps, discussion: null })
+      expect(none).not.toContain('id="comments"')
+      getPublicPostComments.mockRejectedValue(new Error("down"))
+      const failed = await renderTemplate("single", "single", postProps)
+      expect(failed).not.toContain('id="comments"')
+      expect(failed).not.toContain("/gl-comments.js")
+      // The rest of the page renders.
+      expect(failed).toMatch(/<main[^>]*id="content"/)
     })
 
     it("the 500 page has no template: the error layout renders it, with the API down", async () => {

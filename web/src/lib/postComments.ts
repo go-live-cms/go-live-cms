@@ -65,6 +65,9 @@ export interface CommentsSettings {
   privacyHref: string | null
 }
 
+/** The settings when the site's can't be read: threaded, the default notice, no privacy page. */
+export const DEFAULT_COMMENTS_SETTINGS: CommentsSettings = { threading: "replies", notice: "", privacyHref: null }
+
 export interface CommentsRequest {
   /** The post page's path, without a query (`/post/hello-world`). */
   path: string

@@ -25,7 +25,7 @@ export const BLOCK_TEMPLATE_DIFFERENCES = [
   "The submenus' ids carry the navigation block's id (`nav-sub-header-navigation-1` for `nav-sub-1`), and a search field's id is the block's own (`search-…` for `search-q`, `q404`).",
   "On the front page the footer's site title is marked `aria-current=\"page\"`, as the header's is.",
   "The embed loader (`/gl-embeds.js`) is at the end of the page, not at the end of the post's body; still once.",
-  "A post's body (`div.prose`) has no `measure` or `page-body` class: its width is the template's.",
+  "A post's body (`div.prose`) and its comments (`section.comments`, #500) have no `measure` or `page-body` class: their width is the template's.",
   "The search form has the `search-block` class, the copyright line `site-copyright`.",
   "The sidebar post's aside is the second column of a Columns block, not an `aside` landmark labelled \"About this post\".",
   "The full-width page's title band is a tinted full-width Group (`div.group.is-tinted.alignfull`), not `header.page-band`.",
@@ -33,7 +33,6 @@ export const BLOCK_TEMPLATE_DIFFERENCES = [
   "An empty list says so in `div.query-no-results > p`, not `p.empty-state.dek` (no fixture has one).",
   "React adds `<link rel=\"preload\" as=\"image\" fetchpriority=\"high\">` at the start of the body for the image the page shows first (the featured image, the front page's featured post), which the code layouts only marked `fetchpriority=\"high\"`.",
   "On a page, a heading of the body that slugs to `content` is `content-2`, as on a post: the code page layouts didn't reserve the page's own ids, so it took `main#content`'s (the skip link's target).",
-  "Reader comments (#525): a code layout renders the comments section (`section.comments`, `PostComments`) and its script (`/gl-comments.js`) from the `comments` layout prop; a block template renders them with the comments block, which #500 adds to the `single*` templates (this rule goes then).",
 ] as const
 
 /** The frame elements unwrapped (replaced by their children) on each side. */
@@ -182,9 +181,7 @@ export function comparablePage(html: string, side: "code" | "template", name: st
     removeClasses(document, ".site-copyright", ["site-copyright"])
     unwrapAll(root, TEMPLATE_WRAPPERS)
   } else {
-    // #525: the comments section is the code layout's until the comments block (#500).
-    for (const el of Array.from(document.querySelectorAll('section.comments, script[src="/gl-comments.js"]'))) el.remove()
-    removeClasses(document, ".prose", ["measure", "page-body"])
+    removeClasses(document, ".prose, section.comments", ["measure", "page-body"])
     unwrapAll(root, CODE_WRAPPERS)
   }
   // Both sides: every doc's `div.block-content` (the post body's on both, the template's too).

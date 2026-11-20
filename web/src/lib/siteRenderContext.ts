@@ -22,6 +22,10 @@
  *   `/public/posts/:id/related` for the route's post (`readRelatedPosts`: `limit` and `taxonomy`,
  *   its two attrs, one to one; the public cache keys the whole query string, #185). On a route
  *   without a post it reads nothing and renders nothing.
+ * - #500: a `comments` block (the template's own, outside every query) reads the route's post's
+ *   thread with the code layout's loader (`loadPostComments`, reader-comments 11.1): the cached
+ *   `/public/posts/:id/comments` page the URL asks for, only when there is something to show. It
+ *   isn't one of the four (one per template, the page's post's). Nothing per reader.
  * - Failures fail soft: that block renders nothing, the rest of the page renders. A failed
  *   query or related read is logged once per request and block type (`site_block_data_failed`,
  *   the block type and a count, never the query string).
@@ -41,8 +45,10 @@ import {
 } from "@gl-admin/lib/blocks-spec"
 import type { Post } from "@gl-admin/lib/api/types"
 import { SERVER_MEDIA_URL } from "@gl-admin/lib/server-api-url"
-import { queryKey, type SiteLinkedTerm, type SiteMenu, type SitePostList, type SiteRenderContext, type SiteRoute } from "@/components/blocks/utils/siteContext"
-import { getRelatedPosts } from "./api"
+import { queryKey, type SiteComments, type SiteLinkedTerm, type SiteMenu, type SitePostList, type SiteRenderContext, type SiteRoute } from "@/components/blocks/utils/siteContext"
+import { getRelatedPosts, type PublicDiscussion } from "./api"
+import { DEFAULT_COMMENTS_SETTINGS, type CommentsSettings, type PostCommentsData } from "./postComments"
+import { loadPostComments } from "./postCommentsLoader"
 import { log, requestIdHeaders } from "./log"
 import { getMenu, withCurrent, type Menu } from "./menus"
 import { listedThumbnail, toListedPosts } from "./postList"
@@ -117,6 +123,11 @@ export interface TemplateNeeds extends SiteBlockNeeds {
   skippedQueries: number
   /** Whether a site logo block is used (the logo comes with the settings). */
   logo: boolean
+  /**
+   * #500: whether a comments block renders: one in the template's own doc (never a part's) and
+   * outside every query. Then the route's post's thread is read; it isn't one of the four.
+   */
+  comments: boolean
 }
 
 /**
@@ -142,13 +153,16 @@ export function collectTemplateNeeds(
   const keptRelated = new Map<string, TemplateRelatedNeed>()
   let rendered = 0
   let logo = false
+  let comments = false
   const visit = (doc: BlockDocV1 | null | undefined, part?: string) => {
     if (!doc?.blocks) return
-    const listed = blocksInPostTemplates(doc)
+    const listed = blocksInside(doc, "post_template")
     for (const id of blocksInReadingOrder(doc)) {
       const block = doc.blocks[id]
       if (!block) continue
       if (block.type === "site_logo") logo = true
+      // #500: the template's own, outside every query (a part or a list never shows it).
+      else if (block.type === "comments") comments ||= part === undefined && !blocksInside(doc, "query").has(id)
       else if (block.type === "query") {
         rendered++
         const key = queryKey(part, id)
@@ -170,11 +184,14 @@ export function collectTemplateNeeds(
     }
   }
   visit(template)
-  return { ...base, queries: [...kept.values()], related: [...keptRelated.values()], renderedQueries: rendered, skippedQueries: Math.max(0, rendered - MAX_QUERIES_PER_PAGE), logo }
+  return { ...base, queries: [...kept.values()], related: [...keptRelated.values()], renderedQueries: rendered, skippedQueries: Math.max(0, rendered - MAX_QUERIES_PER_PAGE), logo, comments }
 }
 
-/** The ids of every block inside a query's post template, at any depth (#497: they render once per listed post). */
-function blocksInPostTemplates(doc: BlockDocV1): Set<string> {
+/**
+ * The ids of every block inside a container of `type`, at any depth: a query's post template
+ * (#497: they render once per listed post), or a whole query (#500).
+ */
+function blocksInside(doc: BlockDocV1, type: "post_template" | "query"): Set<string> {
   const inside = new Set<string>()
   const add = (id: string) => {
     const block = doc.blocks[id]
@@ -183,9 +200,31 @@ function blocksInPostTemplates(doc: BlockDocV1): Set<string> {
     for (const child of block.children ?? []) add(child)
   }
   for (const block of Object.values(doc.blocks)) {
-    if (block?.type === "post_template") for (const child of block.children ?? []) add(child)
+    if (block?.type === type) for (const child of block.children ?? []) add(child)
   }
   return inside
+}
+
+/** What reads the route's post's comments (#500; tests pass their own): the code layout's loader. */
+export type CommentsReader = (postId: number, discussion: PublicDiscussion | null | undefined, url: URL, now: Date) => Promise<PostCommentsData | null>
+
+/**
+ * The comments block's data (#500, reader-comments 11.1): the route's post's thread, read the way
+ * the post route reads it for a code layout (`loadPostComments`: no read when comments are off,
+ * closed with none or open with none; page `?comments=N` or `?thread=`; a failure is logged
+ * `comments_fetch_failed` and renders no section), with what the section needs besides: the URL,
+ * the clock and Settings › Discussion. Null without a post or a discussion.
+ */
+export async function loadTemplateComments(
+  post: { id: number } | null | undefined,
+  { discussion, url, now, settings, read = loadPostComments }: { discussion: PublicDiscussion | null | undefined; url: URL; now: Date; settings: CommentsSettings; read?: CommentsReader },
+): Promise<SiteComments | null> {
+  if (!post || !discussion) return null
+  const data = await read(post.id, discussion, url, now).catch((error: unknown) => {
+    log.warn("comments_fetch_failed", { post_id: post.id, error })
+    return null
+  })
+  return data ? { data, postId: post.id, url: url.href, now: now.toISOString(), settings } : null
 }
 
 /**
@@ -378,6 +417,11 @@ export interface LoadSiteRenderContextOptions {
   readRelated?: RelatedReader
   /** #498: the active theme's image `sizes` for a post's body (`config.imageSizes`). */
   imageSizes?: { column?: string; wide?: string }
+  /**
+   * #500: for a comments block, the route's post's discussion as `/public` carries it (cached,
+   * clock-free) and the page's URL; `now` and `read` for tests. Without it the block renders nothing.
+   */
+  comments?: { discussion: PublicDiscussion | null | undefined; url: URL; now?: Date; read?: CommentsReader }
 }
 
 /**
@@ -400,7 +444,8 @@ export async function loadSiteRenderContext(locals: App.Locals | undefined, opti
   }
   const readMenu = options.readMenu ?? ((location: string) => getMenu(location))
   const settingsRead = getSiteSettings(locals)
-  const [settings, menus, queries, related] = await Promise.all([
+  const commentsOption = options.comments
+  const [settings, menus, queries, related, comments] = await Promise.all([
     settingsRead,
     Promise.all(locations.map(async (location) => [location, await readMenu(location).catch(() => null)] as const)),
     needs.queries.length === 0
@@ -412,6 +457,18 @@ export async function loadSiteRenderContext(locals: App.Locals | undefined, opti
       ? Promise.resolve({})
       : settingsRead.then((site) =>
           loadRelated(needs.related, { route: options.route, structure: normalizeUrlStructure(site.urlStructure), siteUrl: options.siteUrl ?? "", read: options.readRelated }),
+        ),
+    // #500: the thread, only for a comments block that renders, on a route with a post.
+    !needs.comments || !commentsOption || !options.route?.post
+      ? Promise.resolve(null)
+      : settingsRead.then((site) =>
+          loadTemplateComments(options.route?.post?.post, {
+            discussion: commentsOption.discussion,
+            url: commentsOption.url,
+            now: commentsOption.now ?? new Date(),
+            settings: site.comments ?? DEFAULT_COMMENTS_SETTINGS,
+            read: commentsOption.read,
+          }),
         ),
   ])
   const menusById = Object.fromEntries(Object.entries(options.menusById ?? {}).map(([id, menu]) => [id, siteMenu(menu, options.currentPath)]))
@@ -445,6 +502,7 @@ export async function loadSiteRenderContext(locals: App.Locals | undefined, opti
     related,
     pageShows,
     ...(options.imageSizes ? { imageSizes: options.imageSizes } : {}),
+    ...(comments ? { comments } : {}),
   }
 }
 

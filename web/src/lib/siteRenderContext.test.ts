@@ -17,7 +17,7 @@ import type { Menu } from "./menus"
 
 // Filling the site blocks' context before the render (#488, design theme-builder.md 4.3).
 
-const doc = (blocks: Record<string, { type: string; attrs: Record<string, unknown> }>): BlockDocV1 =>
+const doc = (blocks: Record<string, { type: string; attrs: Record<string, unknown>; children?: string[] }>): BlockDocV1 =>
   ({
     doc_version: 1,
     blocks_order: Object.keys(blocks),
@@ -333,5 +333,58 @@ describe("readRelatedPosts (#497)", () => {
 
   it("throws when the read fails, so the block fails soft", async () => {
     await expect(readRelatedPosts({ id: 42, post_type: "post" }, {}, { structure: "slug", siteUrl: "" }, async () => Promise.reject(new Error("HTTP 500")))).rejects.toThrow("HTTP 500")
+  })
+})
+
+describe("the comments block's data (#500, reader-comments 11.1)", () => {
+  const locals = () => ({ siteSettings: Promise.resolve({ ...settings, comments: { threading: "flat", notice: "Be kind.", privacyHref: "/privacy" } }) }) as unknown as App.Locals
+  const discussion = { state: "open", closes_at: null, count: 2 } as const
+  const answer = { discussion, threads: [], pagination: null }
+  const url = new URL("https://blog.example/guide/this-one?comments=2")
+  const now = new Date("2026-11-20T10:00:00Z")
+  const commentsBlock = (id: string, extra: Record<string, unknown> = {}) => ({ [id]: { type: "comments", attrs: {}, ...extra } })
+
+  it("the template's own comments block is seen, never a part's or one in a query, and it isn't one of the four", () => {
+    expect(collectTemplateNeeds(doc({ ...commentsBlock("comments-1") })).comments).toBe(true)
+    expect(collectTemplateNeeds(doc({ ...commentsBlock("comments-1") })).renderedQueries).toBe(0)
+    // In a part the template places: never (the store refuses it there).
+    const footer = doc({ ...commentsBlock("comments-1") })
+    expect(collectTemplateNeeds(doc({ "part-00001": { type: "template_part", attrs: { slug: "footer" } } }), { footer }).comments).toBe(false)
+    // In a query's post template or its no results, at any depth.
+    const listed = doc({
+      "q-00000001": { type: "query", attrs: {}, children: ["templ-0001", "empty-0001"] },
+      "templ-0001": { type: "post_template", attrs: {}, children: ["group-0001"] },
+      "group-0001": { type: "details", attrs: {}, children: ["comments-1"] },
+      "empty-0001": { type: "query_no_results", attrs: {}, children: ["comments-2"] },
+      ...commentsBlock("comments-1"),
+      ...commentsBlock("comments-2"),
+    })
+    expect(collectTemplateNeeds(listed).comments).toBe(false)
+    expect(collectTemplateNeeds(doc({ "para-00001": { type: "paragraph", attrs: {} } })).comments).toBe(false)
+  })
+
+  it("reads the route's post's thread with the post route's loader, for this URL, with Settings › Discussion", async () => {
+    const read = vi.fn(async () => answer)
+    const site = await loadSiteRenderContext(locals(), { docs: [doc({ ...commentsBlock("comments-1") })], route: { kind: "single", post: routePost }, comments: { discussion, url, now, read } })
+    expect(read).toHaveBeenCalledWith(42, discussion, url, now)
+    expect(site.comments).toEqual({ data: answer, postId: 42, url: url.href, now: now.toISOString(), settings: { threading: "flat", notice: "Be kind.", privacyHref: "/privacy" } })
+  })
+
+  it("reads nothing without a comments block, a post, or a discussion, and a failed read renders nothing", async () => {
+    const read = vi.fn(async () => answer)
+    const without = await loadSiteRenderContext(locals(), { docs: [doc({ "para-00001": { type: "paragraph", attrs: {} } })], route: { kind: "single", post: routePost }, comments: { discussion, url, now, read } })
+    expect(without.comments).toBeUndefined()
+    const noPost = await loadSiteRenderContext(locals(), { docs: [doc({ ...commentsBlock("comments-1") })], route: { kind: "archive" }, comments: { discussion, url, now, read } })
+    expect(noPost.comments).toBeUndefined()
+    const noDiscussion = await loadSiteRenderContext(locals(), { docs: [doc({ ...commentsBlock("comments-1") })], route: { kind: "single", post: routePost }, comments: { discussion: null, url, now, read } })
+    expect(noDiscussion.comments).toBeUndefined()
+    expect(read).not.toHaveBeenCalled()
+    // The loader logs and answers null itself; a reader that throws is caught the same way.
+    const warn = quiet()
+    const failing = vi.fn(async () => Promise.reject(new Error("down")))
+    const failed = await loadSiteRenderContext(locals(), { docs: [doc({ ...commentsBlock("comments-1") })], route: { kind: "single", post: routePost }, comments: { discussion, url, now, read: failing } })
+    expect(failed.comments).toBeUndefined()
+    expect(warn.mock.calls.map(([msg]) => msg)).toContain("comments_fetch_failed")
+    warn.mockRestore()
   })
 })
