@@ -1619,10 +1619,10 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   site's zone (`golive_discussion_digest_at`, UTC for a zone Postgres doesn't know). Reply mail coalesces
   per comment answered, not per reader: an unsubscribe token stops one comment (8.2). A comment already in
   one of the recipient's rows isn't queued again (re-approval, restore). Nothing is queued while
-  `comments_enabled` is off.
+  `comments_enabled` is off, and the sender waits (rows are neither sent nor dropped) until it's back on.
 - **Moderation mail is not queued per comment** (no fan-out to every moderator): each sender round runs
-  `EnqueueModerationMail` (editors and admins with `notify_comment_moderation = hourly`, a pending comment no
-  sent mail of theirs counted, none sent in the last hour, none waiting). The mail records the pending ids
+  `EnqueueModerationMail` (editors and admins with `notify_comment_moderation = hourly`, a pending comment their
+  latest sent mail didn't count, none sent or failed in the last hour, none waiting). The mail records the pending ids
   it counted (`FinishDiscussionMail`'s `comment_ids`), so the next one waits for something new.
 - **`RunDiscussionMail`** (main.go, `DISCUSSION_MAIL_INTERVAL`, 30s, 0 = off, every replica): `ClaimDueDiscussionMail`
   one row at a time (`FOR UPDATE SKIP LOCKED`, a 2-minute lease as the fencing token, ≤25 per round), builds
@@ -1633,7 +1633,8 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   raced it finds no commenter). #529's erasure needs nothing more. Failures retry with #147's backoff up to
   8 attempts (`failed`). `RunDiscussionMaintenance` prunes finished rows after 7 days (`MailPruned`).
 - **Mail** (`mailer` templates `reader_comment_reply|author|moderation`, excerpts 300 code points): reply mail
-  mints its own unsubscribe token (`reader_comment_unsubscribe_tokens`, hash only, goes with the comment) for
+  mints its own unsubscribe token (`reader_comment_unsubscribe_tokens`, hash only, goes with the comment, deleted
+  if the send fails) for
   the visible link (`/comments/unsubscribe#token=`) and **RFC 8058** (`Message.ListUnsubscribe` →
   `List-Unsubscribe: <PUBLIC_BASE_URL/gl-comments/unsubscribe/TOKEN>` + `List-Unsubscribe-Post:
   List-Unsubscribe=One-Click`, the URL checked to stay one header line). Members' mail has no unsubscribe
@@ -1642,7 +1643,8 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   `publicCacheNoPurgeRoutes`, `discussionBodyLimit`): `POST /public/discussion/unsubscribe {token, all?}` (the
   page; account-token limit) and `POST /public/discussion/unsubscribe/:token` (RFC 8058, form body
   `List-Unsubscribe=One-Click` required, the general /public limit only: mail providers send many readers'
-  clicks from one address). Idempotent 204, every bad token 400 `invalid_token`, work while comments are off.
+  clicks from one address). The web's GET of the one-click URL (a client without RFC 8058) 303s to the page.
+  Idempotent 204, every bad token 400 `invalid_token`, work while comments are off.
   `all` turns off every comment of the commenter.
 - **Profile's Notifications (8.3):** `users.notify_post_comments` (`each|digest|off`, default digest) and
   `notify_comment_moderation` (`hourly|off`, default hourly). `GET/PUT /users/me/notifications`

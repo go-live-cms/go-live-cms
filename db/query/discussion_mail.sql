@@ -54,10 +54,12 @@ WHERE id IN (
 
 -- name: EnqueueModerationMail :execrows
 -- "Comments await moderation" (8.1), due now, for every editor and admin who wants it,
--- when the queue holds a pending comment no mail of theirs has counted yet, and they had
--- none in the last hour ("each hour at most", 8.3) and have none waiting. The open-row
--- index makes a second replica's insert a no-op. Nothing is queued per comment: the
--- queue itself is the durable fact, so a moderation mail can't be lost to a rollback.
+-- when the queue holds a pending comment their latest sent mail didn't count (each one
+-- records the whole pending queue it counted), and they had none sent or failed in the
+-- last hour ("each hour at most", 8.3: a failing address isn't retried every round) and
+-- have none waiting. The open-row index makes a second replica's insert a no-op. Nothing
+-- is queued per comment: the queue itself is the durable fact, so a moderation mail can't
+-- be lost to a rollback.
 INSERT INTO discussion_mail (kind, user_id, comment_ids, due_at)
 SELECT 'moderation', u.id, '{}'::bigint[], now()
 FROM users u
@@ -67,16 +69,17 @@ WHERE u.role IN ('admin', 'editor')
   AND NOT EXISTS (
       SELECT 1 FROM discussion_mail m
       WHERE m.kind = 'moderation' AND m.user_id = u.id
-        AND (m.done_at IS NULL OR (m.outcome = 'sent' AND m.done_at > now() - interval '1 hour'))
+        AND (m.done_at IS NULL OR (m.outcome IN ('sent', 'failed') AND m.done_at > now() - interval '1 hour'))
   )
   AND EXISTS (
       SELECT 1 FROM reader_comments rc
       WHERE rc.status = 'pending' AND rc.removed_at IS NULL
-        AND NOT EXISTS (
-            SELECT 1 FROM discussion_mail m
+        AND rc.id <> ALL (coalesce((
+            SELECT m.comment_ids FROM discussion_mail m
             WHERE m.kind = 'moderation' AND m.user_id = u.id AND m.outcome = 'sent'
-              AND rc.id = ANY (m.comment_ids)
-        )
+            ORDER BY m.done_at DESC, m.id DESC
+            LIMIT 1
+        ), '{}'::bigint[]))
   )
 ON CONFLICT DO NOTHING;
 
@@ -124,6 +127,10 @@ LIMIT sqlc.arg(max_rows)::int;
 -- kept, so each mail brings its own. It goes with the comment.
 INSERT INTO reader_comment_unsubscribe_tokens (token_hash, comment_id)
 VALUES (sqlc.arg(token_hash), sqlc.arg(comment_id));
+
+-- name: DeleteReaderCommentUnsubscribeToken :exec
+-- A token whose mail was never delivered (the send failed): nobody holds it.
+DELETE FROM reader_comment_unsubscribe_tokens WHERE token_hash = sqlc.arg(token_hash);
 
 -- name: GetReaderCommentByUnsubscribeToken :one
 -- The comment an unsubscribe token turns off, and its commenter (for "Stop all mail").

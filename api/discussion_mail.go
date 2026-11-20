@@ -113,14 +113,17 @@ func (server *Server) sendDiscussionMailRound(ctx context.Context) int {
 		}
 		return 0
 	}
-	if settings.CommentsEnabled {
-		if queued, err := server.store.EnqueueModerationMail(ctx); err != nil {
-			if ctx.Err() == nil {
-				server.logger.Error("discussion mail: queueing moderation mail failed", "error", err)
-			}
-		} else if queued > 0 {
-			server.logger.Info("discussion mail: moderation mail queued", "count", queued)
+	if !settings.CommentsEnabled {
+		// Comments off for the site: nothing a mail would link to is shown. The rows wait,
+		// and are built from the data as it is once comments are back on.
+		return 0
+	}
+	if queued, err := server.store.EnqueueModerationMail(ctx); err != nil {
+		if ctx.Err() == nil {
+			server.logger.Error("discussion mail: queueing moderation mail failed", "error", err)
 		}
+	} else if queued > 0 {
+		server.logger.Info("discussion mail: moderation mail queued", "count", queued)
 	}
 
 	sent := 0
@@ -146,11 +149,13 @@ func (server *Server) sendDiscussionMailRound(ctx context.Context) int {
 }
 
 // discussionMail is a built mail, or nothing to send (msg nil: the row is dropped).
-// commentIDs replaces the row's when set (a moderation mail's count).
+// commentIDs replaces the row's when set (a moderation mail's count). tokenHash is a reply
+// mail's unsubscribe token, deleted when the send fails (nobody got it).
 type discussionMail struct {
 	msg        *mailer.Message
 	comments   int
 	commentIDs []int64
+	tokenHash  []byte
 }
 
 // sendDiscussionMail builds and sends one claimed row and ends its claim. True when sent.
@@ -176,8 +181,6 @@ func (server *Server) sendDiscussionMail(ctx context.Context, claim db.ClaimDueD
 	var built discussionMail
 	var err error
 	switch {
-	case !settings.CommentsEnabled:
-		// Comments off for the site: nothing a mail would link to is shown.
 	case claim.Kind == discussionMailKindReply:
 		built, err = server.buildReplyMail(ctx, claim, settings)
 	case claim.Kind == discussionMailKindAuthor:
@@ -199,6 +202,11 @@ func (server *Server) sendDiscussionMail(ctx context.Context, claim db.ClaimDueD
 	if err := server.sendMail(context.WithoutCancel(ctx), *built.msg); err != nil {
 		// The type only: a relay's rejection quotes the recipient's address.
 		logger.Error("discussion mail failed", "attempts", claim.Attempts, "error_type", fmt.Sprintf("%T", err))
+		if built.tokenHash != nil {
+			if err := server.store.DeleteReaderCommentUnsubscribeToken(ctx, built.tokenHash); err != nil {
+				logger.Error("discussion mail: deleting the unused unsubscribe token failed", "error", err)
+			}
+		}
 		server.retryDiscussionMail(ctx, claim, logger)
 		return false
 	}
@@ -354,7 +362,7 @@ func (server *Server) buildReplyMail(ctx context.Context, claim db.ClaimDueDiscu
 	if err != nil {
 		return discussionMail{}, err
 	}
-	return discussionMail{msg: &msg, comments: len(replies)}, nil
+	return discussionMail{msg: &msg, comments: len(replies), tokenHash: hash}, nil
 }
 
 // buildAuthorMail is "New comments on your post" (8.1): approved comments on posts whose

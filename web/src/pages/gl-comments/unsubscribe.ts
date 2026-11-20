@@ -34,5 +34,12 @@ export const POST: APIRoute = async (context) => {
   headers.delete(COMMENTER_KEY_HEADER)
   const answer = await postToApi(`${SERVER_MEDIA_URL}/public/discussion/unsubscribe`, all ? { token, all: true } : { token }, headers)
   if (answer.status >= 500) log.warn("comment_unsubscribe_failed", { status: answer.status })
+  if (answer.status === 502) {
+    // jsonAnswer's 502 speaks of posting a comment; this page stops mail.
+    return new Response(JSON.stringify({ error: "The site couldn't stop your emails just now. Try again in a moment.", code: "unavailable" }), {
+      status: 502,
+      headers: { "Content-Type": "application/json", "Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer" },
+    })
+  }
   return jsonAnswer(answer, { "Referrer-Policy": "no-referrer" })
 }

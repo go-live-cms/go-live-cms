@@ -2,7 +2,7 @@ import type { APIContext } from "astro"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { POST as unsubscribe } from "./unsubscribe"
-import { POST as oneClick } from "./unsubscribe/[token]"
+import { GET as oneClickPage, POST as oneClick } from "./unsubscribe/[token]"
 import { COMMENTER_COOKIE, COMMENTER_KEY_HEADER } from "../../lib/commentWrites"
 import { SERVER_MEDIA_URL } from "@gl-admin/lib/server-api-url"
 
@@ -48,6 +48,13 @@ describe("POST /gl-comments/unsubscribe", () => {
     stubApi(204)
     expect((await page({ token: TOKEN, all: true })).status).toBe(204)
     expect(JSON.parse(String(calls[0].init.body))).toEqual({ token: TOKEN, all: true })
+  })
+
+  it("says it couldn't stop the mail when the API is unreachable", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("down") }))
+    const response = await page({ token: TOKEN })
+    expect(response.status).toBe(502)
+    expect((await response.json()).error).toContain("stop your emails")
   })
 
   it("passes a dead link's 400 through for the page's invalid state", async () => {
@@ -101,5 +108,16 @@ describe("POST /gl-comments/unsubscribe/:token (RFC 8058)", () => {
     expect((await click("List-Unsubscribe=One-Click", "application/x-www-form-urlencoded")).status).toBe(400)
     stubApi(500)
     expect((await click("List-Unsubscribe=One-Click", "application/x-www-form-urlencoded")).status).toBe(502)
+  })
+})
+describe("GET /gl-comments/unsubscribe/:token (a client without RFC 8058)", () => {
+  it("unsubscribes nothing and sends the reader to the page with the buttons", async () => {
+    stubApi(204)
+    const response = (await oneClickPage({ params: { token: TOKEN } } as unknown as APIContext)) as Response
+    expect(response.status).toBe(303)
+    expect(response.headers.get("location")).toBe(`/comments/unsubscribe#token=${TOKEN}`)
+    expect(response.headers.get("cache-control")).toBe("private, no-store")
+    expect(calls).toHaveLength(0)
+    expect(((await oneClickPage({ params: { token: "x" } } as unknown as APIContext)) as Response).status).toBe(400)
   })
 })

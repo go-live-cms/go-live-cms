@@ -465,6 +465,30 @@ func TestDiscussionMailModeration(t *testing.T) {
 	_, err = f.conn.Exec(`UPDATE discussion_mail SET done_at = now() - interval '2 hours' WHERE kind = 'moderation' AND user_id = $1`, f.other.ID)
 	require.NoError(t, err)
 	require.Empty(t, mailsTo(f.drain(t), f.other.Email))
+
+	// A failed mail counts for the hour too: a dead address isn't retried every round.
+	f.comment(t, f.post, f.bea, nil, db.ReaderCommentPending)
+	_, err = f.conn.Exec(`INSERT INTO discussion_mail (kind, user_id, comment_ids, due_at, attempts, done_at, outcome)
+		VALUES ('moderation', $1, '{}', now(), 8, now(), 'failed')`, f.other.ID)
+	require.NoError(t, err)
+	require.Empty(t, mailsTo(f.drain(t), f.other.Email))
+}
+
+// While comments are off for the site the sender waits: queued mail is neither sent nor
+// dropped, and goes out, built from the data then, once they are back on.
+func TestDiscussionMailWaitsWhileCommentsAreOff(t *testing.T) {
+	f := newMailFixture(t)
+	root := f.comment(t, f.post, f.ana, nil, db.ReaderCommentApproved)
+	f.comment(t, f.post, f.bea, &root, db.ReaderCommentApproved)
+	f.settings(t, map[string]any{"comments_enabled": false})
+	f.due(t)
+	require.Zero(t, f.server.sendDiscussionMailRound(context.Background()))
+	rows := f.rows(t, f.ana.ID, 0)
+	require.Len(t, rows, 1)
+	require.False(t, rows[0].Outcome.Valid, "still waiting")
+
+	f.settings(t, map[string]any{"comments_enabled": true})
+	require.Len(t, mailsTo(f.drain(t), f.ana.Email), 1)
 }
 
 // No address in any log line: the whole path (approval, sending, unsubscribing, a failed

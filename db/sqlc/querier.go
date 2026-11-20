@@ -304,6 +304,8 @@ type Querier interface {
 	// The row itself; its replies go with it only when it roots their thread (root_id's
 	// cascade), which DeleteReaderCommentTx allows only when none of them is approved.
 	DeleteReaderCommentRow(ctx context.Context, id int64) (int64, error)
+	// A token whose mail was never delivered (the send failed): nobody holds it.
+	DeleteReaderCommentUnsubscribeToken(ctx context.Context, tokenHash []byte) error
 	DeleteReaderCommentUnsubscribeTokens(ctx context.Context, commentID int64) error
 	DeleteRedirect(ctx context.Context, id int64) (Redirect, error)
 	DeleteRedirectFromPath(ctx context.Context, fromPath string) (int64, error)
@@ -351,10 +353,12 @@ type Querier interface {
 	// No row when the plugin isn't installed and compatible, or is already enabled.
 	EnablePlugin(ctx context.Context, arg EnablePluginParams) (Plugin, error)
 	// "Comments await moderation" (8.1), due now, for every editor and admin who wants it,
-	// when the queue holds a pending comment no mail of theirs has counted yet, and they had
-	// none in the last hour ("each hour at most", 8.3) and have none waiting. The open-row
-	// index makes a second replica's insert a no-op. Nothing is queued per comment: the
-	// queue itself is the durable fact, so a moderation mail can't be lost to a rollback.
+	// when the queue holds a pending comment their latest sent mail didn't count (each one
+	// records the whole pending queue it counted), and they had none sent or failed in the
+	// last hour ("each hour at most", 8.3: a failing address isn't retried every round) and
+	// have none waiting. The open-row index makes a second replica's insert a no-op. Nothing
+	// is queued per comment: the queue itself is the durable fact, so a moderation mail can't
+	// be lost to a rollback.
 	EnqueueModerationMail(ctx context.Context) (int64, error)
 	// The commenter of a typed address, created when new. An existing row is returned as it
 	// is: whoever typed the address hasn't shown they own it, so their name and spelling of

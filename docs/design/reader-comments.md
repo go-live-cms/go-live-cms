@@ -1366,8 +1366,13 @@ text left open:
 - **The digest goes at 08:00 in the site's zone.** "Each one" waits five minutes from the first comment, as
   reply mail does. Changing the preference moves the waiting mail, and Off drops it.
 - **Moderation mail isn't queued per comment.** Each round of the sender asks whether the queue holds a pending
-  comment that no mail to that moderator has counted, and whether they had none in the last hour. So the first
-  comment is mailed within a round, later ones wait for the hour, and a queue that hasn't grown mails nothing.
+  comment that the moderator's latest mail didn't count, and whether they had no mail sent (or failed) in the last
+  hour. So the first comment is mailed within a round, later ones wait for the hour, and a queue that hasn't grown
+  mails nothing.
+- **Comments off pauses the sender.** Queued mail waits and is built from the data as it is once comments are
+  back on, so switching comments off for a minute loses nobody's mail.
+- **A client without one-click** opens the header's URL in a browser: its GET changes nothing and goes to the
+  unsubscribe page with the buttons.
 - **Not about what you did:** no author mail about your own comment, nor about one you approved. A reader's
   reply to their own comment mails nobody.
 - **Members' mail has no unsubscribe header.** Profile is where members choose, and a contributor's author mail

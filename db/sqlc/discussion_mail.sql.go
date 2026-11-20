@@ -105,6 +105,16 @@ func (q *Queries) CreateReaderCommentUnsubscribeToken(ctx context.Context, arg C
 	return err
 }
 
+const deleteReaderCommentUnsubscribeToken = `-- name: DeleteReaderCommentUnsubscribeToken :exec
+DELETE FROM reader_comment_unsubscribe_tokens WHERE token_hash = $1
+`
+
+// A token whose mail was never delivered (the send failed): nobody holds it.
+func (q *Queries) DeleteReaderCommentUnsubscribeToken(ctx context.Context, tokenHash []byte) error {
+	_, err := q.db.ExecContext(ctx, deleteReaderCommentUnsubscribeToken, tokenHash)
+	return err
+}
+
 const enqueueModerationMail = `-- name: EnqueueModerationMail :execrows
 INSERT INTO discussion_mail (kind, user_id, comment_ids, due_at)
 SELECT 'moderation', u.id, '{}'::bigint[], now()
@@ -115,25 +125,28 @@ WHERE u.role IN ('admin', 'editor')
   AND NOT EXISTS (
       SELECT 1 FROM discussion_mail m
       WHERE m.kind = 'moderation' AND m.user_id = u.id
-        AND (m.done_at IS NULL OR (m.outcome = 'sent' AND m.done_at > now() - interval '1 hour'))
+        AND (m.done_at IS NULL OR (m.outcome IN ('sent', 'failed') AND m.done_at > now() - interval '1 hour'))
   )
   AND EXISTS (
       SELECT 1 FROM reader_comments rc
       WHERE rc.status = 'pending' AND rc.removed_at IS NULL
-        AND NOT EXISTS (
-            SELECT 1 FROM discussion_mail m
+        AND rc.id <> ALL (coalesce((
+            SELECT m.comment_ids FROM discussion_mail m
             WHERE m.kind = 'moderation' AND m.user_id = u.id AND m.outcome = 'sent'
-              AND rc.id = ANY (m.comment_ids)
-        )
+            ORDER BY m.done_at DESC, m.id DESC
+            LIMIT 1
+        ), '{}'::bigint[]))
   )
 ON CONFLICT DO NOTHING
 `
 
 // "Comments await moderation" (8.1), due now, for every editor and admin who wants it,
-// when the queue holds a pending comment no mail of theirs has counted yet, and they had
-// none in the last hour ("each hour at most", 8.3) and have none waiting. The open-row
-// index makes a second replica's insert a no-op. Nothing is queued per comment: the
-// queue itself is the durable fact, so a moderation mail can't be lost to a rollback.
+// when the queue holds a pending comment their latest sent mail didn't count (each one
+// records the whole pending queue it counted), and they had none sent or failed in the
+// last hour ("each hour at most", 8.3: a failing address isn't retried every round) and
+// have none waiting. The open-row index makes a second replica's insert a no-op. Nothing
+// is queued per comment: the queue itself is the durable fact, so a moderation mail can't
+// be lost to a rollback.
 func (q *Queries) EnqueueModerationMail(ctx context.Context) (int64, error) {
 	result, err := q.db.ExecContext(ctx, enqueueModerationMail)
 	if err != nil {

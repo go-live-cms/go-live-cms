@@ -16,8 +16,9 @@ const TOKEN = /^[A-Za-z0-9_-]{20,100}$/
  * it from their own servers**, so unlike the other /gl-comments endpoints there is no
  * origin check: the token (32 random bytes, mailed to the reader) is the whole authority,
  * and it can only turn off the replies to one comment. The body must be
- * `List-Unsubscribe=One-Click` (urlencoded or multipart, as the RFC allows); a GET does
- * nothing (none is exported), so a link scanner can't unsubscribe anyone. The token is in
+ * `List-Unsubscribe=One-Click` (urlencoded or multipart, as the RFC allows). A GET changes
+ * nothing, so a link scanner can't unsubscribe anyone: a mail client without RFC 8058 opens the
+ * header's URL in a browser, and GET sends it to the page with the buttons. The token is in
  * the path because the RFC requires it; logs name the route, never the path. Answers 204
  * (idempotent), 400 for a bad token or body; no cookie is read or set.
  */
@@ -59,4 +60,17 @@ export const POST: APIRoute = async (context) => {
   if (status === 204) return new Response(null, { status: 204, headers: { "Cache-Control": "private, no-store" } })
   if (status === 400) return plainAnswer(400, "This unsubscribe link doesn't work.")
   return plainAnswer(status >= 500 ? 502 : status, "The site couldn't unsubscribe you just now. Try again later.")
+}
+/**
+ * GET /gl-comments/unsubscribe/:token: a mail client without one-click support opens the
+ * List-Unsubscribe URL in a browser. Nothing is unsubscribed here; a 303 sends the reader to
+ * the unsubscribe page with the token in its fragment, where the buttons spend it.
+ */
+export const GET: APIRoute = async ({ params }) => {
+  const token = params.token ?? ""
+  if (!TOKEN.test(token)) return plainAnswer(400, "This unsubscribe link doesn't work.")
+  return new Response(null, {
+    status: 303,
+    headers: { Location: `/comments/unsubscribe#token=${token}`, "Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer" },
+  })
 }
