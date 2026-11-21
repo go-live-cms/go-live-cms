@@ -110,6 +110,11 @@ var publicPOSTRoutes = map[string]string{
 	// Unsubscribing (#528, discussion_unsubscribe.go): the mailed token can only stop mail.
 	"POST /public/discussion/unsubscribe":        "the mailed token is the credential and can only stop reply mail (account-token limit)",
 	"POST /public/discussion/unsubscribe/:token": "RFC 8058 one-click from mail providers' servers: the mailed token can only stop one comment's reply mail (general limit)",
+	// "Your comments" (#529, discussion_privacy.go).
+	"POST /public/discussion/data-request":     "same 202 for any address, work after the response, per-browser and per browser+address limits, a silent mail cooldown",
+	"POST /public/discussion/data":             "the mailed link is the credential, an hour (account-token limit)",
+	"POST /public/discussion/data/delete":      "the mailed link is the credential, and can only delete that address's comments (account-token limit)",
+	"POST /public/discussion/data/unsubscribe": "the mailed link is the credential and can only stop that address's reply mail (account-token limit)",
 }
 
 // stopOnStoreCall is a gomock reporter that turns any store call into a panic, which the
@@ -177,6 +182,9 @@ var commentRoutes = map[string]string{
 	"GET /api/v1/discussion/commenters":           "requireContentEditor: the whole address only",
 	"GET /api/v1/discussion/commenters/:id":       "requireContentEditor",
 	"PUT /api/v1/discussion/commenters/:id/block": "requireContentEditor",
+	// A commenter's export and erasure (#529): admins only, editors get 403.
+	"GET /api/v1/discussion/commenters/:id/export": "requireSiteAdmin",
+	"DELETE /api/v1/discussion/commenters/:id":     "requireSiteAdmin",
 }
 
 func TestCommentRoutesRequireAuth(t *testing.T) {
@@ -222,6 +230,11 @@ var publicReaderCommentRoutes = map[string]string{
 	"POST /public/discussion/unconfirmed/:id":    "the published comment's outcome and URLs, or 204",
 	"POST /public/discussion/unsubscribe":        "204, or 400 invalid_token",
 	"POST /public/discussion/unsubscribe/:token": "204, or 400 invalid_token / invalid_request",
+	// "Your comments" (#529): the address only to the holder of its mailed link.
+	"POST /public/discussion/data-request":     "202 link_sent for any address; never whether it has comments",
+	"POST /public/discussion/data":             "the link holder's own file: their address and every comment of theirs (13.2), or 400 invalid_token",
+	"POST /public/discussion/data/delete":      "204, or 400 invalid_token / 404 comment_not_found",
+	"POST /public/discussion/data/unsubscribe": "204, or 400 invalid_token",
 }
 
 func TestPublicReaderCommentRoutes(t *testing.T) {

@@ -35,6 +35,12 @@ func (server *Server) registerPublicRoutes(rg *gin.RouterGroup) {
 		discussion.POST("/unconfirmed/:id", server.actOnUnconfirmedReaderComment)
 		// The reply mail's unsubscribe page (#528, discussion_unsubscribe.go).
 		discussion.POST("/unsubscribe", server.unsubscribeReaderComment)
+		// "Your comments" (#529, discussion_privacy.go): the request answers the same for
+		// any address; the mailed link is the credential for the rest.
+		discussion.POST("/data-request", server.requestCommenterData)
+		discussion.POST("/data", server.readCommenterData)
+		discussion.POST("/data/delete", server.deleteCommenterData)
+		discussion.POST("/data/unsubscribe", server.unsubscribeCommenterData)
 	}
 	// RFC 8058's one-click (#528): mail providers POST it from their own servers, many
 	// readers' clicks from one address, so it has only the general /public limit. The

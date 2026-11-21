@@ -1,0 +1,11 @@
+Someone asked to see the comments written with this address on {{.SiteTitle}}.
+
+Open this link to see, download or delete them (the page needs JavaScript):
+
+{{.Link}}
+
+The link works for {{.ExpiresIn}}.
+
+If you didn't ask, ignore this email: nothing changes.
+
+{{.SiteTitle}}

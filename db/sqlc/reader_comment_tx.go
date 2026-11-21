@@ -51,35 +51,52 @@ func (store *SQLStore) DeleteModeratedReaderCommentTx(ctx context.Context, id in
 func (store *SQLStore) deleteReaderCommentTx(ctx context.Context, id int64, statuses []string) (DeleteReaderCommentTxResult, error) {
 	var result DeleteReaderCommentTxResult
 	err := store.execTx(ctx, func(q *Queries) error {
-		comment, err := q.LockReaderComment(ctx, id)
-		if err != nil {
-			return err
-		}
-		result.Status = comment.Status
-		if statuses != nil && comment.Status == ReaderCommentUnconfirmed {
-			// Not moderated (4.1): as if there were no such comment.
-			return sql.ErrNoRows
-		}
-		if statuses != nil && (comment.RemovedAt.Valid || !slices.Contains(statuses, comment.Status)) {
-			return ErrReaderCommentStatusChanged
-		}
-		replies, err := q.LockReaderCommentReplyStatuses(ctx, id)
-		if err != nil {
-			return err
-		}
-		if slices.Contains(replies, ReaderCommentApproved) {
-			// Its subscription ends with its text.
-			if err := q.DeleteReaderCommentUnsubscribeTokens(ctx, id); err != nil {
-				return err
+		var err error
+		result, err = deleteReaderComment(ctx, q, id, func(comment ReaderComment) error {
+			if statuses != nil && comment.Status == ReaderCommentUnconfirmed {
+				// Not moderated (4.1): as if there were no such comment.
+				return sql.ErrNoRows
 			}
-			result.Tombstoned = true
-			result.Comment, err = q.TombstoneReaderComment(ctx, id)
-			return err
-		}
-		result.Comment = comment
-		_, err = q.DeleteReaderCommentRow(ctx, id)
+			if statuses != nil && (comment.RemovedAt.Valid || !slices.Contains(statuses, comment.Status)) {
+				return ErrReaderCommentStatusChanged
+			}
+			return nil
+		})
 		return err
 	})
+	return result, err
+}
+
+// deleteReaderComment is DeleteReaderCommentTx's work inside a transaction: lock the
+// comment (check, when given, decides from the locked row whether it may go), then the
+// rows answering it, and tombstone it when one of them is approved, else delete it.
+func deleteReaderComment(ctx context.Context, q *Queries, id int64, check func(ReaderComment) error) (DeleteReaderCommentTxResult, error) {
+	var result DeleteReaderCommentTxResult
+	comment, err := q.LockReaderComment(ctx, id)
+	if err != nil {
+		return result, err
+	}
+	result.Status = comment.Status
+	if check != nil {
+		if err := check(comment); err != nil {
+			return result, err
+		}
+	}
+	replies, err := q.LockReaderCommentReplyStatuses(ctx, id)
+	if err != nil {
+		return result, err
+	}
+	if slices.Contains(replies, ReaderCommentApproved) {
+		// Its subscription ends with its text.
+		if err := q.DeleteReaderCommentUnsubscribeTokens(ctx, id); err != nil {
+			return result, err
+		}
+		result.Tombstoned = true
+		result.Comment, err = q.TombstoneReaderComment(ctx, id)
+		return result, err
+	}
+	result.Comment = comment
+	_, err = q.DeleteReaderCommentRow(ctx, id)
 	return result, err
 }
 

@@ -8,5 +8,6 @@ Read it: {{.URL}}
 {{end}}
 You get this email because you asked for replies to that comment by email.
 Stop these emails: {{.UnsubscribeLink}}
-
+{{if .ManageLink}}Manage your comments: {{.ManageLink}}
+{{end}}
 {{.SiteTitle}}

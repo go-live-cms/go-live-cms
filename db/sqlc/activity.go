@@ -49,6 +49,10 @@ const (
 	ActivityReaderCommentsBulkModerated = "reader_comments_bulk_moderated"
 	ActivityCommenterBlocked            = "commenter_blocked"
 	ActivityCommenterUnblocked          = "commenter_unblocked"
+	// A commenter's export and erasure by an admin (#529, 13.1). A reader's own (13.2)
+	// are not activity (7.4).
+	ActivityCommenterExported = "commenter_exported"
+	ActivityCommenterErased   = "commenter_erased"
 )
 
 const (

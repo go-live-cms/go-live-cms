@@ -9,5 +9,7 @@ To publish the comment, open this link and press "Publish my comment" (the page 
 The link works once and expires in {{.ExpiresIn}}. Publishing also keeps this address on that browser, so its next comments won't need an email.
 
 If you didn't write a comment, ignore this email: nothing is published.
-
+{{if .ManageLink}}
+See or delete the comments written with this address: {{.ManageLink}}
+{{end}}
 {{.SiteTitle}}

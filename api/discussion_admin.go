@@ -20,7 +20,7 @@ import (
 // Who: editors and admins (requireContentEditor on the whole group, 4.3). Contributors get
 // 403 on every route (decision 3): approving a comment puts reader text on the site
 // without an editor, which contributors can't do with their own text either. Export and
-// erasure (13.1) are #529's, admin-only.
+// erasure (13.1, #529, discussion_privacy.go) are admins' only.
 //
 // Privacy (7.1, decision 6): a commenter's address is answered in full to these callers
 // and never logged; log lines carry comment, post and commenter ids, the action and
@@ -45,6 +45,9 @@ func (server *Server) registerDiscussionRoutes(v1 *gin.RouterGroup) {
 	d.GET("/commenters", server.findDiscussionCommenter)
 	d.GET("/commenters/:id", server.getDiscussionCommenter)
 	d.PUT("/commenters/:id/block", server.blockDiscussionCommenter)
+	// A commenter's export and erasure (#529, discussion_privacy.go): admins only (13.1).
+	d.GET("/commenters/:id/export", requireSiteAdmin(server), server.exportDiscussionCommenter)
+	d.DELETE("/commenters/:id", requireSiteAdmin(server), server.eraseDiscussionCommenter)
 }
 
 const (
