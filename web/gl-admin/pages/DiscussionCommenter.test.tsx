@@ -4,11 +4,19 @@ import { MemoryRouter, Route, Routes } from "react-router-dom"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 
 // A commenter's page (#526, 16.1): the address, counts, every comment, Block with who and
-// when; the "isn't here anymore" page for one erased meanwhile.
+// when; the "isn't here anymore" page for one erased meanwhile; an admin's Export and Erase (#529),
+// which an editor doesn't get.
 
-const api = vi.hoisted(() => ({ getCommenter: vi.fn(), setCommenterBlocked: vi.fn(), announceDiscussionChanged: vi.fn() }))
+const api = vi.hoisted(() => ({
+  getCommenter: vi.fn(),
+  setCommenterBlocked: vi.fn(),
+  announceDiscussionChanged: vi.fn(),
+  exportCommenter: vi.fn(),
+  eraseCommenter: vi.fn(),
+}))
+const auth = vi.hoisted(() => ({ user: null as null | { id: number; role: string; username: string } }))
 vi.mock("@gl-admin/lib/api/discussion", () => api)
-vi.mock("@gl-admin/lib/auth", () => ({ authManager: { getState: () => ({ accessToken: "t", user: null }), subscribe: () => () => {} } }))
+vi.mock("@gl-admin/lib/auth", () => ({ authManager: { getState: () => ({ accessToken: "t", user: auth.user }), subscribe: () => () => {} } }))
 const toasts = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }))
 vi.mock("@gl-admin/components/ui/Toast", () => ({ toast: toasts }))
 
@@ -48,6 +56,7 @@ async function render() {
       <MemoryRouter initialEntries={["/discussion/commenters/7"]}>
         <Routes>
           <Route path="/discussion/commenters/:id" element={<DiscussionCommenter />} />
+          <Route path="/discussion" element={<p>The queue</p>} />
         </Routes>
       </MemoryRouter>
     )
@@ -60,6 +69,9 @@ beforeEach(() => {
   document.body.appendChild(container)
   root = createRoot(container)
   Object.values(api).forEach((fn) => fn.mockReset())
+  auth.user = null
+  toasts.success.mockReset()
+  toasts.error.mockReset()
   api.getCommenter.mockResolvedValue({ commenter: SUMMARY, comments: [] })
 })
 
@@ -87,6 +99,73 @@ it("shows the address, the names used and the counts, and blocks", async () => {
   expect(api.setCommenterBlocked).toHaveBeenCalledWith(7, true)
   expect(container.textContent).toContain("Blocked by Ana Costa on Nov 17")
   expect(Array.from(container.querySelectorAll("button")).some((b) => b.textContent === "Unblock")).toBe(true)
+})
+
+const button = (label: string) => Array.from(document.querySelectorAll("button")).find((b) => b.textContent === label)
+
+it("gives an editor Block only: Export and Erase are an admin's", async () => {
+  auth.user = { id: 2, role: "editor", username: "ed" }
+  await render()
+  expect(button("Block")).toBeTruthy()
+  expect(button("Export")).toBeUndefined()
+  expect(button("Erase")).toBeUndefined()
+})
+
+it("lets an admin export the commenter's file", async () => {
+  auth.user = { id: 1, role: "admin", username: "admin" }
+  const file = { commenter: { email: SUMMARY.email }, comments: [] }
+  api.exportCommenter.mockResolvedValue(file)
+  const created = vi.fn(() => "blob:x")
+  const revoked = vi.fn()
+  Object.assign(URL, { createObjectURL: created, revokeObjectURL: revoked })
+  const clicked = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {})
+  await render()
+  await act(async () => button("Export")!.click())
+  await settle()
+  expect(api.exportCommenter).toHaveBeenCalledWith(7)
+  expect(created).toHaveBeenCalledTimes(1)
+  expect(clicked).toHaveBeenCalledTimes(1)
+  expect((clicked.mock.contexts[0] as HTMLAnchorElement).download).toBe("commenter-7.json")
+  expect(revoked).toHaveBeenCalledWith("blob:x")
+  expect(toasts.success).toHaveBeenCalled()
+  clicked.mockRestore()
+})
+
+it("asks before an admin erases, then leaves for the queue", async () => {
+  auth.user = { id: 1, role: "admin", username: "admin" }
+  api.eraseCommenter.mockResolvedValue({ comment_count: 4, tombstoned: 1 })
+  await render()
+  await act(async () => button("Erase")!.click())
+  const dialog = document.querySelector('[role="alertdialog"]')!
+  expect(dialog.textContent).toContain("Delete Maya Lindqvist’s 4 comments and everything stored about this address?")
+  expect(dialog.textContent).toContain(SUMMARY.email)
+  expect(api.eraseCommenter).not.toHaveBeenCalled()
+
+  // Cancel erases nothing.
+  await act(async () => button("Cancel")!.click())
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull()
+  expect(api.eraseCommenter).not.toHaveBeenCalled()
+
+  await act(async () => button("Erase")!.click())
+  const confirm = Array.from(document.querySelectorAll('[role="alertdialog"] button')).find((b) => b.textContent === "Erase") as HTMLButtonElement
+  await act(async () => confirm.click())
+  await settle()
+  expect(api.eraseCommenter).toHaveBeenCalledWith(7)
+  expect(toasts.success).toHaveBeenCalledWith("Erased 4 comments. One became “This comment was removed”: replies answer it.")
+  expect(api.announceDiscussionChanged).toHaveBeenCalled()
+  expect(container.textContent).toContain("The queue")
+})
+
+it("keeps the page when the erasure fails", async () => {
+  auth.user = { id: 1, role: "admin", username: "admin" }
+  api.eraseCommenter.mockRejectedValue(new ApiError("failed to erase the commenter", 500, null, ""))
+  await render()
+  await act(async () => button("Erase")!.click())
+  const confirm = Array.from(document.querySelectorAll('[role="alertdialog"] button')).find((b) => b.textContent === "Erase") as HTMLButtonElement
+  await act(async () => confirm.click())
+  await settle()
+  expect(toasts.error).toHaveBeenCalled()
+  expect(container.querySelector("h1")?.textContent).toBe("Maya Lindqvist")
 })
 
 it("says when a commenter isn't here anymore", async () => {

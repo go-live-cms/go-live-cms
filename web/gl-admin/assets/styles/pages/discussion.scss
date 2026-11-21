@@ -367,6 +367,13 @@
     gap: 16px;
   }
 
+  // Block, then an admin's Export and Erase (#529).
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
   &__who {
     display: flex;
     flex: 1;

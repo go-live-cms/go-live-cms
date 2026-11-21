@@ -221,6 +221,11 @@ function objectPart(event: ActivityEvent): { verb: string; what: string; href: s
       const href = `/discussion/commenters/${event.object_id}`
       if (event.verb === "commenter_blocked") return { verb: "blocked", what: "a commenter", href }
       if (event.verb === "commenter_unblocked") return { verb: "unblocked", what: "a commenter", href }
+      // #529: an admin's export and erasure, the count only. An erased commenter has no page.
+      const comments = typeof event.payload.comment_count === "number" ? event.payload.comment_count : null
+      const theirs = comments === null ? "" : ` (${comments} ${comments === 1 ? "comment" : "comments"})`
+      if (event.verb === "commenter_exported") return { verb: "exported", what: `a commenter’s data${theirs}`, href }
+      if (event.verb === "commenter_erased") return { verb: "erased", what: `a commenter${theirs}`, href: null }
       return { verb: fallbackVerb, what: "a commenter", href }
     }
     case "redirect":

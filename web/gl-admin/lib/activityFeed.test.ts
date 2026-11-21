@@ -293,6 +293,12 @@ describe("Discussion's verbs", () => {
     expect(d.href).toBe("/discussion/commenters/7")
   })
 
+  it("reads an admin's export and erasure with the count, and no link to an erased commenter (#529)", () => {
+    expect(line({ verb: "commenter_exported", object_type: "commenter", object_id: 7, post: undefined, payload: { comment_count: 4 } })).toBe("Ana Costa exported a commenter’s data (4 comments)")
+    expect(line({ verb: "commenter_erased", object_type: "commenter", object_id: 7, post: undefined, payload: { comment_count: 1 } })).toBe("Ana Costa erased a commenter (1 comment)")
+    expect(describeActivity(event({ verb: "commenter_erased", object_type: "commenter", object_id: 7, post: undefined }), 99, now).href).toBeNull()
+  })
+
   it("puts the queue first in Needs attention", () => {
     const needs: NeedsAttention = {
       failed_schedules: { total: 0, posts: [] },
