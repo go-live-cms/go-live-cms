@@ -15,7 +15,7 @@ and how schema migrations run in production. The scripts live in
 | Secrets: `app.env` / `.env`, PASETO keys, `ROLE_LOOKUP_SECRET`, `COLLAB_INTERNAL_SECRET` | host / secret store | Yes | **Not** by these scripts. Keep them in your secret manager. Without the PASETO keys a restore still works, but every session is invalidated. |
 | Site design (#485, `000056`): global styles per theme (`global_styles`: the draft and the published override), their versions (`global_style_versions`) and the publishes (`site_design_releases`) | Postgres | **Yes** | `db.dump` (they're tables). A restore brings back each theme's draft and published styles as they were; the public cache is purged at startup. |
 | Templates and parts (#490, `000058`): `site_templates` (each theme's customized block templates and parts: the working copy and, after a publish, the published one), their versions (`site_template_versions`, under `site_design_releases`) and their live Yjs state (`site_template_ydoc_state`) | Postgres | **Yes**, except the Yjs state: `block_doc` is canonical, as for posts | `db.dump` (they're tables). A restore that leaves `site_template_ydoc_state` behind its `block_doc` reseeds from `block_doc` under a new epoch, as for posts (rule 12), so open Site editor tabs reload once. |
-| Reader comments (#499, `000061`): `reader_comments`, `commenters` (readers' email addresses), `commenter_keys` (browser keys, as hashes), `reader_comment_unsubscribe_tokens`, the notification outbox `discussion_mail`, and `posts.discussion` / `posts.first_published_at` | Postgres | **Yes** (personal data: addresses, names and texts) | `db.dump` (they're tables). **A restore brings back data erased after the backup was taken**: comments a reader deleted, commenters an admin erased (design `docs/design/reader-comments.md` 13.3). There is no erasure log to replay (it would have to keep the addresses), so after restoring, repeat the erasures made since that backup. Older backups keep erased data until they age out of retention (up to 12 months for monthly sets). The retention job (`RunDiscussionMaintenance`) prunes the restored rows again on its next run. |
+| Reader comments (#499, `000061`): `reader_comments`, `commenters` (readers' email addresses), `commenter_keys` (browser keys, as hashes), `reader_comment_unsubscribe_tokens`, the notification outbox `discussion_mail`, "Your comments" links (`commenter_data_tokens`, #529, `000069`, as hashes), and `posts.discussion` / `posts.first_published_at` | Postgres | **Yes** (personal data: addresses, names and texts) | `db.dump` (they're tables). **A restore brings back data erased after the backup was taken**: comments a reader deleted, commenters an admin erased (design `docs/design/reader-comments.md` 13.3). There is no erasure log to replay (it would have to keep the addresses), so after restoring, repeat the erasures made since that backup (see "What a commenter's erasure doesn't reach" below). Older backups keep erased data until they age out of retention (up to 12 months for monthly sets). The retention job (`RunDiscussionMaintenance`) prunes the restored rows again on its next run. |
 | "Used in" for templates and parts (#496, `000063`): `site_template_media` (which media each template's or part's working and published copies show) | Postgres | No: derived from `block_doc` and `published_block_doc`, and every store and publish syncs it again | `db.dump` (it's a table). A restore brings it back as it was; a row is never wrong for long, since the next store or publish of that template rewrites its copy's rows. |
 | Theme sources (`web/themes`, including the block templates and parts a theme ships in `templates/` and `parts/`, which the startup scan stores in the theme's config), and the token manifest the API validates global styles with (`web/themes/tokens.manifest.json`) | git | Yes | git |
 | Public read cache (#185): copies of the API's public responses | Valkey (`valkey` service, memory only, no volume) | No: rebuilt from Postgres on the next page views | **Nothing, on purpose.** It's a cache: a restart or a lost host only costs a few uncached reads. |
@@ -168,6 +168,42 @@ every document then reseeds from `block_doc` ([collab-cutover.md](collab-cutover
 
 These hold only if backups are monitored and a restore is rehearsed, which is what
 `test-restore.sh` and the monthly restore test are for.
+
+### What a commenter's erasure doesn't reach (#529)
+
+Erasing a commenter (an admin's **Erase** on the commenter's page, or the reader's
+**Delete everything** on `/comments/your-data`; design `docs/design/reader-comments.md`
+13) deletes, in one transaction, every comment of the address (in every status), its
+commenter row with the address, its browser keys, "Your comments" links, unsubscribe
+tokens and reply mail, and the erased comments' ids in everyone's outbox rows. A comment
+that someone else's approved reply answers stays as "This comment was removed", with no
+text, name or address. What it **doesn't** reach:
+
+- **Backups taken before the erasure.** Every set in `BACKUP_DIR` and off-host (hourly,
+  daily for 30 days, monthly for 12 months) still holds the address and the comments
+  until it ages out. Nothing rewrites a backup.
+- **A restore brings erased data back.** Restoring a set from before an erasure puts the
+  commenter and their comments back, public ones included. There is no erasure log to
+  replay: it would have to keep the addresses it erased. Keep your own record of erasure
+  requests (the ticket or email the reader sent, outside the CMS), and after a restore
+  repeat each one made since that set was taken: Discussion › Find a commenter (the whole
+  address) › Erase. The retention job prunes expired rows again on its next run, but it
+  doesn't know about erasures.
+- **Mail already sent.** Confirmations, reply notifications, authors' and moderators'
+  mails sit in their recipients' inboxes and the SMTP provider's logs. Members' mails
+  quoted up to 300 characters of approved comments.
+- **Files already downloaded.** An admin's **Export** or the reader's **Download my data**
+  is a JSON file on someone's computer.
+- **Copies outside the database.** Plugins that received comment events (#530) got ids
+  only, but a plugin's guard saw the comment's text and address when it was written, and
+  may have kept them (a webhook plugin's own server, a spam service). Pages a CDN or a
+  browser cached stop showing an erased comment within the pages' cache time (about six
+  minutes: `max-age=60, stale-while-revalidate=300`); the API's own cache is purged by the
+  erasure.
+
+What holds nothing to erase: the activity log (`commenter_*` and `reader_comment_*`
+events hold ids and counts, never an address, a name or a text), API and web logs (ids
+only, tested), and `plugin_events` (ids only).
 
 ## Testing the restore
 

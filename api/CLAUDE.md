@@ -1575,7 +1575,7 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
 
 - **`/api/v1/discussion/*`, `requireContentEditor` on the group** (4.3): contributors get 403 on
   every route (decision 3; `TestDiscussionRoutesAreModeratorsOnly`, `commentRoutes` in
-  `route_auth_test.go`). Export and erasure are #529's (admin). Queries: `db/query/discussion_admin.sql`;
+  `route_auth_test.go`). Export and erasure (#529, below) are admins' only. Queries: `db/query/discussion_admin.sql`;
   one `ListModerationComments` serves the queue (`status`, newest first), a thread (`root_id`, oldest
   first, every status but unconfirmed, tombstones included), a commenter's comments and one comment
   (`id`). Unconfirmed comments are never moderated (404). `CountModerationComments` follows the same
@@ -1668,6 +1668,39 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   `TestDiscussionMailLogsHoldNoAddress`), `mailer` `TestReaderCommentNotificationTemplates`,
   `TestListUnsubscribeHeaders`. The DB tests start the outbox clean and turn other members' moderation mail
   off, since the sender drains every due row.
+
+## Reader comments: export and erasure (#529, `discussion_privacy.go`, `commenter_privacy_tx.go`, `000069`)
+
+- Design 13 (what it settled: 16.7). **Admins only:** `GET /discussion/commenters/:id/export` and `DELETE
+  /discussion/commenters/:id` carry `requireSiteAdmin` inside the editors' group (an editor gets 403 and nothing is
+  erased: `TestCommenterExportAndEraseAreAdminsOnly`; `commentRoutes`). Activity `commenter_exported` /
+  `commenter_erased` `{comment_count}`; the reader's own requests, deletes and erasure record none (7.4).
+- **The file (`CommenterExport`)** is the admin's Export and the reader's Download my data alike: the commenter
+  (address, names used, dates), every comment of the address in **every status** (unconfirmed too;
+  `ListCommenterExportComments`), each with its post's public title and path, and the subscriptions. Never a
+  hash, key, token or network data, nor the moderation record (block, spam mark, hold reason):
+  `requireNothingHashed` checks field names and values.
+- **Erasure is `db.EraseCommenterTx`, one transaction:** lock the threads (`LockCommenterThreads`, id order, the
+  moderator's order), the commenter, the threads again; delete the commenter's comments **newest first** through
+  `deleteReaderComment` (`DeleteReaderCommentTx`'s step), so a tombstone stays exactly where someone else's
+  approved reply answers; `ScrubDiscussionMailComments` takes the erased ids out of every outbox row (an author row
+  left empty and unclaimed is deleted; a moderation row is kept, emptied); `DeleteCommenter` (keys, data links and
+  reply mail by cascade). `sql.ErrNoRows` = no such commenter. Purges once after the commit when an approved
+  comment was removed (`purgeErasure`). Store tests on a private database (`TestEraseCommenterTx*`: the rules, and a
+  trigger that fails the last step to prove the rollback).
+- **The reader (13.2), `/public/discussion/*`** (the confirmation group's account-token limit, `publicPOSTRoutes`,
+  `publicReaderCommentRoutes`, `discussionBodyLimit`; work while comments are off):
+  `data-request {email}` → 202 `{outcome: "link_sent"}` for any well-formed address, nothing read before the
+  answer (`TestCommenterDataRequestReadsNothingBeforeAnswering`), `commentAddress` per browser + address; after it
+  (`processCommenterDataRequest`): `GetCommenterByEmailLower`, the silent 10-minute `commentDataMail`, a token
+  (`commenter_data_tokens`, hash only, an hour), mail `reader_comment_data` (a link and nothing else) to the address
+  as typed. `data {token}` → the file (not spent); `data/delete {token, comment_id?}` → 204, one comment of theirs
+  (`DeleteCommenterReaderCommentTx`, 404 `comment_not_found` for another's) or the erasure; `data/unsubscribe
+  {token}` → 204, Stop all mail. Every bad link 400 `invalid_token`. Expired links: `RunDiscussionMaintenance`
+  (`DataLinksDeleted`).
+- **Every reader mail links "Manage your comments"** (`ManageLink`, `readerCommentDataPath`): reply and confirmation.
+- Logs: ids, counts, outcomes; a failed send `error_type` only (`TestCommenterPrivacyLogsHoldNoAddress`). What
+  erasure doesn't reach (backups, a restore, sent mail, exports, a plugin guard's copy): `docs/operations/backups.md`.
 ## Per-block "Last edited by" (#328, `000049`, `post_block_edits.go`)
 
 - Design: `docs/design/block-map-yjs-schema.md` ("#328", #315 Option C). `post_block_edits`
