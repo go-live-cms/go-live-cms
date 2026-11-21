@@ -10,7 +10,7 @@
       <p style="margin:0 0 8px;font-size:14px;line-height:1.5;white-space:pre-wrap;">{{.Excerpt}}</p>
       <p style="margin:0;font-size:14px;"><a href="{{.URL}}" style="color:#1f2328;">Read the reply</a></p>
     </div>{{end}}
-    <p style="margin:16px 0 0;font-size:13px;line-height:1.5;color:#59636e;">You get this email because you asked for replies to that comment by email. <a href="{{.UnsubscribeLink}}" style="color:#59636e;">Stop these emails</a></p>
+    <p style="margin:16px 0 0;font-size:13px;line-height:1.5;color:#59636e;">You get this email because you asked for replies to that comment by email. <a href="{{.UnsubscribeLink}}" style="color:#59636e;">Stop these emails</a>{{if .ManageLink}} · <a href="{{.ManageLink}}" style="color:#59636e;">Manage your comments</a>{{end}}</p>
   </div>
 </body>
 </html>

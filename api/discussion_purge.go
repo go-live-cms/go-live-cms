@@ -130,4 +130,6 @@ var publicCacheDiscussionRoutes = map[string]string{
 	"DELETE /api/v1/discussion/comments/:id":     "only a tombstone; a spam or trashed comment without approved replies was never shown (#526)",
 	"PUT /api/v1/discussion/comments/:id":        "a member's edit of an approved comment (#526)",
 	"POST /api/v1/discussion/posts/:id/comments": "a member's comment, approved at once, on a published post (#526)",
+	"DELETE /api/v1/discussion/commenters/:id":   "once, when the erasure deleted or tombstoned an approved comment (#529)",
+	"POST /public/discussion/data/delete":        "a reader's delete or erasure, when it removed an approved comment (#529)",
 }

@@ -45,6 +45,11 @@ var bodyLimitOverrides = map[string]int64{
 	// Unsubscribing (#528): a token, or RFC 8058's one form field.
 	"POST /public/discussion/unsubscribe":        discussionBodyLimit,
 	"POST /public/discussion/unsubscribe/:token": discussionBodyLimit,
+	// "Your comments" (#529): an address, or a token and a comment id.
+	"POST /public/discussion/data-request":     discussionBodyLimit,
+	"POST /public/discussion/data":             discussionBodyLimit,
+	"POST /public/discussion/data/delete":      discussionBodyLimit,
+	"POST /public/discussion/data/unsubscribe": discussionBodyLimit,
 }
 
 // bodyLimitMiddleware caps the request body for the matched route. It runs as

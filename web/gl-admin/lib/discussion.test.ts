@@ -10,7 +10,10 @@ import {
   discussionLine,
   discussionNavLabel,
   emptyQueue,
+  eraseConfirm,
+  erasedMessage,
   excerpt,
+  exportFileName,
   findDiscussionTab,
   networkLine,
   pendingAttention,
@@ -179,6 +182,27 @@ describe("bulk reports (16.1)", () => {
   it("asks before deleting for good", () => {
     expect(deleteConfirm(3).title).toBe("Delete 3 comments for good?")
     expect(deleteConfirm(1).button).toBe("Delete comment")
+  })
+})
+
+describe("export and erase (#529, 13.1)", () => {
+  const counts = { approved: 10, pending: 2, spam: 1, trash: 1 }
+  it("asks before erasing, with the name and the count", () => {
+    const ask = eraseConfirm({ name: "Ana", ...counts })
+    expect(ask.title).toBe("Delete Ana’s 14 comments and everything stored about this address?")
+    expect(ask.body).toContain("“This comment was removed”")
+    expect(ask.body).toContain("can't be undone")
+    expect(ask.button).toBe("Erase")
+    expect(eraseConfirm({ name: "Ana", ...counts, unconfirmed: 1 }).title, "unconfirmed ones are erased too").toBe("Delete Ana’s 15 comments and everything stored about this address?")
+    expect(eraseConfirm({ name: "Jonas", approved: 1, pending: 0, spam: 0, trash: 0 }).title).toBe("Delete Jonas’ 1 comment and everything stored about this address?")
+    expect(eraseConfirm({ name: " ", approved: 0, pending: 0, spam: 0, trash: 0 }).title).toBe("Delete everything stored about this commenter?")
+  })
+  it("says what the erasure did, and names the file", () => {
+    expect(erasedMessage({ comment_count: 14, tombstoned: 0 })).toBe("Erased 14 comments.")
+    expect(erasedMessage({ comment_count: 14, tombstoned: 2 })).toBe("Erased 14 comments. 2 became “This comment was removed”: replies answer them.")
+    expect(erasedMessage({ comment_count: 1, tombstoned: 1 })).toBe("Erased 1 comment. One became “This comment was removed”: replies answer it.")
+    expect(erasedMessage({ comment_count: 0, tombstoned: 0 })).toBe("Erased the commenter.")
+    expect(exportFileName(12)).toBe("commenter-12.json")
   })
 })
 

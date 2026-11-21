@@ -3494,6 +3494,15 @@ div.post-item-media {
 .reader-form {
   flex-wrap: wrap;
 }
+/* A request refused without scripts (#529, ?error=), in the form's own danger pair. */
+.reader-panel .reader-error {
+  color: var(--color-danger);
+  font-weight: 600;
+}
+/* "Stop all mail" and the empty list show only when they apply (#529). */
+.reader-panel [hidden] {
+  display: none;
+}
 .reader-list {
   margin: 0;
   padding: 0;

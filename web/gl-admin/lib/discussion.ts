@@ -320,6 +320,36 @@ export function mailLine(n: number): string {
   return `Replies by email on ${plural(n, "comment")}.`
 }
 
+// Erase (#529, design 13.1, the commenter board's confirmation): "Delete Ana's 14 comments and
+// everything stored about this address?". The count is every comment erasure deletes, the
+// unconfirmed ones included, so it matches what the API answers afterwards.
+export function eraseConfirm(summary: Pick<CommenterSummary, "name" | "approved" | "pending" | "spam" | "trash" | "unconfirmed">): {
+  title: string
+  body: string
+  button: string
+} {
+  const count = summary.approved + summary.pending + summary.spam + summary.trash + (summary.unconfirmed ?? 0)
+  const name = summary.name.trim() || "this commenter"
+  const owner = name.endsWith("s") ? `${name}’` : `${name}’s`
+  return {
+    title: count === 0 ? `Delete everything stored about ${name}?` : `Delete ${owner} ${plural(count, "comment")} and everything stored about this address?`,
+    body: "Comments with replies are replaced by “This comment was removed”. Their mail stops, and the address is forgotten. Backups made before today keep it until they expire. This can't be undone.",
+    button: "Erase",
+  }
+}
+
+// After Erase: what the toast says ("Erased 14 comments. 2 became “This comment was removed”.").
+export function erasedMessage(result: { comment_count: number; tombstoned: number }): string {
+  const what = result.comment_count === 0 ? "Erased the commenter." : `Erased ${plural(result.comment_count, "comment")}.`
+  if (result.tombstoned === 0) return what
+  return `${what} ${result.tombstoned === 1 ? "One became" : `${result.tombstoned} became`} “This comment was removed”: replies answer ${result.tombstoned === 1 ? "it" : "them"}.`
+}
+
+// Export's file name: "commenter-12.json", the API's Content-Disposition.
+export function exportFileName(id: number): string {
+  return `commenter-${id}.json`
+}
+
 // The post's state in a row: "Post not published" (4.4).
 export function postNotPublished(comment: Pick<ModerationComment, "post">): boolean {
   return comment.post.status !== "published"

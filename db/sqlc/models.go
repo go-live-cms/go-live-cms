@@ -37,6 +37,13 @@ type Commenter struct {
 	BlockedBy   sql.NullInt64 `json:"blocked_by"`
 }
 
+type CommenterDataToken struct {
+	TokenHash   []byte    `json:"token_hash"`
+	CommenterID int64     `json:"commenter_id"`
+	CreatedAt   time.Time `json:"created_at"`
+	ExpiresAt   time.Time `json:"expires_at"`
+}
+
 type CommenterKey struct {
 	KeyHash     []byte    `json:"key_hash"`
 	CommenterID int64     `json:"commenter_id"`

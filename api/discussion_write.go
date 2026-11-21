@@ -558,11 +558,12 @@ func (server *Server) processUnconfirmedReaderComment(logger *slog.Logger, d rea
 	title := d.Target.Settings.SiteTitle.String
 	// To the address as this request typed it: the stored spelling is whoever typed it first.
 	msg, err := mailer.RenderReaderCommentConfirm(d.Email, mailer.ReaderCommentConfirm{
-		SiteTitle: title,
-		PostTitle: d.Target.Post.Title,
-		PostURL:   server.publicURL + d.Target.path(),
-		Link:      server.accountLink(readerCommentConfirmPath, token),
-		ExpiresIn: readerCommentConfirmTTL,
+		SiteTitle:  title,
+		PostTitle:  d.Target.Post.Title,
+		PostURL:    server.publicURL + d.Target.path(),
+		Link:       server.accountLink(readerCommentConfirmPath, token),
+		ExpiresIn:  readerCommentConfirmTTL,
+		ManageLink: server.publicURL + readerCommentDataPath,
 	})
 	if err == nil {
 		err = server.sendMail(ctx, msg)

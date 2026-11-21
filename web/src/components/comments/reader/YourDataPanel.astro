@@ -1,24 +1,50 @@
 ---
 /**
- * /comments/your-data's panel (#525, docs/design/reader-comments.md 13.2, 11.6): "Your comments".
- * Without a link the reader types the address and gets one by mail (always the same answer);
- * with the link (`#token=`, valid an hour) the page lists their comments with Delete on each,
- * Download my data and Delete everything (asked first). Each posts to `/gl-comments/data-request`,
- * `/data` or `/data/delete`, which #529 adds with the API routes and the export's shape; until
- * then the page isn't served (`READER_PAGES_READY.yourData`). Same pattern as ConfirmPanel.astro,
- * except that the request form is what shows first: it is a plain form.
+ * /comments/your-data's panel (#525, #529; docs/design/reader-comments.md 13.2, 11.6): "Your
+ * comments". Without a link the reader types the address and gets one by mail (always the same
+ * answer); with the link (`#token=`, valid an hour) the page lists their comments with Delete on
+ * each, Download my data, Stop all mail and Delete everything (asked first). Each posts to
+ * `/gl-comments/data-request`, `/data`, `/data/delete` or `/data/unsubscribe` (#529). Same
+ * pattern as ConfirmPanel.astro, except that the request form is what shows first: it is a plain
+ * form, so it works without scripts too (`?sent=1` and `?error=` render here, `data-reader-final`).
+ *
+ * The list reads the API's file (CommenterExport, api/discussion_privacy.go):
+ * `{commenter: {email}, comments: [{id, post_title, post_url, status, created_at, body}],
+ * subscriptions: [...]}`.
  */
+import { YOUR_DATA_ERRORS } from '@/lib/commentData'
+
+interface Props {
+  // `?sent=1` from the request form without scripts.
+  sent?: boolean
+  // `?error=<code>` (commentData.ts YOUR_DATA_ERRORS), or nothing.
+  error?: string | null
+}
+
+const { sent = false, error = null } = Astro.props
+const reason = error ? (YOUR_DATA_ERRORS[error] ?? YOUR_DATA_ERRORS.failed) : null
+const final = sent || reason !== null
 ---
 
-<div class="reader-page-panel" data-gl-reader="your-data">
+<div class="reader-page-panel" data-gl-reader="your-data" data-reader-final={final ? '' : undefined}>
   <section class="reader-panel" data-reader-panel aria-labelledby="reader-title">
-    <h1 id="reader-title">Your comments</h1>
-    <p>Enter the email you commented with. We’ll send a link to see, download or delete your comments.</p>
-    <form class="search-form reader-form" method="post" action="/gl-comments/data-request" data-reader-request>
-      <label for="reader-email" class="sr-only">Email</label>
-      <input id="reader-email" name="email" type="email" class="input" autocomplete="email" required placeholder="you@example.com" />
-      <button type="submit" class="btn btn-primary">Send me a link</button>
-    </form>
+    {sent ? (
+      <>
+        <h1 id="reader-title">Check your email</h1>
+        <p>If comments were written with that address, a link is on its way. It works for an hour.</p>
+      </>
+    ) : (
+      <>
+        <h1 id="reader-title">Your comments</h1>
+        <p>Enter the email you commented with. We’ll send a link to see, download or delete your comments.</p>
+        {reason && <p class="reader-error" id="reader-email-error">{reason}</p>}
+        <form class="search-form reader-form" method="post" action="/gl-comments/data-request" data-reader-request>
+          <label for="reader-email" class="sr-only">Email</label>
+          <input id="reader-email" name="email" type="email" class="input" autocomplete="email" required placeholder="you@example.com" aria-describedby={reason ? 'reader-email-error' : undefined} aria-invalid={reason ? 'true' : undefined} />
+          <button type="submit" class="btn btn-primary">Send me a link</button>
+        </form>
+      </>
+    )}
   </section>
   <p class="sr-only" role="status" data-reader-live></p>
 
@@ -41,9 +67,11 @@
   </template>
   <template data-reader-state="list">
     <div class="reader-heading"><h1 id="reader-title">Your comments</h1><span class="meta" data-slot="email"></span></div>
+    <p class="meta" data-reader-empty hidden>No comments are kept with this address any more.</p>
     <ul class="reader-list"></ul>
     <div class="reader-actions">
       <button type="button" class="btn btn-secondary" data-reader-download>Download my data</button>
+      <button type="button" class="btn btn-secondary" data-reader-stop-mail hidden>Stop all mail</button>
       <button type="button" class="btn btn-danger" data-reader-erase-ask>Delete everything</button>
     </div>
   </template>

@@ -380,6 +380,13 @@ type rateLimits struct {
 	commentAddress *rateLimiter
 	commentMail    *rateLimiter
 	commentConfirm *rateLimiter
+	// commentDataMail is the silent one-"Your comments"-mail-per-10-minutes cooldown per
+	// address (#529): a data request answers the same, mailing nothing more.
+	commentDataMail *rateLimiter
+	// commentDataLink is the "Your comments" link's routes per client (#529): six times
+	// the account-token limit, since the page deletes comments one by one with one link
+	// (32 random bytes: the limit isn't what stops guessing).
+	commentDataLink *rateLimiter
 	// mediaImport limits "Add from URL" (#29) per member and client IP: each request
 	// makes outbound downloads.
 	mediaImport *rateLimiter
@@ -410,8 +417,11 @@ func newRateLimits(config util.Config) (rateLimits, error) {
 		commentAddress: newRateLimiter("comment-address", config.RateLimitCommentAddressPerMinute),
 		commentMail:    newIntervalLimiter("comment-mail", readerCommentMailCooldown, config.RateLimitCommentPostPerMinute > 0),
 		commentConfirm: newRateLimiter("comment-confirm", config.RateLimitAccountTokenPerMinute),
-		mediaImport:    newRateLimiter("media-import", config.RateLimitMediaImportPerMinute),
-		generalExempt:  exempt,
+		// On with the comment limits, like commentMail.
+		commentDataMail: newIntervalLimiter("comment-data-mail", commenterDataMailCooldown, config.RateLimitCommentPostPerMinute > 0),
+		commentDataLink: newRateLimiter("comment-data-link", 6*config.RateLimitAccountTokenPerMinute),
+		mediaImport:     newRateLimiter("media-import", config.RateLimitMediaImportPerMinute),
+		generalExempt:   exempt,
 	}, nil
 }
 

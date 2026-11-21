@@ -2,8 +2,8 @@
 // board): /comments/confirm in the default theme, not indexed, one panel; its states without
 // scripts and with gl-comments.js (run in a JSDOM window, the link's token in the fragment and
 // fetch answered as the /gl-comments endpoints answer); the token spent only by the button. The
-// unsubscribe page is served since #528; "your comments" waits for #529 (404). Both panels are
-// tested alone too. axe passes on each state.
+// unsubscribe page is served since #528, "your comments" since #529. Both panels are tested
+// alone too. axe passes on each state.
 import { experimental_AstroContainer as AstroContainer } from "astro/container"
 import { getContainerRenderer as reactRenderer } from "@astrojs/react"
 import { loadRenderers } from "astro:container"
@@ -173,11 +173,41 @@ describe("/comments/confirm", () => {
 describe("unsubscribe (#528) and your data (#529)", () => {
   it("are served once their routes are", async () => {
     expect(READER_PAGES_READY.unsubscribe).toBe(true)
+    expect(READER_PAGES_READY.yourData).toBe(true)
     const unsubscribe = await response(Unsubscribe)
     expect(unsubscribe.status).toBe(200)
     expect(unsubscribe.headers.get("x-robots-tag")).toBe("noindex")
-    expect((await response(YourData)).status).toBe(READER_PAGES_READY.yourData ? 200 : 404)
-  })
+    const yourData = await response(YourData)
+    expect(yourData.status).toBe(200)
+    expect(yourData.headers.get("x-robots-tag")).toBe("noindex")
+    expect(yourData.headers.get("referrer-policy")).toBe("no-referrer")
+    const html = await yourData.text()
+    expect(html).toMatch(/<meta name="robots" content="noindex/)
+    expect(html.match(/<script(?![^>]*\bsrc=)[^>]*>/g) ?? [], "no inline script").toEqual([])
+  }, 30_000)
+
+  it("your data without scripts: the request form, then ?sent=1 or ?error= render at once", async () => {
+    const plain = await browse(await (await response(YourData)).text(), "", undefined, false)
+    expect(panelTitle(plain.document)).toBe("Your comments")
+    const form = plain.document.querySelector("[data-reader-panel] form")!
+    expect(form.getAttribute("method")).toBe("post")
+    expect(form.getAttribute("action")).toBe("/gl-comments/data-request")
+    expect(await axe(plain.dom)).toEqual([])
+
+    const sent = await browse(await (await response(YourData, "?sent=1")).text())
+    expect(panelTitle(sent.document)).toBe("Check your email")
+    expect(sent.requests).toEqual([])
+    expect(await axe(sent.dom)).toEqual([])
+
+    const limited = await browse(await (await response(YourData, "?error=rate_limited")).text())
+    expect(panelTitle(limited.document)).toBe("Your comments")
+    expect(limited.document.querySelector(".reader-error")!.textContent).toBe("Too many tries. Wait a minute and try again.")
+    expect(limited.document.querySelector("#reader-email")!.getAttribute("aria-describedby")).toBe("reader-email-error")
+    expect(await axe(limited.dom)).toEqual([])
+    const odd = await (await response(YourData, "?error=%3Cscript%3E")).text()
+    expect(odd).toContain("send a link just now")
+    expect(odd).not.toContain("<script>alert")
+  }, 30_000)
 
   const fragment = async (component: unknown) => `<!doctype html><html lang="en"><head><title>Reader</title></head><body><main>${await container.renderToString(component as any, {})}</main></body></html>`
 
@@ -224,5 +254,38 @@ describe("unsubscribe (#528) and your data (#529)", () => {
     await settle()
     expect(list.requests[2]).toEqual({ url: "/gl-comments/data/delete", body: { token: TOKEN } })
     expect(panelTitle(list.document)).toBe("Your comments and address are deleted")
+  }, 30_000)
+
+  it("your data: every status in the reader's words, Stop all mail when something is mailed, an empty list", async () => {
+    const html = await fragment(YourDataPanel)
+    const at = "2026-11-12T10:00:00Z"
+    const data = {
+      commenter: { email: "jonas@example.com" },
+      comments: ["approved", "pending", "unconfirmed", "spam", "trash"].map((status, i) => ({ id: i + 1, post_title: `Post ${i}`, post_url: "/post/x", status, created_at: at, body: "Text" })),
+      subscriptions: [{ comment_id: 1, post_title: "Post 0", post_url: "/post/x" }],
+    }
+    const list = await browse(html, `#token=${TOKEN}`, (url) => (url.endsWith("/gl-comments/data") ? { status: 200, body: data } : { status: 204 }))
+    await settle()
+    expect([...list.document.querySelectorAll(".reader-list [data-slot='status']")].map((s) => s.textContent)).toEqual([
+      "Published", "Waiting for review", "Not confirmed", "Not published", "Not published",
+    ])
+    const stop = list.document.querySelector("[data-reader-stop-mail]") as HTMLButtonElement
+    expect(stop.hidden).toBe(false)
+    expect((list.document.querySelector("[data-reader-empty]") as HTMLElement).hidden).toBe(true)
+    click(list.dom, "[data-reader-stop-mail]")
+    await settle()
+    expect(list.requests[1]).toEqual({ url: "/gl-comments/data/unsubscribe", body: { token: TOKEN } })
+    expect(list.document.querySelector("[data-reader-stop-mail]")).toBeNull()
+    expect(list.document.querySelector("[data-reader-live]")!.textContent).toBe("You won’t get reply emails from this site any more.")
+    expect(await axe(list.dom, true)).toEqual([])
+
+    const none = await browse(html, `#token=${TOKEN}`, () => ({ status: 200, body: { commenter: { email: "jonas@example.com" }, comments: [], subscriptions: [] } }))
+    await settle()
+    expect((none.document.querySelector("[data-reader-empty]") as HTMLElement).hidden).toBe(false)
+    expect((none.document.querySelector("[data-reader-stop-mail]") as HTMLElement).hidden).toBe(true)
+
+    const dead = await browse(html, `#token=${TOKEN}`, () => ({ status: 400, body: { code: "invalid_token" } }))
+    await settle()
+    expect(panelTitle(dead.document)).toBe("This link doesn’t work anymore")
   }, 30_000)
 })

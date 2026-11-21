@@ -49,8 +49,8 @@ export const DEFAULT_COMMENTS_NOTICE =
 export const READER_PAGES_READY = {
   // #528: POST /gl-comments/unsubscribe and the RFC 8058 /gl-comments/unsubscribe/:token.
   unsubscribe: true,
-  // #529 adds /gl-comments/data-request, /data and /data/delete and sets this true.
-  yourData: false,
+  // #529: /gl-comments/data-request, /data, /data/delete and /data/unsubscribe.
+  yourData: true,
 } as const
 export const CONFIRM_PATH = "/comments/confirm"
 export const UNSUBSCRIBE_PATH = "/comments/unsubscribe"

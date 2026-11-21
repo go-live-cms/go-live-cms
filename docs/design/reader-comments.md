@@ -761,6 +761,7 @@ directly, beside the endpoint's origin check, for no gain.
 | `POST /public/discussion/data-request` | `{email}` | 202, always the same |
 | `POST /public/discussion/data` | `{token}` | The commenter's export (13.2); the token stays valid for its hour |
 | `POST /public/discussion/data/delete` | `{token, comment_id?}` | 204: one comment, or all (erasure) |
+| `POST /public/discussion/data/unsubscribe` | `{token}` | 204: Stop all mail (13.2; added by #529, 16.7) |
 
 `set_key` is the new browser key in the answer of a confirm, so the web endpoint can set the
 cookie (9.4); the API never sets cookies on `/public`. A browser key that is valid but for
@@ -1324,10 +1325,9 @@ Built as the boards draw it, with these details:
 - **The reader pages' states are `<template>`s** the script shows, so a page holds one `<h1>`; a state the server
   knows (`?error=`, `?discarded=1`) renders without scripts. The confirm page can't name the post before the button
   (nothing reads a token without spending it), so it says "a comment written with your email address".
-- **Unsubscribe and "your comments"** are built and tested with their states, but answer 404 until #528 and #529
-  add their routes (`READER_PAGES_READY`); the privacy notice's "Your comments" link waits for #529 too. The list's
-  shape (`{commenter: {email}, comments: [{id, post_title, post_url, status, created_at, body}]}`) is #529's to
-  confirm, and "Stop all mail" on that page waits for it.
+- **Unsubscribe and "your comments"** were built and tested with their states, and answered 404 until #528 and #529
+  added their routes (`READER_PAGES_READY`, both true now). #529 confirmed the list's shape (16.7), added "Stop all
+  mail" and the privacy notice's "Your comments" link.
 - **Contrast.** The comments' new pairs (text, muted text and links on `primarySubtle`, a link on `surface2`,
   `danger` on `surface`, the page's background on `danger`) are in core's list, so global styles warn on them.
 
@@ -1402,10 +1402,66 @@ text left open:
 - **The one-click route skips the origin check.** Mail providers post it from their own servers. Astro's
   `checkOrigin` would refuse it, so the web runs the same check in its middleware, exempting that one route
   (`web/src/middleware/originCheck.ts`).
-- **"Manage your comments" isn't linked yet.** Reply mail links the unsubscribe page only; #529 adds the
-  your-data link when its page is served.
+- **"Manage your comments"** is linked from reply and confirmation mail since #529 (16.7).
 - **Erased is already respected.** Recipients are resolved when the mail is built, so an erased commenter (#529
   deletes the row, and its outbox rows go with it) or a removed member gets nothing.
+
+### 16.7 What C9 settled (#529)
+
+Built as designed (`000069`, `api/discussion_privacy.go`, `db/sqlc/commenter_privacy_tx.go`), with these details
+the text left open:
+
+- **One file for both.** The admin's Export and the reader's Download my data are the same JSON
+  (`CommenterExport`): `{exported_at, site: {title, url}, commenter: {email, name, names_used, created_at,
+  verified_at, last_seen_at}, comments: [{id, post_id, post_title, post_url, comment_url, parent_id, status, name,
+  body, notify_replies, created_at, approved_at, edited_at}], subscriptions: [{comment_id, post_title,
+  post_url}]}`. This confirms #525's list shape (16.3). Every status is in it, **unconfirmed included**; a
+  tombstone isn't (it has no commenter any more). URLs are site paths; `site.url` says which site.
+- **Not in the file:** hashes, keys, tokens, network data (13.1), and the moderation record (a block, a spam
+  mark, a hold's reason): those are the site's notes about the commenter, shown on the commenter's page.
+- **Erasure is `EraseCommenterTx`, one transaction.** It locks every row of the threads involved in id order,
+  then the commenter (the order a moderator's status change takes, so the two never deadlock), then removes the
+  commenter's comments **newest first** through `DeleteReaderCommentTx`'s own step: a reply goes before what it
+  answers, so a tombstone is left exactly where **someone else's** approved reply answers, and a comment only
+  the same commenter answered is deleted. Then the outbox forgets the erased ids (other members' author rows,
+  a moderation row's count; an author row left empty and not yet claimed is deleted; a moderation row is kept,
+  emptied, since its ids are what the next mail compares with), and the commenter row goes with its keys,
+  "Your comments" links and reply mail (cascade). Deleting a root takes the unapproved replies in its thread,
+  as any delete does (6.4). The plugin trigger writes `comment.deleted` per comment, ids only (14.4). A
+  failure rolls everything back (`TestEraseCommenterTxRollsBack`).
+- **The data request** answers 202 `{outcome: "link_sent"}` for any well-formed address, before reading
+  anything (`TestCommenterDataRequestReadsNothingBeforeAnswering`), with the comment form's limits (per browser
+  through the confirmation group, per browser and address). After the response: an address with a commenter
+  (even one never verified: whoever owns the mailbox may see and delete what was written with it) gets a mail
+  at most every 10 minutes (`commentDataMail`), holding `PUBLIC_BASE_URL/comments/your-data#token=…`, an hour,
+  hash only in `commenter_data_tokens`. An unknown address gets nothing.
+- **The link isn't spent** by reading the list, deleting one comment or Stop all mail: the page does several
+  with one link. Delete everything erases the commenter, which deletes the link. Expired links go with the
+  hourly job. The link's routes have a per-browser limit of their own (`commentDataLink`, six times the
+  account-token limit), since one page deletes comments one by one; the request keeps the confirmation's.
+- **Open: erasing a blocked commenter forgets the block.** The commenter row is what the block and
+  `previous_spam` rules remember (6.6 keeps blocked rows for that), so a blocked reader who erases their data
+  and comments again is a new commenter. Keeping a keyed hash of a blocked address through erasure would fix
+  it; it is personal data kept on a legitimate interest, which is a decision for the site's owner, not taken
+  here.
+- **Stop all mail** on the page is a route of its own, `POST /public/discussion/data/unsubscribe` (9.2), the
+  unsubscribe page's `all` for the link's commenter.
+- **Everything works while comments are off** for the site, as unsubscribing does: what readers wrote stays
+  theirs to see and delete.
+- **The reader's list** shows every status in the reader's words: Published, Waiting for review, Not
+  confirmed, Not published (spam and trash). Without scripts, the request form still works (a 303 to `?sent=1`
+  or `?error=`, rendered by the page); the link's page needs scripts, as every reader page does (11.6).
+- **Admins only**, by the API (`requireSiteAdmin` on both routes, `TestCommenterExportAndEraseAreAdminsOnly`:
+  an editor gets 403 and nothing is erased) and the page (an editor sees Block only). Erase asks first with the
+  name and the count, then leaves for the queue. Activity `commenter_exported` and `commenter_erased`
+  (`{comment_count}`; the feed reads "erased a commenter (14 comments)", unlinked). The reader's own requests,
+  deletes and erasure record no activity (7.4).
+- **Every reader mail links "Manage your comments"** (`/comments/your-data`): reply and confirmation mail. The
+  data mail is a link and nothing else.
+- **Logs:** commenter and comment ids, counts, outcomes; a failed send `error_type` only
+  (`TestCommenterPrivacyLogsHoldNoAddress`, #528's guard extended).
+- **What it doesn't reach** is `docs/operations/backups.md`'s "What a commenter's erasure doesn't reach": older
+  backups, a restore, mail already sent, downloaded files, what a plugin's guard kept.
 
 ## 17. Phased plan
 

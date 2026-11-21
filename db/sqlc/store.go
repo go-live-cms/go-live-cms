@@ -103,6 +103,9 @@ type Store interface {
 	DeleteModeratedReaderCommentTx(ctx context.Context, id int64) (DeleteReaderCommentTxResult, error)
 	ModerateReaderCommentTx(ctx context.Context, arg ModerateReaderCommentTxParams) (ModerateReaderCommentTxResult, error)
 	CreateMemberReaderCommentTx(ctx context.Context, arg CreateMemberReaderCommentTxParams) (CreateMemberReaderCommentTxResult, error)
+	// a commenter's privacy (#529): erasure, and a reader deleting one of their comments
+	EraseCommenterTx(ctx context.Context, commenterID int64) (EraseCommenterTxResult, error)
+	DeleteCommenterReaderCommentTx(ctx context.Context, commenterID, commentID int64) (DeleteReaderCommentTxResult, error)
 	TransferPostOwnerTx(ctx context.Context, arg TransferPostOwnerTxParams) (TransferPostOwnerTxResult, error)
 
 	SaveMenuTx(ctx context.Context, arg SaveMenuTxParams) (Menu, error)

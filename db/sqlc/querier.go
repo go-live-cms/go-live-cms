@@ -183,6 +183,8 @@ type Querier interface {
 	// The collab store runs it under the post's row lock, so concurrent stores of one
 	// post can't both insert; elsewhere a race costs at most a duplicate.
 	CreateActivityThrottled(ctx context.Context, arg CreateActivityThrottledParams) (int64, error)
+	// A "Your comments" link (000069): only the SHA-256 of the mailed token.
+	CreateCommenterDataToken(ctx context.Context, arg CreateCommenterDataTokenParams) (CommenterDataToken, error)
 	// A browser key (3.3): the SHA-256 of the cookie's value, never the value.
 	CreateCommenterKey(ctx context.Context, arg CreateCommenterKeyParams) (CommenterKey, error)
 	// Email change (#334): the confirmation link goes to the new address; the change
@@ -261,6 +263,14 @@ type Querier interface {
 	DeleteActivityBefore(ctx context.Context, arg DeleteActivityBeforeParams) (int64, error)
 	DeleteAllPostMeta(ctx context.Context, postID int64) error
 	DeleteAllThemeSettings(ctx context.Context, themeID int64) error
+	// Erasure's last step: the row with the address. Its browser keys, "Your comments"
+	// links and its own outbox rows (reply mail) go with it (ON DELETE CASCADE).
+	DeleteCommenter(ctx context.Context, id int64) (int64, error)
+	// A link stored for a request the mail cooldown then skipped: nobody will get it.
+	DeleteCommenterDataToken(ctx context.Context, tokenHash []byte) error
+	DeleteDiscussionMailRows(ctx context.Context, ids []int64) (int64, error)
+	// RunDiscussionMaintenance (6.6): links past their hour.
+	DeleteExpiredCommenterDataTokens(ctx context.Context, now time.Time) (int64, error)
 	DeleteExpiredCommenterKeys(ctx context.Context, now time.Time) (int64, error)
 	// Unconfirmed after 48 hours, pending after 90 days, spam and trash 30 days after they
 	// got there (moderated_at; created_at for a comment the rules routed to spam).
@@ -394,6 +404,12 @@ type Querier interface {
 	GetActiveThemeWithSettings(ctx context.Context) (GetActiveThemeWithSettingsRow, error)
 	GetAnySessionByRefreshTokenHash(ctx context.Context, refreshTokenHash []byte) (Session, error)
 	GetCommenter(ctx context.Context, id int64) (Commenter, error)
+	// The commenter a "Your comments" link belongs to, while it works (an hour). Reading it
+	// doesn't spend it.
+	GetCommenterByDataToken(ctx context.Context, tokenHash []byte) (Commenter, error)
+	// The data request (13.2): the commenter of a typed address, if there is one. Read after
+	// the response only, so the answer can't tell whether there is.
+	GetCommenterByEmailLower(ctx context.Context, emailLower string) (Commenter, error)
 	// 3.3: the commenter one of the browser's keys belongs to, when that is the typed address.
 	// A key for another address, an expired one or an unknown one matches nothing, so the
 	// answer never says anything about an address.
@@ -664,6 +680,18 @@ type Querier interface {
 	// (canEditAsCollaborator: someone else's published post), for the posts lists'
 	// Edit / "Can edit" (#321).
 	ListCollaboratorPostIDs(ctx context.Context, userID int64) ([]int64, error)
+	// Erasure: the commenter's comments, newest first, so a reply is removed before the
+	// comment it answers and the tombstones left are exactly the comments that someone
+	// else's approved replies still answer.
+	ListCommenterCommentIDs(ctx context.Context, commenterID sql.NullInt64) ([]int64, error)
+	// A commenter's export and erasure (#529, docs/design/reader-comments.md 13): by an
+	// admin from the commenter's page (13.1), and by the reader from "Your comments" with a
+	// mailed link (13.2). Neither the export nor a log line ever carries a hash, a key, a
+	// token or network data.
+	// Every comment written with the address, in every status (unconfirmed, pending,
+	// approved, spam, trash), newest first, with the post's public title and what its link
+	// needs. A tombstone isn't theirs any more (its commenter is NULL), so it isn't here.
+	ListCommenterExportComments(ctx context.Context, commenterID sql.NullInt64) ([]ListCommenterExportCommentsRow, error)
 	// The commenters the browser's valid keys belong to (the confirm page's Publish and
 	// Discard, 3.3 step 5).
 	ListCommenterIDsByKeys(ctx context.Context, keyHashes [][]byte) ([]int64, error)
@@ -951,6 +979,15 @@ type Querier interface {
 	// (COUNT(*) cannot be combined with FOR UPDATE). Ordered by id so lockers
 	// acquire in the same order and cannot deadlock each other.
 	LockAdminUserIDs(ctx context.Context) ([]int64, error)
+	// Erasure: the commenter first. A new comment for the address waits on this lock (its
+	// foreign key check) and fails once the row is gone.
+	LockCommenter(ctx context.Context, id int64) (Commenter, error)
+	// Erasure: every row of every thread one of the commenter's comments is in, in id order.
+	// A moderator's status change share-locks a comment's root and parent before the row
+	// (ModerateReaderCommentTx), and roots and parents are older than what answers them, so
+	// taking them all here in the same order means the two never deadlock, and a reply
+	// approved meanwhile is seen before deciding what becomes a tombstone.
+	LockCommenterThreads(ctx context.Context, commenterID sql.NullInt64) ([]int64, error)
 	// Two jobs importing the same key at once: one at a time, so the second sees the first's.
 	LockImportSourceKey(ctx context.Context, sourceKey string) error
 	// Post ownership (#353): TransferPostOwnerTx and the reassignment it shares with a
@@ -1154,6 +1191,12 @@ type Querier interface {
 	// new time starts over: no attempts, no failure and no claim, so a publish still
 	// in flight for the old time is fenced off.
 	SchedulePost(ctx context.Context, arg SchedulePostParams) (Post, error)
+	// Erasure: the erased comments leave every outbox row that names them (other members'
+	// author mail, a moderation mail's count). Each row says whether it is left with nothing
+	// to send: an author row not yet claimed by the sender, which erasure then deletes. A
+	// moderation row is the queue's record (its ids are what the next mail compares with),
+	// and a claimed row is built from the current data and dropped by the sender.
+	ScrubDiscussionMailComments(ctx context.Context, ids []int64) ([]ScrubDiscussionMailCommentsRow, error)
 	// The admin command palette (#41): the first @limit_per_type posts and pages the viewer may
 	// read whose title or slug contains the text (@pattern, @prefix_pattern: ILIKE patterns the
 	// API escapes), titles that start with it first, then the latest edited. Never the trash.

@@ -46,6 +46,8 @@ const (
 	TemplateReaderCommentReply      = "reader-comment-reply"
 	TemplateReaderCommentAuthor     = "reader-comment-author"
 	TemplateReaderCommentModeration = "reader-comment-moderation"
+	// A reader's "Your comments" link (#529).
+	TemplateReaderCommentData = "reader-comment-data"
 )
 
 // SignupVerify is the data for the open signup confirmation link (#191), sent to
@@ -169,6 +171,8 @@ type templateData struct {
 	UnsubscribeLink string
 	ProfileLink     string
 	Digest          bool
+	// Reader mails (#529): "Manage your comments", the /comments/your-data page.
+	ManageLink string
 }
 
 // RenderAccessRequest renders the edit access request email to a reviewer.
@@ -403,18 +407,42 @@ type ReaderCommentConfirm struct {
 	PostURL   string
 	Link      string
 	ExpiresIn time.Duration
+	// ManageLink is "Manage your comments" (/comments/your-data, #529), every reader
+	// mail's (13.2).
+	ManageLink string
 }
 
 // RenderReaderCommentConfirm renders the comment confirmation email to to.
 func RenderReaderCommentConfirm(to string, d ReaderCommentConfirm) (Message, error) {
 	data := templateData{
+		SiteTitle:  siteTitle(d.SiteTitle),
+		PostTitle:  postTitle(d.PostTitle),
+		PostURL:    d.PostURL,
+		Link:       d.Link,
+		ExpiresIn:  HumanDuration(d.ExpiresIn),
+		ManageLink: d.ManageLink,
+	}
+	return render(to, TemplateReaderCommentConfirm, fmt.Sprintf("Confirm your comment on %s", data.SiteTitle), "reader_comment_confirm", data)
+}
+
+// ReaderCommentData is the data for "Your comments" (#529, design 8.1, 13.2): the link a
+// reader asked for on /comments/your-data, to the address they typed. A link and nothing
+// else: no name, no text, no count (the request can't be used to learn what an address
+// wrote, or to mail anyone a message).
+type ReaderCommentData struct {
+	SiteTitle string
+	Link      string
+	ExpiresIn time.Duration
+}
+
+// RenderReaderCommentData renders the "Your comments" email to to.
+func RenderReaderCommentData(to string, d ReaderCommentData) (Message, error) {
+	data := templateData{
 		SiteTitle: siteTitle(d.SiteTitle),
-		PostTitle: postTitle(d.PostTitle),
-		PostURL:   d.PostURL,
 		Link:      d.Link,
 		ExpiresIn: HumanDuration(d.ExpiresIn),
 	}
-	return render(to, TemplateReaderCommentConfirm, fmt.Sprintf("Confirm your comment on %s", data.SiteTitle), "reader_comment_confirm", data)
+	return render(to, TemplateReaderCommentData, fmt.Sprintf("Your comments on %s", data.SiteTitle), "reader_comment_data", data)
 }
 
 // CommentItem is one comment in a notification (#528): who wrote it (the name as posted,
@@ -442,6 +470,8 @@ type ReaderCommentReply struct {
 	Replies         []CommentItem
 	UnsubscribeLink string
 	OneClick        string
+	// ManageLink is "Manage your comments" (/comments/your-data, #529).
+	ManageLink string
 }
 
 // RenderReaderCommentReply renders a reply notification to to.
@@ -452,6 +482,7 @@ func RenderReaderCommentReply(to string, d ReaderCommentReply) (Message, error) 
 		Comments:        commentItems(d.Replies),
 		Count:           len(d.Replies),
 		UnsubscribeLink: d.UnsubscribeLink,
+		ManageLink:      d.ManageLink,
 	}
 	subject := fmt.Sprintf("New reply to your comment on %s", data.PostTitle)
 	if data.Count > 1 {
