@@ -60,39 +60,6 @@ func postBylineIDs(t *testing.T, postID int64) []int64 {
 	return ids
 }
 
-// onlyAdmins demotes every other admin in the shared test DB to editor until the
-// test ends (restored as "admin"), so ErrLastAdmin can be reached with committed
-// transactions: the guard counts every admin. No other real-DB test needs one.
-func onlyAdmins(t *testing.T, keep ...int64) {
-	t.Helper()
-	ctx := context.Background()
-	rows, err := testStore.(*SQLStore).db.QueryContext(ctx,
-		`UPDATE users SET role = 'editor' WHERE lower(role) = 'admin' AND NOT (id = ANY($1)) RETURNING id`,
-		int64Array(keep))
-	require.NoError(t, err)
-	var demoted []int64
-	for rows.Next() {
-		var id int64
-		require.NoError(t, rows.Scan(&id))
-		demoted = append(demoted, id)
-	}
-	require.NoError(t, rows.Close())
-	t.Cleanup(func() {
-		_, err := testStore.(*SQLStore).db.ExecContext(context.Background(),
-			`UPDATE users SET role = 'admin' WHERE id = ANY($1)`, int64Array(demoted))
-		require.NoError(t, err)
-	})
-}
-
-// int64Array formats ids as a Postgres bigint[] literal for the raw queries above.
-func int64Array(ids []int64) string {
-	parts := make([]string, len(ids))
-	for i, id := range ids {
-		parts[i] = fmt.Sprint(id)
-	}
-	return "{" + strings.Join(parts, ",") + "}"
-}
-
 func TestRemoveUserTx(t *testing.T) {
 	ctx := context.Background()
 	member, owned := createTestUserWithPosts(t)
@@ -176,45 +143,56 @@ func TestRemoveUserTxRefusals(t *testing.T) {
 	require.Equal(t, member.ID, post.UserID)
 }
 
+// The last-admin tests below run on a private database (isolatedStore): the
+// guard counts every admin, so reaching ErrLastAdmin with committed
+// transactions needs a database whose only admins are the test's own.
+
 func TestRemoveUserTxLastAdmin(t *testing.T) {
 	ctx := context.Background()
-	admin := createTestUserWithRole(t, "admin")
-	recipient := createTestUser(t)
-	onlyAdmins(t, admin.ID)
+	store := isolatedStore(t)
+	admin := createUserIn(t, store, "admin")
+	recipient := createUserIn(t, store, "contributor")
 
-	_, err := testStore.RemoveUserTx(ctx, RemoveUserTxParams{UserID: admin.ID, ReassignTo: recipient.ID})
+	_, err := store.RemoveUserTx(ctx, RemoveUserTxParams{UserID: admin.ID, ReassignTo: recipient.ID})
 	require.ErrorIs(t, err, ErrLastAdmin)
-	_, err = testQueries.GetUser(ctx, admin.ID)
+	_, err = store.GetUser(ctx, admin.ID)
 	require.NoError(t, err)
 
 	// With a second admin it goes through.
-	createTestUserWithRole(t, "admin")
-	_, err = testStore.RemoveUserTx(ctx, RemoveUserTxParams{UserID: admin.ID, ReassignTo: recipient.ID})
+	createUserIn(t, store, "admin")
+	_, err = store.RemoveUserTx(ctx, RemoveUserTxParams{UserID: admin.ID, ReassignTo: recipient.ID})
 	require.NoError(t, err)
+	_, err = store.GetUser(ctx, admin.ID)
+	require.ErrorIs(t, err, sql.ErrNoRows)
 }
 
 func TestChangeUserRoleTx(t *testing.T) {
 	ctx := context.Background()
-	user := createTestUser(t)
+	store := isolatedStore(t)
+	user := createUserIn(t, store, "contributor")
 
-	promoted, err := testStore.ChangeUserRoleTx(ctx, SetUserRoleParams{ID: user.ID, Role: "editor"})
+	promoted, err := store.ChangeUserRoleTx(ctx, SetUserRoleParams{ID: user.ID, Role: "editor"})
 	require.NoError(t, err)
 	require.Equal(t, "editor", promoted.User.Role)
 	require.Equal(t, user.Role, promoted.PreviousRole)
-	same, err := testStore.ChangeUserRoleTx(ctx, SetUserRoleParams{ID: user.ID, Role: "editor"})
+	same, err := store.ChangeUserRoleTx(ctx, SetUserRoleParams{ID: user.ID, Role: "editor"})
 	require.NoError(t, err)
 	require.Equal(t, "editor", same.PreviousRole)
 
-	_, err = testStore.ChangeUserRoleTx(ctx, SetUserRoleParams{ID: -1, Role: "editor"})
+	_, err = store.ChangeUserRoleTx(ctx, SetUserRoleParams{ID: -1, Role: "editor"})
 	require.ErrorIs(t, err, sql.ErrNoRows)
 
-	admin := createTestUserWithRole(t, "admin")
-	onlyAdmins(t, admin.ID)
-	_, err = testStore.ChangeUserRoleTx(ctx, SetUserRoleParams{ID: admin.ID, Role: "editor"})
+	admin := createUserIn(t, store, "admin")
+	_, err = store.ChangeUserRoleTx(ctx, SetUserRoleParams{ID: admin.ID, Role: "editor"})
 	require.ErrorIs(t, err, ErrLastAdmin)
 	// Keeping the last admin an admin is fine.
-	_, err = testStore.ChangeUserRoleTx(ctx, SetUserRoleParams{ID: admin.ID, Role: "admin"})
+	_, err = store.ChangeUserRoleTx(ctx, SetUserRoleParams{ID: admin.ID, Role: "admin"})
 	require.NoError(t, err)
+	// With a second admin the demotion goes through.
+	createUserIn(t, store, "admin")
+	demoted, err := store.ChangeUserRoleTx(ctx, SetUserRoleParams{ID: admin.ID, Role: "editor"})
+	require.NoError(t, err)
+	require.Equal(t, "admin", demoted.PreviousRole)
 }
 
 // Two admins demote each other (or themselves) at the same time: the guard's
@@ -222,9 +200,9 @@ func TestChangeUserRoleTx(t *testing.T) {
 // demotion goes through and an admin is left.
 func TestChangeUserRoleTxConcurrentDemotions(t *testing.T) {
 	ctx := context.Background()
-	first := createTestUserWithRole(t, "admin")
-	second := createTestUserWithRole(t, "admin")
-	onlyAdmins(t, first.ID, second.ID)
+	store := isolatedStore(t)
+	first := createUserIn(t, store, "admin")
+	second := createUserIn(t, store, "admin")
 
 	for round := 0; round < 5; round++ {
 		var wg sync.WaitGroup
@@ -235,7 +213,7 @@ func TestChangeUserRoleTxConcurrentDemotions(t *testing.T) {
 			go func() {
 				defer wg.Done()
 				<-start
-				_, errs[i] = testStore.ChangeUserRoleTx(ctx, SetUserRoleParams{ID: id, Role: "editor"})
+				_, errs[i] = store.ChangeUserRoleTx(ctx, SetUserRoleParams{ID: id, Role: "editor"})
 			}()
 		}
 		close(start)
@@ -250,14 +228,11 @@ func TestChangeUserRoleTxConcurrentDemotions(t *testing.T) {
 		}
 		require.Equal(t, 1, failed, "round %d: exactly one demotion must be refused", round)
 
-		var admins int
-		require.NoError(t, testStore.(*SQLStore).db.QueryRowContext(ctx,
-			`SELECT count(*) FROM users WHERE lower(role) = 'admin'`).Scan(&admins))
-		require.Equal(t, 1, admins)
+		require.Equal(t, 1, countAdmins(t, store))
 
 		// Both admins again for the next round.
 		for _, id := range []int64{first.ID, second.ID} {
-			_, err := testQueries.SetUserRole(ctx, SetUserRoleParams{ID: id, Role: "admin"})
+			_, err := store.SetUserRole(ctx, SetUserRoleParams{ID: id, Role: "admin"})
 			require.NoError(t, err)
 		}
 	}

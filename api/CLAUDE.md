@@ -234,6 +234,12 @@ the collab server.
 - sqlc integration tests share one DB across runs and are not cleaned up: use
   unique values (UUID/UnixNano suffixes) and restore global state such as the
   active theme with `t.Cleanup`.
+- `go test ./...` runs `db/sqlc` and `api` at the same time on that one DB, so a test
+  must never change rows it didn't create, not even briefly or in a rolled-back
+  transaction (that still row-locks them). Demoting "every other admin" made api tests
+  acting as an admin get 403s. A test that needs a whole table to itself (the
+  last-admin guard counts every admin) uses `isolatedStore(t)`: a private database
+  migrated from `db/migration` and dropped when the test ends.
 
 ## Collaboration server (#206, #280)
 
