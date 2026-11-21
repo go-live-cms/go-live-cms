@@ -20,7 +20,7 @@ import (
 // Who: editors and admins (requireContentEditor on the whole group, 4.3). Contributors get
 // 403 on every route (decision 3): approving a comment puts reader text on the site
 // without an editor, which contributors can't do with their own text either. Export and
-// erasure (13.1) are #529's, admin-only.
+// erasure (13.1, #529, discussion_privacy.go) are admins' only.
 //
 // Privacy (7.1, decision 6): a commenter's address is answered in full to these callers
 // and never logged; log lines carry comment, post and commenter ids, the action and
@@ -45,6 +45,9 @@ func (server *Server) registerDiscussionRoutes(v1 *gin.RouterGroup) {
 	d.GET("/commenters", server.findDiscussionCommenter)
 	d.GET("/commenters/:id", server.getDiscussionCommenter)
 	d.PUT("/commenters/:id/block", server.blockDiscussionCommenter)
+	// A commenter's export and erasure (#529, discussion_privacy.go): admins only (13.1).
+	d.GET("/commenters/:id/export", requireSiteAdmin(server), server.exportDiscussionCommenter)
+	d.DELETE("/commenters/:id", requireSiteAdmin(server), server.eraseDiscussionCommenter)
 }
 
 const (
@@ -367,20 +370,23 @@ func (server *Server) loadModerationComment(c *gin.Context, id int64, structure 
 
 // CommenterSummary is a commenter as the drawer and their page show them (4.4, 13.1).
 type CommenterSummary struct {
-	ID          int64      `json:"id"`
-	Email       string     `json:"email"`
-	Name        string     `json:"name"`
-	NamesUsed   []string   `json:"names_used"`
-	VerifiedAt  *time.Time `json:"verified_at"`
-	BlockedAt   *time.Time `json:"blocked_at"`
-	BlockedBy   string     `json:"blocked_by"`
-	LastSpamAt  *time.Time `json:"last_spam_at"`
-	CreatedAt   time.Time  `json:"created_at"`
-	Approved    int64      `json:"approved"`
-	Pending     int64      `json:"pending"`
-	Spam        int64      `json:"spam"`
-	Trash       int64      `json:"trash"`
-	NotifyCount int64      `json:"notify_count"`
+	ID         int64      `json:"id"`
+	Email      string     `json:"email"`
+	Name       string     `json:"name"`
+	NamesUsed  []string   `json:"names_used"`
+	VerifiedAt *time.Time `json:"verified_at"`
+	BlockedAt  *time.Time `json:"blocked_at"`
+	BlockedBy  string     `json:"blocked_by"`
+	LastSpamAt *time.Time `json:"last_spam_at"`
+	CreatedAt  time.Time  `json:"created_at"`
+	Approved   int64      `json:"approved"`
+	Pending    int64      `json:"pending"`
+	Spam       int64      `json:"spam"`
+	Trash      int64      `json:"trash"`
+	// Unconfirmed: comments still waiting for their confirmation mail, which the queue
+	// never lists; Erase deletes them too (#529).
+	Unconfirmed int64 `json:"unconfirmed"`
+	NotifyCount int64 `json:"notify_count"`
 	// NetworkNeighbours: "3 other commenters from this network" (7.2), never the network.
 	NetworkNeighbours int64 `json:"network_neighbours"`
 }
@@ -390,7 +396,7 @@ func toCommenterSummary(row db.GetCommenterModerationRow) CommenterSummary {
 		ID: row.ID, Email: row.Email, Name: row.DisplayName, NamesUsed: row.NamesUsed,
 		VerifiedAt: nullTimePtr(row.VerifiedAt), BlockedAt: nullTimePtr(row.BlockedAt), BlockedBy: row.BlockedByName,
 		LastSpamAt: nullTimePtr(row.LastSpamAt), CreatedAt: row.CreatedAt,
-		Approved: row.ApprovedCount, Pending: row.PendingCount, Spam: row.SpamCount, Trash: row.TrashCount,
+		Approved: row.ApprovedCount, Pending: row.PendingCount, Spam: row.SpamCount, Trash: row.TrashCount, Unconfirmed: row.UnconfirmedCount,
 		NotifyCount: row.NotifyCount, NetworkNeighbours: row.NetworkNeighbours,
 	}
 }

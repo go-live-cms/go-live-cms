@@ -1,19 +1,24 @@
 import { useEffect, useState } from "react"
-import { Link, useParams } from "react-router-dom"
+import { Link, useNavigate, useParams } from "react-router-dom"
 import {
   announceDiscussionChanged,
+  eraseCommenter,
+  exportCommenter,
   getCommenter,
   setCommenterBlocked,
   type CommenterSummary,
   type ModerationComment,
 } from "@gl-admin/lib/api/discussion"
 import { ApiError, errorMessage } from "@gl-admin/lib/api/errors"
-import { STATUS_LABELS, blockedLine, mailLine, networkLine } from "@gl-admin/lib/discussion"
+import { STATUS_LABELS, blockedLine, eraseConfirm, erasedMessage, exportFileName, mailLine, networkLine } from "@gl-admin/lib/discussion"
+import { isSiteAdmin } from "@gl-admin/lib/roles"
+import { useAuthUser } from "@gl-admin/lib/hooks/useAuthUser"
 import { formatLastEdited } from "@gl-admin/lib/contentList"
 import { usePageTitle } from "@gl-admin/lib/hooks/usePageTitle"
 import Avatar from "@gl-admin/components/ui/Avatar"
 import Button, { buttonClassName } from "@gl-admin/components/ui/Button"
 import EmptyState from "@gl-admin/components/ui/EmptyState"
+import Modal from "@gl-admin/components/ui/Modal"
 import Notice from "@gl-admin/components/ui/Notice"
 import Pill, { type PillTone } from "@gl-admin/components/ui/Pill"
 import Skeleton from "@gl-admin/components/ui/Skeleton"
@@ -23,8 +28,10 @@ import "@gl-admin/assets/styles/pages/discussion.scss"
 // A commenter's page (#526; design 13.1, 16.1, the "Discussion · commenter" board): one
 // email address on this site, opened from the drawer or Find a commenter. Editors and
 // admins see the address in full (decision 6) and can Block; Export and Erase are an
-// admin's and come with #529. Every comment of theirs in every status, how many ask for
-// reply mail, and how many other commenters posted from their network.
+// admin's (#529, the API's requireSiteAdmin): Export downloads the commenter's file, Erase
+// asks first and then leaves this page for the queue. Every comment of theirs in every
+// status, how many ask for reply mail, and how many other commenters posted from their
+// network.
 
 const TONES: Record<string, PillTone> = { pending: "warning", approved: "success", spam: "danger", trash: "neutral" }
 
@@ -35,7 +42,12 @@ export default function DiscussionCommenter() {
   const [data, setData] = useState<{ commenter: CommenterSummary; comments: ModerationComment[] } | null>(null)
   const [error, setError] = useState<unknown>(null)
   const [busy, setBusy] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [confirmErase, setConfirmErase] = useState(false)
+  const [erasing, setErasing] = useState(false)
   const [reload, setReload] = useState(0)
+  const admin = isSiteAdmin(useAuthUser()?.role)
+  const navigate = useNavigate()
   usePageTitle(data ? data.commenter.name : "Commenter")
 
   useEffect(() => {
@@ -62,6 +74,43 @@ export default function DiscussionCommenter() {
       toast.error(errorMessage(e, "Couldn't save the block"))
     } finally {
       setBusy(false)
+    }
+  }
+
+  const runExport = async () => {
+    if (!data) return
+    setExporting(true)
+    try {
+      const file = await exportCommenter(data.commenter.id)
+      const url = URL.createObjectURL(new Blob([JSON.stringify(file, null, 2)], { type: "application/json" }))
+      const link = document.createElement("a")
+      link.href = url
+      link.download = exportFileName(data.commenter.id)
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      // Later: revoking at once can cancel the download in some browsers.
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+      toast.success("Exported. The file holds the address and every comment.")
+    } catch (e) {
+      toast.error(errorMessage(e, "Couldn't export the commenter"))
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const runErase = async () => {
+    if (!data) return
+    setErasing(true)
+    try {
+      const result = await eraseCommenter(data.commenter.id)
+      setConfirmErase(false)
+      toast.success(erasedMessage(result))
+      announceDiscussionChanged()
+      navigate("/discussion")
+    } catch (e) {
+      toast.error(errorMessage(e, "Couldn't erase the commenter"))
+      setErasing(false)
     }
   }
 
@@ -146,10 +195,43 @@ export default function DiscussionCommenter() {
               .join(" · ")}
           </span>
         </div>
-        <Button variant="secondary" loading={busy} onClick={() => void toggleBlock()}>
-          {c.blocked_at ? "Unblock" : "Block"}
-        </Button>
+        <div className="gl-dq-commenter__actions">
+          <Button variant="secondary" loading={busy} onClick={() => void toggleBlock()}>
+            {c.blocked_at ? "Unblock" : "Block"}
+          </Button>
+          {admin && (
+            <>
+              <Button variant="secondary" loading={exporting} onClick={() => void runExport()}>
+                Export
+              </Button>
+              <Button variant="danger" onClick={() => setConfirmErase(true)}>
+                Erase
+              </Button>
+            </>
+          )}
+        </div>
       </header>
+
+      <Modal
+        isOpen={confirmErase}
+        onClose={() => !erasing && setConfirmErase(false)}
+        role="alertdialog"
+        size="small"
+        title={eraseConfirm(c).title}
+        description={eraseConfirm(c).body}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setConfirmErase(false)} disabled={erasing}>
+              Cancel
+            </Button>
+            <Button variant="danger" loading={erasing} onClick={() => void runErase()}>
+              {eraseConfirm(c).button}
+            </Button>
+          </>
+        }
+      >
+        <p className="gl-dq-help">{c.email}</p>
+      </Modal>
 
       {blocked && (
         <Notice tone="warning" title={blocked}>

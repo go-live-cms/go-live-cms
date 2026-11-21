@@ -358,6 +358,7 @@ func (server *Server) buildReplyMail(ctx context.Context, claim db.ClaimDueDiscu
 		Replies:         items,
 		UnsubscribeLink: server.accountLink(readerCommentUnsubscribeURL, token),
 		OneClick:        server.publicURL + readerCommentOneClickPath + url.PathEscape(token),
+		ManageLink:      server.publicURL + readerCommentDataPath,
 	})
 	if err != nil {
 		return discussionMail{}, err

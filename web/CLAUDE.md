@@ -448,8 +448,8 @@ are the most fragile part of the codebase. **Before editing anything under
   `/comments/unsubscribe`, `/comments/your-data` (`src/pages/comments/`, panels in `components/comments/reader/`)
   and the refusal page render in `ThemedReaderPage.astro` (the theme's `layouts/reader/default.astro`, else
   `ReaderLayout.astro`), noindex; their states are `<template data-reader-state>` that `gl-comments.js` shows
-  from the `#token=` fragment, spending it only on the button. Unsubscribe is served since #528; your data answers
-  404 until #529 adds its routes (`READER_PAGES_READY`), and the notice's "Your comments" link waits for #529. Styles:
+  from the `#token=` fragment, spending it only on the button. Unsubscribe is served since #528, your data since #529
+  (`READER_PAGES_READY`, below), and the notice links "Your comments". Styles:
   theme.css "reader comments (#525)"; new contrast pairs in `CONTRAST_PAIRS` (and Go's copy, the vectors).
 - **Discussion settings screens (#527, design 12.1–12.3; the canvas's "Settings · Discussion", "Post types ·
   Posts" and "Discussion settings…" boards):** Settings › Discussion is its own page, `/settings/discussion`
@@ -485,7 +485,20 @@ are the most fragile part of the codebase. **Before editing anything under
   no reply box. Rules and wording: `lib/discussion.ts` (tested): row/phone/bulk actions, held and spam reasons, the
   bulk report, reply words, trash dates, Home's "4 comments await moderation" (`attentionItems`, first) and the
   sidebar label; the feed's verbs are `lib/activityFeed.ts` (`reader_comment_*`, `commenter_*`). Client:
-  `lib/api/discussion.ts`. Export and Erase on the commenter page come with #529.
+  `lib/api/discussion.ts`. **Export and Erase** (#529) are on the commenter page for admins only (`isSiteAdmin`; the API
+  is `requireSiteAdmin`): Export downloads the commenter's file (`exportCommenter`, `exportFileName`), Erase asks first
+  (`eraseConfirm`: the name and the count) and then leaves for the queue with `erasedMessage`; the feed reads
+  `commenter_exported` / `commenter_erased` with the count.
+- **"Your comments" (#529, `src/lib/commentData.ts`, design 13.2):** `/comments/your-data` is served
+  (`READER_PAGES_READY.yourData`). Its endpoints: `POST /gl-comments/data-request` (`{email}`; the API answers the same
+  202 for any address; JSON for the script, and **without scripts** a 303 to `/comments/your-data?sent=1` or
+  `?error=email_invalid|rate_limited|failed`, which the panel renders at once, `data-reader-final`), and JSON-only
+  `/gl-comments/data` (`{token}` → the commenter's file), `/data/delete` (`{token, comment_id?}`: one comment, or
+  Delete everything) and `/data/unsubscribe` (`{token}`: Stop all mail), all through `linkEndpoint` (same-origin,
+  a base64url token, the browser's address forwarded, never the commenter keys, logs by status only). The panel
+  (`YourDataPanel.astro`) lists every status in the reader's words (Published, Waiting for review, Not confirmed,
+  Not published), shows Stop all mail only when something is mailed and an empty list's line, and Download my data
+  saves the API's file. Tests: `src/pages/gl-comments/data.test.ts`, `src/pages/comments/readerPages.astro.test.ts`.
 - **Global styles (#485, `src/lib/globalStyles.ts`, design `docs/design/theme-builder.md`
   section 6):** the override grammar, validator, contrast (`CONTRAST_PAIRS`, which the
   default theme's `tokens.test.ts` checks) and groups, the same rules as the API's

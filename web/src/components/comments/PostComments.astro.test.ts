@@ -164,10 +164,10 @@ describe("what the section shows (11.2)", () => {
     expect(html).toContain("Check your email to publish your comment")
   })
 
-  it("the site's own notice and its privacy page", async () => {
+  it("the site's own notice, its privacy page and Your comments (#529)", async () => {
     settings.value = { comments: { threading: "replies", notice: "We keep comments for a year.", privacyHref: "/page/12" } }
     const html = await render(answer("open", BOARD))
-    expect(html).toMatch(/<p class="comment-privacy">We keep comments for a year\. <a href="\/page\/12">Privacy<\/a><\/p>/)
+    expect(html).toMatch(/<p class="comment-privacy">We keep comments for a year\. <a href="\/page\/12">Privacy<\/a> · <a href="\/comments\/your-data">Your comments<\/a><\/p>/)
   })
 })
 

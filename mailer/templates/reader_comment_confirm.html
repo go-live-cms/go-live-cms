@@ -8,6 +8,7 @@
     <p style="margin:0 0 24px;"><a href="{{.Link}}" style="display:inline-block;padding:12px 20px;border-radius:8px;background:#1f2328;color:#ffffff;text-decoration:none;font-weight:600;">Publish my comment</a></p>
     <p style="margin:0 0 8px;font-size:13px;line-height:1.5;color:#59636e;">Or paste this link into your browser:<br><a href="{{.Link}}" style="color:#59636e;word-break:break-all;">{{.Link}}</a></p>
     <p style="margin:16px 0 0;font-size:13px;line-height:1.5;color:#59636e;">The link works once and expires in {{.ExpiresIn}}. Publishing also keeps this address on that browser, so its next comments won't need an email. <strong>If you didn't write a comment, ignore this email:</strong> nothing is published.</p>
+    {{if .ManageLink}}<p style="margin:16px 0 0;font-size:13px;line-height:1.5;color:#59636e;"><a href="{{.ManageLink}}" style="color:#59636e;">Manage your comments</a></p>{{end}}
   </div>
 </body>
 </html>

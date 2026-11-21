@@ -431,6 +431,35 @@ func TestMentionAndReminderTemplates(t *testing.T) {
 	require.Contains(t, reminder.HTML, "Launch &lt;plan&gt;")
 }
 
+// "Your comments" (#529): a link and nothing else, and every reader mail's "Manage your
+// comments".
+func TestReaderCommentDataTemplates(t *testing.T) {
+	msg, err := RenderReaderCommentData("ana@example.com", ReaderCommentData{
+		SiteTitle: "Acme\r\nBcc: x@y.z", Link: "https://acme.example/comments/your-data#token=abc", ExpiresIn: time.Hour,
+	})
+	require.NoError(t, err)
+	require.Equal(t, TemplateReaderCommentData, msg.Template)
+	require.Equal(t, "ana@example.com", msg.To)
+	require.Equal(t, "Your comments on Acme Bcc: x@y.z", msg.Subject, "one line")
+	require.Contains(t, msg.Text, "https://acme.example/comments/your-data#token=abc")
+	require.Contains(t, msg.Text, "1 hour")
+	require.Contains(t, msg.HTML, `href="https://acme.example/comments/your-data#token=abc"`)
+	require.Empty(t, msg.ListUnsubscribe)
+
+	manage := "https://acme.example/comments/your-data"
+	reply, err := RenderReaderCommentReply("ana@example.com", ReaderCommentReply{PostTitle: "Hi", Replies: []CommentItem{{Name: "Bea", Excerpt: "x"}}, ManageLink: manage})
+	require.NoError(t, err)
+	require.Contains(t, reply.Text, "Manage your comments: "+manage)
+	require.Contains(t, reply.HTML, `href="`+manage+`"`)
+	confirm, err := RenderReaderCommentConfirm("ana@example.com", ReaderCommentConfirm{PostTitle: "Hi", Link: "https://acme.example/comments/confirm#token=x", ExpiresIn: 48 * time.Hour, ManageLink: manage})
+	require.NoError(t, err)
+	require.Contains(t, confirm.Text, manage)
+	require.Contains(t, confirm.HTML, `href="`+manage+`"`)
+	bare, err := RenderReaderCommentConfirm("ana@example.com", ReaderCommentConfirm{PostTitle: "Hi", Link: "https://acme.example/comments/confirm#token=x", ExpiresIn: 48 * time.Hour})
+	require.NoError(t, err)
+	require.NotContains(t, bare.Text, "your-data")
+}
+
 func TestReaderCommentNotificationTemplates(t *testing.T) {
 	long := strings.Repeat("word ", 100) + "<b>end</b>"
 	reply, err := RenderReaderCommentReply("ana@example.com", ReaderCommentReply{

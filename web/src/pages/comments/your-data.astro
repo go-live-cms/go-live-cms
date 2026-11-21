@@ -1,21 +1,25 @@
 ---
 /**
- * /comments/your-data (#525, docs/design/reader-comments.md 13.2, 11.6): "Your comments", where a
- * reader asks for a link and, with it (`#token=`), sees, downloads or deletes their comments.
- * Not served until #529 adds the endpoints and the export (`READER_PAGES_READY.yourData`): a 404
- * until then, and the privacy notice leaves out its "Your comments" link.
+ * /comments/your-data (#525, #529; docs/design/reader-comments.md 13.2, 11.6): "Your comments",
+ * where a reader asks for a link and, with it (`#token=`), sees, downloads or deletes their
+ * comments. Served since #529 added the endpoints (`READER_PAGES_READY.yourData`). Without
+ * scripts the request form still works: `/gl-comments/data-request` sends it back here with
+ * `?sent=1` ("Check your email") or `?error=<code>`, which render at once.
  */
 import ThemedReaderPage from '@/components/ThemedReaderPage.astro'
 import YourDataPanel from '@/components/comments/reader/YourDataPanel.astro'
 import { READER_PAGES_READY } from '@/lib/postComments'
+import { YOUR_DATA_ERROR_PARAM, YOUR_DATA_SENT_PARAM } from '@/lib/commentData'
 
 export const prerender = false
 
 if (!READER_PAGES_READY.yourData) return new Response(null, { status: 404 })
 Astro.response.headers.set('Referrer-Policy', 'no-referrer')
 Astro.response.headers.set('X-Robots-Tag', 'noindex')
+const sent = Astro.url.searchParams.get(YOUR_DATA_SENT_PARAM) === '1'
+const error = Astro.url.searchParams.get(YOUR_DATA_ERROR_PARAM)
 ---
 
 <ThemedReaderPage title="Your comments" description="See, download or delete the comments you wrote.">
-  <YourDataPanel />
+  <YourDataPanel sent={sent} error={error} />
 </ThemedReaderPage>

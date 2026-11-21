@@ -646,6 +646,18 @@
           say("Deleted your comment on " + ((item.querySelector("b") || {}).textContent || "the post") + ".")
         })
       })
+      onClick("[data-reader-stop-mail]", function (button) {
+        busy(button, true)
+        post("/gl-comments/data/unsubscribe", { token: token }).then(function (answer) {
+          if (answer.status !== 204 && answer.status !== 200) {
+            busy(button, false)
+            return failed(answer)
+          }
+          if (request && Array.isArray(request.subscriptions)) request.subscriptions = []
+          button.replaceWith(h("span", { class: "meta reader-item-done" }, "Reply emails stopped"))
+          say("You won’t get reply emails from this site any more.")
+        })
+      })
       onClick("[data-reader-download]", function () {
         if (!request) return
         var blob = new Blob([JSON.stringify(request, null, 2)], { type: "application/json" })
@@ -672,7 +684,10 @@
       })
     }
 
-    // The export of 13.2 (#529 owns its shape): {commenter: {email}, comments: [{id, post_title, post_url, status, created_at, body}]}.
+    // The export of 13.2 (#529, api/discussion_privacy.go CommenterExport): {commenter: {email},
+    // comments: [{id, post_title, post_url, status, created_at, body}], subscriptions: [...]}.
+    // Every status is listed: the reader sees what the site keeps, not only what is shown.
+    var STATUS_LABELS = { approved: "Published", pending: "Waiting for review", unconfirmed: "Not confirmed", spam: "Not published", trash: "Not published" }
     function commenterEmail(data) {
       return (data && data.commenter && data.commenter.email) || ""
     }
@@ -685,7 +700,12 @@
       var row = root.querySelector('template[data-reader-state="item"]')
       var list = node && node.querySelector(".reader-list")
       if (!list || !row) return
-      ;(Array.isArray(data.comments) ? data.comments : []).forEach(function (comment) {
+      var comments = Array.isArray(data.comments) ? data.comments : []
+      var empty = node.querySelector("[data-reader-empty]")
+      if (empty && comments.length === 0) empty.hidden = false
+      var stop = node.querySelector("[data-reader-stop-mail]")
+      if (stop && Array.isArray(data.subscriptions) && data.subscriptions.length > 0) stop.hidden = false
+      comments.forEach(function (comment) {
         if (!comment || !/^[1-9][0-9]*$/.test(String(comment.id))) return
         var item = row.content.cloneNode(true).querySelector("li")
         item.setAttribute("data-comment-id", String(comment.id))
@@ -693,7 +713,7 @@
         fill(item, {
           post: { href: comment.post_url, text: String(comment.post_title || "") },
           when: when && !isNaN(when.getTime()) ? when.toLocaleDateString(document.documentElement.lang || undefined, { month: "short", day: "numeric" }) : "",
-          status: comment.status === "approved" ? "Published" : "Waiting for review",
+          status: STATUS_LABELS[comment.status] || "Waiting for review",
           excerpt: String(comment.body || "").slice(0, 200),
         })
         var del = item.querySelector("[data-reader-delete]")

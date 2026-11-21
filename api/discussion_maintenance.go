@@ -18,7 +18,7 @@ import (
 //     after they got there. One that approved replies still hang from becomes a
 //     tombstone instead of being deleted (the root's cascade would take them, 6.4);
 //   - network hashes after 30 days (7.2);
-//   - expired browser keys (3.3);
+//   - expired browser keys (3.3) and "Your comments" links (13.2, #529);
 //   - tombstones with no replies left;
 //   - commenters with no comments and no keys, unseen for 30 days, unless blocked or
 //     marked spam in the last 90 days: those rows are what the block and previous_spam
@@ -47,6 +47,7 @@ type discussionMaintenanceResult struct {
 	TombstonesDeleted int64
 	HashesCleared     int64
 	KeysDeleted       int64
+	DataLinksDeleted  int64
 	CommentersDeleted int64
 	MailPruned        int64
 }
@@ -92,6 +93,7 @@ func (server *Server) maintainDiscussion(ctx context.Context) {
 			"tombstones_deleted", result.TombstonesDeleted,
 			"network_hashes_cleared", result.HashesCleared,
 			"commenter_keys_deleted", result.KeysDeleted,
+			"data_links_deleted", result.DataLinksDeleted,
 			"commenters_deleted", result.CommentersDeleted,
 			"mail_pruned", result.MailPruned)
 	}
@@ -131,6 +133,9 @@ func (server *Server) runDiscussionMaintenance(ctx context.Context, now time.Tim
 		return result, err
 	}
 	if result.KeysDeleted, err = server.store.DeleteExpiredCommenterKeys(ctx, now); err != nil {
+		return result, err
+	}
+	if result.DataLinksDeleted, err = server.store.DeleteExpiredCommenterDataTokens(ctx, now); err != nil {
 		return result, err
 	}
 	if result.CommentersDeleted, err = server.store.DeleteStaleCommenters(ctx, db.DeleteStaleCommentersParams{StaleBefore: now.Add(-commenterStaleTTL), SpamSince: now.Add(-commenterSpamMemory)}); err != nil {

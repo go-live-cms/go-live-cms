@@ -87,6 +87,8 @@ export interface CommenterSummary {
   pending: number
   spam: number
   trash: number
+  // Waiting for their confirmation mail (never in the queue); Erase deletes them too (#529).
+  unconfirmed?: number
   notify_count: number
   network_neighbours: number
 }
@@ -189,4 +191,15 @@ export async function getCommenter(id: number): Promise<{ commenter: CommenterSu
 export async function setCommenterBlocked(id: number, blocked: boolean): Promise<CommenterSummary> {
   const answer = await apiCall(`/discussion/commenters/${id}/block`, { method: "PUT", body: { blocked } })
   return answer.commenter
+}
+
+// A commenter's export and erasure (#529, design 13.1): admins only (the API is
+// requireSiteAdmin). The export is the commenter's file (api/discussion_privacy.go's
+// CommenterExport), the same the reader downloads from "Your comments".
+export async function exportCommenter(id: number): Promise<unknown> {
+  return apiCall(`/discussion/commenters/${id}/export`)
+}
+
+export async function eraseCommenter(id: number): Promise<{ comment_count: number; tombstoned: number }> {
+  return apiCall(`/discussion/commenters/${id}`, { method: "DELETE" })
 }

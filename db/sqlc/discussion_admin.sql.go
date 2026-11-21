@@ -81,6 +81,8 @@ SELECT
   (SELECT count(*) FROM reader_comments r WHERE r.commenter_id = c.id AND r.status = 'pending')::bigint AS pending_count,
   (SELECT count(*) FROM reader_comments r WHERE r.commenter_id = c.id AND r.status = 'spam')::bigint AS spam_count,
   (SELECT count(*) FROM reader_comments r WHERE r.commenter_id = c.id AND r.status = 'trash')::bigint AS trash_count,
+  -- Erase deletes these too (#529): its confirmation counts them.
+  (SELECT count(*) FROM reader_comments r WHERE r.commenter_id = c.id AND r.status = 'unconfirmed')::bigint AS unconfirmed_count,
   (SELECT count(*) FROM reader_comments r WHERE r.commenter_id = c.id AND r.notify_replies AND r.status <> 'unconfirmed')::bigint AS notify_count,
   coalesce((
     SELECT array_agg(DISTINCT r.display_name ORDER BY r.display_name) FROM reader_comments r
@@ -113,6 +115,7 @@ type GetCommenterModerationRow struct {
 	PendingCount      int64        `json:"pending_count"`
 	SpamCount         int64        `json:"spam_count"`
 	TrashCount        int64        `json:"trash_count"`
+	UnconfirmedCount  int64        `json:"unconfirmed_count"`
 	NotifyCount       int64        `json:"notify_count"`
 	NamesUsed         []string     `json:"names_used"`
 	NetworkNeighbours int64        `json:"network_neighbours"`
@@ -138,6 +141,7 @@ func (q *Queries) GetCommenterModeration(ctx context.Context, id int64) (GetComm
 		&i.PendingCount,
 		&i.SpamCount,
 		&i.TrashCount,
+		&i.UnconfirmedCount,
 		&i.NotifyCount,
 		pq.Array(&i.NamesUsed),
 		&i.NetworkNeighbours,
