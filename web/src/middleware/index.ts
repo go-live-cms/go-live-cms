@@ -11,6 +11,7 @@ import { applyAdminCsp, applyPublicCsp, isAccountPagePath, isAdminPath } from ".
 import { getSiteSettings } from "../lib/siteSettings"
 import { isApiProxyPath, proxyToApi } from "./apiProxy"
 import { redirectOn404 } from "./redirects"
+import { crossSiteRefusal } from "./originCheck"
 import { shouldNoindex } from "../lib/seo"
 import { withPageCacheControl } from "../lib/httpCache"
 import { SERVER_MEDIA_URL } from "../../gl-admin/lib/server-api-url"
@@ -38,6 +39,11 @@ const THEME_FUNCTIONS = import.meta.glob<Record<string, any>>("../../themes/*/fu
 // Every log line written while a request is handled carries its id (Caddy's X-Request-ID,
 // which the API proxy also forwards) and route pattern, never the raw path (#378).
 export const onRequest = defineMiddleware((context, next) => {
+  // Astro's checkOrigin, here so RFC 8058's one-click route can be exempt (originCheck.ts).
+  if (!context.isPrerendered) {
+    const refused = crossSiteRefusal(context.request, context.url)
+    if (refused) return refused
+  }
   const proxied = !import.meta.env.DEV && isApiProxyPath(context.url.pathname)
   const requestId = requestIdFrom(context.request.headers)
   context.locals.requestId = requestId

@@ -1348,7 +1348,7 @@ Built as designed and drawn, with these details the text left open:
 - **The bulk action records one event** (`reader_comments_bulk_moderated`), not one per comment, so a
   cleanup of 50 spam comments is one line in the feed.
 - **The settings switch has no gate any more** (#527's `COMMENTS_SWITCH_READY` is gone); comments
-  start off. The hook for #528's notifications is `readerCommentModerated` (api/CLAUDE.md).
+  start off. The hook for #528's notifications was `readerCommentModerated`; #528 replaced it with a trigger (16.6).
 
 ### 16.5 What #500 settled
 
@@ -1371,6 +1371,41 @@ theme-builder 4.5's "As built (T18)"):
   "Comments are off for this site" while they are, and has a "Discussion settings" button (the Site editor is
   admins' only). The Block tab's one field is Title, with its invalid state past 60 characters. Where it can't go
   the inserter leaves it out, as Post content's second copy; a copy that got there anyway says it shows nothing.
+
+### 16.6 What C8 settled (#528)
+
+Built as designed (`000068`, `api/discussion_mail.go`, `api/discussion_unsubscribe.go`), with these details the
+text left open:
+
+- **The trigger writes the outbox.** Reply and author rows are queued by a trigger on `reader_comments` when a
+  comment becomes approved, so every path (moderation, bulk, a member's comment, a confirmation, a keyed comment,
+  a restore) writes them in its own transaction. #526's after-commit hook (`readerCommentModerated`) is gone: it
+  ran after the commit and missed the reader paths.
+- **Reply mail coalesces per comment answered**, not per reader: an unsubscribe token can only turn off one
+  comment (8.2), so each reply mail is about one comment and carries its own token, both in the visible link and
+  in RFC 8058's `List-Unsubscribe`. Twenty replies to Ana's comment are one mail; replies to two of her comments
+  are two.
+- **The digest goes at 08:00 in the site's zone.** "Each one" waits five minutes from the first comment, as
+  reply mail does. Changing the preference moves the waiting mail, and Off drops it.
+- **Moderation mail isn't queued per comment.** Each round of the sender asks whether the queue holds a pending
+  comment that the moderator's latest mail didn't count, and whether they had no mail sent (or failed) in the last
+  hour. So the first comment is mailed within a round, later ones wait for the hour, and a queue that hasn't grown
+  mails nothing.
+- **Comments off pauses the sender.** Queued mail waits and is built from the data as it is once comments are
+  back on, so switching comments off for a minute loses nobody's mail.
+- **A client without one-click** opens the header's URL in a browser: its GET changes nothing and goes to the
+  unsubscribe page with the buttons.
+- **Not about what you did:** no author mail about your own comment, nor about one you approved. A reader's
+  reply to their own comment mails nobody.
+- **Members' mail has no unsubscribe header.** Profile is where members choose, and a contributor's author mail
+  has no Discussion link (decision 3). Only readers' reply mail has RFC 8058's headers.
+- **The one-click route skips the origin check.** Mail providers post it from their own servers. Astro's
+  `checkOrigin` would refuse it, so the web runs the same check in its middleware, exempting that one route
+  (`web/src/middleware/originCheck.ts`).
+- **"Manage your comments" isn't linked yet.** Reply mail links the unsubscribe page only; #529 adds the
+  your-data link when its page is served.
+- **Erased is already respected.** Recipients are resolved when the mail is built, so an erased commenter (#529
+  deletes the row, and its outbox rows go with it) or a removed member gets nothing.
 
 ## 17. Phased plan
 

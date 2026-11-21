@@ -8,6 +8,7 @@ import (
 	"strings"
 	texttemplate "text/template"
 	"time"
+	"unicode"
 )
 
 // Email templates: a plain-text and a simple HTML version of each, in
@@ -40,8 +41,11 @@ const (
 	TemplateMention  = "mention"
 	TemplateReminder = "reminder"
 
-	// Reader comments (#524).
-	TemplateReaderCommentConfirm = "reader-comment-confirm"
+	// Reader comments (#524), and their notifications (#528).
+	TemplateReaderCommentConfirm    = "reader-comment-confirm"
+	TemplateReaderCommentReply      = "reader-comment-reply"
+	TemplateReaderCommentAuthor     = "reader-comment-author"
+	TemplateReaderCommentModeration = "reader-comment-moderation"
 )
 
 // SignupVerify is the data for the open signup confirmation link (#191), sent to
@@ -157,6 +161,14 @@ type templateData struct {
 	When string
 	// Reader comment confirmation (#524): the post's public URL.
 	PostURL string
+	// Reader comment notifications (#528): the comments a mail is about, how many, the
+	// posts a moderation mail names, the reply mail's unsubscribe page, Profile.
+	Comments        []CommentItem
+	Count           int
+	Titles          []string
+	UnsubscribeLink string
+	ProfileLink     string
+	Digest          bool
 }
 
 // RenderAccessRequest renders the edit access request email to a reviewer.
@@ -403,4 +415,148 @@ func RenderReaderCommentConfirm(to string, d ReaderCommentConfirm) (Message, err
 		ExpiresIn: HumanDuration(d.ExpiresIn),
 	}
 	return render(to, TemplateReaderCommentConfirm, fmt.Sprintf("Confirm your comment on %s", data.SiteTitle), "reader_comment_confirm", data)
+}
+
+// CommentItem is one comment in a notification (#528): who wrote it (the name as posted,
+// or a member's current name), its first 300 characters (approved text: readers'
+// comments are moderated before anyone is mailed about them), its link on the post, and
+// the post's title (author mails, which may cover several posts). Plain text:
+// html/template escapes it, and nothing of it goes in a header.
+type CommentItem struct {
+	Name      string
+	Excerpt   string
+	URL       string
+	PostTitle string
+}
+
+// CommentExcerptMax is how much of a comment a notification quotes (8.1).
+const CommentExcerptMax = 300
+
+// ReaderCommentReply is the data for "New reply" (#528, design 8.1), to a reader who asked
+// for replies to their comment: the replies to that one comment since the last mail.
+// UnsubscribeLink is the visible link (/comments/unsubscribe#token=…); OneClick the RFC
+// 8058 URL for the List-Unsubscribe header. Both carry the same token.
+type ReaderCommentReply struct {
+	SiteTitle       string
+	PostTitle       string
+	Replies         []CommentItem
+	UnsubscribeLink string
+	OneClick        string
+}
+
+// RenderReaderCommentReply renders a reply notification to to.
+func RenderReaderCommentReply(to string, d ReaderCommentReply) (Message, error) {
+	data := templateData{
+		SiteTitle:       siteTitle(d.SiteTitle),
+		PostTitle:       postTitle(d.PostTitle),
+		Comments:        commentItems(d.Replies),
+		Count:           len(d.Replies),
+		UnsubscribeLink: d.UnsubscribeLink,
+	}
+	subject := fmt.Sprintf("New reply to your comment on %s", data.PostTitle)
+	if data.Count > 1 {
+		subject = fmt.Sprintf("%d new replies to your comment on %s", data.Count, data.PostTitle)
+	}
+	msg, err := render(to, TemplateReaderCommentReply, subject, "reader_comment_reply", data)
+	msg.ListUnsubscribe = d.OneClick
+	return msg, err
+}
+
+// ReaderCommentAuthor is the data for "New comments on your post" (#528, 8.1), to a member
+// on the posts' published bylines: each one (coalesced) or the daily digest (8.3).
+// DiscussionLink opens Discussion in the admin, ProfileLink the member's preferences.
+type ReaderCommentAuthor struct {
+	SiteTitle      string
+	Digest         bool
+	Comments       []CommentItem
+	DiscussionLink string
+	ProfileLink    string
+}
+
+// RenderReaderCommentAuthor renders an author notification to to.
+func RenderReaderCommentAuthor(to string, d ReaderCommentAuthor) (Message, error) {
+	data := templateData{
+		SiteTitle:   siteTitle(d.SiteTitle),
+		Digest:      d.Digest,
+		Comments:    commentItems(d.Comments),
+		Count:       len(d.Comments),
+		Link:        d.DiscussionLink,
+		ProfileLink: d.ProfileLink,
+	}
+	var subject string
+	switch {
+	case d.Digest && data.Count == 1:
+		subject = fmt.Sprintf("Today on %s: a new comment on your posts", data.SiteTitle)
+	case d.Digest:
+		subject = fmt.Sprintf("Today on %s: %d new comments on your posts", data.SiteTitle, data.Count)
+	case data.Count == 1:
+		subject = fmt.Sprintf("New comment on %s", data.Comments[0].PostTitle)
+	default:
+		subject = fmt.Sprintf("%d new comments on your posts", data.Count)
+	}
+	return render(to, TemplateReaderCommentAuthor, subject, "reader_comment_author", data)
+}
+
+// ReaderCommentModeration is the data for "Comments await moderation" (#528, 8.1), to
+// editors and admins at most hourly: the count, the newest posts' titles, the link to
+// Pending. Never a commenter's name, address or text.
+type ReaderCommentModeration struct {
+	SiteTitle   string
+	Count       int
+	PostTitles  []string
+	Link        string
+	ProfileLink string
+}
+
+// RenderReaderCommentModeration renders a moderation notification to to.
+func RenderReaderCommentModeration(to string, d ReaderCommentModeration) (Message, error) {
+	titles := make([]string, len(d.PostTitles))
+	for i, title := range d.PostTitles {
+		titles[i] = postTitle(title)
+	}
+	data := templateData{
+		SiteTitle:   siteTitle(d.SiteTitle),
+		Count:       d.Count,
+		Titles:      titles,
+		Link:        d.Link,
+		ProfileLink: d.ProfileLink,
+	}
+	subject := fmt.Sprintf("%d comments await moderation on %s", d.Count, data.SiteTitle)
+	if d.Count == 1 {
+		subject = fmt.Sprintf("A comment awaits moderation on %s", data.SiteTitle)
+	}
+	return render(to, TemplateReaderCommentModeration, subject, "reader_comment_moderation", data)
+}
+
+// commentItems keeps names and titles to one line with their fallbacks, and the
+// excerpts to CommentExcerptMax characters.
+func commentItems(items []CommentItem) []CommentItem {
+	out := make([]CommentItem, len(items))
+	for i, item := range items {
+		out[i] = CommentItem{
+			Name:      personName(item.Name),
+			Excerpt:   Excerpt(item.Excerpt, CommentExcerptMax),
+			URL:       item.URL,
+			PostTitle: postTitle(item.PostTitle),
+		}
+	}
+	return out
+}
+
+// Excerpt is text's first max characters (code points), with "…" when it was cut, the
+// cut moved back to a space when one is near so a word isn't split.
+func Excerpt(text string, max int) string {
+	text = strings.TrimSpace(text)
+	runes := []rune(text)
+	if len(runes) <= max {
+		return text
+	}
+	cut := runes[:max]
+	for i := len(cut) - 1; i > max-30 && i > 0; i-- {
+		if unicode.IsSpace(cut[i]) {
+			cut = cut[:i]
+			break
+		}
+	}
+	return strings.TrimRightFunc(string(cut), unicode.IsSpace) + "…"
 }

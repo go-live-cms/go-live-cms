@@ -41,6 +41,14 @@ type Querier interface {
 	// exclude_id skips the post being edited; pass 0 when creating.
 	CheckSlugExists(ctx context.Context, arg CheckSlugExistsParams) (bool, error)
 	CheckURLExists(ctx context.Context, url string) (bool, error)
+	// Reader comment mail (#528, docs/design/reader-comments.md 8; api/discussion_mail.go).
+	// The reply and author rows are written by 000068's trigger, in the approving
+	// transaction; these queries claim, build, finish and prune them, queue moderation mail
+	// and serve unsubscribing and members' preferences.
+	// Claims up to max_rows due rows for this replica (FOR UPDATE SKIP LOCKED, then a lease,
+	// as ClaimDueReminders). claimed_until is the claim's fencing token. A claimed row
+	// (attempts > 0) takes no more comments: the next one opens a new row.
+	ClaimDueDiscussionMail(ctx context.Context, arg ClaimDueDiscussionMailParams) ([]ClaimDueDiscussionMailRow, error)
 	// Takes up to max_runs due runs of one plugin, for the events this process has a hook
 	// for, and leases them: status running, next_attempt_at lease_seconds ahead (the
 	// fencing token the record queries check). A running run whose lease has passed (its
@@ -210,6 +218,9 @@ type Querier interface {
 	CreatePostType(ctx context.Context, arg CreatePostTypeParams) (PostType, error)
 	CreatePosts(ctx context.Context, arg CreatePostsParams) (Post, error)
 	CreateReaderComment(ctx context.Context, arg CreateReaderCommentParams) (ReaderComment, error)
+	// A reply mail's unsubscribe token (8.2), minted when the mail is built: only its hash is
+	// kept, so each mail brings its own. It goes with the comment.
+	CreateReaderCommentUnsubscribeToken(ctx context.Context, arg CreateReaderCommentUnsubscribeTokenParams) error
 	// Review requests (#323, 000044). Publishing resolves the open one in a trigger
 	// (golive_resolve_review_on_publish); the API writes the rest here.
 	// A new open request. Nothing is inserted (sql.ErrNoRows) when the post already
@@ -293,6 +304,8 @@ type Querier interface {
 	// The row itself; its replies go with it only when it roots their thread (root_id's
 	// cascade), which DeleteReaderCommentTx allows only when none of them is approved.
 	DeleteReaderCommentRow(ctx context.Context, id int64) (int64, error)
+	// A token whose mail was never delivered (the send failed): nobody holds it.
+	DeleteReaderCommentUnsubscribeToken(ctx context.Context, tokenHash []byte) error
 	DeleteReaderCommentUnsubscribeTokens(ctx context.Context, commentID int64) error
 	DeleteRedirect(ctx context.Context, id int64) (Redirect, error)
 	DeleteRedirectFromPath(ctx context.Context, fromPath string) (int64, error)
@@ -339,6 +352,14 @@ type Querier interface {
 	DismissImportNotice(ctx context.Context, arg DismissImportNoticeParams) (int64, error)
 	// No row when the plugin isn't installed and compatible, or is already enabled.
 	EnablePlugin(ctx context.Context, arg EnablePluginParams) (Plugin, error)
+	// "Comments await moderation" (8.1), due now, for every editor and admin who wants it,
+	// when the queue holds a pending comment their latest sent mail didn't count (each one
+	// records the whole pending queue it counted), and they had none sent or failed in the
+	// last hour ("each hour at most", 8.3: a failing address isn't retried every round) and
+	// have none waiting. The open-row index makes a second replica's insert a no-op. Nothing
+	// is queued per comment: the queue itself is the durable fact, so a moderation mail can't
+	// be lost to a rollback.
+	EnqueueModerationMail(ctx context.Context) (int64, error)
 	// The commenter of a typed address, created when new. An existing row is returned as it
 	// is: whoever typed the address hasn't shown they own it, so their name and spelling of
 	// the address don't replace the owner's (a confirmation or a key does that).
@@ -358,6 +379,10 @@ type Querier interface {
 	// round), so events are fanned out in id order and a later event's run never exists
 	// before an earlier one's for the same post. locked = false: another replica holds it.
 	FanOutPluginEvents(ctx context.Context, maxEvents int32) (FanOutPluginEventsRow, error)
+	// Ends a claimed row (sent, dropped, or failed for good), only under this claim.
+	// comment_ids, when given, replaces the row's (a moderation mail records the pending
+	// comments it counted, so the next one says only what is new).
+	FinishDiscussionMail(ctx context.Context, arg FinishDiscussionMailParams) (int64, error)
 	// A skipped or failed item (an imported one is ImportPostTx's), fenced by the job's claim.
 	FinishImportItem(ctx context.Context, arg FinishImportItemParams) (int64, error)
 	FinishImportJob(ctx context.Context, arg FinishImportJobParams) (int64, error)
@@ -507,6 +532,8 @@ type Querier interface {
 	// shape of GetPostTaxonomyTerms.
 	GetPublishedPostTaxonomyTerms(ctx context.Context, postID int64) ([]GetPublishedPostTaxonomyTermsRow, error)
 	GetReaderComment(ctx context.Context, id int64) (ReaderComment, error)
+	// The comment an unsubscribe token turns off, and its commenter (for "Stop all mail").
+	GetReaderCommentByUnsubscribeToken(ctx context.Context, tokenHash []byte) (GetReaderCommentByUnsubscribeTokenRow, error)
 	// ---------------------------------------------------------------------------------
 	// The public write path (#524, api/discussion_write.go, design 3.3, 4.2, 5, 9.2).
 	// What the write path reads of the post a comment is for: its state's inputs (12.4) and
@@ -559,6 +586,8 @@ type Querier interface {
 	GetUserByEmailFold(ctx context.Context, email string) (User, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
 	GetUserMediaCount(ctx context.Context, userID int64) (int64, error)
+	// Profile's Notifications (8.3).
+	GetUserNotifications(ctx context.Context, id int64) (GetUserNotificationsRow, error)
 	GetValidEmailChangeTokenByHash(ctx context.Context, tokenHash []byte) (EmailChangeToken, error)
 	GetValidPasswordResetTokenByHash(ctx context.Context, tokenHash []byte) (PasswordResetToken, error)
 	GetValidUserInvitationByTokenHash(ctx context.Context, tokenHash []byte) (UserInvitation, error)
@@ -656,6 +685,11 @@ type Querier interface {
 	// this type that the caller may read (viewer_id as in ListPosts, #393), trash aside.
 	// Public fields only. Kept short: a filter menu, not a member directory.
 	ListCreditedAuthors(ctx context.Context, arg ListCreditedAuthorsParams) ([]ListCreditedAuthorsRow, error)
+	// What a mail says about its comments, read when it is built (8.4): their state now, and
+	// the post's, so a comment trashed, a post unpublished or a member taken off the byline
+	// meanwhile is left out. name is a member's current name. on_byline: member_id is on the
+	// post's published byline.
+	ListDiscussionMailComments(ctx context.Context, arg ListDiscussionMailCommentsParams) ([]ListDiscussionMailCommentsRow, error)
 	// What the block menus offer (GET /plugins/enabled): enabled and in this build.
 	// A missing or incompatible plugin keeps its flag but isn't running.
 	ListEnabledPluginSlugs(ctx context.Context) ([]string, error)
@@ -731,6 +765,9 @@ type Querier interface {
 	// Author badge, 3.4); a removed member's has neither (author_user_id is NULL).
 	// pattern is an ILIKE pattern ('' = no search) over the text and the name.
 	ListModerationComments(ctx context.Context, arg ListModerationCommentsParams) ([]ListModerationCommentsRow, error)
+	// The posts with the newest pending comments, newest first (a moderation mail names
+	// three, 8.1). Titles as the admin shows them.
+	ListNewestPendingCommentPosts(ctx context.Context, maxRows int32) ([]ListNewestPendingCommentPostsRow, error)
 	// The posts list's "Review requested" indicator, for one page of rows.
 	ListOpenReviewRequestsForPosts(ctx context.Context, postIds []int64) ([]ListOpenReviewRequestsForPostsRow, error)
 	// What the admin Users page shows. Invitations that expired over 30 days ago
@@ -745,6 +782,8 @@ type Querier interface {
 	ListPendingAccessRequestsForReviewer(ctx context.Context, arg ListPendingAccessRequestsForReviewerParams) ([]ListPendingAccessRequestsForReviewerRow, error)
 	// A post's open requests with who asked, oldest first (the editor's notice).
 	ListPendingPostAccessRequests(ctx context.Context, postID int64) ([]ListPendingPostAccessRequestsRow, error)
+	// The moderation queue's Pending tab, as ids (a moderation mail's count).
+	ListPendingReaderCommentIDs(ctx context.Context) ([]int64, error)
 	// A plugin's stored settings (extension_settings, extension_type 'plugin'), for
 	// pluginsdk.Host.Settings.
 	ListPluginExtensionSettings(ctx context.Context, slug string) ([]ListPluginExtensionSettingsRow, error)
@@ -1000,6 +1039,8 @@ type Querier interface {
 	NextGlobalStyleVersionNo(ctx context.Context, themeSlug string) (int32, error)
 	NextPendingImportItem(ctx context.Context, jobID int64) (ImportItem, error)
 	NextSiteTemplateVersionNo(ctx context.Context, templateID int64) (int32, error)
+	// Finished rows go after 7 days (8.4): ids only, but no reason to keep them.
+	PruneDiscussionMail(ctx context.Context, doneBefore time.Time) (int64, error)
 	// Deletes the rows of blocks that aren't in the post's new block_doc (keep_ids: every
 	// key of its "blocks", hidden blocks included).
 	PrunePostBlockEdits(ctx context.Context, arg PrunePostBlockEditsParams) error
@@ -1044,6 +1085,8 @@ type Querier interface {
 	// The dev seed (#358): published posts whose terms and featured images were linked
 	// after they were published get them in their published settings.
 	RefreshPublishedSettings(ctx context.Context, ids []int64) error
+	// Gives a claimed row back for a retry at retry_at (a failed send), under this claim.
+	ReleaseDiscussionMail(ctx context.Context, arg ReleaseDiscussionMailParams) (int64, error)
 	// Gives a claimed reminder back for a retry at retry_at (a failed send), under this claim.
 	ReleaseReminder(ctx context.Context, arg ReleaseReminderParams) (int64, error)
 	RemoveAllPostTaxonomies(ctx context.Context, postID int64) error
@@ -1091,6 +1134,10 @@ type Querier interface {
 	RestoreReaderComment(ctx context.Context, arg RestoreReaderCommentParams) (ReaderComment, error)
 	// Chain collapse: what pointed at old_to now points at new_to (A→B, then B→C: A→C).
 	RetargetRedirects(ctx context.Context, arg RetargetRedirectsParams) (int64, error)
+	// A member's open author row follows a change of "Comments on my posts": due five
+	// minutes after the change (each), or at the next digest. Off leaves it: the sender
+	// drops it, as it drops anything a preference no longer asks for.
+	RetimeAuthorMail(ctx context.Context, arg RetimeAuthorMailParams) (int64, error)
 	// Pending reminders whose instant changed while the chip didn't (the site's time zone
 	// changed) take the new one (parallel arrays; remind_ats as RFC 3339 text).
 	RetimePostReminders(ctx context.Context, arg RetimePostRemindersParams) error
@@ -1268,6 +1315,10 @@ type Querier interface {
 	// The snapshot stays in post_versions, so it can still be viewed and restored.
 	UnpublishPost(ctx context.Context, id int64) (Post, error)
 	UnresolvePostCommentThread(ctx context.Context, id int64) (PostCommentThread, error)
+	// "Stop all mail from this site": every subscription of the commenter.
+	UnsubscribeCommenter(ctx context.Context, commenterID sql.NullInt64) (int64, error)
+	// "Stop these emails": that comment's replies are no longer mailed.
+	UnsubscribeReaderComment(ctx context.Context, id int64) (int64, error)
 	// A known plugin whose files or status changed since the last scan (an upgrade, a
 	// return from 'missing', a change of compatibility). `enabled` is kept. No row when
 	// nothing changed, including when another replica has just applied the same change:
@@ -1324,6 +1375,7 @@ type Querier interface {
 	UpdateTaxonomyType(ctx context.Context, arg UpdateTaxonomyTypeParams) (TaxonomyType, error)
 	UpdateTheme(ctx context.Context, arg UpdateThemeParams) (Theme, error)
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error)
+	UpdateUserNotifications(ctx context.Context, arg UpdateUserNotificationsParams) (UpdateUserNotificationsRow, error)
 	// One row per address (3.2): matched on email_lower; the latest name and address as
 	// typed win, and last_seen_at moves (which keeps the maintenance job off it).
 	UpsertCommenter(ctx context.Context, arg UpsertCommenterParams) (Commenter, error)

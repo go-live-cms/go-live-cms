@@ -1,0 +1,13 @@
+{{if .Digest}}Today on {{.SiteTitle}}: {{end}}{{if eq .Count 1}}a new comment{{else}}{{.Count}} new comments{{end}} on your posts.
+{{range .Comments}}
+On "{{.PostTitle}}", {{.Name}} wrote:
+
+{{.Excerpt}}
+
+{{.URL}}
+{{end}}
+{{if .Link}}Moderate comments in Discussion: {{.Link}}
+
+{{end}}You get this email because of your notification settings: {{.ProfileLink}}
+
+{{.SiteTitle}}

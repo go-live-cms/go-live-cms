@@ -67,12 +67,6 @@ type Server struct {
 	// plugin_comment_guards.go). A field so tests can set their own.
 	readerCommentGuard readerCommentGuardFunc
 
-	// readerCommentModerated is where #528's moderation and reply notifications attach
-	// (discussion_admin.go): called after every committed Discussion change (a status
-	// change, a bulk action, a delete, a member's comment and the parent it approved),
-	// off the request's cancellation. nil until then.
-	readerCommentModerated func(ctx context.Context, changes []readerCommentChange)
-
 	// Observability (observability.go, metrics.go, health.go).
 	logger        *slog.Logger
 	metrics       *httpMetrics

@@ -56,6 +56,10 @@ export default defineConfig({
     },
   },
   output: "server",
+  // Astro's cross-site form check (CSRF) runs in src/middleware/originCheck.ts instead, the
+  // same rule with one exemption: RFC 8058's one-click unsubscribe, which mail providers POST
+  // from their own servers (#528). Don't turn this back on: it would refuse every one-click.
+  security: { checkOrigin: false },
   // SSR needs an adapter for `astro build`; the production image runs the
   // standalone Node server it emits (dist/server/entry.mjs, started by
   // server/start.mjs, see web/Dockerfile).

@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>New replies to your comment on {{.PostTitle}}</title></head>
+<body style="margin:0;padding:24px;background:#f4f5f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1f2328;">
+  <div style="max-width:480px;margin:0 auto;background:#ffffff;border-radius:12px;padding:32px;">
+    <h1 style="margin:0 0 16px;font-size:20px;">{{if eq .Count 1}}A new reply to your comment{{else}}{{.Count}} new replies to your comment{{end}}</h1>
+    <p style="margin:0 0 16px;font-size:15px;line-height:1.5;">On <strong>{{.PostTitle}}</strong>, on {{.SiteTitle}}.</p>
+    {{range .Comments}}<div style="margin:0 0 16px;padding:12px 14px;border-radius:8px;background:#f4f5f6;">
+      <p style="margin:0 0 8px;font-size:14px;font-weight:600;">{{.Name}}</p>
+      <p style="margin:0 0 8px;font-size:14px;line-height:1.5;white-space:pre-wrap;">{{.Excerpt}}</p>
+      <p style="margin:0;font-size:14px;"><a href="{{.URL}}" style="color:#1f2328;">Read the reply</a></p>
+    </div>{{end}}
+    <p style="margin:16px 0 0;font-size:13px;line-height:1.5;color:#59636e;">You get this email because you asked for replies to that comment by email. <a href="{{.UnsubscribeLink}}" style="color:#59636e;">Stop these emails</a></p>
+  </div>
+</body>
+</html>

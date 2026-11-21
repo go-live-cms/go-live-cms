@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -99,54 +98,21 @@ func TestCreateUser(t *testing.T) {
 
 func TestGuardLastAdmin(t *testing.T) {
 	ctx := context.Background()
-	errRollback := errors.New("rollback")
-	contributor := createTestUser(t)
+	// A private database (isolatedStore): the guard counts every admin, and
+	// demoting the shared DB's admins, even in a transaction that is rolled
+	// back, row-locks other packages' admins while it runs.
+	store := isolatedStore(t)
+	contributor := createUserIn(t, store, "contributor")
 
-	// Everything runs in one transaction that is always rolled back, so
-	// demoting the shared DB's existing admins never leaks to other tests.
-	// Assertions happen outside the closure: a require failure inside it
-	// would Goexit with the transaction (and its row locks) still open.
-	var soleAdminErr, nonAdminErr, twoAdminsErr error
-	err := testStore.ExecTx(ctx, func(q *Queries) error {
-		if _, err := q.db.ExecContext(ctx, `UPDATE users SET role = 'editor' WHERE lower(role) = 'admin'`); err != nil {
-			return err
-		}
+	// Mixed-case stored role: the column side of the match must be
+	// case-insensitive too, or this admin would go uncounted.
+	admin := createUserIn(t, store, "Admin")
 
-		// Mixed-case stored role: the column side of the match must be
-		// case-insensitive too, or this admin would go uncounted.
-		suffix := time.Now().UnixNano()
-		admin, err := q.CreateUser(ctx, CreateUserParams{
-			Username:       fmt.Sprintf("sole_admin_%d", suffix),
-			Email:          fmt.Sprintf("sole_admin_%d@example.com", suffix),
-			FullName:       "Sole Admin",
-			HashedPassword: "hashed",
-			Role:           "Admin",
-		})
-		if err != nil {
-			return err
-		}
+	require.ErrorIs(t, guardLastAdmin(ctx, store.Queries, admin.ID), ErrLastAdmin)
+	require.NoError(t, guardLastAdmin(ctx, store.Queries, contributor.ID))
 
-		soleAdminErr = guardLastAdmin(ctx, q, admin.ID)
-		nonAdminErr = guardLastAdmin(ctx, q, contributor.ID)
-
-		if _, err := q.CreateUser(ctx, CreateUserParams{
-			Username:       fmt.Sprintf("second_admin_%d", suffix),
-			Email:          fmt.Sprintf("second_admin_%d@example.com", suffix),
-			FullName:       "Second Admin",
-			HashedPassword: "hashed",
-			Role:           "admin",
-		}); err != nil {
-			return err
-		}
-		twoAdminsErr = guardLastAdmin(ctx, q, admin.ID)
-
-		return errRollback
-	})
-	require.ErrorIs(t, err, errRollback)
-
-	require.ErrorIs(t, soleAdminErr, ErrLastAdmin)
-	require.NoError(t, nonAdminErr)
-	require.NoError(t, twoAdminsErr)
+	createUserIn(t, store, "admin")
+	require.NoError(t, guardLastAdmin(ctx, store.Queries, admin.ID))
 }
 
 func TestGetUser(t *testing.T) {

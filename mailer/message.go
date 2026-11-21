@@ -11,6 +11,7 @@ import (
 	"mime/quotedprintable"
 	"net/mail"
 	"net/textproto"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -43,6 +44,16 @@ func buildMessage(from *mail.Address, msg Message, now time.Time) (to *mail.Addr
 	header("Message-ID", fmt.Sprintf("<%s@%s>", hex.EncodeToString(id), domainOf(from.Address)))
 	header("MIME-Version", "1.0")
 	header("Auto-Submitted", "auto-generated")
+	if msg.ListUnsubscribe != "" {
+		// RFC 8058: a POST to the URL, from the mail provider's servers, unsubscribes. The
+		// URL must be https and is one header line (2369's angle brackets).
+		link, err := listUnsubscribeURL(msg.ListUnsubscribe)
+		if err != nil {
+			return nil, nil, err
+		}
+		header("List-Unsubscribe", "<"+link+">")
+		header("List-Unsubscribe-Post", "List-Unsubscribe=One-Click")
+	}
 
 	if msg.HTML == "" {
 		header("Content-Type", "text/plain; charset=utf-8")
@@ -79,6 +90,22 @@ func buildMessage(from *mail.Address, msg Message, now time.Time) (to *mail.Addr
 	b.WriteString("\r\n")
 	b.Write(body.Bytes())
 	return to, b.Bytes(), nil
+}
+
+// listUnsubscribeURL checks a one-click unsubscribe URL: absolute http(s) (https outside
+// development, which PUBLIC_BASE_URL already enforces), printable ASCII with no space or
+// angle bracket, so it stays one well-formed header value.
+func listUnsubscribeURL(raw string) (string, error) {
+	u, err := url.Parse(raw)
+	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
+		return "", errors.New("invalid List-Unsubscribe URL")
+	}
+	for _, r := range raw {
+		if r <= ' ' || r >= 0x7f || r == '<' || r == '>' {
+			return "", errors.New("invalid List-Unsubscribe URL")
+		}
+	}
+	return raw, nil
 }
 
 func writeQuotedPrintable(w interface{ Write([]byte) (int, error) }, s string) error {

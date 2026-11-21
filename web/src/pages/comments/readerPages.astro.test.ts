@@ -2,8 +2,8 @@
 // board): /comments/confirm in the default theme, not indexed, one panel; its states without
 // scripts and with gl-comments.js (run in a JSDOM window, the link's token in the fragment and
 // fetch answered as the /gl-comments endpoints answer); the token spent only by the button. The
-// unsubscribe and "your comments" pages wait for #528 and #529 (404); their panels are tested
-// alone. axe passes on each state.
+// unsubscribe page is served since #528; "your comments" waits for #529 (404). Both panels are
+// tested alone too. axe passes on each state.
 import { experimental_AstroContainer as AstroContainer } from "astro/container"
 import { getContainerRenderer as reactRenderer } from "@astrojs/react"
 import { loadRenderers } from "astro:container"
@@ -170,9 +170,12 @@ describe("/comments/confirm", () => {
   }, 30_000)
 })
 
-describe("the pages that wait for #528 and #529", () => {
-  it("aren't served until their routes are", async () => {
-    expect((await response(Unsubscribe)).status).toBe(READER_PAGES_READY.unsubscribe ? 200 : 404)
+describe("unsubscribe (#528) and your data (#529)", () => {
+  it("are served once their routes are", async () => {
+    expect(READER_PAGES_READY.unsubscribe).toBe(true)
+    const unsubscribe = await response(Unsubscribe)
+    expect(unsubscribe.status).toBe(200)
+    expect(unsubscribe.headers.get("x-robots-tag")).toBe("noindex")
     expect((await response(YourData)).status).toBe(READER_PAGES_READY.yourData ? 200 : 404)
   })
 

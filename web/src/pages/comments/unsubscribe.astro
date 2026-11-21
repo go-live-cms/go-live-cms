@@ -1,8 +1,9 @@
 ---
 /**
  * /comments/unsubscribe (#525, docs/design/reader-comments.md 8.2, 11.6): a reply mail's visible
- * unsubscribe link (`#token=`). Not served until #528 adds the mails and the endpoint
- * (`READER_PAGES_READY.unsubscribe`): a 404 until then.
+ * unsubscribe link (`#token=`), served since #528 added the mails and the endpoint
+ * (`READER_PAGES_READY.unsubscribe`). The mail's RFC 8058 header goes to
+ * `/gl-comments/unsubscribe/:token` instead, which needs no page.
  */
 import ThemedReaderPage from '@/components/ThemedReaderPage.astro'
 import UnsubscribePanel from '@/components/comments/reader/UnsubscribePanel.astro'

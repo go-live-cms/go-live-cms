@@ -107,6 +107,9 @@ var publicPOSTRoutes = map[string]string{
 	"POST /public/posts/:id/comments":         "a reader's comment: same 202 for any address without its browser key, limits per browser and per browser+address, a silent mail cooldown, caps, honeypot, rules",
 	"POST /public/discussion/confirm":         "the emailed token is the credential, spent by the confirm page's button (account-token limit)",
 	"POST /public/discussion/unconfirmed/:id": "the browser key of the comment's address is the credential (account-token limit)",
+	// Unsubscribing (#528, discussion_unsubscribe.go): the mailed token can only stop mail.
+	"POST /public/discussion/unsubscribe":        "the mailed token is the credential and can only stop reply mail (account-token limit)",
+	"POST /public/discussion/unsubscribe/:token": "RFC 8058 one-click from mail providers' servers: the mailed token can only stop one comment's reply mail (general limit)",
 }
 
 // stopOnStoreCall is a gomock reporter that turns any store call into a panic, which the
@@ -214,9 +217,11 @@ var publicReaderCommentRoutes = map[string]string{
 	"GET /public/posts/:id/comments": "approved comments of a published post of a public type; no address, commenter id, status or hash (7.1)",
 	// The writes (#524, discussion_write.go), also in publicPOSTRoutes with why they may be
 	// anonymous: their answers hold no address either (TestReaderCommentAnswersHoldNoAddress).
-	"POST /public/posts/:id/comments":         "a reader's comment: confirm_email, pending or published, with the post's URL; never an address",
-	"POST /public/discussion/confirm":         "the confirmed comment's outcome and URLs, the new key, the address's other unconfirmed comments for the link's holder",
-	"POST /public/discussion/unconfirmed/:id": "the published comment's outcome and URLs, or 204",
+	"POST /public/posts/:id/comments":            "a reader's comment: confirm_email, pending or published, with the post's URL; never an address",
+	"POST /public/discussion/confirm":            "the confirmed comment's outcome and URLs, the new key, the address's other unconfirmed comments for the link's holder",
+	"POST /public/discussion/unconfirmed/:id":    "the published comment's outcome and URLs, or 204",
+	"POST /public/discussion/unsubscribe":        "204, or 400 invalid_token",
+	"POST /public/discussion/unsubscribe/:token": "204, or 400 invalid_token / invalid_request",
 }
 
 func TestPublicReaderCommentRoutes(t *testing.T) {

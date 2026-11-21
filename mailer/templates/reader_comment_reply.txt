@@ -1,0 +1,12 @@
+{{if eq .Count 1}}There is a new reply{{else}}There are {{.Count}} new replies{{end}} to your comment on "{{.PostTitle}}" on {{.SiteTitle}}.
+{{range .Comments}}
+{{.Name}} wrote:
+
+{{.Excerpt}}
+
+Read it: {{.URL}}
+{{end}}
+You get this email because you asked for replies to that comment by email.
+Stop these emails: {{.UnsubscribeLink}}
+
+{{.SiteTitle}}

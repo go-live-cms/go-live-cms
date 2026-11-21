@@ -47,8 +47,8 @@ export const DEFAULT_COMMENTS_NOTICE =
 
 /** Whether the reader pages that need #528 and #529's routes are served yet (11.6). */
 export const READER_PAGES_READY = {
-  // #528 adds POST /gl-comments/unsubscribe (and the RFC 8058 one) and sets this true.
-  unsubscribe: false,
+  // #528: POST /gl-comments/unsubscribe and the RFC 8058 /gl-comments/unsubscribe/:token.
+  unsubscribe: true,
   // #529 adds /gl-comments/data-request, /data and /data/delete and sets this true.
   yourData: false,
 } as const

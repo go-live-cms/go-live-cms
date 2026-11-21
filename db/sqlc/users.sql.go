@@ -55,7 +55,7 @@ INSERT INTO users (
     role
 ) VALUES (
     $1, $2, $3, $4, $5
-) RETURNING id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website, last_active_at, avatar_url
+) RETURNING id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website, last_active_at, avatar_url, notify_post_comments, notify_comment_moderation
 `
 
 type CreateUserParams struct {
@@ -88,6 +88,8 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.Website,
 		&i.LastActiveAt,
 		&i.AvatarUrl,
+		&i.NotifyPostComments,
+		&i.NotifyCommentModeration,
 	)
 	return i, err
 }
@@ -159,7 +161,7 @@ func (q *Queries) DeleteUserSessions(ctx context.Context, id int64) error {
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website, last_active_at, avatar_url FROM users
+SELECT id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website, last_active_at, avatar_url, notify_post_comments, notify_comment_moderation FROM users
 WHERE id = $1 LIMIT 1
 `
 
@@ -179,12 +181,14 @@ func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
 		&i.Website,
 		&i.LastActiveAt,
 		&i.AvatarUrl,
+		&i.NotifyPostComments,
+		&i.NotifyCommentModeration,
 	)
 	return i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website, last_active_at, avatar_url FROM users
+SELECT id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website, last_active_at, avatar_url, notify_post_comments, notify_comment_moderation FROM users
 WHERE email = $1
 LIMIT 1
 `
@@ -205,12 +209,14 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.Website,
 		&i.LastActiveAt,
 		&i.AvatarUrl,
+		&i.NotifyPostComments,
+		&i.NotifyCommentModeration,
 	)
 	return i, err
 }
 
 const getUserByEmailFold = `-- name: GetUserByEmailFold :one
-SELECT id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website, last_active_at, avatar_url FROM users
+SELECT id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website, last_active_at, avatar_url, notify_post_comments, notify_comment_moderation FROM users
 WHERE lower(email) = lower($1::text)
 LIMIT 1
 `
@@ -234,12 +240,14 @@ func (q *Queries) GetUserByEmailFold(ctx context.Context, email string) (User, e
 		&i.Website,
 		&i.LastActiveAt,
 		&i.AvatarUrl,
+		&i.NotifyPostComments,
+		&i.NotifyCommentModeration,
 	)
 	return i, err
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website, last_active_at, avatar_url FROM users
+SELECT id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website, last_active_at, avatar_url, notify_post_comments, notify_comment_moderation FROM users
 WHERE username = $1
 LIMIT 1
 `
@@ -260,12 +268,14 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.Website,
 		&i.LastActiveAt,
 		&i.AvatarUrl,
+		&i.NotifyPostComments,
+		&i.NotifyCommentModeration,
 	)
 	return i, err
 }
 
 const listMembers = `-- name: ListMembers :many
-SELECT u.id, u.username, u.full_name, u.email, u.hashed_password, u.password_changed_at, u.created_at, u.role, u.bio, u.website, u.last_active_at, u.avatar_url,
+SELECT u.id, u.username, u.full_name, u.email, u.hashed_password, u.password_changed_at, u.created_at, u.role, u.bio, u.website, u.last_active_at, u.avatar_url, u.notify_post_comments, u.notify_comment_moderation,
     (SELECT count(*) FROM posts p WHERE p.user_id = u.id)::bigint AS posts_owned
 FROM users u
 WHERE ($1::text = ''
@@ -334,6 +344,8 @@ func (q *Queries) ListMembers(ctx context.Context, arg ListMembersParams) ([]Lis
 			&i.User.Website,
 			&i.User.LastActiveAt,
 			&i.User.AvatarUrl,
+			&i.User.NotifyPostComments,
+			&i.User.NotifyCommentModeration,
 			&i.PostsOwned,
 		); err != nil {
 			return nil, err
@@ -350,7 +362,7 @@ func (q *Queries) ListMembers(ctx context.Context, arg ListMembersParams) ([]Lis
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website, last_active_at, avatar_url FROM users
+SELECT id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website, last_active_at, avatar_url, notify_post_comments, notify_comment_moderation FROM users
 ORDER BY
     CASE WHEN $1 = 'date_asc' THEN created_at END ASC,
     CASE WHEN $1 = 'date_desc' THEN created_at END DESC,
@@ -395,6 +407,8 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 			&i.Website,
 			&i.LastActiveAt,
 			&i.AvatarUrl,
+			&i.NotifyPostComments,
+			&i.NotifyCommentModeration,
 		); err != nil {
 			return nil, err
 		}
@@ -701,7 +715,7 @@ const setUserEmail = `-- name: SetUserEmail :one
 UPDATE users
 SET email = $2
 WHERE id = $1
-RETURNING id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website, last_active_at, avatar_url
+RETURNING id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website, last_active_at, avatar_url, notify_post_comments, notify_comment_moderation
 `
 
 type SetUserEmailParams struct {
@@ -725,6 +739,8 @@ func (q *Queries) SetUserEmail(ctx context.Context, arg SetUserEmailParams) (Use
 		&i.Website,
 		&i.LastActiveAt,
 		&i.AvatarUrl,
+		&i.NotifyPostComments,
+		&i.NotifyCommentModeration,
 	)
 	return i, err
 }
@@ -735,7 +751,7 @@ SET
     hashed_password = $2,
     password_changed_at = $3
 WHERE id = $1
-RETURNING id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website, last_active_at, avatar_url
+RETURNING id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website, last_active_at, avatar_url, notify_post_comments, notify_comment_moderation
 `
 
 type SetUserPasswordParams struct {
@@ -760,6 +776,8 @@ func (q *Queries) SetUserPassword(ctx context.Context, arg SetUserPasswordParams
 		&i.Website,
 		&i.LastActiveAt,
 		&i.AvatarUrl,
+		&i.NotifyPostComments,
+		&i.NotifyCommentModeration,
 	)
 	return i, err
 }
@@ -768,7 +786,7 @@ const setUserRole = `-- name: SetUserRole :one
 UPDATE users
 SET role = $1
 WHERE id = $2
-RETURNING id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website, last_active_at, avatar_url
+RETURNING id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website, last_active_at, avatar_url, notify_post_comments, notify_comment_moderation
 `
 
 type SetUserRoleParams struct {
@@ -792,6 +810,8 @@ func (q *Queries) SetUserRole(ctx context.Context, arg SetUserRoleParams) (User,
 		&i.Website,
 		&i.LastActiveAt,
 		&i.AvatarUrl,
+		&i.NotifyPostComments,
+		&i.NotifyCommentModeration,
 	)
 	return i, err
 }
@@ -855,7 +875,7 @@ SET
     bio = COALESCE($8, bio),
     website = COALESCE($9, website)
 WHERE id = $1
-RETURNING id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website, last_active_at, avatar_url
+RETURNING id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website, last_active_at, avatar_url, notify_post_comments, notify_comment_moderation
 `
 
 type UpdateUserParams struct {
@@ -896,6 +916,8 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 		&i.Website,
 		&i.LastActiveAt,
 		&i.AvatarUrl,
+		&i.NotifyPostComments,
+		&i.NotifyCommentModeration,
 	)
 	return i, err
 }

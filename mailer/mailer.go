@@ -33,6 +33,10 @@ type Message struct {
 	Text     string
 	HTML     string
 	Template string
+	// ListUnsubscribe is the one-click unsubscribe URL (RFC 8058) of a mail a reader can
+	// stop (#528, reader comment replies). When set, the message carries List-Unsubscribe
+	// and List-Unsubscribe-Post: List-Unsubscribe=One-Click. It holds a token: never log it.
+	ListUnsubscribe string
 }
 
 // Mailer delivers email. Implementations must be safe for concurrent use.

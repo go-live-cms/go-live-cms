@@ -27,8 +27,9 @@ import (
 // outcomes. Activity (15.2) records ids and counts only.
 //
 // Every write purges the public cache through purgeDiscussion after its commit, by what
-// readers can now see (discussion_purge.go), and then calls readerCommentModerated: the
-// hook #528's moderation and reply notifications attach to.
+// readers can now see (discussion_purge.go). Notifications need nothing here: 000068's
+// trigger queues a comment's reply and author mail in the transaction that approves it
+// (discussion_mail.go).
 
 // registerDiscussionRoutes registers /api/v1/discussion (9.3).
 func (server *Server) registerDiscussionRoutes(v1 *gin.RouterGroup) {
@@ -56,25 +57,6 @@ const (
 	// ReaderCommentActionDelete is the bulk route's Delete permanently (spam or trash).
 	readerCommentActionDelete = "delete"
 )
-
-// readerCommentChange is one committed change, for readerCommentModerated (#528): From
-// is "" for a new member comment, To "" for a deleted one.
-type readerCommentChange struct {
-	CommentID int64
-	PostID    int64
-	ParentID  int64
-	From      string
-	To        string
-	ActorID   int64
-}
-
-// notifyReaderCommentChanges hands committed changes to #528's hook (nil until then).
-func (server *Server) notifyReaderCommentChanges(ctx context.Context, changes []readerCommentChange) {
-	if server.readerCommentModerated == nil || len(changes) == 0 {
-		return
-	}
-	server.readerCommentModerated(context.WithoutCancel(ctx), changes)
-}
 
 // ModerationCommenter is a reader's commenter as the queue shows it: the address in full
 // (decision 6), "New commenter" when nothing of theirs is approved yet, and blocked.
@@ -537,14 +519,6 @@ func (server *Server) recordReaderCommentActivity(c *gin.Context, verb string, c
 	server.recordRequestActivity(c, activityEvent{Verb: verb, ObjectType: db.ActivityObjectReaderComment, ObjectID: comment.ID, Payload: payload})
 }
 
-func (o readerCommentOutcome) change(actorID int64) readerCommentChange {
-	to := o.Comment.Status
-	if o.Deleted {
-		to = ""
-	}
-	return readerCommentChange{CommentID: o.Comment.ID, PostID: o.Comment.PostID, ParentID: o.Comment.ParentID.Int64, From: o.From, To: to, ActorID: actorID}
-}
-
 // setDiscussionCommentStatus handles PUT /discussion/comments/:id/status {action}:
 // approve (pending), unapprove (approved), spam (pending or approved; the commenter is
 // then held for 90 days, 4.2), not_spam (spam, back to pending), trash and restore. 409
@@ -574,7 +548,6 @@ func (server *Server) setDiscussionCommentStatus(c *gin.Context) {
 	}
 	server.purgeDiscussion(ctx, server.requestLog(c), outcome.Comment.PostID, outcome.event())
 	server.recordReaderCommentActivity(c, readerCommentActionVerbs[req.Action], outcome.Comment, nil)
-	server.notifyReaderCommentChanges(ctx, []readerCommentChange{outcome.change(caller.ID)})
 	server.requestLog(c).Info("discussion_moderated", "comment_id", id, "post_id", outcome.Comment.PostID, "action", req.Action, "from", outcome.From, "to", outcome.Comment.Status)
 	structure, _ := server.urlStructure(ctx)
 	comment, ok := server.loadModerationComment(c, id, structure)
@@ -604,7 +577,6 @@ func (server *Server) deleteDiscussionComment(c *gin.Context) {
 	}
 	server.purgeDiscussion(ctx, server.requestLog(c), outcome.Comment.PostID, outcome.event())
 	server.recordReaderCommentActivity(c, db.ActivityReaderCommentDeleted, outcome.Comment, map[string]any{"status": outcome.From})
-	server.notifyReaderCommentChanges(ctx, []readerCommentChange{outcome.change(caller.ID)})
 	server.requestLog(c).Info("discussion_deleted", "comment_id", id, "post_id", outcome.Comment.PostID, "tombstoned", outcome.Tombstoned)
 	c.Status(http.StatusNoContent)
 }
@@ -652,7 +624,7 @@ func (server *Server) bulkDiscussionComments(c *gin.Context) {
 	}
 
 	results := make([]BulkReaderCommentResult, 0, len(ids))
-	changes := make([]readerCommentChange, 0, len(ids))
+	succeeded := 0
 	purge := false
 	var postID int64
 	samePost := true
@@ -667,7 +639,7 @@ func (server *Server) bulkDiscussionComments(c *gin.Context) {
 			result.CommentStatus = outcome.Comment.Status
 		}
 		results = append(results, result)
-		changes = append(changes, outcome.change(caller.ID))
+		succeeded++
 		if discussionEventPurges[outcome.event()] {
 			purge = true
 		}
@@ -677,7 +649,6 @@ func (server *Server) bulkDiscussionComments(c *gin.Context) {
 			samePost = false
 		}
 	}
-	succeeded := len(changes)
 	if succeeded > 0 {
 		purgePost := postID
 		if !samePost {
@@ -691,7 +662,6 @@ func (server *Server) bulkDiscussionComments(c *gin.Context) {
 			payload["post_id"] = postID
 		}
 		server.recordRequestActivity(c, activityEvent{Verb: db.ActivityReaderCommentsBulkModerated, ObjectType: db.ActivityObjectReaderComment, ObjectID: 0, Payload: payload})
-		server.notifyReaderCommentChanges(ctx, changes)
 	}
 	server.requestLog(c).Info("discussion_bulk_moderated", "action", req.Action, "requested", len(ids), "succeeded", succeeded)
 	c.JSON(http.StatusOK, gin.H{
@@ -783,14 +753,10 @@ func (server *Server) createDiscussionComment(c *gin.Context) {
 	}
 	log := server.requestLog(c)
 	server.purgeDiscussion(ctx, log, postID, discussionEventPublished)
-	changes := []readerCommentChange{}
 	if result.ParentApproved && result.Parent != nil {
 		server.recordReaderCommentActivity(c, db.ActivityReaderCommentApproved, *result.Parent, nil)
-		changes = append(changes, readerCommentChange{CommentID: result.Parent.ID, PostID: postID, ParentID: result.Parent.ParentID.Int64, From: db.ReaderCommentPending, To: db.ReaderCommentApproved, ActorID: caller.ID})
 	}
 	server.recordReaderCommentActivity(c, db.ActivityReaderCommentPosted, result.Comment, map[string]any{"parent_id": req.ParentID})
-	changes = append(changes, readerCommentChange{CommentID: result.Comment.ID, PostID: postID, ParentID: req.ParentID, To: db.ReaderCommentApproved, ActorID: caller.ID})
-	server.notifyReaderCommentChanges(ctx, changes)
 	log.Info("discussion_member_comment", "comment_id", result.Comment.ID, "post_id", postID, "parent_approved", result.ParentApproved)
 	comment, ok := server.loadModerationComment(c, result.Comment.ID, settings.PostUrlStructure)
 	if !ok {
