@@ -266,6 +266,8 @@ type Querier interface {
 	// Erasure's last step: the row with the address. Its browser keys, "Your comments"
 	// links and its own outbox rows (reply mail) go with it (ON DELETE CASCADE).
 	DeleteCommenter(ctx context.Context, id int64) (int64, error)
+	// A link stored for a request the mail cooldown then skipped: nobody will get it.
+	DeleteCommenterDataToken(ctx context.Context, tokenHash []byte) error
 	DeleteDiscussionMailRows(ctx context.Context, ids []int64) (int64, error)
 	// RunDiscussionMaintenance (6.6): links past their hour.
 	DeleteExpiredCommenterDataTokens(ctx context.Context, now time.Time) (int64, error)

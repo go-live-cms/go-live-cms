@@ -89,7 +89,8 @@ export default function DiscussionCommenter() {
       document.body.appendChild(link)
       link.click()
       link.remove()
-      URL.revokeObjectURL(url)
+      // Later: revoking at once can cancel the download in some browsers.
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
       toast.success("Exported. The file holds the address and every comment.")
     } catch (e) {
       toast.error(errorMessage(e, "Couldn't export the commenter"))

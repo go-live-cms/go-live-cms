@@ -20,6 +20,7 @@ import (
 	mockdb "github.com/go-live-cms/go-live-cms/db/mock"
 	db "github.com/go-live-cms/go-live-cms/db/sqlc"
 	"github.com/go-live-cms/go-live-cms/mailer"
+	"github.com/go-live-cms/go-live-cms/util"
 )
 
 // A commenter's export and erasure (#529, discussion_privacy.go) against the test database
@@ -146,6 +147,15 @@ func TestCommenterAdminExportAndErase(t *testing.T) {
 	_, err := f.store.CreateCommenterKey(context.Background(), db.CreateCommenterKeyParams{KeyHash: key, CommenterID: ana.ID, ExpiresAt: time.Now().Add(time.Hour)})
 	require.NoError(t, err)
 
+	// The page's summary counts the unconfirmed comment too: Erase's confirmation names it.
+	page := f.call(t, &f.admin, http.MethodGet, fmt.Sprintf("/api/v1/discussion/commenters/%d", ana.ID), nil)
+	require.Equal(t, http.StatusOK, page.Code, page.Body.String())
+	var summary struct {
+		Commenter CommenterSummary `json:"commenter"`
+	}
+	require.NoError(t, json.Unmarshal(page.Body.Bytes(), &summary))
+	require.Equal(t, int64(1), summary.Commenter.Unconfirmed)
+
 	recorder := f.call(t, &f.admin, http.MethodGet, fmt.Sprintf("/api/v1/discussion/commenters/%d/export", ana.ID), nil)
 	require.Equal(t, "no-store", recorder.Header().Get("Cache-Control"))
 	require.Equal(t, fmt.Sprintf(`attachment; filename="commenter-%d.json"`, ana.ID), recorder.Header().Get("Content-Disposition"))
@@ -223,6 +233,9 @@ func TestCommenterDataRequestAnswersTheSame(t *testing.T) {
 	sent := ofTemplate(f.mail.messages()[before:], mailer.TemplateReaderCommentData)
 	require.Len(t, sent, 2, "Ana once (then her cooldown), the blocked commenter once, nobody for the unknown address")
 	require.ElementsMatch(t, []string{f.ana.Email, blocked.Email}, []string{sent[0].To, sent[1].To})
+	var links int
+	require.NoError(t, f.conn.QueryRow(`SELECT count(*) FROM commenter_data_tokens WHERE commenter_id = $1`, f.ana.ID).Scan(&links))
+	require.Equal(t, 1, links, "the requests the cooldown skipped leave no link behind")
 	for _, msg := range sent {
 		require.NotContains(t, msg.Text+msg.HTML, f.ana.DisplayName, "a link and nothing else")
 		require.NotContains(t, msg.Text+msg.HTML, comment.Body)
@@ -251,6 +264,25 @@ func TestCommenterDataRequestReadsNothingBeforeAnswering(t *testing.T) {
 	require.Equal(t, answers[0], answers[1])
 	require.Equal(t, answers[0], answers[2])
 	require.JSONEq(t, `{"outcome": "link_sent"}`, answers[0])
+}
+
+// The link's routes have their own limit: one page deletes comments one by one, more than
+// the confirmation's ten a minute, while the request keeps the emailed-token limit.
+func TestCommenterDataLinkRoutesHaveTheirOwnLimit(t *testing.T) {
+	server := newRateLimitedTestServer(t, mockdb.NewMockStore(gomock.NewController(t)), func(c *util.Config) {
+		c.RateLimitAccountTokenPerMinute = 3
+	})
+	status := func(path string) int {
+		// An empty body is refused at binding: nothing reaches the store, only the limiter.
+		return doJSON(t, server, http.MethodPost, path, map[string]any{}, nil).Code
+	}
+	for range 10 {
+		require.Equal(t, http.StatusBadRequest, status("/public/discussion/data/delete"))
+	}
+	for range 3 {
+		require.Equal(t, http.StatusBadRequest, status("/public/discussion/data-request"))
+	}
+	require.Equal(t, http.StatusTooManyRequests, status("/public/discussion/data-request"))
 }
 
 // The link: the reader's own file (the same as the admin's), not spent by reading; Delete

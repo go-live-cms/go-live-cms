@@ -321,14 +321,14 @@ export function mailLine(n: number): string {
 }
 
 // Erase (#529, design 13.1, the commenter board's confirmation): "Delete Ana's 14 comments and
-// everything stored about this address?". The count is what the page shows (every status but
-// unconfirmed ones, which erasure deletes too).
-export function eraseConfirm(summary: Pick<CommenterSummary, "name" | "approved" | "pending" | "spam" | "trash">): {
+// everything stored about this address?". The count is every comment erasure deletes, the
+// unconfirmed ones included, so it matches what the API answers afterwards.
+export function eraseConfirm(summary: Pick<CommenterSummary, "name" | "approved" | "pending" | "spam" | "trash" | "unconfirmed">): {
   title: string
   body: string
   button: string
 } {
-  const count = summary.approved + summary.pending + summary.spam + summary.trash
+  const count = summary.approved + summary.pending + summary.spam + summary.trash + (summary.unconfirmed ?? 0)
   const name = summary.name.trim() || "this commenter"
   const owner = name.endsWith("s") ? `${name}’` : `${name}’s`
   return {

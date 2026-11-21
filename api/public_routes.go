@@ -36,11 +36,16 @@ func (server *Server) registerPublicRoutes(rg *gin.RouterGroup) {
 		// The reply mail's unsubscribe page (#528, discussion_unsubscribe.go).
 		discussion.POST("/unsubscribe", server.unsubscribeReaderComment)
 		// "Your comments" (#529, discussion_privacy.go): the request answers the same for
-		// any address; the mailed link is the credential for the rest.
+		// any address, and mails, so it has the emailed-token limit.
 		discussion.POST("/data-request", server.requestCommenterData)
-		discussion.POST("/data", server.readCommenterData)
-		discussion.POST("/data/delete", server.deleteCommenterData)
-		discussion.POST("/data/unsubscribe", server.unsubscribeCommenterData)
+	}
+	// The mailed link's routes (#529): one page deletes a reader's comments one by one,
+	// so they have a limit of their own instead of the confirmation's 10 a minute.
+	data := rg.Group("/discussion/data", server.rateLimits.commentDataLink.perIP())
+	{
+		data.POST("", server.readCommenterData)
+		data.POST("/delete", server.deleteCommenterData)
+		data.POST("/unsubscribe", server.unsubscribeCommenterData)
 	}
 	// RFC 8058's one-click (#528): mail providers POST it from their own servers, many
 	// readers' clicks from one address, so it has only the general /public limit. The

@@ -120,6 +120,8 @@ SELECT
   (SELECT count(*) FROM reader_comments r WHERE r.commenter_id = c.id AND r.status = 'pending')::bigint AS pending_count,
   (SELECT count(*) FROM reader_comments r WHERE r.commenter_id = c.id AND r.status = 'spam')::bigint AS spam_count,
   (SELECT count(*) FROM reader_comments r WHERE r.commenter_id = c.id AND r.status = 'trash')::bigint AS trash_count,
+  -- Erase deletes these too (#529): its confirmation counts them.
+  (SELECT count(*) FROM reader_comments r WHERE r.commenter_id = c.id AND r.status = 'unconfirmed')::bigint AS unconfirmed_count,
   (SELECT count(*) FROM reader_comments r WHERE r.commenter_id = c.id AND r.notify_replies AND r.status <> 'unconfirmed')::bigint AS notify_count,
   coalesce((
     SELECT array_agg(DISTINCT r.display_name ORDER BY r.display_name) FROM reader_comments r

@@ -1688,12 +1688,13 @@ The one place the public site outputs raw HTML. **The markup is not in the Yjs d
   reply mail by cascade). `sql.ErrNoRows` = no such commenter. Purges once after the commit when an approved
   comment was removed (`purgeErasure`). Store tests on a private database (`TestEraseCommenterTx*`: the rules, and a
   trigger that fails the last step to prove the rollback).
-- **The reader (13.2), `/public/discussion/*`** (the confirmation group's account-token limit, `publicPOSTRoutes`,
+- **The reader (13.2), `/public/discussion/*`** (the request in the confirmation group's account-token limit, the
+  link's three routes in `commentDataLink`, six times it; `publicPOSTRoutes`,
   `publicReaderCommentRoutes`, `discussionBodyLimit`; work while comments are off):
   `data-request {email}` → 202 `{outcome: "link_sent"}` for any well-formed address, nothing read before the
   answer (`TestCommenterDataRequestReadsNothingBeforeAnswering`), `commentAddress` per browser + address; after it
-  (`processCommenterDataRequest`): `GetCommenterByEmailLower`, the silent 10-minute `commentDataMail`, a token
-  (`commenter_data_tokens`, hash only, an hour), mail `reader_comment_data` (a link and nothing else) to the address
+  (`processCommenterDataRequest`): `GetCommenterByEmailLower`, a token (`commenter_data_tokens`, hash only, an
+  hour), then the silent 10-minute `commentDataMail` (taken after the store; a skipped one deletes its token), mail `reader_comment_data` (a link and nothing else) to the address
   as typed. `data {token}` → the file (not spent); `data/delete {token, comment_id?}` → 204, one comment of theirs
   (`DeleteCommenterReaderCommentTx`, 404 `comment_not_found` for another's) or the erasure; `data/unsubscribe
   {token}` → 204, Stop all mail. Every bad link 400 `invalid_token`. Expired links: `RunDiscussionMaintenance`

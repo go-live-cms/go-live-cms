@@ -193,6 +193,7 @@ describe("export and erase (#529, 13.1)", () => {
     expect(ask.body).toContain("“This comment was removed”")
     expect(ask.body).toContain("can't be undone")
     expect(ask.button).toBe("Erase")
+    expect(eraseConfirm({ name: "Ana", ...counts, unconfirmed: 1 }).title, "unconfirmed ones are erased too").toBe("Delete Ana’s 15 comments and everything stored about this address?")
     expect(eraseConfirm({ name: "Jonas", approved: 1, pending: 0, spam: 0, trash: 0 }).title).toBe("Delete Jonas’ 1 comment and everything stored about this address?")
     expect(eraseConfirm({ name: " ", approved: 0, pending: 0, spam: 0, trash: 0 }).title).toBe("Delete everything stored about this commenter?")
   })

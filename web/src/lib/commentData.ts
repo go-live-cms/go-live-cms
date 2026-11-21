@@ -32,7 +32,7 @@ export function isDataToken(value: unknown): value is string {
 
 /** A comment id as the page sends it: a positive integer. */
 export function commentIdField(value: FormDataEntryValue | null | undefined): number | null {
-  return typeof value === "string" && /^[1-9][0-9]{0,15}$/.test(value) ? Number(value) : null
+  return typeof value === "string" && /^[1-9][0-9]{0,15}$/.test(value) && Number.isSafeInteger(Number(value)) ? Number(value) : null
 }
 
 export interface DataCall {

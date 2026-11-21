@@ -159,6 +159,7 @@ describe("the field rules", () => {
     expect(commentIdField("12")).toBe(12)
     expect(commentIdField("0")).toBeNull()
     expect(commentIdField("1e3")).toBeNull()
+    expect(commentIdField("9007199254740993"), "past 2^53 it would round to another id").toBeNull()
     expect(commentIdField(null)).toBeNull()
   })
 })

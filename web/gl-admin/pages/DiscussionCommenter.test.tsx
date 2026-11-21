@@ -126,7 +126,7 @@ it("lets an admin export the commenter's file", async () => {
   expect(created).toHaveBeenCalledTimes(1)
   expect(clicked).toHaveBeenCalledTimes(1)
   expect((clicked.mock.contexts[0] as HTMLAnchorElement).download).toBe("commenter-7.json")
-  expect(revoked).toHaveBeenCalledWith("blob:x")
+  await vi.waitFor(() => expect(revoked).toHaveBeenCalledWith("blob:x"), { timeout: 3000 })
   expect(toasts.success).toHaveBeenCalled()
   clicked.mockRestore()
 })

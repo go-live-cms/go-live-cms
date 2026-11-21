@@ -1437,7 +1437,13 @@ the text left open:
   hash only in `commenter_data_tokens`. An unknown address gets nothing.
 - **The link isn't spent** by reading the list, deleting one comment or Stop all mail: the page does several
   with one link. Delete everything erases the commenter, which deletes the link. Expired links go with the
-  hourly job.
+  hourly job. The link's routes have a per-browser limit of their own (`commentDataLink`, six times the
+  account-token limit), since one page deletes comments one by one; the request keeps the confirmation's.
+- **Open: erasing a blocked commenter forgets the block.** The commenter row is what the block and
+  `previous_spam` rules remember (6.6 keeps blocked rows for that), so a blocked reader who erases their data
+  and comments again is a new commenter. Keeping a keyed hash of a blocked address through erasure would fix
+  it; it is personal data kept on a legitimate interest, which is a decision for the site's owner, not taken
+  here.
 - **Stop all mail** on the page is a route of its own, `POST /public/discussion/data/unsubscribe` (9.2), the
   unsubscribe page's `all` for the link's commenter.
 - **Everything works while comments are off** for the site, as unsubscribing does: what readers wrote stays

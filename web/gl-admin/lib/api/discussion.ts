@@ -87,6 +87,8 @@ export interface CommenterSummary {
   pending: number
   spam: number
   trash: number
+  // Waiting for their confirmation mail (never in the queue); Erase deletes them too (#529).
+  unconfirmed?: number
   notify_count: number
   network_neighbours: number
 }

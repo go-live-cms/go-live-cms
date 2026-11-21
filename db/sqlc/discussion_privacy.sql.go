@@ -52,6 +52,16 @@ func (q *Queries) DeleteCommenter(ctx context.Context, id int64) (int64, error) 
 	return result.RowsAffected()
 }
 
+const deleteCommenterDataToken = `-- name: DeleteCommenterDataToken :exec
+DELETE FROM commenter_data_tokens WHERE token_hash = $1
+`
+
+// A link stored for a request the mail cooldown then skipped: nobody will get it.
+func (q *Queries) DeleteCommenterDataToken(ctx context.Context, tokenHash []byte) error {
+	_, err := q.db.ExecContext(ctx, deleteCommenterDataToken, tokenHash)
+	return err
+}
+
 const deleteDiscussionMailRows = `-- name: DeleteDiscussionMailRows :execrows
 DELETE FROM discussion_mail WHERE id = ANY ($1::bigint[])
 `

@@ -29,6 +29,10 @@ INSERT INTO commenter_data_tokens (token_hash, commenter_id, expires_at)
 VALUES ($1, $2, $3)
 RETURNING *;
 
+-- name: DeleteCommenterDataToken :exec
+-- A link stored for a request the mail cooldown then skipped: nobody will get it.
+DELETE FROM commenter_data_tokens WHERE token_hash = $1;
+
 -- name: GetCommenterByDataToken :one
 -- The commenter a "Your comments" link belongs to, while it works (an hour). Reading it
 -- doesn't spend it.

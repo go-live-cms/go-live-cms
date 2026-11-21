@@ -112,9 +112,9 @@ var publicPOSTRoutes = map[string]string{
 	"POST /public/discussion/unsubscribe/:token": "RFC 8058 one-click from mail providers' servers: the mailed token can only stop one comment's reply mail (general limit)",
 	// "Your comments" (#529, discussion_privacy.go).
 	"POST /public/discussion/data-request":     "same 202 for any address, work after the response, per-browser and per browser+address limits, a silent mail cooldown",
-	"POST /public/discussion/data":             "the mailed link is the credential, an hour (account-token limit)",
-	"POST /public/discussion/data/delete":      "the mailed link is the credential, and can only delete that address's comments (account-token limit)",
-	"POST /public/discussion/data/unsubscribe": "the mailed link is the credential and can only stop that address's reply mail (account-token limit)",
+	"POST /public/discussion/data":             "the mailed link is the credential, an hour (the link's own per-browser limit)",
+	"POST /public/discussion/data/delete":      "the mailed link is the credential, and can only delete that address's comments (the link's limit)",
+	"POST /public/discussion/data/unsubscribe": "the mailed link is the credential and can only stop that address's reply mail (the link's limit)",
 }
 
 // stopOnStoreCall is a gomock reporter that turns any store call into a panic, which the

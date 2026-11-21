@@ -329,10 +329,6 @@ func (server *Server) processCommenterDataRequest(logger *slog.Logger, email, em
 		logger.Error("commenter data request: lookup failed", "error", err)
 		return
 	}
-	if !server.rateLimits.commentDataMail.allowSilently(ctx, emailLower) {
-		logger.Info("commenter data request skipped: a link was mailed to the address less than 10 minutes ago", "commenter_id", commenter.ID)
-		return
-	}
 	token, hash, err := newAccountToken()
 	if err != nil {
 		logger.Error("commenter data request: token generation failed", "commenter_id", commenter.ID, "error", err)
@@ -342,6 +338,15 @@ func (server *Server) processCommenterDataRequest(logger *slog.Logger, email, em
 		TokenHash: hash, CommenterID: commenter.ID, ExpiresAt: time.Now().Add(commenterDataTokenTTL),
 	}); err != nil {
 		logger.Error("commenter data request: storing the link failed", "commenter_id", commenter.ID, "error", err)
+		return
+	}
+	// The cooldown is taken only once the link is stored (as the confirmation's, #524), so a
+	// failed store doesn't use up the address's one mail for the next ten minutes.
+	if !server.rateLimits.commentDataMail.allowSilently(ctx, emailLower) {
+		if err := server.store.DeleteCommenterDataToken(ctx, hash); err != nil {
+			logger.Warn("commenter data request: dropping the unsent link failed", "commenter_id", commenter.ID, "error", err)
+		}
+		logger.Info("commenter data request skipped: a link was mailed to the address less than 10 minutes ago", "commenter_id", commenter.ID)
 		return
 	}
 	// To the address as this request typed it, as the confirmation is (discussion_write.go).
