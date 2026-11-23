@@ -193,18 +193,26 @@ main.admin-main--editor {
     min-height: 0;
   }
 
-  // min-height: the Site editor's panel asks for the old page's height.
-  .post-editor__canvas,
-  .post-editor .post-settings {
+  // 48px of side padding at least: wide and full blocks reach 48px past the column, the
+  // gutter about 50px, and the scroller would clip them (or scroll sideways).
+  .post-editor__canvas {
     min-height: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
+    padding-inline: clamp(var(--space-8), 5vw, 64px);
   }
 
-  .post-editor .post-settings__header {
-    position: sticky;
-    top: 0;
-    z-index: var(--z-raised);
+  // The panel stays put (its header and resize handle with it); its content scrolls.
+  // min-height: the Site editor's panel asks for the old page's height.
+  .post-editor .post-settings {
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .post-editor .post-settings__content {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
 }
 

@@ -26,8 +26,9 @@
 
   // TipTap's Placeholder: on the empty block. Every empty node gets `is-empty`, so draw
   // only a hint there is (#551): an empty ::before is still a box, a grid item in a
-  // callout's icon column.
-  .is-empty:not([data-placeholder=""])::before {
+  // callout's icon column. `:where` keeps the old specificity, so a block's own override
+  // (the footnote's `content: none`) still wins.
+  .is-empty:not(:where([data-placeholder=""]))::before {
     color: var(--text-placeholder);
     content: attr(data-placeholder);
     float: left;
@@ -2045,8 +2046,9 @@
   }
 
   // A block someone else selected (#417, utils/cursorAwareness.ts): their colour as a ring
-  // inside this user's own outline, and their name on its top edge. Never clipped: no
-  // container sets overflow, and the tag sits above every block.
+  // inside this user's own outline, and their name on its top edge. Never clipped: no block
+  // sets overflow, the canvas that scrolls (#551) has 48px of padding around the column,
+  // and the tag sits above every block.
   .collab-block-selection {
     box-shadow: 0 0 0 2px var(--collab-color);
     position: relative;

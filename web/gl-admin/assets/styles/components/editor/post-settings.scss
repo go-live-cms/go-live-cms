@@ -15,8 +15,9 @@
   line-height: var(--type-body-lh);
   position: relative;
   width: var(--post-settings-width, 320px);
-  // Opening (#551): slides in from the right edge. Transform and opacity only; the canvas
-  // beside it takes its new width at once, so nothing in the editor reflows twice.
+  // Opening (#551): fades in; the canvas beside it takes its new width at once, so
+  // nothing in the editor reflows twice. Opacity only: a transform here would make the
+  // panel the containing block of its fixed listboxes and menus while it played.
   animation: gl-settings-in var(--duration-moderate) var(--ease-out);
 
   &[hidden] {
@@ -313,7 +314,6 @@
 @keyframes gl-settings-in {
   from {
     opacity: 0;
-    transform: translateX(16px);
   }
 }
 
