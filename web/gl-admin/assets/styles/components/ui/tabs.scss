@@ -62,7 +62,19 @@
 .gl-tabs__panel {
   padding-top: var(--space-4);
 
+  // A switch to another tab (#551): its content fades in (a new subtree, so on mount only;
+  // panels that keep the same component, a list under status tabs, just update).
+  > * {
+    animation: gl-tab-panel-in var(--duration-base) var(--ease-out);
+  }
+
   &:focus-visible {
     border-radius: var(--radius-sm);
+  }
+}
+
+@keyframes gl-tab-panel-in {
+  from {
+    opacity: 0;
   }
 }

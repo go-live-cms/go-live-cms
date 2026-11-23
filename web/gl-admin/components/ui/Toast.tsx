@@ -1,5 +1,6 @@
 import { useEffect, useRef, useSyncExternalStore, type ReactNode } from "react"
 import { CheckIcon, CloseIcon, DangerIcon, InfoIcon, WarningIcon } from "@gl-admin/components/ui/icons"
+import { playsAnimation } from "@gl-admin/components/ui/presence"
 import "@gl-admin/assets/styles/components/ui/toast.scss"
 
 // Toasts (#338): short, inverted confirmations at the bottom of the screen. One store
@@ -37,8 +38,19 @@ const emit = () => listeners.forEach((l) => l())
 let counter = 0
 
 export function dismissToast(id: string) {
-  items = items.filter((t) => t.id !== id)
-  emit()
+  const remove = () => {
+    if (!items.some((t) => t.id === id)) return
+    items = items.filter((t) => t.id !== id)
+    emit()
+  }
+  // It slides out first (#551) when drawn and animated; else (reduced motion, not shown,
+  // tests) it goes at once. A second dismiss while it slides doesn't wait.
+  const el = typeof document === "undefined" ? null : document.querySelector(`.gl-toast[data-toast-id="${id}"]`)
+  if (!el || el.classList.contains("is-closing")) return remove()
+  el.classList.add("is-closing")
+  if (!playsAnimation(el)) return remove()
+  el.addEventListener("animationend", (e) => e.target === el && remove())
+  setTimeout(remove, 1000)
 }
 
 // Whether a toast waits for the user: errors and anything with an action.

@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react"
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from "react"
 import { useLocation, useNavigate } from "react-router-dom"
 import Avatar from "@gl-admin/components/ui/Avatar"
 import Skeleton from "@gl-admin/components/ui/Skeleton"
 import { SearchIcon } from "@gl-admin/components/ui/icons"
 import { useEscape, useFocusTrap, useStableId } from "@gl-admin/components/ui/a11y"
 import { useScrollLock } from "@gl-admin/components/ui/Modal"
+import { usePresence } from "@gl-admin/components/ui/presence"
 import NavIcon from "@gl-admin/components/sidebar/NavIcon"
 import { searchCommandPalette, type CommandPaletteResults } from "@gl-admin/lib/api/commandPalette"
 import { getMediaVariantPreviewURL } from "@gl-admin/lib/api/media"
@@ -100,7 +101,8 @@ function Lead({ option }: { option: PaletteOption }) {
   )
 }
 
-function PaletteDialog({ onClose }: { onClose: () => void }) {
+// `closing`: closed, fading out (Modal's exit), with nothing held: no trap, lock or Escape.
+function PaletteDialog({ onClose, closing, overlayRef }: { onClose: () => void; closing: boolean; overlayRef: RefObject<HTMLDivElement | null> }) {
   const navigate = useNavigate()
   const role = useCurrentRole()
   const dialogRef = useRef<HTMLDivElement>(null)
@@ -110,9 +112,9 @@ function PaletteDialog({ onClose }: { onClose: () => void }) {
   const [query, setQuery] = useState("")
   const [active, setActive] = useState(0)
 
-  useScrollLock(true)
-  useEscape(true, onClose)
-  useFocusTrap(dialogRef, true, { initialFocus: inputRef })
+  useScrollLock(!closing)
+  useEscape(!closing, onClose)
+  useFocusTrap(dialogRef, !closing, { initialFocus: inputRef })
 
   const trimmed = query.trim()
   // Only content roles may call the search (requireContentAuthor).
@@ -165,12 +167,21 @@ function PaletteDialog({ onClose }: { onClose: () => void }) {
   let at = 0
   return (
     <div
-      className="gl-modal-overlay"
+      ref={overlayRef}
+      className={`gl-modal-overlay${closing ? " is-closing" : ""}`}
+      inert={closing || undefined}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose()
       }}
     >
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Search" tabIndex={-1} className="gl-modal gl-command-palette">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal={closing ? undefined : "true"}
+        aria-label="Search"
+        tabIndex={-1}
+        className="gl-modal gl-command-palette"
+      >
         <div className="gl-command-palette__search">
           <SearchIcon size={16} />
           <label htmlFor={`${idPrefix}-input`} className="gl-command-palette__sr">
@@ -299,5 +310,7 @@ export default function CommandPalette() {
   // Back or forward while it's open.
   useEffect(() => setOpen(false), [pathname, search])
 
-  return open ? <PaletteDialog onClose={() => setOpen(false)} /> : null
+  const overlayRef = useRef<HTMLDivElement>(null)
+  const { mounted, closing } = usePresence(open, overlayRef)
+  return mounted ? <PaletteDialog onClose={() => setOpen(false)} closing={closing} overlayRef={overlayRef} /> : null
 }

@@ -11,6 +11,7 @@ import {
   type Ref,
 } from "react"
 import type { Placement } from "@floating-ui/dom"
+import { usePresence } from "@gl-admin/components/ui/presence"
 import {
   nextRovingIndex,
   typeaheadIndex,
@@ -54,7 +55,9 @@ export default function Menu({ trigger, label, children, placement = "bottom-sta
   const triggerRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const menuId = useStableId("menu")
-  const { style, ready } = useFloating(triggerRef, menuRef, open, placement)
+  // Closed: it fades out where it was (still placed), inert, then unmounts.
+  const { mounted, closing } = usePresence(open, menuRef)
+  const { style, ready } = useFloating(triggerRef, menuRef, mounted, placement)
 
   const items = () => Array.from(menuRef.current?.querySelectorAll<HTMLElement>(ITEM) ?? [])
 
@@ -114,13 +117,14 @@ export default function Menu({ trigger, label, children, placement = "bottom-sta
         "aria-expanded": open,
         "aria-controls": open ? menuId : undefined,
       })}
-      {open && (
+      {mounted && (
         <div
           ref={menuRef}
           id={menuId}
           role="menu"
           aria-label={label}
-          className={`gl-menu ${className}`}
+          className={`gl-menu ${className}${closing ? " is-closing" : ""}`}
+          inert={closing || undefined}
           style={style}
           onKeyDown={onMenuKeyDown}
         >

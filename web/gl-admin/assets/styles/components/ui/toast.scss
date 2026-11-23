@@ -91,9 +91,22 @@
   }
 }
 
+// Dismissed (#551, dismissToast): slides out to the left, then leaves the list.
+.gl-toast.is-closing {
+  animation: gl-toast-out var(--duration-base) var(--ease-in) forwards;
+  pointer-events: none;
+}
+
 @keyframes gl-toast-in {
   from {
     opacity: 0;
     transform: translateY(8px);
+  }
+}
+
+@keyframes gl-toast-out {
+  to {
+    opacity: 0;
+    transform: translateX(-16px);
   }
 }

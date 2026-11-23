@@ -12,10 +12,16 @@
 
 // Default text is text-primary: the legacy text-secondary was near-black, but in
 // the design tokens it is slate-11, kept for meta and helper text.
+// Hover, focus and pressed states everywhere (#551): colours, rings, shadows and fades,
+// never layout. (This was `transition: all`, which also eased sizes and positions, the
+// editor's included.) Movement is opt-in per component, transform and opacity only.
+// 0ms with reduced motion (_tokens.scss).
 * {
   box-sizing: border-box;
   color: var(--text-primary);
-  transition: var(--duration-moderate); // 0 with reduced motion (_tokens.scss)
+  transition-duration: var(--duration-fast);
+  transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke, box-shadow, opacity;
+  transition-timing-function: var(--ease-out);
 }
 
 body {

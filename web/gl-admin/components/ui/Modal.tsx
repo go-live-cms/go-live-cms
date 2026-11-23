@@ -2,6 +2,7 @@ import { useEffect, useRef, type ReactNode, type RefObject } from "react"
 import { useEscape, useFocusTrap, useInertOthers, useStableId } from "@gl-admin/components/ui/a11y"
 import { IconButton } from "@gl-admin/components/ui/Button"
 import { CloseIcon } from "@gl-admin/components/ui/icons"
+import { usePresence } from "@gl-admin/components/ui/presence"
 import "@gl-admin/assets/styles/components/ui/modal.scss"
 
 interface ModalProps {
@@ -71,8 +72,10 @@ export default function Modal({
   // read meanwhile (#480).
   useInertOthers(overlayRef, isOpen)
   useFocusTrap(ref, isOpen, { initialFocus, preferIn: ".gl-modal__content" })
+  // Closed: it fades out inert (focus has gone back already), then unmounts.
+  const { mounted, closing } = usePresence(isOpen, overlayRef)
 
-  if (!isOpen) return null
+  if (!mounted) return null
 
   const titled = showHeader && title
   // The description is drawn in the header, so only point at it when there is one.
@@ -80,7 +83,8 @@ export default function Modal({
   return (
     <div
       ref={overlayRef}
-      className="gl-modal-overlay"
+      className={`gl-modal-overlay${closing ? " is-closing" : ""}`}
+      inert={closing || undefined}
       // mousedown, not click: a text selection dragged out of the dialog shouldn't close it.
       onMouseDown={(e) => {
         if (closeOnBackdrop && e.target === e.currentTarget) onClose()
@@ -89,7 +93,8 @@ export default function Modal({
       <div
         ref={ref}
         role={role}
-        aria-modal="true"
+        // Not while it fades out: nothing may take it for an open dialog (the palette's check).
+        aria-modal={closing ? undefined : "true"}
         aria-labelledby={titled ? `${id}-title` : undefined}
         aria-label={titled ? undefined : (aria["aria-label"] ?? title)}
         aria-describedby={described ? `${id}-description` : undefined}

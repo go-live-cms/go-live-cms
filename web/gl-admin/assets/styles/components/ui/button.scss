@@ -21,8 +21,15 @@
   transition:
     background var(--duration-fast) var(--ease-out),
     border-color var(--duration-fast) var(--ease-out),
-    color var(--duration-fast) var(--ease-out);
+    box-shadow var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out),
+    transform var(--duration-fast) var(--ease-out);
   white-space: nowrap;
+
+  // Pressed (#551): a slight give.
+  &:active:not(:disabled, [aria-disabled="true"], .is-inactive) {
+    transform: scale(0.97);
+  }
 
   // global.scss colours every element; let the label and icon follow the button.
   * {
