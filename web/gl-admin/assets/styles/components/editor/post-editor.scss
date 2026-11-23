@@ -180,8 +180,9 @@ main.admin-main--editor {
 // editor goes by element (ProseMirror's scrollIntoView, floating-ui's autoUpdate, the slash
 // menu's capture listener), never the window. A phone scrolls the page, the panel a drawer.
 @media (width > 768px) {
+  // clip, not hidden: a hidden box still scrolls from script (scrollIntoView on focus).
   main.admin-main--editor {
-    overflow: hidden;
+    overflow: clip;
   }
 
   .post-editor {
@@ -206,13 +207,18 @@ main.admin-main--editor {
   // min-height: the Site editor's panel asks for the old page's height.
   .post-editor .post-settings {
     min-height: 0;
-    overflow: hidden;
+    // clip: focusing a field near the bottom scrolled a `hidden` panel by its overflow,
+    // and the tabs slid under the top bar.
+    overflow: clip;
   }
 
+  // relative: absolutely placed things in it (hidden live regions) scroll and clip with
+  // it, instead of stretching the panel's own overflow.
   .post-editor .post-settings__content {
     min-height: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
+    position: relative;
   }
 }
 
