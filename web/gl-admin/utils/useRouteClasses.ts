@@ -8,9 +8,13 @@ export function useRouteClasses(baseClass = "admin-main") {
     const path = location.pathname
     const classes = [baseClass]
 
+    // Any type's new post (`/content/:typeName/new`, e.g. /content/post/new) is the editor.
+    if (/^\/content\/[^/]+\/new\/?$/.test(path)) {
+      classes.push(`${baseClass}--editor`, `${baseClass}--new-content`)
+      return classes.join(" ")
+    }
+
     const routeMap: Record<string, string[]> = {
-      "/content/posts/new": ["editor", "new-content", "posts"],
-      "/content/pages/new": ["editor", "new-content", "pages"],
       "/content/edit/": ["editor", "edit-content"],
       // The template and part editors are the post editor's chrome (#493); History scrolls as a page.
       "/site-editor/templates/": ["editor", "edit-content", "site-template"],
