@@ -3,6 +3,7 @@ import { useEscape, useFocusTrap, useInertOthers, useStableId } from "@gl-admin/
 import { IconButton } from "@gl-admin/components/ui/Button"
 import { CloseIcon } from "@gl-admin/components/ui/icons"
 import { useScrollLock } from "@gl-admin/components/ui/Modal"
+import { usePresence } from "@gl-admin/components/ui/presence"
 import "@gl-admin/assets/styles/components/ui/modal.scss"
 
 type DrawerProps = {
@@ -54,15 +55,18 @@ export default function Drawer({
   // read meanwhile (#480).
   useInertOthers(overlayRef, isOpen)
   useFocusTrap(ref, isOpen, { initialFocus, preferIn: ".gl-drawer__content" })
+  // Closed: it slides out inert (as Modal), then unmounts.
+  const { mounted, closing } = usePresence(isOpen, overlayRef)
 
-  if (!isOpen) return null
+  if (!mounted) return null
 
   const close = <IconButton onClick={onClose} aria-label={closeLabel} icon={<CloseIcon />} className={bare ? "gl-drawer__float-close" : ""} />
 
   return (
     <div
       ref={overlayRef}
-      className={`gl-drawer-overlay gl-drawer-overlay--${side}`}
+      className={`gl-drawer-overlay gl-drawer-overlay--${side}${closing ? " is-closing" : ""}`}
+      inert={closing || undefined}
       onMouseDown={(e) => {
         if (closeOnBackdrop && e.target === e.currentTarget) onClose()
       }}
@@ -71,7 +75,7 @@ export default function Drawer({
         ref={ref}
         id={givenId}
         role="dialog"
-        aria-modal="true"
+        aria-modal={closing ? undefined : "true"}
         aria-labelledby={bare ? undefined : `${id}-title`}
         aria-label={bare ? title : undefined}
         tabIndex={-1}

@@ -212,9 +212,54 @@
   }
 }
 
+// Closing (#551, usePresence): the scrim fades and the panel leaves, a little faster than
+// it came, while the component stays mounted. Unmounted when the scrim's animation ends.
+.gl-modal-overlay.is-closing,
+.gl-drawer-overlay.is-closing {
+  animation: gl-scrim-out var(--duration-base) var(--ease-in) forwards;
+  pointer-events: none;
+
+  > .gl-modal {
+    animation: gl-dialog-out var(--duration-base) var(--ease-in) forwards;
+  }
+
+  > .gl-drawer {
+    animation: gl-drawer-out-right var(--duration-base) var(--ease-in) forwards;
+  }
+
+  > .gl-drawer--left {
+    animation-name: gl-drawer-out-left;
+  }
+}
+
 @keyframes gl-scrim-in {
   from {
     opacity: 0;
+  }
+}
+
+@keyframes gl-scrim-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes gl-dialog-out {
+  to {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+}
+
+@keyframes gl-drawer-out-right {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes gl-drawer-out-left {
+  to {
+    transform: translateX(-100%);
   }
 }
 

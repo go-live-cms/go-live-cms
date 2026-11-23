@@ -174,6 +174,54 @@ main.admin-main--editor {
   padding: 0;
 }
 
+// A frame above phone width (#551): the top bar and banners stay put, and the canvas and
+// the settings panel (or Comments, or the Site editor's preview) each scroll on their own,
+// so the panel's top is in reach at the end of a long post. Everything that scrolls in the
+// editor goes by element (ProseMirror's scrollIntoView, floating-ui's autoUpdate, the slash
+// menu's capture listener), never the window. A phone scrolls the page, the panel a drawer.
+@media (width > 768px) {
+  // clip, not hidden: a hidden box still scrolls from script (scrollIntoView on focus).
+  main.admin-main--editor {
+    overflow: clip;
+  }
+
+  .post-editor {
+    height: 100vh;
+  }
+
+  .post-editor__body {
+    align-items: stretch;
+    min-height: 0;
+  }
+
+  // 48px of side padding at least: wide and full blocks reach 48px past the column, the
+  // gutter about 50px, and the scroller would clip them (or scroll sideways).
+  .post-editor__canvas {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-inline: clamp(var(--space-8), 5vw, 64px);
+  }
+
+  // The panel stays put (its header and resize handle with it); its content scrolls.
+  // min-height: the Site editor's panel asks for the old page's height.
+  .post-editor .post-settings {
+    min-height: 0;
+    // clip: focusing a field near the bottom scrolled a `hidden` panel by its overflow,
+    // and the tabs slid under the top bar.
+    overflow: clip;
+  }
+
+  // relative: absolutely placed things in it (hidden live regions) scroll and clip with
+  // it, instead of stretching the panel's own overflow.
+  .post-editor .post-settings__content {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    position: relative;
+  }
+}
+
 // Edit access requests (#321): one notice per open request, for its reviewers.
 .post-editor__access-requests {
   display: flex;

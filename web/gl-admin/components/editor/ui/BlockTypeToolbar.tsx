@@ -118,6 +118,9 @@ const BlockTypeToolbar = ({ editor }: BlockTypeToolbarProps) => {
       editor={editor}
       pluginKey="blockTypeToolbar"
       className="editor-toolbar block-type-toolbar"
+      // From the caret rightwards (#551): centred on a caret at the line's start, it hung
+      // over the gutter's + and drag handle.
+      options={{ placement: "top-start" }}
       shouldShow={({ editor, state }) => {
         // Don't show if there's a text selection (let BubbleMenu handle that)
         const { from, to } = state.selection

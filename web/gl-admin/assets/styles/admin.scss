@@ -13,7 +13,11 @@ div#admin {
   --admin-main-padding: 2rem 6.25rem;
 }
 
-main.admin-main {
+// One class, so a route's `main.admin-main--<route>` (the editor's padding: 0, the Site
+// editor's frame) wins on specificity. Same specificity lost on load order in the
+// production bundle (#551): a page's chunk can land before this one, and the editor kept
+// 32px of padding above its sticky top bar and 100px beside it.
+.admin-main {
   height: 100vh;
   overflow-y: auto;
   padding: var(--admin-main-padding);
@@ -36,7 +40,7 @@ main.admin-main {
     height: 100dvh;
   }
 
-  main.admin-main {
+  .admin-main {
     flex: 1;
     height: auto;
     min-height: 0;

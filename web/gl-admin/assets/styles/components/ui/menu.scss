@@ -91,8 +91,22 @@
   }
 }
 
+// Closing (#551, usePresence): fades back the way it came.
+.gl-menu.is-closing,
+.gl-popover.is-closing {
+  animation: gl-float-out var(--duration-fast) var(--ease-in) forwards;
+  pointer-events: none;
+}
+
 @keyframes gl-float-in {
   from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes gl-float-out {
+  to {
     opacity: 0;
     transform: translateY(-4px);
   }

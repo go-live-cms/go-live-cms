@@ -239,6 +239,8 @@ $mobile: 768px; // MOBILE_QUERY in Sidebar.tsx
   }
 
   &__children {
+    // A group opening (#551): its links drop in under the chevron as it turns.
+    animation: gl-sidebar-group-in var(--duration-moderate) var(--ease-out);
     border-left: 1px solid var(--border-strong);
     display: flex;
     flex-direction: column;
@@ -377,3 +379,10 @@ $mobile: 768px; // MOBILE_QUERY in Sidebar.tsx
   }
 }
 
+
+@keyframes gl-sidebar-group-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}

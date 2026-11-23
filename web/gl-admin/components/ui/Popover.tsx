@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactElement, type React
 import type { Placement } from "@floating-ui/dom"
 import { getFocusable, useClickOutside, useEscape, useFloating, useStableId } from "@gl-admin/components/ui/a11y"
 import type { TriggerProps } from "@gl-admin/components/ui/Menu"
+import { usePresence } from "@gl-admin/components/ui/presence"
 import "@gl-admin/assets/styles/components/ui/menu.scss"
 
 type PopoverProps = {
@@ -36,7 +37,9 @@ export default function Popover({
   const triggerRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const id = useStableId("popover")
-  const { style, ready } = useFloating(triggerRef, panelRef, open, placement, { gap: 6 })
+  // Closed: it fades out where it was, inert, then unmounts (as Menu).
+  const { mounted, closing } = usePresence(open, panelRef)
+  const { style, ready } = useFloating(triggerRef, panelRef, mounted, placement, { gap: 6 })
 
   const setOpen = useCallback(
     (next: boolean) => {
@@ -72,7 +75,7 @@ export default function Popover({
         "aria-expanded": open,
         "aria-controls": open ? id : undefined,
       })}
-      {open && (
+      {mounted && (
         <div
           ref={panelRef}
           id={id}
@@ -80,7 +83,8 @@ export default function Popover({
           aria-labelledby={title ? `${id}-title` : undefined}
           aria-label={title ? undefined : label}
           tabIndex={-1}
-          className={`gl-popover ${className}`}
+          className={`gl-popover ${className}${closing ? " is-closing" : ""}`}
+          inert={closing || undefined}
           style={style}
           onBlur={(e) => {
             const to = e.relatedTarget as Node | null

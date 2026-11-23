@@ -1,4 +1,4 @@
-import { StrictMode, Suspense, lazy, useEffect, type MouseEvent, type ReactNode } from "react"
+import { StrictMode, Suspense, lazy, useEffect, useRef, type MouseEvent, type ReactNode } from "react"
 import { BrowserRouter, Routes, Route, useLocation, useParams } from "react-router-dom"
 import { GoLiveProvider } from "./contexts/GoLiveContext"
 import { ThemeProvider } from "./contexts/ThemeContext"
@@ -19,6 +19,7 @@ import EditContent from "./pages/EditPost"
 import { useRouteClasses } from "./utils/useRouteClasses"
 import { focusOnce, useRouteFocus } from "@gl-admin/lib/hooks/useRouteFocus"
 import { installInputModality, installSubmitFocus } from "@gl-admin/components/ui/a11y"
+import { fadeIn } from "@gl-admin/components/ui/presence"
 
 // Wrapper so the Content list remounts when the post type changes.
 // Route-level keys must come from params, which are only available inside <Routes>,
@@ -84,6 +85,16 @@ function AdminOnly({ area, children }: { area: string; children: ReactNode }) {
 function AppLayout() {
   const routeClasses = useRouteClasses()
   const { pathname } = useLocation()
+  // A new page fades in (#551). Not between two editor URLs: a new post becomes
+  // /content/edit/:id under the writer's hands.
+  const isEditor = routeClasses.includes("admin-main--editor")
+  const lastRoute = useRef({ pathname, isEditor })
+  useEffect(() => {
+    const last = lastRoute.current
+    lastRoute.current = { pathname, isEditor }
+    if (last.pathname === pathname || (last.isEditor && isEditor)) return
+    fadeIn(document.getElementById("admin-content"))
+  }, [pathname, isEditor])
   // After a navigation, focus goes to the new page's <h1> (or <main>) (#480). Each
   // page sets its own document.title (usePageTitle).
   useRouteFocus(MAIN_CONTENT_ID)

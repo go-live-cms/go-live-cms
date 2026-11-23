@@ -14,10 +14,13 @@
   }
 }
 
-// Hidden from sight, kept for screen readers.
+// Hidden from sight, kept for screen readers. margin -1px (#551): one placed after a
+// 100vh layout (the editor's save announcer, at the end of <body>) made the page 1px
+// taller, and the window's scrollbar kept the editor 8px short of the right edge.
 @mixin visually-hidden {
   clip-path: inset(50%);
   height: 1px;
+  margin: -1px;
   overflow: hidden;
   position: absolute;
   white-space: nowrap;

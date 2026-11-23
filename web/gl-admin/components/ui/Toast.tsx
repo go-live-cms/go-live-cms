@@ -1,5 +1,6 @@
 import { useEffect, useRef, useSyncExternalStore, type ReactNode } from "react"
 import { CheckIcon, CloseIcon, DangerIcon, InfoIcon, WarningIcon } from "@gl-admin/components/ui/icons"
+import { playsAnimation } from "@gl-admin/components/ui/presence"
 import "@gl-admin/assets/styles/components/ui/toast.scss"
 
 // Toasts (#338): short, inverted confirmations at the bottom of the screen. One store
@@ -35,10 +36,25 @@ let items: ToastItem[] = []
 const listeners = new Set<() => void>()
 const emit = () => listeners.forEach((l) => l())
 let counter = 0
+// Sliding out (#551): still drawn, no longer one of the MAX_TOASTS.
+const leaving = new Set<string>()
 
 export function dismissToast(id: string) {
-  items = items.filter((t) => t.id !== id)
-  emit()
+  const remove = () => {
+    leaving.delete(id)
+    if (!items.some((t) => t.id === id)) return
+    items = items.filter((t) => t.id !== id)
+    emit()
+  }
+  // It slides out first (#551) when drawn and animated; else (reduced motion, not shown,
+  // tests) it goes at once. A second dismiss while it slides doesn't wait.
+  const el = typeof document === "undefined" ? null : document.querySelector(`.gl-toast[data-toast-id="${id}"]`)
+  if (!el || el.classList.contains("is-closing")) return remove()
+  el.classList.add("is-closing")
+  leaving.add(id)
+  if (!playsAnimation(el)) return remove()
+  el.addEventListener("animationend", (e) => e.target === el && remove())
+  setTimeout(remove, 1000)
 }
 
 // Whether a toast waits for the user: errors and anything with an action.
@@ -56,9 +72,10 @@ function show(type: ToastType, message: ReactNode, options: ToastOptions = {}): 
   const next = [...items, { id, type, message, action: options.action, duration: toastDuration(type, options) }]
   // At most three at once. The oldest that would hide on its own goes first, so a
   // burst of confirmations never pushes out an error or an Undo; then the oldest.
-  while (next.length > MAX_TOASTS) {
-    const timed = next.findIndex((t) => Number.isFinite(t.duration))
-    next.splice(timed >= 0 ? timed : 0, 1)
+  // Toasts already sliding out don't count and aren't chosen.
+  while (next.filter((t) => !leaving.has(t.id)).length > MAX_TOASTS) {
+    const timed = next.findIndex((t) => !leaving.has(t.id) && Number.isFinite(t.duration))
+    next.splice(timed >= 0 ? timed : next.findIndex((t) => !leaving.has(t.id)), 1)
   }
   items = next
   emit()
