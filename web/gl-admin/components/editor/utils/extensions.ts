@@ -184,6 +184,10 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
         includeChildren: true,
         showOnlyWhenEditable: true,
         placeholder: ({ node, editor }) => {
+          // Only a line you type in shows a hint (#551). A block that holds blocks (callout,
+          // quote, list item, group, details, columns…) has none of its own: its empty
+          // line shows it. Its own drew a second copy, in a grid a box in the icon's column.
+          if (!node.isTextblock) return ""
           switch (node.type.name) {
             case "codeBlock":
               return "Write code…"

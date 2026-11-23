@@ -24,8 +24,10 @@
     background: var(--text-selection);
   }
 
-  // TipTap's Placeholder: on the empty block.
-  .is-empty::before {
+  // TipTap's Placeholder: on the empty block. Every empty node gets `is-empty`, so draw
+  // only a hint there is (#551): an empty ::before is still a box, a grid item in a
+  // callout's icon column.
+  .is-empty:not([data-placeholder=""])::before {
     color: var(--text-placeholder);
     content: attr(data-placeholder);
     float: left;

@@ -55,6 +55,26 @@ describe("the empty line hint", () => {
     expect(hints(ed)).toEqual([])
   })
 
+  // #551: an empty callout drew its hint twice, once from the callout itself, whose empty
+  // ::before took the icon's grid column. A block that holds blocks has no hint of its own.
+  it.each([
+    ["callout", { type: "callout", content: [{ type: "paragraph" }] }, "Type a note"],
+    ["quote", { type: "blockquote", content: [{ type: "paragraph" }] }, "Write a quote…"],
+    ["list item", { type: "bulletList", content: [{ type: "listItem", content: [{ type: "paragraph" }] }] }, "List item…"],
+  ])("shows an empty %s's hint once, on its line", (_, block, hint) => {
+    const element = document.createElement("div")
+    document.body.appendChild(element)
+    editor = new Editor({ element, extensions: getExtensions({ collabProvider: null })(), content: { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "alpha" }] }, block] } })
+    let line = 0
+    editor.state.doc.descendants((node, pos) => {
+      if (!line && node.type.name === "paragraph" && node.content.size === 0) line = pos + 1
+    })
+    editor.commands.setTextSelection(line)
+    focus(editor)
+    // Once: the block itself carries no hint (an empty one draws nothing, editor.scss).
+    expect(hints(editor)).toEqual([hint])
+  })
+
   it("keeps a heading's own placeholder", () => {
     const ed = makeEditor("<p>alpha</p><h2></h2>")
     ed.commands.setTextSelection(ed.state.doc.firstChild!.nodeSize + 1)
